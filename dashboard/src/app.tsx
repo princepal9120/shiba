@@ -479,7 +479,7 @@ export function App(): React.JSX.Element {
       <header className="h-14 border-b border-white/[0.08] bg-[#07090e]/95 backdrop-blur-md px-4 lg:px-6 flex items-center justify-between z-20 shrink-0 sticky top-0 shadow-[0_1px_3px_rgba(0,0,0,0.5)]">
         <div className="flex items-center gap-3">
           <a href="/" className="flex items-center gap-2.5 text-white hover:opacity-90 transition-opacity">
-            <img src="/assets/mascot/shiba-logo-animated.svg" alt="Shiba Mascot" className="w-8 h-8 rounded-lg shadow-[0_0_12px_rgba(11,159,149,0.4)] object-cover border border-teal-500/50" />
+            <img src="/assets/mascot/pet-logo.png" alt="Shiba Mascot" className="w-8 h-8 rounded-full bg-white shadow-[0_0_12px_rgba(11,159,149,0.4)] object-contain border border-teal-500/50" />
             <div>
               <div className="font-bold tracking-tight text-sm text-white flex items-center gap-1.5">
                 Shiba
@@ -663,7 +663,7 @@ export function App(): React.JSX.Element {
           <div className="p-5 xl:p-6 border-b border-neutral-800">
             <div className="flex items-center justify-between mb-2">
               <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
-                <img src="/assets/mascot/shiba-logo-animated.svg" alt="Mascot" className="w-6 h-6 rounded-md object-cover border border-teal-500/40" />
+                <img src="/assets/mascot/pet-logo.png" alt="Mascot" className="w-6 h-6 rounded-full bg-white object-contain border border-teal-500/40" />
                 New Coding Task
               </h1>
               <span className="text-[11px] font-mono text-[#8b98a9]">v0.1.0</span>
@@ -860,7 +860,7 @@ export function App(): React.JSX.Element {
                           </>
                         ) : (
                           <div className="flex items-center gap-1.5">
-                            <img src="/assets/mascot/shiba-logo-animated.svg" alt="Shiba" className="w-4 h-4 rounded-full object-cover border border-teal-500/40 shadow-sm" />
+                            <img src="/assets/mascot/pet-logo.png" alt="Shiba" className="w-4 h-4 rounded-full bg-white object-contain border border-teal-500/40 shadow-sm" />
                             <span className="text-teal-400 font-bold">Shiba</span>
                           </div>
                         )}
@@ -916,7 +916,7 @@ export function App(): React.JSX.Element {
                   {(chat.isStreaming || chat.status === "streaming") ? (
                     <li className="flex flex-col items-start">
                       <div className="flex items-center gap-2 text-xs font-semibold text-teal-400 mb-1 px-1">
-                        <img src="/assets/mascot/shiba-logo-animated.svg" alt="Shiba" className="w-4 h-4 rounded-full object-cover border border-teal-500/40 shadow-sm animate-bounce" />
+                        <img src="/assets/mascot/pet-logo.png" alt="Shiba" className="w-4 h-4 rounded-full bg-white object-contain border border-teal-500/40 shadow-sm animate-bounce" />
                         Shiba is reasoning...
                       </div>
                       <div className="bg-[#090b0e] border border-neutral-800 rounded-2xl rounded-tl-sm p-4 text-xs text-[#8b98a9] flex items-center gap-2">
@@ -946,7 +946,7 @@ export function App(): React.JSX.Element {
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="font-mono font-bold text-sm text-[#e6edf3] flex items-center gap-2">
-                          <img src="/assets/mascot/shiba-logo-animated.svg" alt="Shiba Guard" className="w-5 h-5 rounded-full object-cover border border-amber-500/50" />
+                          <img src="/assets/mascot/pet-logo.png" alt="Shiba Guard" className="w-5 h-5 rounded-full bg-white object-contain border border-amber-500/50" />
                           {approval.tool}
                         </div>
                         <span className="text-[10px] uppercase tracking-wider font-bold bg-[#c9a227]/15 border border-[#c9a227]/30 text-[#c9a227] px-2 py-0.5 rounded-full">

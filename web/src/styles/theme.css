@@ -144,6 +144,7 @@ a.site-title :is(img, svg) {
   border-radius: 9999px !important;
   display: inline-block !important;
   flex-shrink: 0 !important;
+  background-color: #ffffff !important;
 }
 
 .site-title {

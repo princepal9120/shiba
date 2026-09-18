@@ -264,50 +264,9 @@ import '../styles/theme.css';
       <!-- LOGO & BRAND -->
       <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
         <a href="/" class="flex items-center gap-3 group shrink-0">
-          <!-- Animated Shiba Mascot Vector Logo -->
+          <!-- Shiba Mascot Pet Logo -->
           <div class="relative w-10 h-10 flex items-center justify-center shrink-0">
-            <svg id="shiba-header-mascot" aria-hidden="true" viewBox="0 0 100 100" width="40" height="40" fill="none" class="w-10 h-10 cursor-pointer transition-transform group-hover:scale-105">
-              <circle cx="50" cy="50" r="47" fill="#0B9F95" stroke="#000000" stroke-width="3" />
-              <!-- Ears -->
-              <path d="M 28 34 L 18 12 Q 34 16 38 32 Z" fill="#D97706" stroke="#000000" stroke-width="3" stroke-linejoin="round" />
-              <path d="M 26 29 L 21 17 Q 31 20 33 28 Z" fill="#FDE68A" />
-              <path d="M 72 34 L 82 12 Q 66 16 62 32 Z" fill="#D97706" stroke="#000000" stroke-width="3" stroke-linejoin="round" />
-              <path d="M 74 29 L 79 17 Q 69 20 67 28 Z" fill="#FDE68A" />
-              <!-- Head -->
-              <ellipse cx="50" cy="54" rx="34" ry="30" fill="#E89B3D" stroke="#000000" stroke-width="3" />
-              <!-- Muzzle -->
-              <path d="M 22 56 Q 16 66 28 72 Q 40 76 50 76 Q 60 76 72 72 Q 84 66 78 56 Q 68 50 50 50 Q 32 50 22 56 Z" fill="#FFFFFF" stroke="#000000" stroke-width="2.5" />
-              <ellipse cx="50" cy="61" rx="4.5" ry="3" fill="#000000" />
-              <path d="M 46 64 Q 50 67 54 64" stroke="#000000" stroke-width="2" stroke-linecap="round" fill="none" />
-
-              <!-- Eye Frame 1: Cool Sunglasses (Default) -->
-              <g id="shiba-frame-1" class="shiba-frame shiba-frame-1">
-                <rect x="29" y="40" width="18" height="13" rx="3.5" fill="#06B6D4" stroke="#000000" stroke-width="2.5" />
-                <rect x="53" y="40" width="18" height="13" rx="3.5" fill="#06B6D4" stroke="#000000" stroke-width="2.5" />
-                <line x1="47" y1="45" x2="53" y2="45" stroke="#000000" stroke-width="2.5" stroke-linecap="round" />
-                <line x1="33" y1="43" x2="36" y2="50" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" />
-                <line x1="57" y1="43" x2="60" y2="50" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" />
-              </g>
-
-              <!-- Eye Frame 2: Happy Squint (^ _ ^) -->
-              <g id="shiba-frame-2" class="shiba-frame shiba-frame-2">
-                <path d="M 31 46 Q 38 40 45 46" stroke="#000000" stroke-width="3.5" stroke-linecap="round" fill="none" />
-                <path d="M 55 46 Q 62 40 69 46" stroke="#000000" stroke-width="3.5" stroke-linecap="round" fill="none" />
-                <ellipse cx="26" cy="53" rx="4" ry="2" fill="#F43F5E" opacity="0.75" />
-                <ellipse cx="74" cy="53" rx="4" ry="2" fill="#F43F5E" opacity="0.75" />
-              </g>
-
-              <!-- Eye Frame 3: Winking with Star Sparkle -->
-              <g id="shiba-frame-3" class="shiba-frame shiba-frame-3">
-                <path d="M 31 46 Q 38 49 45 46" stroke="#000000" stroke-width="3.5" stroke-linecap="round" fill="none" />
-                <rect x="53" y="40" width="18" height="13" rx="3.5" fill="#06B6D4" stroke="#000000" stroke-width="2.5" />
-                <line x1="47" y1="45" x2="53" y2="45" stroke="#000000" stroke-width="2.5" stroke-linecap="round" />
-                <line x1="57" y1="43" x2="60" y2="50" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" />
-                <path d="M 28 40 L 30 35 L 32 40 L 37 42 L 32 44 L 30 49 L 28 44 L 23 42 Z" fill="#FACC15" />
-                <ellipse cx="26" cy="53" rx="4" ry="2" fill="#F43F5E" opacity="0.85" />
-                <ellipse cx="74" cy="53" rx="4" ry="2" fill="#F43F5E" opacity="0.85" />
-              </g>
-            </svg>
+            <img src="/assets/mascot/pet-logo.png" alt="Shiba Mascot" class="w-10 h-10 rounded-full bg-white object-contain border border-teal-500/50 shadow-sm cursor-pointer transition-transform group-hover:scale-105" />
           </div>
 
           <div class="flex flex-col text-left whitespace-nowrap">
@@ -1515,7 +1474,7 @@ $ run checks
       <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
         <div class="space-y-4">
           <div class="flex items-center gap-3">
-            <img src="/assets/mascot/shiba-logo-animated.svg" alt="Shiba Mascot" class="w-8 h-8 rounded-full border border-teal-500/50" />
+            <img src="/assets/mascot/pet-logo.png" alt="Shiba Mascot" class="w-8 h-8 rounded-full bg-white object-contain border border-teal-500/50" />
             <span class="font-heading text-2xl text-white tracking-wide">SHIBA</span>
           </div>
           <p class="font-dm-mono text-neutral-400 text-xs max-w-sm leading-relaxed">
