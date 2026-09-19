@@ -64,6 +64,21 @@ export function emptyDiffText(): string {
   return "No file changes produced";
 }
 
+// Diff output for completed live runs. The orchestrator surfaces the unified
+// diff on the run record when present; anything else is not diff output.
+export function extractCompletedDiff(run: unknown): string | null {
+  if (typeof run !== "object" || run === null) return null;
+  const record = run as Record<string, unknown>;
+  if (record["status"] !== "completed") return null;
+  const direct = record["diff"];
+  if (typeof direct === "string" && direct.trim() !== "") return direct;
+  const summary = record["summary"];
+  if (typeof summary === "string" && summary.includes("diff --git")) {
+    return summary.slice(summary.indexOf("diff --git"));
+  }
+  return null;
+}
+
 export function parseRepoName(repoUrl: string): string {
   try {
     const url = new URL(repoUrl);
@@ -89,4 +104,3 @@ export function formatTimeAgo(timestamp: number): string {
   const days = Math.floor(hours / 24);
   return `${days}d ago`;
 }
-

@@ -4,6 +4,7 @@ import { VMInspector } from "./VMInspector";
 import {
   formatTimeAgo,
   parseRepoName,
+  extractCompletedDiff,
   type PendingApproval,
 } from "../ui-helpers";
 
@@ -84,20 +85,6 @@ function runPartText(part: unknown): string {
   } catch {
     return String(part);
   }
-}
-
-// Same rule as app.tsx: only completed runs surface unified-diff output.
-function extractCompletedDiff(run: unknown): string | null {
-  if (typeof run !== "object" || run === null) return null;
-  const record = run as Record<string, unknown>;
-  if (record["status"] !== "completed") return null;
-  const direct = record["diff"];
-  if (typeof direct === "string" && direct.trim() !== "") return direct;
-  const summary = record["summary"];
-  if (typeof summary === "string" && summary.includes("diff --git")) {
-    return summary.slice(summary.indexOf("diff --git"));
-  }
-  return null;
 }
 
 function matchesFilter(status: string, filter: RunsFilter): boolean {

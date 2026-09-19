@@ -65,9 +65,9 @@ describe("dashboard rendering", () => {
 
     expect(markup).toContain("No messages yet. Submit a task to start.");
     expect(markup).toContain("Setup Guide");
-    expect(markup).toContain("View Setup Checklist &amp; Architecture");
-    expect(markup).toContain("No live runs. Approved tasks appear here while they execute.");
-    expect(markup).toContain("No retained runs on the orchestrator yet.");
+    expect(markup).toContain("Sessions");
+    expect(markup).toContain("Fix Failing Tests");
+    expect(markup).toContain("No runs. Approved tasks appear here while they execute.");
   });
 
   it("renders a pending approval with its tool input and actions", () => {
@@ -89,7 +89,8 @@ describe("dashboard rendering", () => {
 
     const markup = renderApp();
 
-    expect(markup).toContain("Waiting for your approval");
+    expect(markup).toContain("waiting for your approval");
+    expect(markup).toContain("Action Required");
     expect(markup).toContain("runSandbox");
     expect(markup).toContain("&quot;command&quot;: &quot;npm test&quot;");
     expect(markup).toContain("Approve");
@@ -132,8 +133,7 @@ describe("dashboard rendering", () => {
 
     const appMarkup = renderApp();
 
-    expect(appMarkup).toContain('data-testid="task-submission-form"');
-    expect(appMarkup).toContain('type="url"');
+    expect(appMarkup).toContain('data-testid="task-composer"');
     expect(appMarkup).toContain("<textarea");
     expect(appMarkup).toContain('type="checkbox"');
   });
