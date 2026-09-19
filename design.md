@@ -111,3 +111,58 @@ Starlight defaults in docs). Named tokens only.
   --radius-card: 12px; --radius-input: 8px;
 }
 ```
+
+## Workbench layout
+
+Devin-style three-pane agent workbench for the dashboard Tasks view
+(`dashboard/src/`). Other views keep working under the same slim top
+header (`h-14`): logo + Shiba, nav tabs, sandbox pill, connection,
+setup, docs.
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│ TOP HEADER (slim, h-14)                                      │
+├──────────┬────────────────────────────────┬──────────────────┤
+│ SESSIONS │  CONVERSATION TIMELINE         │  WORKSPACE PANEL │
+│ ~300px   │  · session header              │  ~400px, tabs    │
+│ search   │  · step feed (icon rail)       │  Runs|VM|Diff|   │
+│ +New task│  · inline approval cards       │  Approvals       │
+│ run rows │  · sticky TASK COMPOSER        │  collapsible→40px│
+└──────────┴────────────────────────────────┴──────────────────┘
+```
+
+### Panes
+
+- **Sessions sidebar (~300px):** "Sessions" header, search input,
+  "+ New task" primary CTA, session rows (`.session-row`). Row =
+  title (truncated), mono meta line (repo · status · time-ago).
+  Selected row: `--panel-elevated` bg + `--line-light` border.
+  Live session row tints title `--accent-light`.
+- **Conversation timeline:** Devin-style step feed on a left icon
+  rail (`.step-rail`): 1px `--line` vertical connector, 24px icon
+  circles on `--panel`. Steps: "Ran \<tool\>" mono label + status
+  chip + expandable `<details>` output (mono, max-h-56 scroll).
+  User messages stay right-aligned blue bubbles. Waiting-approval
+  steps also render an inline approval card (amber `--pending`
+  border, Approve `--ok` fill / Reject `--danger` outline) — the
+  approval gate is sacred: never auto-approve, never hide.
+- **Workspace panel (~400px):** tab bar Runs | VM | Diff |
+  Approvals (`.workspace-tab`, count badges via
+  `.workspace-tab-badge`). Collapses to a 40px icon rail.
+- **Task composer (`.composer`):** pinned at timeline bottom.
+  Rounded-xl `--panel` card, `--line` border (`--accent` on
+  focus-within). Auto-growing textarea + collapsed config row
+  (repo, branch, harness select, PR checkbox, Clear ghost, Send
+  primary teal). ⌘Enter submits.
+
+### Workbench rules
+
+- Accent teal stays ≤5% of viewport — rail icons, selected states,
+  primary CTAs only.
+- All surfaces from tokens: `--bg`, `--panel`, `--panel-elevated`,
+  `--line`, `--line-light`; ink `--text`/`--muted`; semantics
+  `--ok`, `--pending` (#c9a227 for approvals), `--danger`,
+  running blue #4f9cf0.
+- Status chips reuse the existing `statusColors` map in app.tsx.
+- Density: 8pt spacing, radius 8–12px, `transition-colors` ≤200ms,
+  silent success (no toasts).
