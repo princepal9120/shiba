@@ -68,9 +68,20 @@ export function RunRegistryView({
   const stats = useMemo(() => {
     const total = runs.length;
     const active = runs.filter((r) => r.status === "running" || r.status === "pending").length;
-    const completed = runs.filter((r) => r.status === "completed").length;
+    const completedRuns = runs.filter((r) => r.status === "completed");
+    const completed = completedRuns.length;
     const error = runs.filter((r) => r.status === "error" || r.status === "aborted" || r.status === "cancelled").length;
-    return { total, active, completed, error };
+    // Outcome metrics (Factory-style): success rate on terminal runs, median
+    // wall-clock for completed runs, and how many asked for a PR.
+    const terminal = completed + error;
+    const successRate = terminal > 0 ? Math.round((completed / terminal) * 100) : null;
+    const durations = completedRuns
+      .map((r) => r.updatedAt - r.createdAt)
+      .filter((d) => d > 0)
+      .sort((a, b) => a - b);
+    const medianMs = durations.length > 0 ? durations[Math.floor(durations.length / 2)]! : null;
+    const prRequested = runs.filter((r) => r.publishPullRequest).length;
+    return { total, active, completed, error, successRate, medianMs, prRequested };
   }, [runs]);
 
   return (
@@ -116,7 +127,7 @@ export function RunRegistryView({
       {/* Stats Cards & Filters */}
       <div className="p-4 lg:p-8 flex-1 overflow-y-auto flex flex-col gap-6">
         {/* Quick Stats Metrics */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
           <div className="bg-[#07090e] border border-white/[0.08] rounded-xl p-3.5 shadow-sm flex flex-col gap-1">
             <span className="text-[11px] font-mono text-[#8b98a9] uppercase">Total Runs</span>
             <span className="text-xl font-bold text-white font-mono">{stats.total}</span>
@@ -132,6 +143,26 @@ export function RunRegistryView({
           <div className="bg-[#07090e] border border-white/[0.08] rounded-xl p-3.5 flex flex-col gap-1">
             <span className="text-[11px] font-mono text-[#f06666] uppercase">Failed / Cancelled</span>
             <span className="text-xl font-bold text-[#f06666] font-mono">{stats.error}</span>
+          </div>
+          <div className="bg-[#07090e] border border-white/[0.08] rounded-xl p-3.5 flex flex-col gap-1">
+            <span className="text-[11px] font-mono text-[#8b98a9] uppercase">Success Rate</span>
+            <span className="text-xl font-bold text-white font-mono">
+              {stats.successRate === null ? "—" : `${stats.successRate}%`}
+            </span>
+          </div>
+          <div className="bg-[#07090e] border border-white/[0.08] rounded-xl p-3.5 flex flex-col gap-1">
+            <span className="text-[11px] font-mono text-[#8b98a9] uppercase">Median Cycle</span>
+            <span className="text-xl font-bold text-white font-mono">
+              {stats.medianMs === null
+                ? "—"
+                : stats.medianMs < 60_000
+                  ? `${Math.round(stats.medianMs / 1000)}s`
+                  : `${Math.round(stats.medianMs / 60_000)}m`}
+            </span>
+          </div>
+          <div className="bg-[#07090e] border border-white/[0.08] rounded-xl p-3.5 flex flex-col gap-1">
+            <span className="text-[11px] font-mono text-[#8b98a9] uppercase">PRs Requested</span>
+            <span className="text-xl font-bold text-white font-mono">{stats.prRequested}</span>
           </div>
         </div>
 
