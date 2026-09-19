@@ -123,3 +123,197 @@ details summary::-webkit-details-marker {
     scroll-behavior: auto !important;
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Workbench utilities (Devin-style 3-pane Tasks view)                 */
+/* Token-based only — see design.md "Workbench layout".                */
+/* ------------------------------------------------------------------ */
+
+/* StepTimeline: left icon rail with vertical connector */
+.step-rail {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space);
+}
+
+.step-rail::before {
+  content: "";
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 11px; /* centers 1px line under the 24px icon circle */
+  width: 1px;
+  background: var(--line);
+}
+
+.step-rail-item {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: calc(var(--space) * 1.5);
+}
+
+.step-rail-icon {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.step-rail-icon[data-tone="accent"] { color: var(--accent-light); border-color: var(--accent); }
+.step-rail-icon[data-tone="pending"] { color: var(--pending); border-color: var(--pending); }
+.step-rail-icon[data-tone="ok"] { color: var(--ok); border-color: var(--ok); }
+.step-rail-icon[data-tone="danger"] { color: var(--danger); border-color: var(--danger); }
+
+/* SessionsSidebar: run/session row */
+.session-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 150ms, border-color 150ms, color 150ms;
+}
+
+.session-row:hover {
+  background: var(--panel-elevated);
+}
+
+.session-row[data-selected="true"] {
+  background: var(--panel-elevated);
+  border-color: var(--line-light);
+}
+
+.session-row[data-live="true"] .session-row-title {
+  color: var(--accent-light);
+}
+
+.session-row-title {
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-row-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* TaskComposer: pinned bottom composer panel */
+.composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space);
+  padding: 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.composer:focus-within {
+  border-color: var(--accent);
+}
+
+.composer textarea {
+  width: 100%;
+  resize: none;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  min-height: 44px;
+  max-height: 200px;
+}
+
+.composer textarea::placeholder {
+  color: var(--muted);
+  opacity: 0.6;
+}
+
+.composer-config {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.composer-config input[type="text"],
+.composer-config select {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+/* WorkspacePanel: tab bar */
+.workspace-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 150ms, color 150ms;
+  white-space: nowrap;
+}
+
+.workspace-tab:hover {
+  color: var(--text);
+}
+
+.workspace-tab[data-active="true"] {
+  background: var(--panel-elevated);
+  border-color: var(--line);
+  color: var(--text);
+}
+
+.workspace-tab-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 0 6px;
+  border-radius: 9999px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.workspace-tab-badge[data-tone="pending"] {
+  border-color: var(--pending);
+  color: var(--pending);
+}

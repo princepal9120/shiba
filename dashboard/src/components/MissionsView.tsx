@@ -98,12 +98,12 @@ export function MissionsView(): JSX.Element {
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-y-auto bg-[#0d1117] text-[#e6edf3] p-4 lg:p-8">
+    <div className="flex-1 flex flex-col h-full overflow-y-auto bg-[#11141b] text-[#e6edf3] p-4 lg:p-8">
       <div className="max-w-5xl mx-auto w-full flex flex-col gap-6">
-        <div className="border-b border-white/[0.08] pb-4">
-          <h2 className="text-base font-semibold text-white flex items-center gap-2">
+        <div className="border-b border-[#1e2530] pb-4">
+          <h2 className="text-base font-semibold text-[#e6edf3] flex items-center gap-2">
             <span>Missions</span>
-            <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-teal-950/60 border border-teal-800/60 text-teal-400">
+            <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-[#0B9F95]/10 border border-[#0B9F95]/30 text-[#2dd4bf]">
               Standing goals
             </span>
           </h2>
@@ -119,14 +119,14 @@ export function MissionsView(): JSX.Element {
         ) : null}
 
         {/* New mission */}
-        <div className="border border-white/[0.08] rounded-xl bg-[#07090e] shadow-sm p-5 flex flex-col gap-3">
-          <h3 className="text-sm font-semibold text-white">New Mission</h3>
+        <div className="border border-[#1e2530] rounded-xl bg-[#0a0c10] shadow-sm p-5 flex flex-col gap-3">
+          <h3 className="text-sm font-semibold text-[#e6edf3]">New Mission</h3>
           <textarea
             value={goal}
             onChange={(e) => setGoal(e.target.value)}
             placeholder="e.g. Keep dependency vulnerabilities at zero and the test suite green on main"
             rows={3}
-            className="w-full bg-black text-xs text-[#e6edf3] border border-neutral-800 rounded-lg p-3 transition-colors focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500/30 placeholder:text-[#8b98a9]/50 resize-y"
+            className="w-full bg-black text-xs text-[#e6edf3] border border-[#1e2530] rounded-lg p-3 transition-colors focus:outline-none focus:border-[#0B9F95] focus:ring-1 focus:ring-[#0B9F95]/30 placeholder:text-[#8b98a9]/50 resize-y"
           />
           <div className="flex flex-wrap items-center gap-3">
             <input
@@ -134,12 +134,12 @@ export function MissionsView(): JSX.Element {
               value={repoUrl}
               onChange={(e) => setRepoUrl(e.target.value)}
               placeholder="https://github.com/owner/repo"
-              className="flex-1 min-w-56 bg-black text-xs font-mono text-[#e6edf3] border border-neutral-800 rounded-lg px-3 py-1.5 transition-colors focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500/30 placeholder:text-[#8b98a9]/50"
+              className="flex-1 min-w-56 bg-black text-xs font-mono text-[#e6edf3] border border-[#1e2530] rounded-lg px-3 py-1.5 transition-colors focus:outline-none focus:border-[#0B9F95] focus:ring-1 focus:ring-[#0B9F95]/30 placeholder:text-[#8b98a9]/50"
             />
             <select
               value={cron}
               onChange={(e) => setCron(e.target.value)}
-              className="bg-black text-xs text-[#e6edf3] border border-neutral-800 rounded-lg px-2.5 py-1.5 transition-colors focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500/30"
+              className="bg-black text-xs text-[#e6edf3] border border-[#1e2530] rounded-lg px-2.5 py-1.5 transition-colors focus:outline-none focus:border-[#0B9F95] focus:ring-1 focus:ring-[#0B9F95]/30"
             >
               {CADENCES.map((c) => (
                 <option key={c.cron} value={c.cron}>{c.label}</option>
@@ -149,11 +149,11 @@ export function MissionsView(): JSX.Element {
               type="button"
               disabled={busy}
               onClick={() => void deployMission()}
-              className="text-xs font-semibold text-teal-300 border border-teal-500/40 bg-teal-950/50 hover:bg-teal-900/60 rounded-md px-3 py-1.5 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+              className="text-xs font-semibold text-[#2dd4bf] border border-[#0B9F95]/40 bg-[#0B9F95]/10 hover:bg-[#0B9F95]/20 rounded-md px-3 py-1.5 transition-colors disabled:opacity-50 flex items-center gap-1.5"
             >
               {busy ? (
                 <>
-                  <span className="animate-spin inline-block w-3 h-3 border-2 border-teal-300 border-t-transparent rounded-full" />
+                  <span className="animate-spin inline-block w-3 h-3 border-2 border-[#2dd4bf] border-t-transparent rounded-full" />
                   <span>Deploying…</span>
                 </>
               ) : (
@@ -164,13 +164,13 @@ export function MissionsView(): JSX.Element {
         </div>
 
         {/* Active missions */}
-        <div className="border border-white/[0.08] rounded-xl bg-[#07090e] shadow-sm p-5 flex flex-col gap-3">
+        <div className="border border-[#1e2530] rounded-xl bg-[#0a0c10] shadow-sm p-5 flex flex-col gap-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-white">Active Missions</h3>
+            <h3 className="text-sm font-semibold text-[#e6edf3]">Active Missions</h3>
             <button
               type="button"
               onClick={refresh}
-              className="text-[11px] text-[#8b98a9] hover:text-white hover:border-neutral-700 border border-neutral-800 rounded-md px-2 py-1 transition-colors"
+              className="text-[11px] text-[#8b98a9] hover:text-[#e6edf3] hover:border-[#2c3545] border border-[#1e2530] rounded-md px-2 py-1 transition-colors"
             >
               Refresh
             </button>
@@ -181,24 +181,24 @@ export function MissionsView(): JSX.Element {
               <span>Loading…</span>
             </div>
           ) : missions.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 border border-dashed border-neutral-800 rounded-lg bg-black/20 text-center px-4">
+            <div className="flex flex-col items-center justify-center py-10 border border-dashed border-[#1e2530] rounded-lg bg-black/20 text-center px-4">
               <p className="text-[#8b98a9] text-xs">No missions yet — deploy one above.</p>
             </div>
           ) : (
-            <div className="flex flex-col divide-y divide-white/[0.06]">
+            <div className="flex flex-col divide-y divide-[#1e2530]">
               {missions.map((m) => (
-                <div key={m.id} className="py-3 flex items-start justify-between gap-3 hover:bg-white/[0.02] -mx-2 px-2 rounded-lg transition-colors">
+                <div key={m.id} className="py-3 flex items-start justify-between gap-3 hover:bg-[#11141b] -mx-2 px-2 rounded-lg transition-colors">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-mono font-semibold text-white">{m.id}</span>
-                      <span className="text-[10px] font-mono text-teal-400 bg-teal-950/60 border border-teal-800/60 px-1.5 py-0.5 rounded">
+                      <span className="text-xs font-mono font-semibold text-[#e6edf3]">{m.id}</span>
+                      <span className="text-[10px] font-mono text-[#2dd4bf] bg-[#0B9F95]/10 border border-[#0B9F95]/30 px-1.5 py-0.5 rounded">
                         {m.triggers.find((t) => t.kind === "schedule")?.cron ?? "manual"}
                       </span>
                       <span
                         className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${
                           m.enabled
                             ? "text-[#4cc38a] border-[#4cc38a]/30 bg-[#4cc38a]/10"
-                            : "text-[#8b98a9] border-neutral-800 bg-black"
+                            : "text-[#8b98a9] border-[#1e2530] bg-black"
                         }`}
                       >
                         {m.enabled ? "active" : "paused"}
@@ -216,7 +216,7 @@ export function MissionsView(): JSX.Element {
                     type="button"
                     disabled={busy}
                     onClick={() => void runNow(m.id)}
-                    className="text-xs font-semibold border border-teal-500/40 text-teal-300 bg-teal-950/50 hover:bg-teal-900/60 rounded-md px-2.5 py-1 shrink-0 transition-colors disabled:opacity-50"
+                    className="text-xs font-semibold border border-[#0B9F95]/40 text-[#2dd4bf] bg-[#0B9F95]/10 hover:bg-[#0B9F95]/20 rounded-md px-2.5 py-1 shrink-0 transition-colors disabled:opacity-50"
                   >
                     Check in now
                   </button>
