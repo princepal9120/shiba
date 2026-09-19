@@ -41,3 +41,41 @@ for (const file of pages) {
 }
 assert.equal(failures.length, 0, failures.join("\n"));
 console.log("Verified " + pages.length + " HTML pages, " + links + " local links/assets/anchors, and Pagefind output.");
+
+// Stale-claim check (VERIFICATION_PLAN §3): the docs source must not
+// resurrect removed claims. Each pattern is verified against the current
+// tree — anything listed here must produce zero matches.
+function negated(text, index) {
+  // "There is no provider callback" documents the deleted route honestly;
+  // only an affirmative mention is stale. Negation must appear in the same
+  // sentence — newlines do not end a sentence because prose is hard-wrapped.
+  const before = text.slice(0, index);
+  const clause = Math.max(
+    before.lastIndexOf("."), before.lastIndexOf("!"), before.lastIndexOf("?"),
+    before.lastIndexOf(";"), before.lastIndexOf(":"), before.lastIndexOf("|"),
+  ) + 1;
+  return /\b(?:no|not|never|without|nor|nonexistent|n't)\b/i.test(before.slice(clause));
+}
+const staleClaims = [
+  // Case-sensitive: "Worker origin" (the hostname) is legit prose; the env
+  // var spelling is the removed claim.
+  { re: /WORKER_ORIGIN/g, note: "removed env var" },
+  { re: /gemini-2\.0/gi, note: "retired model id" },
+  { re: /only google/gi, note: "provider-lock claim" },
+  { re: /provider callback/gi, note: "deleted 503 callback path", allow: negated },
+];
+const docsRoot = resolve("web/src/content/docs");
+const markdown = (await walk(docsRoot)).filter(file => /\.(md|mdx)$/.test(file));
+const stale = [];
+for (const file of markdown) {
+  const text = await readFile(file, "utf8");
+  for (const { re, note, allow } of staleClaims) {
+    for (const match of text.matchAll(re)) {
+      if (allow && allow(text, match.index)) continue;
+      const line = text.slice(0, match.index).split("\n").length;
+      stale.push(relative(docsRoot, file) + ":" + line + " matches " + re + " (" + note + ")");
+    }
+  }
+}
+assert.equal(stale.length, 0, stale.join("\n"));
+console.log("Checked " + markdown.length + " markdown files for stale claims.");

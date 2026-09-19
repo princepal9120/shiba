@@ -9,6 +9,10 @@ export default defineConfig({
 	srcDir: './src',
 	outDir: 'dist',
 	output: 'static',
+	redirects: {
+		'/docs': '/docs/overview/',
+		'/docs/': '/docs/overview/',
+	},
 	integrations: [
 		tailwind(),
 		starlight({
@@ -75,6 +79,7 @@ export default defineConfig({
 					label: 'Reference',
 					items: [
 						{ label: 'API reference', slug: 'docs/api' },
+						{ label: 'Nimbus Docs CLI', slug: 'docs/nimbus-cli' },
 						{ label: 'Contributing', slug: 'docs/contributing' },
 					],
 				},
@@ -82,3 +87,4 @@ export default defineConfig({
 		}),
 	],
 });
+

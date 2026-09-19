@@ -170,12 +170,12 @@ The computer adapter deliberately refuses execution — `@cloudflare/computer` i
 - Provider traffic interception at the Sandbox egress boundary is implemented in `src/sandbox.ts`; there is no callback route to enable.
 - Phase updates exist; token-level OpenCode JSON event streaming is partially surfaced via `streamProgress`.
 - Per-user orchestrator routing exists (`getUserId` in `src/index.ts`); unauthenticated `/api/runs` returns 401. Full Access JWT verification is not implemented.
-- No deny-by-default egress allowlist yet — `outboundByHost` routes two hosts but anything else falls through. Do not expose untrusted runs publicly on this basis.
-- GitHub credential is attached to any github.com request from the container — not yet scoped to the run's repo.
+- Egress is deny-by-default: `interceptHttps` is on and `allowedHosts` admits only `generativelanguage.googleapis.com`, `github.com`, and `codeload.github.com`, narrowed per run by `approveHarnessEgress` to the selected harness's provider host plus git. The boundary is unit-tested but has not faced a live hostile run — still do not expose untrusted runs publicly on this basis alone.
+- The GitHub credential is scoped to the run's repo: github.com egress is refused until `approveRepoScope` installs a forwarder for the approved `/owner/repo` path, and only GET/HEAD plus POST `git-upload-pack` pass — container pushes are refused even with the token.
 - Cancellation is best-effort; clearing registry/history is not process cancellation or complete Durable Object erasure.
 - GitHub publishing uses captured contents, not a lossless Git patch. File modes and large files need further work. Webhooks acknowledge events only.
 - The parent result envelope exists (`RESULT_MARKER`); trust the parsed envelope, not the transport type — inspect transcripts, not just badges.
-- Run cost estimation helpers exist (`src/costs.ts`) as pure functions; they are estimates, not bills.
+- `src/costs.ts` is gone — cost surfaces and application limits live in the docs (`web/src/content/docs/docs/costs.md`, served at `/docs/costs`); they describe resources, not bills.
 
 ## Alternative runtimes
 

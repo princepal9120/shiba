@@ -8,13 +8,43 @@ Worker, durable agents, and a Sandbox container running OpenCode.
 The deployed resources are declared in `wrangler.jsonc`; the runtime flow is
 implemented in `src/agents/orchestrator.ts` and `src/runtime.ts`.
 
+<div class="docs-hero-card">
+  <div class="docs-hero-icon">⚡</div>
+  <div class="docs-hero-body">
+    <div class="docs-hero-title">Account-Owned Autonomous Engineering</div>
+    <p class="docs-hero-desc">Delegate bounded GitHub coding tasks to isolated Cloudflare micro-containers with human approval gates and secret-masking egress proxies.</p>
+  </div>
+</div>
+
 ## The workflow
 
-1. Describe a task and supply an HTTPS GitHub repository URL.
-2. Review the proposed `delegate_coding_task` input.
-3. Approve or reject that exact delegation.
-4. Follow phase progress while the sandbox clones and edits the repository.
-5. Review the returned files and diff before adopting the changes.
+<div class="docs-flow-grid">
+  <div class="docs-flow-step">
+    <div class="docs-flow-num">STEP 01</div>
+    <div class="docs-flow-title">Task Submission</div>
+    <p class="docs-flow-desc">Describe task with repo URL and target branch via dashboard or Slack.</p>
+  </div>
+  <div class="docs-flow-step">
+    <div class="docs-flow-num">STEP 02</div>
+    <div class="docs-flow-title">Plan Synthesis</div>
+    <p class="docs-flow-desc">Orchestrator generates bounded diff and shell commands using Workers AI.</p>
+  </div>
+  <div class="docs-flow-step">
+    <div class="docs-flow-num">STEP 03</div>
+    <div class="docs-flow-title">Human Sign-off</div>
+    <p class="docs-flow-desc">Inspect planned commands; approve or reject on Slack or Dashboard.</p>
+  </div>
+  <div class="docs-flow-step">
+    <div class="docs-flow-num">STEP 04</div>
+    <div class="docs-flow-title">Sandbox Execution</div>
+    <p class="docs-flow-desc">gVisor microVM clones repo, edits files, and runs test suites.</p>
+  </div>
+  <div class="docs-flow-step">
+    <div class="docs-flow-num">STEP 05</div>
+    <div class="docs-flow-title">Diff &amp; PR Review</div>
+    <p class="docs-flow-desc">Review live syntax-highlighted diff; publish optional GitHub PR.</p>
+  </div>
+</div>
 
 The delegation tool sets `needsApproval: true`. Its input contains `repoUrl`,
 `task`, `baseBranch` (default `main`), and `publishPullRequest` (default `false`).
