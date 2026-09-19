@@ -131,6 +131,29 @@ interface SetupStatusShape {
   slack?: { signingSecret?: boolean; botToken?: boolean; approvers?: number };
 }
 
+/**
+ * Detect which onboarding steps the deployment itself proves done.
+ * Shared by the modal checklist and the header setup pill.
+ */
+export async function detectSetupSteps(): Promise<Set<string>> {
+  const found = new Set<string>(["workers-paid"]); // reachable = deployed
+  const status = (await fetch("/api/setup/status")
+    .then((r) => (r.ok ? r.json() : null))
+    .catch(() => null)) as SetupStatusShape | null;
+  if (status) {
+    if (status.gateway?.reachable === "yes") found.add("ai-gateway");
+    if (status.access?.required) found.add("access-bypass");
+    if (status.github?.token) found.add("github-token");
+    if (status.slack?.signingSecret && status.slack?.botToken && (status.slack?.approvers ?? 0) > 0)
+      found.add("slack-bot");
+    const runs = (await fetch("/api/runs")
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null)) as { runs?: unknown[] } | null;
+    if ((runs?.runs?.length ?? 0) > 0) found.add("first-run");
+  }
+  return found;
+}
+
 export function OnboardingModal({
   isOpen,
   onClose,
@@ -166,22 +189,11 @@ export function OnboardingModal({
   // Live-detect configured pieces from the deployment itself.
   useEffect(() => {
     if (!isOpen) return;
-    const found = new Set<string>(["workers-paid"]); // reachable = deployed
-    fetch("/api/setup/status")
-      .then(async (r) => (r.ok ? ((await r.json()) as SetupStatusShape) : null))
-      .then(async (status) => {
-        if (!status) return;
-        if (status.gateway?.reachable === "yes") found.add("ai-gateway");
-        if (status.access?.required) found.add("access-bypass");
-        if (status.github?.token) found.add("github-token");
-        if (status.slack?.signingSecret && status.slack?.botToken && (status.slack?.approvers ?? 0) > 0)
-          found.add("slack-bot");
-        const runs = (await fetch("/api/runs")
-          .then((r) => (r.ok ? r.json() : null)).catch(() => null)) as { runs?: unknown[] } | null;
-        if ((runs?.runs?.length ?? 0) > 0) found.add("first-run");
-        setDetected(found);
-      })
-      .catch(() => setDetected(found));
+    let cancelled = false;
+    detectSetupSteps()
+      .then((found) => { if (!cancelled) setDetected(found); })
+      .catch(() => {});
+    return () => { cancelled = true; };
   }, [isOpen]);
 
   if (!isOpen) return null;

@@ -164,9 +164,9 @@ describe("dashboard rendering", () => {
 
   it("renders the top navigation bar with all architectural views", () => {
     const markup = renderApp();
-    expect(markup).toContain("Task Console");
-    expect(markup).toContain("VM Inspector");
-    expect(markup).toContain("Run Registry");
+    expect(markup).toContain("Tasks");
+    expect(markup).toContain("VM");
+    expect(markup).toContain("Runs");
     expect(markup).toContain("Automations");
     expect(markup).toContain("Architecture");
   });

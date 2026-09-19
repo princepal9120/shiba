@@ -15,7 +15,7 @@ import { VMInspector, type VMRun } from "./components/VMInspector";
 import { RunRegistryView } from "./components/RunRegistryView";
 import { AutomationsView } from "./components/AutomationsView";
 import { ArchitectureView } from "./components/ArchitectureView";
-import { OnboardingModal } from "./components/OnboardingModal";
+import { OnboardingModal, detectSetupSteps } from "./components/OnboardingModal";
 import { TaskForm } from "../../web/src/components/TaskForm";
 import {
   extractPendingApprovals,
@@ -127,6 +127,18 @@ function useRetainedRuns(refreshToken: number): { runs: RetainedRun[]; error: st
   return { runs, error };
 }
 
+type MainView = "tasks" | "vm" | "runs" | "automations" | "architecture";
+
+const NAV_ITEMS: { id: MainView; label: string }[] = [
+  { id: "tasks", label: "Tasks" },
+  { id: "vm", label: "VM" },
+  { id: "runs", label: "Runs" },
+  { id: "automations", label: "Automations" },
+  { id: "architecture", label: "Architecture" },
+];
+
+const SETUP_TOTAL_STEPS = 6;
+
 const STARTER_TEMPLATES = [
   {
     icon: "🧪",
@@ -165,8 +177,20 @@ export function App(): React.JSX.Element {
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const [showOnboardingModal, setShowOnboardingModal] = useState(false);
   const [activeTab, setActiveTab] = useState<"all" | "active" | "completed">("all");
-  const [mainView, setMainView] = useState<"tasks" | "vm" | "runs" | "automations" | "architecture">("tasks");
+  const [mainView, setMainView] = useState<MainView>("tasks");
+  const [setupDone, setSetupDone] = useState<number | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+
+  // Header setup pill: count deployment-proven steps; refreshes when the
+  // onboarding modal closes so fixes show up immediately.
+  useEffect(() => {
+    if (showOnboardingModal) return;
+    let cancelled = false;
+    detectSetupSteps()
+      .then((found) => { if (!cancelled) setSetupDone(found.size); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [showOnboardingModal]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -493,68 +517,23 @@ export function App(): React.JSX.Element {
 
         {/* DESKTOP VIEW NAVIGATION TABS */}
         <nav className="hidden md:flex items-center gap-1 bg-[#0d1117] p-1 rounded-xl border border-white/[0.08] text-xs shadow-inner">
-          <button
-            type="button"
-            onClick={() => setMainView("tasks")}
-            className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
-              mainView === "tasks"
-                ? "bg-teal-950/80 text-teal-300 border border-teal-500/30 font-semibold shadow-sm"
-                : "text-[#8b98a9] hover:text-white hover:bg-white/[0.04]"
-            }`}
-          >
-            <span>🚀 Task Console</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setMainView("vm")}
-            className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
-              mainView === "vm"
-                ? "bg-teal-950/80 text-teal-300 border border-teal-500/30 font-semibold shadow-sm"
-                : "text-[#8b98a9] hover:text-teal-300 hover:bg-white/[0.04]"
-            }`}
-          >
-            <span>🖥️ VM Inspector</span>
-            {activeSandboxCount > 0 ? (
-              <span className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />
-            ) : null}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setMainView("runs")}
-            className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
-              mainView === "runs"
-                ? "bg-teal-950/80 text-teal-300 border border-teal-500/30 font-semibold shadow-sm"
-                : "text-[#8b98a9] hover:text-white hover:bg-white/[0.04]"
-            }`}
-          >
-            <span>📋 Run Registry</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setMainView("automations")}
-            className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
-              mainView === "automations"
-                ? "bg-teal-950/80 text-teal-300 border border-teal-500/30 font-semibold shadow-sm"
-                : "text-[#8b98a9] hover:text-white hover:bg-white/[0.04]"
-            }`}
-          >
-            <span>⚡ Automations</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setMainView("architecture")}
-            className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
-              mainView === "architecture"
-                ? "bg-teal-950/80 text-teal-300 border border-teal-500/30 font-semibold shadow-sm"
-                : "text-[#8b98a9] hover:text-white hover:bg-white/[0.04]"
-            }`}
-          >
-            <span>🏗️ Architecture</span>
-          </button>
+          {NAV_ITEMS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setMainView(item.id)}
+              className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
+                mainView === item.id
+                  ? "bg-teal-950/80 text-teal-300 border border-teal-500/30 font-semibold shadow-sm"
+                  : "text-[#8b98a9] hover:text-white hover:bg-white/[0.04]"
+              }`}
+            >
+              <span>{item.label}</span>
+              {item.id === "vm" && activeSandboxCount > 0 ? (
+                <span className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />
+              ) : null}
+            </button>
+          ))}
         </nav>
 
         <div className="flex items-center gap-3 sm:gap-4">
@@ -594,16 +573,24 @@ export function App(): React.JSX.Element {
             ?
           </button>
 
-          {/* Onboarding Setup Guide */}
+          {/* Onboarding Setup Guide — pill shows live progress when incomplete */}
           <button
             type="button"
             onClick={() => setShowOnboardingModal(true)}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-300 hover:text-teal-200 border border-teal-500/40 hover:border-teal-400/80 bg-teal-950/50 hover:bg-teal-900/60 px-2.5 py-1 rounded-md transition-colors shadow-[0_0_8px_rgba(11,159,149,0.2)]"
+            className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-md transition-colors border ${
+              setupDone !== null && setupDone < SETUP_TOTAL_STEPS
+                ? "text-[#c9a227] hover:text-[#e9d890] border-[#c9a227]/40 hover:border-[#c9a227]/70 bg-[#c9a227]/10"
+                : "text-teal-300 hover:text-teal-200 border-teal-500/40 hover:border-teal-400/80 bg-teal-950/50 hover:bg-teal-900/60 shadow-[0_0_8px_rgba(11,159,149,0.2)]"
+            }`}
             title="Setup & Onboarding Guide"
             aria-label="Setup & Onboarding Guide"
           >
-            <span>🚀</span>
-            <span className="hidden sm:inline">Setup Guide</span>
+            <span className="hidden sm:inline">
+              {setupDone !== null && setupDone < SETUP_TOTAL_STEPS
+                ? `Setup ${setupDone}/${SETUP_TOTAL_STEPS}`
+                : "Setup Guide"}
+            </span>
+            <span className="sm:hidden">Setup</span>
           </button>
 
           {/* Links */}
@@ -618,42 +605,19 @@ export function App(): React.JSX.Element {
 
       {/* MOBILE VIEW NAVIGATION TABS */}
       <div className="md:hidden flex items-center justify-between px-3 py-2 bg-[#090b0e] border-b border-neutral-800 overflow-x-auto text-xs font-mono shrink-0 gap-1">
-        <button
-          type="button"
-          onClick={() => setMainView("tasks")}
-          className={`px-2.5 py-1 rounded whitespace-nowrap ${mainView === "tasks" ? "bg-teal-950 text-teal-300 font-bold border border-teal-800/60" : "text-[#8b98a9]"}`}
-        >
-          🚀 Console
-        </button>
-        <button
-          type="button"
-          onClick={() => setMainView("vm")}
-          className={`px-2.5 py-1 rounded whitespace-nowrap flex items-center gap-1.5 ${mainView === "vm" ? "bg-teal-950 text-teal-300 font-bold border border-teal-800/60" : "text-[#8b98a9]"}`}
-        >
-          <span>🖥️ VM View</span>
-          {activeSandboxCount > 0 ? <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse" /> : null}
-        </button>
-        <button
-          type="button"
-          onClick={() => setMainView("runs")}
-          className={`px-2.5 py-1 rounded whitespace-nowrap ${mainView === "runs" ? "bg-teal-950 text-teal-300 font-bold border border-teal-800/60" : "text-[#8b98a9]"}`}
-        >
-          📋 Runs
-        </button>
-        <button
-          type="button"
-          onClick={() => setMainView("automations")}
-          className={`px-2.5 py-1 rounded whitespace-nowrap ${mainView === "automations" ? "bg-teal-950 text-teal-300 font-bold border border-teal-800/60" : "text-[#8b98a9]"}`}
-        >
-          ⚡ Automations
-        </button>
-        <button
-          type="button"
-          onClick={() => setMainView("architecture")}
-          className={`px-2.5 py-1 rounded whitespace-nowrap ${mainView === "architecture" ? "bg-teal-950 text-teal-300 font-bold border border-teal-800/60" : "text-[#8b98a9]"}`}
-        >
-          🏗️ Arch
-        </button>
+        {NAV_ITEMS.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => setMainView(item.id)}
+            className={`px-2.5 py-1 rounded whitespace-nowrap flex items-center gap-1.5 ${mainView === item.id ? "bg-teal-950 text-teal-300 font-bold border border-teal-800/60" : "text-[#8b98a9]"}`}
+          >
+            <span>{item.label}</span>
+            {item.id === "vm" && activeSandboxCount > 0 ? (
+              <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse" />
+            ) : null}
+          </button>
+        ))}
       </div>
 
       {mainView === "tasks" ? (
@@ -844,7 +808,6 @@ export function App(): React.JSX.Element {
                     onClick={() => setShowOnboardingModal(true)}
                     className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold text-teal-300 hover:text-teal-200 border border-teal-500/40 bg-teal-950/60 hover:bg-teal-900/70 px-3.5 py-1.5 rounded-lg transition-colors shadow-[0_0_8px_rgba(11,159,149,0.3)]"
                   >
-                    <span>🚀</span>
                     <span>View Setup Checklist & Architecture</span>
                   </button>
                 </div>
