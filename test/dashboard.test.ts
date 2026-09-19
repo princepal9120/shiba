@@ -168,7 +168,26 @@ describe("dashboard rendering", () => {
     expect(markup).toContain("VM");
     expect(markup).toContain("Runs");
     expect(markup).toContain("Automations");
+    expect(markup).toContain("Missions");
+    expect(markup).toContain("Gates");
     expect(markup).toContain("Architecture");
+  });
+
+  it("renders the Missions surface with standing-goal framing", async () => {
+    const { MissionsView } = await import("../dashboard/src/components/MissionsView");
+    const markup = renderToStaticMarkup(React.createElement(MissionsView));
+    expect(markup).toContain("Standing goal");
+    expect(markup).toContain("Deploy mission");
+    expect(markup).toContain("approval-gated");
+  });
+
+  it("renders the Gates surface with review, QA, and security entry points", async () => {
+    const { GatesView } = await import("../dashboard/src/components/GatesView");
+    const markup = renderToStaticMarkup(React.createElement(GatesView));
+    expect(markup).toContain("Code Review");
+    expect(markup).toContain("QA");
+    expect(markup).toContain("Security Review");
+    expect(markup).toContain("Publish result as a PR");
   });
 
   it("renders VMInspector with workspace inspection, diff and terminal tabs", () => {

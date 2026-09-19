@@ -13,6 +13,10 @@ Clone/configure/code/collect phases stream, but the runtime awaits the OpenCode 
 
 The parent currently treats string child output as completed, including possible error text. **Read the transcript, not just a completed badge.** An empty diff is not evidence of successful edits.
 
+## Missions and Quality Gates
+
+The **Missions** tab deploys standing goals — recurring automations (`mission: true`) whose `run_when` gate re-queues work only while the goal is unfinished. The **Gates** tab offers typed entry points for Code Review, QA (test generation), and Security Review; each builds a task prompt and queues it through the same `/api/runs` approval path. Neither surface bypasses the approval gate, and both publish as PRs only when `GITHUB_TOKEN` is configured.
+
 ## Cancel and clear
 
 Cancellation updates the registry before best-effort sandbox destruction. A successful request does not prove the process stopped. Verify shutdown for sensitive work.

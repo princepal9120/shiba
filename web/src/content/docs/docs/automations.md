@@ -54,6 +54,27 @@ You can declare automations in your dashboard or programmatically via the API:
 
 ---
 
+## Missions
+
+A mission is a standing goal rather than a one-off task: an automation created with `mission: true`, shown on the dashboard's **Missions** surface. Each cadence tick evaluates the `run_when` gate — "does this goal still have unfinished work?" — and queues a run only while it does. Every check-in stays approval-gated; a mission schedules work, it does not authorize it.
+
+```json
+{
+  "prompt": "Standing goal: keep dependency vulnerabilities at zero on main",
+  "repoUrl": "https://github.com/org/web-app",
+  "mission": true,
+  "enabled": true,
+  "triggers": [
+    { "kind": "schedule", "cron": "0 3 * * *", "runWhen": "the standing goal still has unfinished work or new relevant changes" },
+    { "kind": "manual" }
+  ]
+}
+```
+
+This is a recurring gated check-in, not a checkpointed multi-day process: there is no resumable agent memory between runs. Each check-in is a normal run with its own approval, diff, and outcome.
+
+---
+
 ## The `run_when` gate
 
 Exact filters cannot express *"only when it's actually a bug report"*. Any trigger may carry a `run_when` sentence, checked by the cheap Workers AI orchestrator model before the run starts: a single call, no AI Gateway round trip, and no token bill against your provider key.

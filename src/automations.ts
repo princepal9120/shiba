@@ -109,6 +109,12 @@ export interface Automation {
   runDayStartedAt?: number;
   /** T19: the most recent gate refusal, kept so a skip is never silent. */
   lastSkip?: { at: number; reason: string };
+  /**
+   * Mission flag: a standing goal evaluated on a cadence rather than a
+   * one-off trigger. The `run_when` gate carries the goal's exit criteria —
+   * each firing re-queues work only while the goal is still unsatisfied.
+   */
+  mission?: boolean;
 }
 
 export interface GitHubAutomationEvent {
@@ -464,6 +470,8 @@ export interface CreateAutomationInput {
   triggers: AutomationTrigger[];
   enabled?: boolean;
   runAs?: string;
+  /** Standing-goal automation — see {@link Automation.mission}. */
+  mission?: boolean;
 }
 
 export interface CreatedAutomation {
@@ -514,6 +522,7 @@ export function createAutomation(input: CreateAutomationInput): CreatedAutomatio
       triggers: input.triggers,
       enabled: input.enabled ?? true,
       ...(input.runAs !== undefined ? { runAs: input.runAs } : {}),
+      ...(input.mission === true ? { mission: true } : {}),
       ...(webhookSecret !== null ? { webhookSecret } : {}),
       runCount: 0,
     },

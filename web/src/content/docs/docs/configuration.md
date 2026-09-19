@@ -19,6 +19,10 @@ Provider traffic is intercepted at Sandbox egress. There is no public `/api/prov
 
 Select a currently available model in your account. The checked-in default is not an availability guarantee. The assistant model used to edit this repository is independent of these application settings; an anonymous model name is not a usable endpoint.
 
+### Harnesses and subscription credentials
+
+`opencode`, `claude-code`, and `codex` are supported; each run may pick a different provider model (`google/*`, `anthropic/*`, `openai/*`) validated against the harness. Subscription credentials are deliberately not supported: Claude Pro/Max OAuth tokens and ChatGPT Plus/Pro credentials may not be routed through a third-party service on a user's behalf. The supported path is a provider **API key** stored as BYOK on your own AI Gateway — the container receives only a dummy key and real credentials are injected at egress. Cursor and Devin have no published headless CLI with a compatible credential model, so no harness exists for them.
+
 ## Optional secrets
 
 | Name | Purpose |

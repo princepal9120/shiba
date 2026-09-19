@@ -14,6 +14,8 @@ import { DiffViewer } from "./components/DiffViewer";
 import { VMInspector, type VMRun } from "./components/VMInspector";
 import { RunRegistryView } from "./components/RunRegistryView";
 import { AutomationsView } from "./components/AutomationsView";
+import { MissionsView } from "./components/MissionsView";
+import { GatesView } from "./components/GatesView";
 import { ArchitectureView } from "./components/ArchitectureView";
 import { OnboardingModal, detectSetupSteps } from "./components/OnboardingModal";
 import { TaskForm } from "../../web/src/components/TaskForm";
@@ -127,13 +129,15 @@ function useRetainedRuns(refreshToken: number): { runs: RetainedRun[]; error: st
   return { runs, error };
 }
 
-type MainView = "tasks" | "vm" | "runs" | "automations" | "architecture";
+type MainView = "tasks" | "vm" | "runs" | "automations" | "missions" | "gates" | "architecture";
 
 const NAV_ITEMS: { id: MainView; label: string }[] = [
   { id: "tasks", label: "Tasks" },
   { id: "vm", label: "VM" },
   { id: "runs", label: "Runs" },
   { id: "automations", label: "Automations" },
+  { id: "missions", label: "Missions" },
+  { id: "gates", label: "Gates" },
   { id: "architecture", label: "Architecture" },
 ];
 
@@ -206,6 +210,10 @@ export function App(): React.JSX.Element {
         setMainView("runs");
       } else if (tabParam === "automations") {
         setMainView("automations");
+      } else if (tabParam === "missions") {
+        setMainView("missions");
+      } else if (tabParam === "gates" || tabParam === "quality-gates") {
+        setMainView("gates");
       } else if (tabParam === "architecture") {
         setMainView("architecture");
       }
@@ -1243,6 +1251,10 @@ export function App(): React.JSX.Element {
         />
       ) : mainView === "automations" ? (
         <AutomationsView />
+      ) : mainView === "missions" ? (
+        <MissionsView />
+      ) : mainView === "gates" ? (
+        <GatesView />
       ) : (
         <ArchitectureView />
       )}

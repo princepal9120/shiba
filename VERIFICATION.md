@@ -8,7 +8,7 @@
 |-------|--------|
 | `pnpm typecheck` | PASS |
 | `pnpm lint` | PASS |
-| `pnpm test` | PASS (405/405 across 32 files) |
+| `pnpm test` | PASS (407/407 across 32 files) |
 | `pnpm build` | PASS (docs: 25 pages, 1101 links verified, 21 markdown files stale-claim scanned) |
 | `pnpm docs:check` | PASS |
 | `npx wrangler deploy --dry-run` | **PASS (2026-09-19)** — image `cloudflare/sandbox:0.12.9-opencode` + `opencode-ai@1.18.31`, `claude-code@2.1.277`, `codex@0.155.0` built; four DOs bound; migrations v1/v2 accepted; `standard-1` accepted. |
@@ -37,7 +37,7 @@ Specifically unmeasured: peak container memory (which decides `basic` vs `standa
 
 **The Claude Code and Codex CLIs ship in the image but have not run live.** The Dockerfile installs `opencode-ai@1.18.31`, `@anthropic-ai/claude-code@2.1.277`, and `@openai/codex@0.155.0`, and the image build verifies each binary reports its version. Their config, argv, env, and event parsers are unit-tested against their documented stream formats; neither has been run against the live API, so a stream-format drift would surface at the first real run, not before. The dashboard's harness picker is wired end to end; only OpenCode has completed a live run.
 
-## What the 405 tests do cover
+## What the 407 tests do cover
 
 - **Egress credential boundary.** `github.com` defaults to refusal; the credential is attached only for the run's own `/owner/repo`, with prefix-confusion siblings (`/owner/repo-evil`) and non-GitHub destinations refused, and no `Authorization` header reaching a refused request. The scope is proven to be installed *before* the clone, not after.
 - **Automation safety.** Approval required by default; unattended mode refused for a non-allowlisted repo and for any run mutating more than a pull request; the daily budget refusing run N+1 with its reason and resetting on the next UTC day; both kill switches.
@@ -46,6 +46,16 @@ Specifically unmeasured: peak container memory (which decides `basic` vs `standa
 - Run result envelope parsing (an `error` envelope never reads `completed`), Slack signature verification and replay bounds, approver allowlisting, burst grouping, cron parsing and coalescing, GitHub tree publishing including deletions.
 
 ## Fix history
+
+**2026-09-19 (missions + quality gates surfaces — 407 tests)**
+
+Factory/Droid-parity surfaces, verified live on `wrangler dev` (:8788):
+
+- **Missions** (`dashboard/src/components/MissionsView.tsx`): standing goals as `mission: true` automations — a scheduled trigger carries a `run_when` gate ("does this goal still have unfinished work?") plus a manual check-in trigger. `Automation.mission` added to the record, `CreateAutomationInput`, and create path (`src/automations.ts`); `publicAutomation` serializes it. Live-verified: `POST /api/automations` with `mission:true` → stored, listed, serialized; `POST /api/automations/{id}/run` fired the check-in and the queue refused (400 — automations request `publishPullRequest`, no `GITHUB_TOKEN` locally: fail-closed as designed). Honest scope: recurring gated check-ins, not checkpointed multi-day processes — no resumable agent memory between runs.
+- **Quality Gates** (`dashboard/src/components/GatesView.tsx`): Code Review / QA / Security Review cards that build typed task prompts and queue through the same `POST /api/runs` approval path. Live-verified: security gate prompt → `200`, `approvalId` issued, pending approval persisted. No bypass — a human still approves before a container starts.
+- Dashboard nav extended (`Missions`, `Gates` tabs + deep links `?tab=missions`, `?tab=gates`); 2 new render tests.
+- **Docs**: `automations.md` Missions section, `dashboard.md` Missions/Gates section, `configuration.md` harness/subscription boundary — Claude Pro/Max and ChatGPT Plus/Pro subscription credentials are deliberately unsupported (provider terms); BYOK API keys on the user's own AI Gateway are the path. Devin CLI: no published headless CLI exists (`devin-cli@0.0.1` is a 205-byte placeholder) — no harness wired, documented rather than faked.
+- Suite green: typecheck, lint, 407/407 tests, build (25 pages/1101 links), `wrangler deploy --dry-run`.
 
 **2026-09-19 (self-serve onboarding lane + audit-gap closure — 405 tests)**
 
