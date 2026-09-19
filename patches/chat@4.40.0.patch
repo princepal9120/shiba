@@ -1,0 +1,25 @@
+diff --git a/dist/chunk-BKACWYIW.js b/dist/chunk-BKACWYIW.js
+index 6db01afc101f457b04703717e1eb3157f16af7ca..dd2b157cc1dd9b9598c3d1f4a632bd08355cdd1e 100644
+--- a/dist/chunk-BKACWYIW.js
++++ b/dist/chunk-BKACWYIW.js
+@@ -1130,7 +1130,10 @@ var THREAD_STATE_KEY_PREFIX = "thread-state:";
+ function isAsyncIterable2(value) {
+   return value !== null && typeof value === "object" && Symbol.asyncIterator in value;
+ }
+-var NEVER_ABORTED_SIGNAL = new AbortController().signal;
++var neverAbortedSignal;
++function getNeverAbortedSignal() {
++  return neverAbortedSignal ??= new AbortController().signal;
++}
+ async function* takeUntilAborted(source, signal) {
+   const iterator = source[Symbol.asyncIterator]();
+   let onAbort;
+@@ -1191,7 +1194,7 @@ var ThreadImpl = class _ThreadImpl {
+     this.channelId = config.channelId;
+     this.isDM = config.isDM ?? false;
+     this.channelVisibility = config.channelVisibility ?? "unknown";
+-    this.signal = config.signal ?? NEVER_ABORTED_SIGNAL;
++    this.signal = config.signal ?? getNeverAbortedSignal();
+     this._isSubscribedContext = config.isSubscribedContext ?? false;
+     this._currentMessage = config.currentMessage;
+     this._logger = config.logger;

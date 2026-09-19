@@ -1,0 +1,40 @@
+diff --git a/dist/commonjs/index.js b/dist/commonjs/index.js
+index 48cf0d3dabc885249c65909c4912712c834786f5..c99ad66e3aecc99bab3747401f00865d7b9a3e03 100644
+--- a/dist/commonjs/index.js
++++ b/dist/commonjs/index.js
+@@ -3,11 +3,11 @@ Object.defineProperty(exports, "__esModule", { value: true });
+ exports.EXPANSION_MAX_REWRITES = exports.EXPANSION_MAX_DEPTH = exports.EXPANSION_MAX_LENGTH = exports.EXPANSION_MAX = void 0;
+ exports.expand = expand;
+ const balanced_match_1 = require("balanced-match");
+-const escSlash = '\0SLASH' + Math.random() + '\0';
+-const escOpen = '\0OPEN' + Math.random() + '\0';
+-const escClose = '\0CLOSE' + Math.random() + '\0';
+-const escComma = '\0COMMA' + Math.random() + '\0';
+-const escPeriod = '\0PERIOD' + Math.random() + '\0';
++const escSlash = '\0SLASH' + '\0';
++const escOpen = '\0OPEN' + '\0';
++const escClose = '\0CLOSE' + '\0';
++const escComma = '\0COMMA' + '\0';
++const escPeriod = '\0PERIOD' + '\0';
+ const escSlashPattern = new RegExp(escSlash, 'g');
+ const escOpenPattern = new RegExp(escOpen, 'g');
+ const escClosePattern = new RegExp(escClose, 'g');
+diff --git a/dist/esm/index.js b/dist/esm/index.js
+index 0e0cc962307eb697dc8139ef4c1f86b82380e5cc..9afeb3485bb764db7a70f2564f505e95110fca35 100644
+--- a/dist/esm/index.js
++++ b/dist/esm/index.js
+@@ -1,9 +1,9 @@
+ import { balanced } from 'balanced-match';
+-const escSlash = '\0SLASH' + Math.random() + '\0';
+-const escOpen = '\0OPEN' + Math.random() + '\0';
+-const escClose = '\0CLOSE' + Math.random() + '\0';
+-const escComma = '\0COMMA' + Math.random() + '\0';
+-const escPeriod = '\0PERIOD' + Math.random() + '\0';
++const escSlash = '\0SLASH' + '\0';
++const escOpen = '\0OPEN' + '\0';
++const escClose = '\0CLOSE' + '\0';
++const escComma = '\0COMMA' + '\0';
++const escPeriod = '\0PERIOD' + '\0';
+ const escSlashPattern = new RegExp(escSlash, 'g');
+ const escOpenPattern = new RegExp(escOpen, 'g');
+ const escClosePattern = new RegExp(escClose, 'g');

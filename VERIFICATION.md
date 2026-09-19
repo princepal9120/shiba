@@ -1,6 +1,6 @@
 # Verification Results
 
-**Last run: 2026-09-18 (rev 5, plan-review pass).**
+**Last run: 2026-09-19 (rev 6, local end-to-end run).**
 
 ## Status: PASS, every check green including the dry run
 
@@ -9,16 +9,29 @@
 | `pnpm typecheck` | PASS |
 | `pnpm lint` | PASS |
 | `pnpm test` | PASS (397/397 across 32 files) |
-| `pnpm build` | PASS (docs: 23 pages, 1015 links verified) |
+| `pnpm build` | PASS (docs: 25 pages, 1101 links verified, 21 markdown files stale-claim scanned) |
 | `pnpm docs:check` | PASS |
-| `npx wrangler deploy --dry-run` | **PASS (2026-09-18)** — OrbStack daemon started locally; container image `cloudflare/sandbox:0.12.9-opencode` + `opencode-ai@1.18.31` built and exported; all four DOs (`CodingOrchestrator`, `OpenCodeAgent`, `Sandbox`, `Automations`) bound with `new_sqlite_classes` migrations v1/v2 accepted; `instance_type: standard-1` accepted. **T1–T3 are now validated by the tool that catches them.** |
-| Live cloud run (PLAN.md T10) | **NOT ATTEMPTED** — requires a Cloudflare account; `spec/GOAL.md` forbids deploying from this environment. |
+| `npx wrangler deploy --dry-run` | **PASS (2026-09-19)** — image `cloudflare/sandbox:0.12.9-opencode` + `opencode-ai@1.18.31`, `claude-code@2.1.277`, `codex@0.155.0` built; four DOs bound; migrations v1/v2 accepted; `standard-1` accepted. |
+| Live cloud run (PLAN.md T10) | **NOT ATTEMPTED** — `spec/GOAL.md` forbids deploying from this environment. See below for the local `wrangler dev` end-to-end. |
+
+## Local end-to-end run — 2026-09-19 (`wrangler dev`, OrbStack Docker)
+
+`wrangler dev --port 8788` with `.dev.vars` (`SLACK_SIGNING_SECRET`, `SLACK_APPROVERS=U_E2E`, both test-only). Real chain exercised over HTTP:
+
+1. `POST /api/runs` `{repoUrl: octocat/Hello-World, task, baseBranch: master}` → `200`, `approvalId` issued, pending approval persisted on the `default` orchestrator DO.
+2. `POST /api/slack/interact` with a locally HMAC-signed `block_actions` payload (`v0` signature, action `approve`, value `{threadKey:"default", approvalId}`) → `200` ack; allowlist admitted `U_E2E`; the DO resolved the pointer exactly once. **Note: interact resolves the orchestrator DO by `threadKey` — the DO name must match the queue target (`default`), not an arbitrary thread key.**
+3. Approval → `delegate_coding_task` → `OpenCodeAgent` child → real Docker container `workerd-ai-intern-Sandbox-*-proxy` up under OrbStack.
+4. HTTPS egress interception ran: `approveRepoScope` installed `githubScoped` for `/octocat/Hello-World`; `git clone` succeeded into `/workspace/run-*`.
+5. `opencode run --format json --model google/gemini-3.5-flash-lite` executed; provider egress was rewritten to AI Gateway `…/default/google-ai-studio` and returned **401 (code 2009, Unauthorized)** — no `AI_GATEWAY_TOKEN` in `.dev.vars` and no BYOK key visible. The error propagated as a structured envelope; run marked `error`; sandbox destroyed.
+
+**Verified live locally:** queue → signed approval → DO dispatch → container spawn → scoped GitHub egress → clone → harness launch → provider egress rewrite → structured error → cleanup.
+**Not verified:** model inference itself (needs `AI_GATEWAY_TOKEN` or a BYOK key in the `default` AI Gateway — the wrangler OAuth token lacks gateway read/write scope, so this is an account-config step, not a code gap).
 
 ## Limitations, stated plainly
 
 **The dry run no longer blocks anything.** The prior "no Docker CLI / no daemon" limitation is retired: OrbStack was running this pass and the full dry run completed. T1–T3 (SQLite migration, instance type, model id) are validated.
 
-**No live end-to-end cloud run has been performed.** `spec/GOAL.md` forbids deploying from this environment. Every claim below rests on mocked unit tests, which cannot establish that any of this works in the cloud. Until a dated live run against the PLAN.md §15 P2 bar is recorded here, the honest status stays **local prototype**.
+**No live end-to-end *cloud* run has been performed.** `spec/GOAL.md` forbids deploying from this environment. The local `wrangler dev` run above now covers the whole path except the model call — but it is still not a cloud deploy, so status remains **local prototype** until a dated live run against the PLAN.md §15 P2 bar is recorded here.
 
 Specifically unmeasured: peak container memory (which decides `basic` vs `standard-1`, and per PLAN.md §8 is the binding cost constraint), cold-start time, and whether the `agents` SDK uses the WebSocket Hibernation API.
 
@@ -33,6 +46,19 @@ Specifically unmeasured: peak container memory (which decides `basic` vs `standa
 - Run result envelope parsing (an `error` envelope never reads `completed`), Slack signature verification and replay bounds, approver allowlisting, burst grouping, cron parsing and coalescing, GitHub tree publishing including deletions.
 
 ## Fix history
+
+**2026-09-19 (local end-to-end run — three real runtime bugs found and fixed)**
+
+The first `wrangler dev` boot failed with `Disallowed operation called within global scope`, which `--dry-run` never catches (it builds but never evaluates the bundle). Two dependency-level offenders, both patched via `pnpm patch` (`patches/`):
+
+- `brace-expansion@5.0.12` — `Math.random()` sentinel strings at module top level (`\0SLASH<rand>\0` etc.), pulled in via `minimatch@10` ← `just-bash` ← `@cloudflare/think`/`agents`. Sentinels replaced with fixed strings; collision risk is nil for the literal `\0` markers.
+- `chat@4.40.0` — `var NEVER_ABORTED_SIGNAL = new AbortController().signal` at module top level, via `@cloudflare/think` + `agents`. Lazy `getNeverAbortedSignal()` now constructs it on first use.
+
+And one repo bug that only surfaces at runtime:
+
+- **`src/sandbox.ts` egress handlers were dead.** `static get outboundHandlers`/`outboundByHost` overrode accessors whose *setters* populate the base `Container`'s module-level registries — the getters read fine but registered nothing, so `setOutboundByHost` threw `Outbound handler method 'githubScoped' not found` and every static handler (`denyUnscopedGitHub`, provider forwarders) never dispatched: github.com fell through to plain `fetch` once allowlisted. Both are now plain setter assignments evaluated at module init, which registers them under class name `Sandbox` in every context that loads the module.
+- **`wrangler.jsonc`** gained `enable_abortsignal_rpc`: `sandbox.exec({signal})` passes the run's AbortSignal over RPC for cancellation; without the flag workerd throws `AbortSignal serialization is not enabled`.
+- `test/runtime.test.ts` egress tests updated for the registry-backed accessor types (`| undefined`, required handler ctx arg).
 
 **2026-09-19 (inspo-driven dashboard redesign & full end-to-end UI polish)**
 - **Inspo-driven Design System & UI Skills Integration:** Reshaped the entire dashboard surface using Inspo MCP references (Buildkite, LlamaIndex, Anima, Tabnine) and UI-skills (@vercel-labs/web-design-guidelines, @s0xdk/refactoring-ui, @mengto/beautiful-shadows, @mengto/container-lines). Standardized obsidian elevation, hairline guides, layered shadows, live telemetry ribbon, and unified status tokens across all 5 views.

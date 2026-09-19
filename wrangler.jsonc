@@ -3,7 +3,9 @@
   "name": "ai-intern",
   "main": "src/index.ts",
   "compatibility_date": "2026-06-01",
-  "compatibility_flags": ["nodejs_compat"],
+  // enable_abortsignal_rpc: sandbox.exec({ signal }) sends an AbortSignal
+  // over RPC so dashboard cancellation reaches the container process.
+  "compatibility_flags": ["nodejs_compat", "enable_abortsignal_rpc"],
   "assets": {
     "directory": "./public",
     "not_found_handling": "404-page",

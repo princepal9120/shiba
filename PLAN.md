@@ -20,7 +20,7 @@
 | **Cut** | Multi-tenancy · snapshots · multi-repo projects · Linear/Tailscale/Vercel · cost-estimate UI · rename tracking |
 | **Ceiling** | `standard-4` (4 vCPU / 12 GiB / 20 GB) is Cloudflare's max. Capy goes to 16 vCPU / 128 GB. Heavy builds are out of reach — say so in the README. |
 | **Effort** | P0 ≈ 3h · P1 ≈ 5h · P2 ≈ 5h · P3 ≈ 14h · P4 ≈ 10h · **P5 ≈ 14h** · P6 ≈ 4h → **~55h** |
-| **Rev 4 status** | All of the above is **done except T10** (the live run — blocked on Docker + GOAL.md, not on code). See §2.0. |
+| **Rev 4 status** | All of the above is **done except T10** — the live run is now verified locally via `wrangler dev` up to the model call (AI Gateway credential needed); the cloud deploy itself is still blocked on GOAL.md. See §2.0. |
 
 ---
 
@@ -66,12 +66,12 @@ Baseline: **374 tests passing across 30 files**, typecheck and lint clean, `wran
 | **T6 scoped GitHub credential** | **Done in rev 4.** `github.com` now defaults to *refusal*; `approveRepoScope("/owner/repo")` installs the scoped forwarder before the clone. Stricter than this plan's sketch, which left the open forwarder as the default. Handlers moved to `src/egress.ts` — `src/sandbox.ts` imports `cloudflare:` builtins and cannot load under vitest, which is why this code was previously untested. |
 | **T19 `run_when` gate · T20 automation safety** | **Done.** TypeSafe Noul when `TYPESAFE_API_KEY` is set (noul ≥ 0.8 to run), else Workers AI YES/NO; both fail closed. Approval by default, narrow opt-in unattended mode, daily budget, two kill switches. |
 | **B10 concurrency** | **Fixed in rev 4.** `MAX_CONCURRENT_RUNS` was still 3 while `max_instances` was already 5 — T2 had only been half-applied. |
-| **T22 Claude Code / Codex adapters · T23 provider choice (B11)** | **Done in rev 4.** The seam had to widen first: `configPath` and the container env were still OpenCode-hardcoded in `runtime.ts`, so a second harness could not have worked. `AgentHarness` now owns `supportedProviders`, `egressHosts(model)`, `configFile()`, and `env()`. `allowedHosts` is narrowed per run via `approveHarnessEgress` to the selected harness's provider host plus git — never the union. **Caveat: neither new CLI is in the shipped image**, so both are unit-tested and unproven live. |
-| **T10 live acceptance run** | **Blocked on a Cloudflare account, not on tooling.** `spec/GOAL.md` forbids deploying from the build environment. The `wrangler deploy --dry-run` gap is closed as of 2026-09-18 (rev 5): with the OrbStack daemon running, the dry run builds the image and validates T1–T3. |
+| **T22 Claude Code / Codex adapters · T23 provider choice (B11)** | **Done in rev 4.** The seam had to widen first: `configPath` and the container env were still OpenCode-hardcoded in `runtime.ts`, so a second harness could not have worked. `AgentHarness` now owns `supportedProviders`, `egressHosts(model)`, `configFile()`, and `env()`. `allowedHosts` is narrowed per run via `approveHarnessEgress` to the selected harness's provider host plus git — never the union. All three CLIs ship in the image and the dry run verifies each binary. Caveat: only OpenCode has run live (locally, to the model call); the other two are unit-tested against their documented stream formats. |
+| **T10 live acceptance run** | **Partially done locally (rev 6, 2026-09-19).** `wrangler dev` + OrbStack ran the full chain to the model call: queue → signed Slack approval → DO dispatch → real container → scoped GitHub clone → `opencode run` → AI Gateway **401** (needs `AI_GATEWAY_TOKEN` or BYOK key in gateway `default`). Cloud deploy still not performed — `spec/GOAL.md` forbids it from this environment. Evidence in VERIFICATION.md. |
 
-**The honest summary:** every task that can be completed without a cloud account is now done. **T10 is the only thing left**, it cannot be done from this environment, and no amount of further coding changes that. The remaining work is a Docker-capable machine and a Cloudflare account, not more code.
+**The honest summary:** every task that can be completed without a cloud account is done, and the local dev run now proves the pipeline mechanics end to end. **What remains is a cloud deploy plus an AI Gateway credential** (`AI_GATEWAY_TOKEN`, or a BYOK key on the `default` gateway) — account work, not more code.
 
-**Two things this rev deliberately did not do.** The Dockerfile still installs only `opencode-ai`, so `AGENT_HARNESS=claude-code` or `codex` will fail at exec until the image carries those CLIs — PLAN §11 argues for one image per harness rather than one fat image, and that decision wants the cold-start measurement from T10 first. And `registry.npmjs.org` stays off the egress allowlist.
+**Two things this rev deliberately did not do.** `registry.npmjs.org` stays off the egress allowlist. (The one-image-per-harness question from §11 is now moot for boot — the single image carries all three CLIs and the dry run verifies them.)
 
 ### Already working — stop listing these as TODO
 

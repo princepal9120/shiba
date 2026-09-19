@@ -33,23 +33,6 @@ export class Sandbox<Env = WorkerEnv> extends SandboxBase<Env> {
     "codeload.github.com", // git clone fetches packs here
   ];
 
-  /** Named handlers addressable by `setOutboundByHost` at run time. */
-  static override get outboundHandlers() {
-    return { githubScoped: forwardGitHubScoped };
-  }
-
-  // github.com defaults to refusal; approveRepoScope swaps in the scoped
-  // handler for the one repo a run was approved for (B6). Provider hosts are
-  // mapped for every supported harness, but allowedHosts admits only one.
-  static override get outboundByHost() {
-    return {
-      "generativelanguage.googleapis.com": forwardGoogle,
-      "api.anthropic.com": forwardAnthropic,
-      "api.openai.com": forwardOpenAI,
-      "github.com": denyUnscopedGitHub,
-    };
-  }
-
   /**
    * Narrow egress to the selected harness's hosts (T22). A handler mapping is
    * not permission: allowedHosts gates every host before any handler runs.
@@ -66,3 +49,18 @@ export class Sandbox<Env = WorkerEnv> extends SandboxBase<Env> {
     await this.setOutboundByHost("github.com", "githubScoped", { allowedPath });
   }
 }
+
+// These must go through the base class setters: Container records handler
+// maps in module-level registries keyed by class name, so a `static get`
+// override would read correctly but leave runtime dispatch empty.
+/** Named handlers addressable by `setOutboundByHost` at run time. */
+Sandbox.outboundHandlers = { githubScoped: forwardGitHubScoped };
+// github.com defaults to refusal; approveRepoScope swaps in the scoped
+// handler for the one repo a run was approved for (B6). Provider hosts are
+// mapped for every supported harness, but allowedHosts admits only one.
+Sandbox.outboundByHost = {
+  "generativelanguage.googleapis.com": forwardGoogle,
+  "api.anthropic.com": forwardAnthropic,
+  "api.openai.com": forwardOpenAI,
+  "github.com": denyUnscopedGitHub,
+};

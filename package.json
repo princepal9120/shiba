@@ -64,7 +64,11 @@
       "esbuild",
       "node-liblzma",
       "workerd"
-    ]
+    ],
+    "patchedDependencies": {
+      "brace-expansion@5.0.12": "patches/brace-expansion@5.0.12.patch",
+      "chat@4.40.0": "patches/chat@4.40.0.patch"
+    }
   },
   "homepage": "https://shiba-intern.pages.dev/"
 }

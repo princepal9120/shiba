@@ -229,6 +229,7 @@ describe("parsePorcelainStatus", () => {
 });
 
 describe("sandbox HTTPS egress", () => {
+  const outboundCtx = { containerId: "test-container", className: "Sandbox" };
   function env(token?: string) {
     const getUrl = vi.fn().mockResolvedValue(
       "https://gateway.ai.cloudflare.com/v1/binding-account/default/google-ai-studio",
@@ -264,7 +265,7 @@ describe("sandbox HTTPS egress", () => {
         body: '{"contents":[]}',
       },
     );
-    const response = await Sandbox.outboundByHost["generativelanguage.googleapis.com"](request, bindings);
+    const response = await Sandbox.outboundByHost!["generativelanguage.googleapis.com"]!(request, bindings, outboundCtx);
     expect(response).toBe(upstream);
     expect(bindings.gateway).toHaveBeenCalledWith("default");
     expect(bindings.getUrl).toHaveBeenCalledWith("google-ai-studio");
@@ -285,11 +286,12 @@ describe("sandbox HTTPS egress", () => {
   it("uses no provider credential when the gateway supplies BYOK", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response("ok"));
     vi.stubGlobal("fetch", fetchMock);
-    await Sandbox.outboundByHost["generativelanguage.googleapis.com"](
+    await Sandbox.outboundByHost!["generativelanguage.googleapis.com"]!(
       new Request("https://generativelanguage.googleapis.com/v1beta/models", {
         headers: { "cf-aig-authorization": "Bearer untrusted" },
       }),
       env(),
+      outboundCtx,
     );
     const headers = new Headers(fetchMock.mock.calls[0]?.[1].headers);
     expect(headers.has("authorization")).toBe(false);
@@ -300,12 +302,12 @@ describe("sandbox HTTPS egress", () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response("git advertisement"));
     vi.stubGlobal("fetch", fetchMock);
     // github.com is credentialed only through the per-run scoped handler (B6).
-    await Sandbox.outboundHandlers.githubScoped(
+    await Sandbox.outboundHandlers!.githubScoped!(
       new Request("https://github.com/owner/repo.git/info/refs?service=git-upload-pack", {
         headers: { Authorization: "Bearer container-token" },
       }),
       env(token),
-      { params: { allowedPath: "/owner/repo" } } as never,
+      { ...outboundCtx, params: { allowedPath: "/owner/repo" } } as never,
     );
     const [url, init] = fetchMock.mock.calls[0] as [URL, RequestInit];
     expect(url.toString()).toBe("https://github.com/owner/repo.git/info/refs?service=git-upload-pack");
@@ -319,9 +321,9 @@ describe("sandbox HTTPS egress", () => {
   it("does not forward credentials to insecure or mismatched destinations", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-    for (const handler of Object.values(Sandbox.outboundByHost)) {
-      expect((await handler(new Request("https://attacker.example/"), env("secret"))).status).toBe(403);
-      expect((await handler(new Request("http://github.com/"), env("secret"))).status).toBe(403);
+    for (const handler of Object.values(Sandbox.outboundByHost!)) {
+      expect((await handler!(new Request("https://attacker.example/"), env("secret"), outboundCtx)).status).toBe(403);
+      expect((await handler!(new Request("http://github.com/"), env("secret"), outboundCtx)).status).toBe(403);
     }
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -333,18 +335,19 @@ describe("sandbox HTTPS egress", () => {
     const attempts: [Request, Promise<Response>][] = [
       [
         new Request("https://generativelanguage.googleapis.com/"),
-        Sandbox.outboundByHost["generativelanguage.googleapis.com"](
+        Promise.resolve(Sandbox.outboundByHost!["generativelanguage.googleapis.com"]!(
           new Request("https://generativelanguage.googleapis.com/"),
           env("worker-only-secret"),
-        ),
+          outboundCtx,
+        )),
       ],
       [
         new Request("https://github.com/owner/repo.git/info/refs"),
-        Sandbox.outboundHandlers.githubScoped(
+        Promise.resolve(Sandbox.outboundHandlers!.githubScoped!(
           new Request("https://github.com/owner/repo.git/info/refs"),
           env("worker-only-secret"),
-          { params: { allowedPath: "/owner/repo" } } as never,
-        ),
+          { ...outboundCtx, params: { allowedPath: "/owner/repo" } } as never,
+        )),
       ],
     ];
     for (const [, pending] of attempts) {
