@@ -670,7 +670,7 @@ export function App(): React.JSX.Element {
           </div>
 
           <div className="p-5 xl:p-6 flex-1 flex flex-col gap-4">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-[#8b98a9]">New Coding Task</h2>
+            <h2 className="text-xs font-bold uppercase tracking-wider text-[#8b98a9]">Configuration</h2>
 
             <TaskForm
               repoUrl={repoUrl}

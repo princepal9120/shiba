@@ -30,7 +30,7 @@ export default defineConfig({
 				{ icon: 'x.com', label: 'Twitter / X', href: 'https://x.com/prince_twets' },
 			],
 			editLink: {
-				baseUrl: 'https://github.com/princepal9120/ai-intern/edit/main/web/src/content/docs/',
+				baseUrl: 'https://github.com/princepal9120/ai-intern/edit/main/web/',
 			},
 			sidebar: [
 				{
@@ -79,7 +79,6 @@ export default defineConfig({
 					label: 'Reference',
 					items: [
 						{ label: 'API reference', slug: 'docs/api' },
-						{ label: 'Nimbus Docs CLI', slug: 'docs/nimbus-cli' },
 						{ label: 'Contributing', slug: 'docs/contributing' },
 					],
 				},

@@ -1,0 +1,12 @@
+[
+  {
+    "date": "2026-09-20",
+    "macrostructure": "Workbench + Long Document",
+    "theme": "custom",
+    "theme_axes": "dark+light / grotesk-sans / cool-teal",
+    "vibe": "restrained teal dev-tool",
+    "enrichment": "none",
+    "scope": "app",
+    "brief": "ai-intern end-to-end theme: dashboard + Starlight docs"
+  }
+]

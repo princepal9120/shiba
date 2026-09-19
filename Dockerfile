@@ -12,4 +12,16 @@ FROM docker.io/cloudflare/sandbox:0.12.9-opencode
 RUN npm i -g opencode-ai@1.18.31 @anthropic-ai/claude-code@2.1.277 @openai/codex@0.155.0 \
   && opencode --version && claude --version && codex --version
 
+# Procoder commit gate — checksum-verified, version-pinned like the harnesses.
+# Available to every sandboxed agent so quality-gate runs can execute
+# `procoder check` inside the container. Bump requires the same T10 pass.
+ARG PROCODER_VERSION=3.6.0
+RUN set -eux; \
+  case "$(uname -m)" in x86_64) p=linux-amd64;; aarch64) p=linux-arm64;; *) exit 1;; esac; \
+  curl -sSfL -o /usr/local/bin/procoder "https://github.com/azrtydxb/procoder/releases/download/v${PROCODER_VERSION}/procoder-${p}"; \
+  curl -sSfL -o /tmp/SHA256SUMS "https://github.com/azrtydxb/procoder/releases/download/v${PROCODER_VERSION}/SHA256SUMS"; \
+  grep " procoder-${p}\$" /tmp/SHA256SUMS | sed "s/procoder-${p}/procoder/" > /tmp/procoder.sum; \
+  cd /usr/local/bin && sha256sum -c /tmp/procoder.sum; \
+  chmod +x /usr/local/bin/procoder && procoder version
+
 EXPOSE 4096

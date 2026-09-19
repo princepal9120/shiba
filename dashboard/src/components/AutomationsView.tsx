@@ -188,7 +188,7 @@ export function AutomationsView(): JSX.Element {
               value={repoUrl}
               onChange={(e) => setRepoUrl(e.target.value)}
               placeholder="https://github.com/owner/repo"
-              className="bg-black text-xs font-mono text-[#e6edf3] border border-neutral-800 rounded-lg px-3 py-1.5 w-72 focus:outline-none focus:border-teal-500 placeholder:text-[#8b98a9]/50"
+              className="bg-black text-xs font-mono text-[#e6edf3] border border-neutral-800 rounded-lg px-3 py-1.5 w-72 transition-colors focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500/30 placeholder:text-[#8b98a9]/50"
             />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
@@ -197,7 +197,7 @@ export function AutomationsView(): JSX.Element {
               return (
                 <div
                   key={recipe.id}
-                  className="bg-[#0d1117] p-4 rounded-lg border border-white/[0.08] flex flex-col gap-2"
+                  className="bg-[#0d1117] p-4 rounded-lg border border-white/[0.08] hover:border-white/[0.15] flex flex-col gap-2 transition-colors"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-semibold text-white">{recipe.name}</span>
@@ -210,9 +210,18 @@ export function AutomationsView(): JSX.Element {
                     type="button"
                     disabled={busyId === recipe.id || deployed}
                     onClick={() => void deployRecipe(recipe)}
-                    className="text-xs font-semibold self-start border rounded-md px-2.5 py-1 transition-colors disabled:opacity-50 text-teal-300 border-teal-500/40 bg-teal-950/50 hover:bg-teal-900/60"
+                    className="text-xs font-semibold self-start border rounded-md px-2.5 py-1 transition-colors disabled:opacity-50 text-teal-300 border-teal-500/40 bg-teal-950/50 hover:bg-teal-900/60 flex items-center gap-1.5"
                   >
-                    {deployed ? "Deployed" : busyId === recipe.id ? "Deploying…" : "Deploy recipe"}
+                    {busyId === recipe.id ? (
+                      <>
+                        <span className="animate-spin inline-block w-3 h-3 border-2 border-teal-300 border-t-transparent rounded-full" />
+                        <span>Deploying…</span>
+                      </>
+                    ) : deployed ? (
+                      "Deployed"
+                    ) : (
+                      "Deploy recipe"
+                    )}
                   </button>
                 </div>
               );
@@ -227,19 +236,24 @@ export function AutomationsView(): JSX.Element {
             <button
               type="button"
               onClick={refresh}
-              className="text-[11px] text-[#8b98a9] hover:text-white border border-neutral-800 rounded-md px-2 py-1"
+              className="text-[11px] text-[#8b98a9] hover:text-white hover:border-neutral-700 border border-neutral-800 rounded-md px-2 py-1 transition-colors"
             >
               Refresh
             </button>
           </div>
           {automations === null ? (
-            <p className="text-xs text-[#8b98a9] font-mono">Loading…</p>
+            <div className="flex items-center gap-2 text-xs text-[#8b98a9] font-mono py-2">
+              <span className="animate-spin inline-block w-3 h-3 border-2 border-[#8b98a9] border-t-transparent rounded-full" />
+              <span>Loading…</span>
+            </div>
           ) : automations.length === 0 ? (
-            <p className="text-xs text-[#8b98a9]">None yet — deploy a recipe above or POST /api/automations.</p>
+            <div className="flex flex-col items-center justify-center py-10 border border-dashed border-neutral-800 rounded-lg bg-black/20 text-center px-4">
+              <p className="text-[#8b98a9] text-xs">None yet — deploy a recipe above or POST /api/automations.</p>
+            </div>
           ) : (
             <div className="flex flex-col divide-y divide-white/[0.06]">
               {automations.map((a) => (
-                <div key={a.id} className="py-2.5 flex items-center justify-between gap-3">
+                <div key={a.id} className="py-2.5 flex items-center justify-between gap-3 hover:bg-white/[0.02] -mx-2 px-2 rounded-lg transition-colors">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-mono font-semibold text-white truncate">{a.id}</span>
@@ -266,9 +280,16 @@ export function AutomationsView(): JSX.Element {
                       type="button"
                       disabled={busyId === `run-${a.id}`}
                       onClick={() => void triggerNow(a.id)}
-                      className="text-xs font-semibold border border-teal-500/40 text-teal-300 bg-teal-950/50 hover:bg-teal-900/60 rounded-md px-2.5 py-1 shrink-0 disabled:opacity-50"
+                      className="text-xs font-semibold border border-teal-500/40 text-teal-300 bg-teal-950/50 hover:bg-teal-900/60 rounded-md px-2.5 py-1 shrink-0 transition-colors disabled:opacity-50 flex items-center gap-1.5"
                     >
-                      {busyId === `run-${a.id}` ? "Firing…" : "Run now"}
+                      {busyId === `run-${a.id}` ? (
+                        <>
+                          <span className="animate-spin inline-block w-3 h-3 border-2 border-teal-300 border-t-transparent rounded-full" />
+                          <span>Firing…</span>
+                        </>
+                      ) : (
+                        "Run now"
+                      )}
                     </button>
                   ) : null}
                 </div>
@@ -302,7 +323,7 @@ export function AutomationsView(): JSX.Element {
               <button
                 type="button"
                 onClick={() => copyToClipboard("/api/github/webhook", "github")}
-                className="text-teal-400 hover:text-teal-300 text-[11px] shrink-0 ml-2"
+                className="text-teal-400 hover:text-teal-300 text-[11px] shrink-0 ml-2 transition-colors"
               >
                 {copiedEndpoint === "github" ? "Copied" : "Copy"}
               </button>
@@ -333,19 +354,19 @@ export function AutomationsView(): JSX.Element {
             <div className="flex flex-col gap-1.5 text-xs font-mono">
               <div className="bg-[#0d1117] p-2 rounded border border-white/[0.08] flex items-center justify-between">
                 <span>Commands: /api/slack/command</span>
-                <button type="button" onClick={() => copyToClipboard("/api/slack/command", "slack1")} className="text-teal-400 text-[11px]">
+                <button type="button" onClick={() => copyToClipboard("/api/slack/command", "slack1")} className="text-teal-400 hover:text-teal-300 text-[11px] transition-colors">
                   {copiedEndpoint === "slack1" ? "Copied" : "Copy"}
                 </button>
               </div>
               <div className="bg-[#0d1117] p-2 rounded border border-white/[0.08] flex items-center justify-between">
                 <span>Events: /api/slack/events</span>
-                <button type="button" onClick={() => copyToClipboard("/api/slack/events", "slack2")} className="text-teal-400 text-[11px]">
+                <button type="button" onClick={() => copyToClipboard("/api/slack/events", "slack2")} className="text-teal-400 hover:text-teal-300 text-[11px] transition-colors">
                   {copiedEndpoint === "slack2" ? "Copied" : "Copy"}
                 </button>
               </div>
               <div className="bg-[#0d1117] p-2 rounded border border-white/[0.08] flex items-center justify-between">
                 <span>Interactivity: /api/slack/interact</span>
-                <button type="button" onClick={() => copyToClipboard("/api/slack/interact", "slack3")} className="text-teal-400 text-[11px]">
+                <button type="button" onClick={() => copyToClipboard("/api/slack/interact", "slack3")} className="text-teal-400 hover:text-teal-300 text-[11px] transition-colors">
                   {copiedEndpoint === "slack3" ? "Copied" : "Copy"}
                 </button>
               </div>
