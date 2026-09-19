@@ -52,9 +52,9 @@
 
 ## 2. Corrected Current State
 
-### 2.0 Status as of rev 5 (2026-09-18)
+### 2.0 Status as of rev 7 (2026-09-19)
 
-Baseline: **374 tests passing across 30 files**, typecheck and lint clean, `wrangler deploy --dry-run` green (OrbStack). Earlier counts ("333/28", "269/21", "111/111") are stale everywhere they appear below.
+Baseline: **405 tests passing across 32 files**, typecheck and lint clean, `wrangler deploy --dry-run` green (OrbStack), and a **local `wrangler dev` end-to-end run** that exercised queue → signed Slack approval → DO dispatch → real container → scoped GitHub clone → harness exec → AI Gateway egress (model call blocked at gateway auth — account config, see VERIFICATION.md). Earlier counts ("374/30", "333/28", "269/21", "111/111") are stale everywhere they appear below.
 
 | Task | State |
 |---|---|

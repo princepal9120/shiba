@@ -118,6 +118,62 @@ describe("slack events endpoint (T12)", () => {
     expect(onEvent).toHaveBeenCalledOnce();
   });
 
+  it("durable dedupe suppresses retries that land on a fresh isolate", async () => {
+    // Simulate a retry on another isolate: clear the in-memory ring, the
+    // durable dep still reports the id as seen.
+    const body = JSON.stringify({
+      type: "event_callback",
+      event_id: "EvDURABLE",
+      event: { type: "app_mention", text: "<@U1> fix this" },
+    });
+    const onEvent = vi.fn(async () => {});
+    const first = stubCtx();
+    await handleSlackEvents(await signedEventsRequest(body), eventEnv(), first.ctx, {
+      onEvent,
+      dedupe: async () => false,
+    });
+    clearSeenSlackEvents();
+
+    const dedupe = vi.fn(async () => true);
+    const retry = stubCtx();
+    const retryResponse = await handleSlackEvents(
+      await signedEventsRequest(body),
+      eventEnv(),
+      retry.ctx,
+      { onEvent, dedupe },
+    );
+    expect(retryResponse!.status).toBe(200);
+    expect(dedupe).toHaveBeenCalledWith("EvDURABLE");
+    expect(retry.ctx.waitUntil).not.toHaveBeenCalled();
+    await Promise.all(first.waited);
+    expect(onEvent).toHaveBeenCalledOnce();
+  });
+
+  it("fails open and dispatches when the dedupe backend errors", async () => {
+    const body = JSON.stringify({
+      type: "event_callback",
+      event_id: "EvFAILOPEN",
+      event: { type: "app_mention", text: "<@U1> fix this" },
+    });
+    const onEvent = vi.fn(async () => {});
+    const { ctx, waited } = stubCtx();
+    const response = await handleSlackEvents(
+      await signedEventsRequest(body),
+      eventEnv(),
+      ctx,
+      {
+        onEvent,
+        dedupe: async () => {
+          throw new Error("DO unreachable");
+        },
+      },
+    );
+    expect(response!.status).toBe(200);
+    expect(ctx.waitUntil).toHaveBeenCalledOnce();
+    await Promise.all(waited);
+    expect(onEvent).toHaveBeenCalledOnce();
+  });
+
   it("rejects a tampered body with 401 and schedules nothing", async () => {
     const signedBody = JSON.stringify({ type: "url_verification", challenge: "x" });
     const request = await signedEventsRequest(signedBody);

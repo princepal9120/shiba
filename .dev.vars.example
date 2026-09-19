@@ -18,4 +18,9 @@
 
 # AI Gateway uses the AI binding and GATEWAY_ID, not a container provider key.
 # Optional: sent as cf-aig-authorization on gateway requests (src/egress.ts).
+# Required when the gateway is auth-gated or has no BYOK key stored.
+# AI_GATEWAY_TOKEN=
+
+# Set to any value to enforce Cloudflare Access on /app and /api locally too.
+# REQUIRE_ACCESS=1
 

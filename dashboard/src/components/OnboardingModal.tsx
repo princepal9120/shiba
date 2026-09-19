@@ -124,6 +124,13 @@ Task: Fix lint errors and verify test suite runs cleanly.`,
 
 const STORAGE_KEY = "shiba_onboarding_completed_steps";
 
+interface SetupStatusShape {
+  gateway?: { reachable?: string };
+  access?: { required?: boolean };
+  github?: { token?: boolean };
+  slack?: { signingSecret?: boolean; botToken?: boolean; approvers?: number };
+}
+
 export function OnboardingModal({
   isOpen,
   onClose,
@@ -145,6 +152,7 @@ export function OnboardingModal({
   const [expandedStep, setExpandedStep] = useState<string | null>("workers-paid");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "pending" | "completed">("all");
+  const [detected, setDetected] = useState<Set<string>>(new Set());
   const modalTitleId = useId();
 
   useEffect(() => {
@@ -154,6 +162,27 @@ export function OnboardingModal({
       // ignore
     }
   }, [completedSteps]);
+
+  // Live-detect configured pieces from the deployment itself.
+  useEffect(() => {
+    if (!isOpen) return;
+    const found = new Set<string>(["workers-paid"]); // reachable = deployed
+    fetch("/api/setup/status")
+      .then(async (r) => (r.ok ? ((await r.json()) as SetupStatusShape) : null))
+      .then(async (status) => {
+        if (!status) return;
+        if (status.gateway?.reachable === "yes") found.add("ai-gateway");
+        if (status.access?.required) found.add("access-bypass");
+        if (status.github?.token) found.add("github-token");
+        if (status.slack?.signingSecret && status.slack?.botToken && (status.slack?.approvers ?? 0) > 0)
+          found.add("slack-bot");
+        const runs = (await fetch("/api/runs")
+          .then((r) => (r.ok ? r.json() : null)).catch(() => null)) as { runs?: unknown[] } | null;
+        if ((runs?.runs?.length ?? 0) > 0) found.add("first-run");
+        setDetected(found);
+      })
+      .catch(() => setDetected(found));
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -169,8 +198,9 @@ export function OnboardingModal({
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  const isStepDone = (id: string) => completedSteps.includes(id) || detected.has(id);
   const totalSteps = ONBOARDING_STEPS.length;
-  const completedCount = completedSteps.length;
+  const completedCount = ONBOARDING_STEPS.filter((s) => isStepDone(s.id)).length;
   const progressPercent = Math.round((completedCount / totalSteps) * 100);
   const isAllComplete = completedCount === totalSteps;
   const resetChecklist = () => {
@@ -183,7 +213,7 @@ export function OnboardingModal({
   };
 
   const filteredSteps = ONBOARDING_STEPS.filter((step) => {
-    const isDone = completedSteps.includes(step.id);
+    const isDone = isStepDone(step.id);
     if (filter === "pending") return !isDone;
     if (filter === "completed") return isDone;
     return true;
@@ -324,7 +354,8 @@ export function OnboardingModal({
           ) : (
             filteredSteps.map((step) => {
               const idx = ONBOARDING_STEPS.findIndex((s) => s.id === step.id);
-            const isDone = completedSteps.includes(step.id);
+            const isDone = isStepDone(step.id);
+            const isDetected = detected.has(step.id) && !completedSteps.includes(step.id);
             const isExpanded = expandedStep === step.id;
 
             return (
@@ -368,6 +399,11 @@ export function OnboardingModal({
                         </span>
                         {!step.required ? (
                           <span className="text-[10px] text-[#8b98a9] italic">(optional)</span>
+                        ) : null}
+                        {isDetected ? (
+                          <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-teal-950/60 border border-teal-800/60 text-teal-300">
+                            detected live
+                          </span>
                         ) : null}
                       </div>
                       <p className="text-xs text-[#8b98a9] mt-1 leading-relaxed line-clamp-1">

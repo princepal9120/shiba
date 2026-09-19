@@ -32,7 +32,15 @@ Open http://localhost:4321/docs/. Production builds include Pagefind search; the
 
 ## Prepare the coding application
 
-Copy .dev.vars.example to the ignored .dev.vars file. Set the values described in [Configuration](/docs/configuration/). Public diff-only runs need no GitHub token.
+The fastest path is the interactive bootstrap:
+
+~~~sh
+pnpm setup
+~~~
+
+It checks `wrangler` auth, deploys the Worker and container image, prompts for each secret (skippable), and prints the Slack app manifest import path and the URLs to paste into your Slack app. Afterwards the dashboard's onboarding modal shows live status from `GET /api/setup/status`.
+
+Manual path: copy .dev.vars.example to the ignored .dev.vars file. Set the values described in [Configuration](/docs/configuration/). Public diff-only runs need no GitHub token.
 
 The Vite command, pnpm dev, is **UI-only**, with no Worker API or WebSocket proxy. Use [Local development](/docs/local-development/) for Worker startup. A static page is not evidence that the cloud coding integration works.
 

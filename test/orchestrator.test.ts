@@ -67,6 +67,54 @@ describe("orchestrator run routes", () => {
     expect(mocks.execute).not.toHaveBeenCalled();
   });
 
+  it("posts run cancellation back to the originating Slack thread", async () => {
+    const instance = agent();
+    Object.assign(instance, {
+      name: "slack:T1:C9:1700.0001",
+      ctx: { waitUntil: vi.fn((p: Promise<unknown>) => p) },
+    });
+    Object.assign(instance.env, { SLACK_BOT_TOKEN: "xoxb-test" });
+    instance.setState({ runs: [{ ...retained(), updatedAt: Date.now() }] });
+    const fetchMock = vi.fn(async (_url: unknown, _init?: { body?: unknown }) =>
+      new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const response = await instance.onRequest(
+        new Request("https://internal/api/runs/r1", { method: "DELETE" }),
+      );
+      expect(response.status).toBe(200);
+      const postCalls = fetchMock.mock.calls.filter((call) =>
+        String(call[0]).includes("chat.postMessage"));
+      expect(postCalls).toHaveLength(1);
+      const body = JSON.parse(String(postCalls[0]![1]?.body)) as Record<string, string>;
+      expect(body.channel).toBe("C9");
+      expect(body.thread_ts).toBe("1700.0001");
+      expect(body.text).toContain("cancelled");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("skips post-back for non-Slack orchestrators", async () => {
+    const instance = agent();
+    Object.assign(instance, {
+      name: "default",
+      ctx: { waitUntil: vi.fn((p: Promise<unknown>) => p) },
+    });
+    Object.assign(instance.env, { SLACK_BOT_TOKEN: "xoxb-test" });
+    instance.setState({ runs: [{ ...retained(), updatedAt: Date.now() }] });
+    const fetchMock = vi.fn(async (_url: unknown) => new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      await instance.onRequest(new Request("https://internal/api/runs/r1", { method: "DELETE" }));
+      expect(
+        fetchMock.mock.calls.filter((call) => String(call[0]).includes("chat.postMessage")),
+      ).toHaveLength(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("propagates cancellation to the running child execution", async () => {
     const instance = agent();
     mocks.execute.mockImplementation(async (_input, options: { abortSignal?: AbortSignal }) => {

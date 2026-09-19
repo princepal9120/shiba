@@ -61,6 +61,11 @@ export interface SlackTrigger extends TriggerBase {
   authors?: string[];
   /** Case-insensitive substrings; any one matching fires. */
   textContains?: string[];
+  /**
+   * One run per burst: matched Slack events within this window of the
+   * previous firing are suppressed. Seconds, clamped 1–300 (default 10).
+   */
+  burstWindowSeconds?: number;
 }
 
 export interface WebhookTrigger extends TriggerBase {

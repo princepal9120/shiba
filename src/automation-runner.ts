@@ -19,6 +19,7 @@ import {
   type SlackAutomationEvent,
   type TypeSafeNoulFetch,
 } from "./automations.js";
+import { clampBurstWindowSeconds, DEFAULT_BURST_WINDOW_SECONDS } from "./slack-context.js";
 
 export const AUTOMATIONS_DO_NAME = "default";
 
@@ -159,6 +160,22 @@ export async function fireAutomation(
   const matched = matchAutomationEvent(automation, event);
   if (!matched) {
     return { fired: false, automation, reason: "No matching trigger." };
+  }
+
+  // One run per burst (PLAN T13): a matched Slack event inside the trigger's
+  // burst window of the previous firing is suppressed — cheap check before
+  // any run_when model call.
+  if (
+    matched.trigger.kind === "slack" &&
+    automation.lastTriggeredAt !== undefined
+  ) {
+    const windowMs =
+      clampBurstWindowSeconds(matched.trigger.burstWindowSeconds ?? DEFAULT_BURST_WINDOW_SECONDS) *
+      1000;
+    if (nowMs - automation.lastTriggeredAt < windowMs) {
+      const skipped = recordSkip(automation, "Burst window: a matching run already fired.", nowMs);
+      return { fired: false, automation: skipped, reason: skipped.lastSkip?.reason ?? "burst" };
+    }
   }
 
   const runWhen = matched.trigger.runWhen?.trim() ?? "";

@@ -8,7 +8,7 @@
 |-------|--------|
 | `pnpm typecheck` | PASS |
 | `pnpm lint` | PASS |
-| `pnpm test` | PASS (397/397 across 32 files) |
+| `pnpm test` | PASS (405/405 across 32 files) |
 | `pnpm build` | PASS (docs: 25 pages, 1101 links verified, 21 markdown files stale-claim scanned) |
 | `pnpm docs:check` | PASS |
 | `npx wrangler deploy --dry-run` | **PASS (2026-09-19)** — image `cloudflare/sandbox:0.12.9-opencode` + `opencode-ai@1.18.31`, `claude-code@2.1.277`, `codex@0.155.0` built; four DOs bound; migrations v1/v2 accepted; `standard-1` accepted. |
@@ -37,7 +37,7 @@ Specifically unmeasured: peak container memory (which decides `basic` vs `standa
 
 **The Claude Code and Codex CLIs ship in the image but have not run live.** The Dockerfile installs `opencode-ai@1.18.31`, `@anthropic-ai/claude-code@2.1.277`, and `@openai/codex@0.155.0`, and the image build verifies each binary reports its version. Their config, argv, env, and event parsers are unit-tested against their documented stream formats; neither has been run against the live API, so a stream-format drift would surface at the first real run, not before. The dashboard's harness picker is wired end to end; only OpenCode has completed a live run.
 
-## What the 397 tests do cover
+## What the 405 tests do cover
 
 - **Egress credential boundary.** `github.com` defaults to refusal; the credential is attached only for the run's own `/owner/repo`, with prefix-confusion siblings (`/owner/repo-evil`) and non-GitHub destinations refused, and no `Authorization` header reaching a refused request. The scope is proven to be installed *before* the clone, not after.
 - **Automation safety.** Approval required by default; unattended mode refused for a non-allowlisted repo and for any run mutating more than a pull request; the daily budget refusing run N+1 with its reason and resetting on the next UTC day; both kill switches.
@@ -46,6 +46,20 @@ Specifically unmeasured: peak container memory (which decides `basic` vs `standa
 - Run result envelope parsing (an `error` envelope never reads `completed`), Slack signature verification and replay bounds, approver allowlisting, burst grouping, cron parsing and coalescing, GitHub tree publishing including deletions.
 
 ## Fix history
+
+**2026-09-19 (self-serve onboarding lane + audit-gap closure — 405 tests)**
+
+Onboarding/deploy-simplicity work, all verified against local `wrangler dev` (:8788) and the test suite:
+
+- **`GET /api/setup/status`** (`src/setup-status.ts`): live booleans for every required binding/secret — Slack (signing secret, bot token, approver count, channel repos), GitHub (token, webhook secret), AI Gateway (token configured + a real reachability probe — observed `unauthorized` locally, matching the 401 seen in the e2e run), Access requirement, model names, automation/TypeSafe flags. No secret values are ever returned.
+- **`slack-app-manifest.yaml`**: import at api.slack.com/apps → "From a manifest" creates the app with the exact scopes, `app_mention` event, `/ai-intern` command, and interactivity URL the code expects. Hostname is the only edit.
+- **`pnpm setup`** (`scripts/setup.mjs`): one-command bootstrap — wrangler auth check → deploy → per-secret `wrangler secret put` prompts (skippable) → prints manifest + URLs. stdlib-only, no new deps.
+- **OnboardingModal live status**: fetches `/api/setup/status`, auto-checks detected steps ("detected live" badge), merges with the localStorage manual checklist; progress counter counts detected steps.
+- **Slack post-back** (`orchestrator.postToSlackThread`): thread-keyed DO names (`slack:{team}:{channel}:{ts}`) parse back to channel+thread; run start, completion (summary incl. PR link), error, and cancellation post into the originating thread via `chat.postMessage`. Best-effort `waitUntil` — never touches the run record. Non-Slack orchestrators and missing bot token no-op. Covered by two new orchestrator tests (posts to C9/1700.0001; skips `default`).
+- **Manual automation trigger**: `POST /api/automations/{id}/run` fires one automation (targeted `fireEvent` with store merge — the filtered result list merges back into the full store). Verified live: missing id → 404 `Automation not found`, non-manual trigger → 400 `Automation has no manual trigger`, manual fire → reached the orchestrator and was correctly refused `Queue failed (400)` because automations always request `publishPullRequest` and no `GITHUB_TOKEN` is set locally — fail-closed working as designed.
+- **Durable Slack event dedupe**: the in-memory ring stays the same-isolate fast path; a new `POST /internal/dedupe` on the Automations DO (`dedupe:{key}` in DO storage, 1-hour expiry) covers retries landing on another isolate. Fail-open — a dedupe backend error still acks and dispatches (duplicate beats lost). Two new slack-events tests cover both directions.
+- **`groupMessageBursts` wired** (was dead code): `gatherSlackContext` collapses same-author rapid messages into one burst line (`⋮` separator, `+N` count). Plus the PLAN semantic at fire time — slack-trigger automations suppress a matching event inside `burstWindowSeconds` (default 10s, clamped 1–300) of `lastTriggeredAt`, checked before any `run_when` model call. Four new runner tests.
+- `wrangler deploy --dry-run` re-verified green; `pnpm typecheck && pnpm lint && pnpm test && pnpm build` all green at 405 tests.
 
 **2026-09-19 (local end-to-end run — three real runtime bugs found and fixed)**
 

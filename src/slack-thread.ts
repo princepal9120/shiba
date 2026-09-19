@@ -63,6 +63,17 @@ export function resolveThreadTs(event: { thread_ts?: string; ts?: string }): str
   return candidate;
 }
 
+/**
+ * Inverse of buildSlackThreadName — lets the orchestrator recover the Slack
+ * channel/thread for result post-back without storing duplicate fields.
+ */
+export function parseSlackThreadName(name: string): SlackThreadIds | null {
+  const match = /^slack:([^:]+):([^:]+):(\d+\.\d+)$/.exec(name);
+  const [, teamId, channelId, threadTs] = match ?? [];
+  if (!teamId || !channelId || !threadTs) return null;
+  return { teamId, channelId, threadTs };
+}
+
 export interface SlackRunPayload {
   repoUrl: string;
   task: string;

@@ -34,6 +34,7 @@ import {
   type ResolveResult,
 } from "../pending-approvals.js";
 import { makeSandboxId, parseGitHubRepoUrl, redactSecrets } from "../security.js";
+import { parseSlackThreadName } from "../slack-thread.js";
 import { evaluateResultQuality } from "../result-quality.js";
 import { HARNESS_DEFAULT_MODELS, allowedHostsFor, resolveHarness } from "../harness/index.js";
 import { OpenCodeAgent } from "./opencode-agent.js";
@@ -237,8 +238,16 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     );
     const finish = (status: RunStatus, patch?: { summary?: string; error?: string; diff?: string }) => {
       this.store.transition(runId, status, patch);
+      // Slack-originated runs get the outcome back in the thread; the
+      // summary carries the PR link when one was published.
+      if (status === "completed") {
+        this.postToSlackThread(`Run completed for ${fullInput.repoUrl}\n${patch?.summary?.slice(0, 1500) ?? ""}`.trim());
+      } else if (status === "error") {
+        this.postToSlackThread(`Run failed for ${fullInput.repoUrl}\n${patch?.error?.slice(0, 1000) ?? ""}`.trim());
+      }
     };
     this.store.transition(runId, "running");
+    this.postToSlackThread(`Run started for ${fullInput.repoUrl} (${fullInput.baseBranch ?? "main"}).`);
     const controller = new AbortController();
     this.runControllers.set(runId, controller);
     const signal = abortSignal ? AbortSignal.any([abortSignal, controller.signal]) : controller.signal;
@@ -407,8 +416,31 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     if (!isActiveStatus(run.status)) return run;
     const updated = this.store.transition(runId, "cancelled");
     this.runControllers.get(runId)?.abort();
+    this.postToSlackThread(`Run cancelled for ${run.repoUrl}.`);
     await this.destroySandbox(run.sandboxId);
     return updated;
+  }
+
+  /**
+   * Slack post-back: thread-keyed orchestrators (`slack:{team}:{channel}:{ts}`)
+   * relay run start + terminal outcome into the thread they came from.
+   * Best-effort — the ack already went out and failure must not touch the run.
+   */
+  private postToSlackThread(text: string): void {
+    const ids = parseSlackThreadName(this.name);
+    const token = this.env.SLACK_BOT_TOKEN?.trim();
+    if (!ids || !token) return;
+    this.ctx.waitUntil(
+      fetch("https://slack.com/api/chat.postMessage", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ channel: ids.channelId, thread_ts: ids.threadTs, text: text.slice(0, 3000) }),
+      })
+        .then((response) => {
+          if (!response.ok) console.error(`Slack post-back failed (${response.status})`);
+        })
+        .catch(() => { /* best-effort */ }),
+    );
   }
 
   private async destroySandbox(sandboxId: string): Promise<void> {

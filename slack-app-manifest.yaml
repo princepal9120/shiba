@@ -1,0 +1,36 @@
+# Slack app manifest — create the app at https://api.slack.com/apps?new_app=1
+# and choose "From a manifest". Replace YOUR-WORKER with your deployed host
+# (e.g. ai-intern.you.workers.dev) before importing.
+display_information:
+  name: ai-intern
+  description: Approval-gated coding agent in your own Cloudflare account
+  background_color: "#0b0d10"
+features:
+  bot_user:
+    display_name: ai-intern
+    always_online: true
+  slash_commands:
+    - command: /ai-intern
+      url: https://YOUR-WORKER.workers.dev/api/slack/command
+      description: Queue a coding task for approval
+      usage_hint: "https://github.com/owner/repo <task>"
+      should_escape: false
+oauth_config:
+  scopes:
+    bot:
+      - app_mentions:read
+      - chat:write
+      - commands
+      - channels:history
+      - groups:history
+      - im:history
+      - mpim:history
+settings:
+  event_subscriptions:
+    request_url: https://YOUR-WORKER.workers.dev/api/slack/events
+    bot_events:
+      - app_mention
+  interactivity:
+    is_enabled: true
+    request_url: https://YOUR-WORKER.workers.dev/api/slack/interact
+  org_deploy_enabled: false

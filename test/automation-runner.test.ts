@@ -212,6 +212,70 @@ describe("slack event mapping", () => {
   });
 });
 
+describe("slack burst suppression", () => {
+  const NOW = Date.UTC(2026, 0, 1, 2, 0, 0);
+  const slackEvent = { kind: "slack" as const, channel: "C1", author: "U1", text: "cpu on fire" };
+
+  function slackAutomation(burstWindowSeconds?: number, lastTriggeredAt?: number): Automation {
+    const base = createAutomation({
+      id: "on-call",
+      prompt: "Triage the incident",
+      repoUrl: REPO,
+      triggers: [
+        {
+          kind: "slack",
+          channels: ["C1"],
+          ...(burstWindowSeconds === undefined ? {} : { burstWindowSeconds }),
+        },
+      ],
+    }).automation;
+    return lastTriggeredAt === undefined ? base : { ...base, lastTriggeredAt };
+  }
+
+  it("fires the first matching slack event", async () => {
+    const d = deps({ nowMs: NOW });
+    const result = await fireAutomation(slackAutomation(), slackEvent, d);
+    expect(result.fired).toBe(true);
+    expect(d.queueRun).toHaveBeenCalledOnce();
+  });
+
+  it("suppresses a second match inside the burst window without a model call", async () => {
+    const ai = { run: vi.fn(async () => ({ response: "YES" })) };
+    const d = deps({ nowMs: NOW, ai });
+    const result = await fireAutomation(
+      slackAutomation(undefined, NOW - 5_000),
+      slackEvent,
+      d,
+    );
+    expect(result.fired).toBe(false);
+    expect(result.reason).toMatch(/burst/i);
+    expect(d.queueRun).not.toHaveBeenCalled();
+    expect(ai.run).not.toHaveBeenCalled();
+  });
+
+  it("fires again once the burst window has elapsed", async () => {
+    const d = deps({ nowMs: NOW });
+    const result = await fireAutomation(
+      slackAutomation(undefined, NOW - 60_000),
+      slackEvent,
+      d,
+    );
+    expect(result.fired).toBe(true);
+    expect(d.queueRun).toHaveBeenCalledOnce();
+  });
+
+  it("honors a custom burstWindowSeconds", async () => {
+    const d = deps({ nowMs: NOW });
+    const result = await fireAutomation(
+      slackAutomation(120, NOW - 60_000),
+      slackEvent,
+      d,
+    );
+    expect(result.fired).toBe(false);
+    expect(result.reason).toMatch(/burst/i);
+  });
+});
+
 describe("fan-out", () => {
   it("updates only the automations that fired", async () => {
     const idle = scheduleAutomation({ id: "idle", lastTriggeredAt: Date.UTC(2026, 0, 1, 2, 0, 0) });

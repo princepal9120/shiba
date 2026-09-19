@@ -67,6 +67,12 @@ export interface SlackEventsDeps {
    * no-op so T12 ships the ack + dedupe contract on its own.
    */
   onEvent?: (body: SlackEventCallbackBody, env: Env) => Promise<void>;
+  /**
+   * Durable check-and-record for `event_id` (Automations DO). Returns true
+   * when the id was already recorded. The in-memory ring stays as the
+   * same-isolate fast path; this covers retries that land elsewhere.
+   */
+  dedupe?: (eventId: string) => Promise<boolean>;
 }
 
 export interface SlackEventCallbackBody {
@@ -131,9 +137,21 @@ export async function handleSlackEvents(
     // ack so Slack does not retry, schedule nothing.
     return new Response("", { status: 200 });
   }
-  // One mention, one run. event_id is the idempotency key.
+  // One mention, one run. event_id is the idempotency key. The in-memory
+  // ring answers same-isolate retries for free; the durable dep covers
+  // retries that land on another isolate.
   if (hasSeenSlackEvent(body.event_id)) {
     return new Response("", { status: 200 });
+  }
+  if (deps.dedupe) {
+    try {
+      if (await deps.dedupe(body.event_id)) {
+        recordSeenSlackEvent(body.event_id);
+        return new Response("", { status: 200 });
+      }
+    } catch {
+      // Dedupe backend down: ack anyway — a duplicate beats a lost event.
+    }
   }
   recordSeenSlackEvent(body.event_id);
   const onEvent = deps.onEvent ?? (async () => {});

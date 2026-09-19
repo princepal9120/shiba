@@ -19,6 +19,7 @@ import { handleSlackEvents } from "./slack-events.js";
 import { handleSlackEvent } from "./slack-mention.js";
 import { ORCHESTRATOR_NAME, handleSlackCommand } from "./slack-routes.js";
 import { handleSandboxRoutes } from "./sandbox-routes.js";
+import { readSetupStatus } from "./setup-status.js";
 
 export { Automations, CodingOrchestrator, OpenCodeAgent, Sandbox, ContainerProxy };
 export { assertLiveCodingModel } from "./coding-model.js";
@@ -133,7 +134,8 @@ async function handleGitHubWebhook(request: Request, env: Env, ctx?: ExecutionCo
 
 async function handleAutomations(request: Request, env: Env): Promise<Response | null> {
   const url = new URL(request.url);
-  if (url.pathname === "/api/automations" || isAutomationWebhookPath(url.pathname)) {
+  if (url.pathname === "/api/automations" || isAutomationWebhookPath(url.pathname)
+    || /^\/api\/automations\/[^/]+\/run\/?$/.test(url.pathname)) {
     return automationsStub(env).fetch(request);
   }
   return null;
@@ -171,6 +173,14 @@ export default {
           headers: { "Cache-Control": "no-store" },
         });
       }
+      if (url.pathname === "/api/setup/status") {
+        if (request.method !== "GET") {
+          return Response.json({ error: "Method not allowed." }, { status: 405 });
+        }
+        return Response.json(await readSetupStatus(env), {
+          headers: { "Cache-Control": "no-store" },
+        });
+      }
       if (url.pathname === "/api/approvals" || url.pathname.startsWith("/internal/")) {
         return Response.json({ error: "Not found." }, { status: 404 });
       }
@@ -196,6 +206,17 @@ export default {
         env,
         ctx ?? { waitUntil: () => {} } as unknown as ExecutionContext,
         {
+          dedupe: async (eventId) => {
+            const response = await automationsStub(env).fetch(
+              new Request("https://internal/internal/dedupe", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ key: `slack-event:${eventId}` }),
+              }),
+            );
+            const body = (await response.json().catch(() => ({}))) as { seen?: boolean };
+            return response.ok && body.seen === true;
+          },
           onEvent: async (body, eventEnv) => {
             await handleSlackEvent(body, eventEnv);
             try {

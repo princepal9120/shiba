@@ -104,15 +104,21 @@ export class Automations {
     event: AutomationMatchEvent,
     orchestrator: OrchestratorStub,
     nowMs = Date.now(),
+    onlyId?: string,
   ): Promise<{ fired: number; skipped: number }> {
     const store = await this.load();
+    const all = store.list();
+    const target = onlyId ? all.filter((a) => a.id === onlyId) : all;
     const { results, automations } = await fireMatchingAutomations(
-      store.list(),
+      target,
       event,
       this.fireDeps(orchestrator, nowMs),
     );
+    // Merge updated entries back into the full store — the input list is
+    // filtered when onlyId is set, so it is not the complete store.
+    const updated = new Map(automations.map((a) => [a.id, a]));
     const next = new AutomationStore();
-    for (const item of automations) next.upsert(item);
+    for (const item of all) next.upsert(updated.get(item.id) ?? item);
     await this.save(next);
     return {
       fired: results.filter((r) => r.fired).length,
@@ -159,6 +165,31 @@ export class Automations {
       const result = await this.fireEvent({ kind: "github", ...mapped }, await this.orchestrator());
       return Response.json(result);
     }
+    if (request.method === "POST" && url.pathname === "/internal/dedupe") {
+      // Cross-isolate idempotency for retried Slack event deliveries:
+      // {key} → {seen}. Keys expire after one hour — Slack retries stop
+      // long before that, so the set stays tiny.
+      let body: unknown;
+      try {
+        body = await request.json();
+      } catch {
+        return Response.json({ error: "Request body is not valid JSON." }, { status: 400 });
+      }
+      const key = (body as { key?: unknown })?.key;
+      if (typeof key !== "string" || !key) {
+        return Response.json({ error: "Missing dedupe key." }, { status: 400 });
+      }
+      const storageKey = `dedupe:${key.slice(0, 200)}`;
+      if (await this.ctx.storage.get<number>(storageKey)) {
+        return Response.json({ seen: true });
+      }
+      const now = Date.now();
+      await this.ctx.storage.put(storageKey, now);
+      const all = await this.ctx.storage.list<number>({ prefix: "dedupe:" });
+      const stale = [...all.keys()].filter((k) => (all.get(k) ?? 0) < now - 3_600_000);
+      if (stale.length) await this.ctx.storage.delete(stale);
+      return Response.json({ seen: false });
+    }
     if (request.method === "POST" && url.pathname === "/internal/slack") {
       let body: unknown;
       try {
@@ -194,6 +225,19 @@ export class Automations {
         const message = error instanceof InputError ? error.message : "Invalid automation.";
         return Response.json({ error: message }, { status: 400 });
       }
+    }
+    const manualId = /^\/api\/automations\/([^/]+)\/run\/?$/.exec(url.pathname)?.[1];
+    if (manualId && request.method === "POST") {
+      const store = await this.load();
+      const automation = store.get(decodeURIComponent(manualId));
+      if (!automation) {
+        return Response.json({ error: "Automation not found." }, { status: 404 });
+      }
+      if (!automation.triggers.some((t) => t.kind === "manual")) {
+        return Response.json({ error: "Automation has no manual trigger." }, { status: 400 });
+      }
+      const result = await this.fireEvent({ kind: "manual" }, await this.orchestrator(), Date.now(), automation.id);
+      return Response.json({ ok: true, id: automation.id, ...result });
     }
     const webhookId = parseAutomationWebhookPath(url.pathname);
     if (webhookId && request.method === "POST") {

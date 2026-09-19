@@ -228,20 +228,28 @@ export interface GatherSlackContextArgs {
   linkedTexts?: string[];
   maxMessages?: number;
   maxCharsPerMessage?: number;
+  burstWindowSeconds?: number;
 }
 
 /**
  * Assemble bounded, redacted context: `aside` messages excluded, thread
- * capped at ~50 messages (most recent win), each body tail-bounded, linked
- * issue/PR text appended, secrets redacted over the whole assembly.
+ * capped at ~50 messages (most recent win), same-author rapid-fire
+ * messages collapsed into one burst line (`⋮` separator, `+N` marker),
+ * each body tail-bounded, linked issue/PR text appended, secrets redacted
+ * over the whole assembly.
  */
 export function gatherSlackContext(args: GatherSlackContextArgs): string {
   const maxMessages = args.maxMessages ?? MAX_CONTEXT_MESSAGES;
   const maxChars = args.maxCharsPerMessage ?? MAX_CONTEXT_CHARS_PER_MESSAGE;
   const visible = applyThreadControls(args.threadMessages);
   const tail = visible.slice(-Math.max(maxMessages, 0));
-  const lines = tail.map(
-    (message) => `[${message.user} ${message.ts}] ${boundTail(message.text, maxChars)}`,
+  const lines = groupMessageBursts(tail, { windowSeconds: args.burstWindowSeconds }).map(
+    (burst) => {
+      const first = burst[0]!;
+      const texts = burst.map((message) => boundTail(message.text, maxChars)).join(" ⋮ ");
+      const extra = burst.length > 1 ? ` +${burst.length - 1}` : "";
+      return `[${first.user} ${first.ts}${extra}] ${texts}`;
+    },
   );
   for (const linked of args.linkedTexts ?? []) {
     lines.push(`[linked] ${boundTail(linked, maxChars)}`);
