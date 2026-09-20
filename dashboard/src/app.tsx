@@ -16,6 +16,7 @@ import { SessionsSidebar, type SessionItem } from "./components/SessionsSidebar"
 import { StepTimeline } from "./components/StepTimeline";
 import { WorkspacePanel, type WorkspaceTab } from "./components/WorkspacePanel";
 import { TaskComposer } from "./components/TaskComposer";
+import { AppNavRail, APP_NAV_ITEMS, type AppNavView } from "./components/AppNavRail";
 import {
   extractPendingApprovals,
   extractCompletedDiff,
@@ -53,17 +54,7 @@ function useRetainedRuns(refreshToken: number): { runs: RetainedRun[]; error: st
   return { runs, error };
 }
 
-type MainView = "tasks" | "vm" | "runs" | "automations" | "missions" | "gates" | "architecture";
-
-const NAV_ITEMS: { id: MainView; label: string }[] = [
-  { id: "tasks", label: "Tasks" },
-  { id: "vm", label: "VM" },
-  { id: "runs", label: "Runs" },
-  { id: "automations", label: "Automations" },
-  { id: "missions", label: "Missions" },
-  { id: "gates", label: "Gates" },
-  { id: "architecture", label: "Architecture" },
-];
+type MainView = AppNavView;
 
 const SETUP_TOTAL_STEPS = 6;
 
@@ -108,7 +99,13 @@ export function App(): React.JSX.Element {
   const [setupDone, setSetupDone] = useState<number | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [selectedSessionId, setSelectedSessionId] = useState<string>("live");
-  const [workspaceCollapsed, setWorkspaceCollapsed] = useState(false);
+  // Workspace starts collapsed below lg so the drawer doesn't cover the
+  // conversation on small screens; expanded by default on desktop.
+  const [workspaceCollapsed, setWorkspaceCollapsed] = useState(() =>
+    typeof window !== "undefined"
+      ? window.matchMedia("(max-width: 1023px)").matches
+      : false,
+  );
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("runs");
   const [mobileSessionsOpen, setMobileSessionsOpen] = useState(false);
 
@@ -506,56 +503,43 @@ export function App(): React.JSX.Element {
   const busy = submitting || clearing || chat.isStreaming || chat.status === "streaming" || chat.status === "submitted";
 
   return (
-    <div className="min-h-dvh bg-black text-[#e6edf3] font-sans selection:bg-[#63c8c1] selection:text-black flex flex-col">
-      {/* TOP HEADER BAR */}
-      <header className="h-14 border-b border-white/[0.08] bg-[#07090e]/95 backdrop-blur-md px-4 lg:px-6 flex items-center justify-between z-20 shrink-0 sticky top-0 shadow-[0_1px_3px_rgba(0,0,0,0.5)]">
-        <div className="flex items-center gap-3">
-          <a href="/" className="flex items-center gap-2.5 text-white hover:opacity-90 transition-opacity">
-            <img src="/assets/mascot/pet-logo.png" alt="Shiba Mascot" className="w-8 h-8 rounded-full bg-white shadow-[0_0_12px_rgba(11,159,149,0.4)] object-contain border border-teal-500/50" />
-            <div>
-              <div className="font-bold tracking-tight text-sm text-white flex items-center gap-1.5">
-                Shiba
-                <span className="text-[10px] font-mono text-teal-400 bg-teal-950/60 border border-teal-800/60 px-1.5 py-0.2 rounded">
-                  Cloudflare Native
-                </span>
-              </div>
-            </div>
-          </a>
-        </div>
+    <div className="min-h-dvh bg-black text-[#e6edf3] font-sans selection:bg-[#63c8c1] selection:text-black flex">
+      {/* LEFT: app navigation rail (all views) */}
+      <AppNavRail
+        activeView={mainView}
+        onNavigate={setMainView}
+        activeSandboxCount={activeSandboxCount}
+        setupDone={setupDone}
+        setupTotal={SETUP_TOTAL_STEPS}
+        onOpenSetup={() => setShowOnboardingModal(true)}
+        onOpenShortcuts={() => setShowShortcutsModal(true)}
+      />
 
-        {/* DESKTOP VIEW NAVIGATION TABS */}
-        <nav className="hidden md:flex items-center gap-1 bg-[#0d1117] p-1 rounded-xl border border-white/[0.08] text-xs shadow-inner">
-          {NAV_ITEMS.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => setMainView(item.id)}
-              className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
-                mainView === item.id
-                  ? "bg-teal-950/80 text-teal-300 border border-teal-500/30 font-semibold shadow-sm"
-                  : "text-[#8b98a9] hover:text-white hover:bg-white/[0.04]"
-              }`}
-            >
-              <span>{item.label}</span>
-              {item.id === "vm" && activeSandboxCount > 0 ? (
-                <span className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />
-              ) : null}
-            </button>
-          ))}
-        </nav>
+      <div className="flex-1 flex flex-col min-w-0 min-h-0">
+      {/* SLIM CONTEXT HEADER */}
+      <header className="h-14 border-b border-white/[0.08] bg-[#07090e]/95 backdrop-blur-md px-4 lg:px-6 flex items-center justify-between gap-3 z-20 shrink-0">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span className="text-sm font-semibold text-white font-display tracking-tight">
+            {APP_NAV_ITEMS.find((item) => item.id === mainView)?.label ?? "Tasks"}
+          </span>
+          <span className="text-[10px] font-mono text-teal-400 bg-teal-950/60 border border-teal-800/60 px-1.5 py-0.5 rounded">
+            Cloudflare Native
+          </span>
+        </div>
 
         <div className="flex items-center gap-3 sm:gap-4">
           {/* Active Sandboxes Pill */}
-          <div className="hidden sm:inline-flex items-center gap-1.5 border border-white/[0.08] bg-[#0d1117] rounded-full px-2.5 py-1 text-xs font-mono text-[#8b98a9] shadow-sm">
+          <div className="hidden sm:inline-flex items-center gap-1.5 border border-white/[0.08] bg-[#0d1117] rounded-full px-2.5 py-1 text-xs font-mono text-[#8b98a9] shadow-sm whitespace-nowrap">
             <span className={`w-1.5 h-1.5 rounded-full ${activeSandboxCount > 0 ? "bg-[#4f9cf0] animate-pulse" : "bg-zinc-600"}`} />
             <span>{activeSandboxCount} / 5 sandboxes active</span>
           </div>
 
           {/* Connection Status */}
           <div
-            className="inline-flex items-center gap-2 border border-white/[0.08] bg-[#0d1117] rounded-full px-3 py-1 text-xs font-medium text-[#8b98a9] shadow-sm"
+            className="inline-flex items-center gap-2 border border-white/[0.08] bg-[#0d1117] rounded-full px-3 py-1 text-xs font-medium text-[#8b98a9] shadow-sm max-w-[240px]"
             role="status"
             aria-live="polite"
+            title={connectionState}
           >
             <span
               className={`w-2 h-2 rounded-full ${
@@ -567,71 +551,15 @@ export function App(): React.JSX.Element {
               }`}
               aria-hidden="true"
             />
-            <span className="truncate max-w-[140px] sm:max-w-none">{connectionState}</span>
+            <span className="truncate">{connectionState}</span>
           </div>
-
-          {/* Shortcuts & Help */}
-          <button
-            type="button"
-            onClick={() => setShowShortcutsModal(true)}
-            className="w-8 h-8 rounded-lg border border-white/[0.08] bg-[#0d1117] hover:bg-[#1f2937] text-[#8b98a9] hover:text-white flex items-center justify-center text-xs font-mono transition-colors shadow-sm"
-            title="Keyboard shortcuts (?)"
-            aria-label="Keyboard shortcuts"
-          >
-            ?
-          </button>
-
-          {/* Onboarding Setup Guide — pill shows live progress when incomplete */}
-          <button
-            type="button"
-            onClick={() => setShowOnboardingModal(true)}
-            className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-md transition-colors border ${
-              setupDone !== null && setupDone < SETUP_TOTAL_STEPS
-                ? "text-[#c9a227] hover:text-[#e9d890] border-[#c9a227]/40 hover:border-[#c9a227]/70 bg-[#c9a227]/10"
-                : "text-teal-300 hover:text-teal-200 border-teal-500/40 hover:border-teal-400/80 bg-teal-950/50 hover:bg-teal-900/60 shadow-[0_0_8px_rgba(11,159,149,0.2)]"
-            }`}
-            title="Setup & Onboarding Guide"
-            aria-label="Setup & Onboarding Guide"
-          >
-            <span className="hidden sm:inline">
-              {setupDone !== null && setupDone < SETUP_TOTAL_STEPS
-                ? `Setup ${setupDone}/${SETUP_TOTAL_STEPS}`
-                : "Setup Guide"}
-            </span>
-            <span className="sm:hidden">Setup</span>
-          </button>
-
-          {/* Links */}
-          <a
-            href="/docs/"
-            className="text-xs text-[#4f9cf0] hover:text-[#3b82f6] font-medium transition-colors border border-neutral-800 px-2.5 py-1 rounded-md bg-black"
-          >
-            Docs
-          </a>
         </div>
       </header>
-
-      {/* MOBILE VIEW NAVIGATION TABS */}
-      <div className="md:hidden flex items-center justify-between px-3 py-2 bg-[#090b0e] border-b border-neutral-800 overflow-x-auto text-xs font-mono shrink-0 gap-1">
-        {NAV_ITEMS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => setMainView(item.id)}
-            className={`px-2.5 py-1 rounded whitespace-nowrap flex items-center gap-1.5 ${mainView === item.id ? "bg-teal-950 text-teal-300 font-bold border border-teal-800/60" : "text-[#8b98a9]"}`}
-          >
-            <span>{item.label}</span>
-            {item.id === "vm" && activeSandboxCount > 0 ? (
-              <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse" />
-            ) : null}
-          </button>
-        ))}
-      </div>
 
       {mainView === "tasks" ? (
       <div className="flex-1 flex overflow-hidden">
         {/* LEFT: Devin-style sessions rail */}
-        <div className="hidden lg:block h-full">
+        <div className="hidden lg:block self-stretch">
           <SessionsSidebar
             sessions={sessions}
             selectedId={selectedSessionId}
@@ -968,6 +896,7 @@ export function App(): React.JSX.Element {
           </div>
         </div>
       ) : null}
+      </div>
     </div>
   );
 }
