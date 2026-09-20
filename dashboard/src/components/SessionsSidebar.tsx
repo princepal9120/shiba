@@ -1,10 +1,11 @@
 /**
- * SessionsSidebar — Devin-style left rail (~300px).
- * Lists chat/run sessions with status dots, search filter, New Task CTA,
- * and a footer with setup progress, docs link, and connection state.
+ * SessionsSidebar — Devin-style left rail (280px).
+ * Sessions grouped "Active" (live chat pinned) then "Recent" (runs,
+ * newest first). Borderless rows: status dot + title + mono meta line.
+ * Footer carries setup progress, docs link, and connection state.
  */
 import { useMemo, useState } from "react";
-import { formatTimeAgo } from "../ui-helpers";
+import { formatTimeAgo, statusLabel } from "../ui-helpers";
 
 export interface SessionItem {
   id: string; // runId, or "live" for the active chat session
@@ -32,7 +33,7 @@ function statusDotClass(session: SessionItem): string {
     return "bg-[#0B9F95] animate-pulse-subtle";
   }
   if (session.status === "waiting-approval" || session.status === "pending") {
-    return "bg-[#f59e0b]";
+    return "bg-[#c9a227]";
   }
   if (session.status === "completed") {
     return "bg-[#4cc38a]";
@@ -49,8 +50,55 @@ function statusDotClass(session: SessionItem): string {
 
 function connectionDotClass(tone: SessionsSidebarProps["connectionTone"]): string {
   if (tone === "ok") return "bg-[#4cc38a]";
-  if (tone === "pending") return "bg-[#f59e0b] animate-pulse-subtle";
+  if (tone === "pending") return "bg-[#c9a227] animate-pulse-subtle";
   return "bg-[#f06666]";
+}
+
+function GroupLabel({ children }: { children: string }) {
+  return (
+    <h3 className="px-3 pt-4 pb-1.5 text-[10px] font-mono font-semibold uppercase tracking-[0.1em] text-[#8b98a9]/60 select-none">
+      {children}
+    </h3>
+  );
+}
+
+function SessionRow({
+  session,
+  selected,
+  onSelect,
+}: {
+  session: SessionItem;
+  selected: boolean;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(session.id)}
+      aria-current={selected ? "true" : undefined}
+      className={`group w-full text-left rounded-lg px-3 py-2 flex items-start gap-2.5 transition-colors ${
+        selected ? "bg-[#161a22]" : "hover:bg-white/[0.04]"
+      }`}
+    >
+      <span
+        className={`mt-[7px] size-1.5 rounded-full shrink-0 ${statusDotClass(session)}`}
+        aria-hidden="true"
+      />
+      <span className="min-w-0 flex-1">
+        <span
+          className={`block text-[13px] font-medium truncate leading-snug ${
+            session.live ? "text-[#2dd4bf]" : "text-[#e6edf3]"
+          }`}
+        >
+          {session.title || "Untitled session"}
+        </span>
+        <span className="block text-[11px] font-mono text-[#8b98a9]/80 truncate mt-0.5 tabular-nums">
+          {session.repoName} · {statusLabel(session.status)} ·{" "}
+          {formatTimeAgo(session.updatedAt)}
+        </span>
+      </span>
+    </button>
+  );
 }
 
 export function SessionsSidebar({
@@ -75,33 +123,33 @@ export function SessionsSidebar({
     );
   }, [sessions, query]);
 
+  const activeSessions = filtered.filter((s) => s.live || s.status === "running" || s.status === "waiting-approval");
+  const recentSessions = filtered.filter((s) => !activeSessions.includes(s));
   const setupComplete = setupDone !== null && setupDone >= setupTotal;
 
   return (
     <aside
-      className="w-[300px] shrink-0 h-full flex flex-col bg-[#0a0c10] border-r border-[#1e2530]"
+      className="w-[280px] shrink-0 h-full flex flex-col bg-[#0a0c10] border-r border-[#1e2530]"
       aria-label="Sessions"
     >
       {/* Header */}
       <div className="flex items-center justify-between px-4 pt-4 pb-3">
-        <div className="flex items-center gap-2">
-          <h2 className="text-sm font-semibold text-[#e6edf3] font-display tracking-tight">
-            Sessions
-          </h2>
-          <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-[#11141b] border border-[#1e2530] text-[#8b98a9]">
-            {sessions.length}
-          </span>
-        </div>
+        <h2 className="text-[11px] font-mono font-semibold uppercase tracking-[0.12em] text-[#8b98a9]">
+          Sessions
+        </h2>
+        <span className="text-[11px] font-mono px-1.5 py-0.5 rounded-md bg-[#11141b] text-[#8b98a9] tabular-nums">
+          {sessions.length}
+        </span>
       </div>
 
       {/* New task */}
-      <div className="px-4 pb-3">
+      <div className="px-3 pb-3">
         <button
           type="button"
           onClick={onNewTask}
-          className="w-full inline-flex items-center justify-center gap-1.5 bg-[#0B9F95] hover:bg-[#0c8d84] text-black font-semibold text-sm py-2 px-3 rounded-lg transition-colors shadow-sm"
+          className="w-full inline-flex items-center justify-center gap-1.5 bg-[#0B9F95] hover:bg-[#0cb0a4] text-black font-semibold text-[13px] h-9 px-3 rounded-lg transition-colors"
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
           </svg>
           New task
@@ -109,10 +157,10 @@ export function SessionsSidebar({
       </div>
 
       {/* Search */}
-      <div className="px-4 pb-3">
+      <div className="px-3 pb-2">
         <div className="relative">
           <svg
-            className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#8b98a9]"
+            className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-[#8b98a9]/60"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -130,7 +178,7 @@ export function SessionsSidebar({
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search sessions"
             aria-label="Search sessions"
-            className="w-full bg-[#11141b] border border-[#1e2530] rounded-lg pl-8 pr-3 py-1.5 text-sm text-[#e6edf3] placeholder:text-[#8b98a9]/60 focus:border-[#2dd4bf]/50 transition-colors"
+            className="w-full h-8 bg-[#11141b] border border-transparent rounded-lg pl-8 pr-3 text-[13px] text-[#e6edf3] placeholder:text-[#8b98a9]/50 focus:border-[#2dd4bf]/40 focus:outline-none transition-colors"
           />
         </div>
       </div>
@@ -138,75 +186,78 @@ export function SessionsSidebar({
       {/* Session list */}
       <div className="flex-1 overflow-y-auto px-2 pb-2">
         {filtered.length === 0 ? (
-          <p className="text-[#8b98a9] text-xs px-3 py-6 text-center">
+          <p className="text-[#8b98a9] text-xs px-3 py-8 text-center text-pretty">
             {sessions.length === 0
               ? "No sessions yet — start a task."
               : "No sessions match your search."}
           </p>
         ) : (
-          <ul className="flex flex-col gap-0.5">
-            {filtered.map((session) => {
-              const selected = session.id === selectedId;
-              return (
-                <li key={session.id}>
-                  <button
-                    type="button"
-                    onClick={() => onSelect(session.id)}
-                    aria-current={selected ? "true" : undefined}
-                    className={`w-full text-left rounded-lg px-3 py-2.5 flex items-start gap-2.5 transition-colors border ${
-                      selected
-                        ? "bg-[#11141b] border-[#2c3545]"
-                        : "bg-transparent border-transparent hover:bg-[#11141b]/70"
-                    }`}
-                  >
-                    <span
-                      className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${statusDotClass(session)}`}
-                      aria-hidden="true"
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm text-[#e6edf3] truncate leading-snug">
-                        {session.title || "Untitled session"}
-                      </span>
-                      <span className="block text-[11px] font-mono text-[#8b98a9] truncate mt-0.5">
-                        {session.repoName} · {formatTimeAgo(session.updatedAt)}
-                      </span>
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+          <>
+            {activeSessions.length > 0 ? (
+              <section aria-label="Active sessions">
+                <GroupLabel>Active</GroupLabel>
+                <ul className="flex flex-col gap-0.5">
+                  {activeSessions.map((session) => (
+                    <li key={session.id}>
+                      <SessionRow
+                        session={session}
+                        selected={session.id === selectedId}
+                        onSelect={onSelect}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+            {recentSessions.length > 0 ? (
+              <section aria-label="Recent sessions">
+                <GroupLabel>Recent</GroupLabel>
+                <ul className="flex flex-col gap-0.5">
+                  {recentSessions.map((session) => (
+                    <li key={session.id}>
+                      <SessionRow
+                        session={session}
+                        selected={session.id === selectedId}
+                        onSelect={onSelect}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+          </>
         )}
       </div>
 
       {/* Footer */}
-      <div className="border-t border-[#1e2530] px-4 py-3 flex flex-col gap-2.5">
+      <div className="border-t border-[#1e2530] px-3 py-3 flex flex-col gap-2.5">
         <button
           type="button"
           onClick={onOpenSetup}
           className={`inline-flex items-center gap-2 text-xs font-semibold rounded-lg px-2.5 py-1.5 border transition-colors w-fit ${
             setupComplete
               ? "text-[#2dd4bf] border-[#0B9F95]/40 bg-[#0B9F95]/10 hover:bg-[#0B9F95]/20"
-              : "text-[#f59e0b] border-[#f59e0b]/40 bg-[#f59e0b]/10 hover:bg-[#f59e0b]/20"
+              : "text-[#c9a227] border-[#c9a227]/40 bg-[#c9a227]/10 hover:bg-[#c9a227]/20"
           }`}
         >
-          {setupComplete
-            ? "Setup Guide"
-            : `Setup ${setupDone ?? 0}/${setupTotal}`}
+          {setupComplete ? "Setup Guide" : `Setup ${setupDone ?? 0}/${setupTotal}`}
         </button>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <a
             href="/docs"
-            className="text-xs text-[#8b98a9] hover:text-[#e6edf3] transition-colors"
+            className="text-xs text-[#8b98a9] hover:text-[#e6edf3] transition-colors shrink-0"
           >
             Docs
           </a>
-          <span className="inline-flex items-center gap-1.5 text-[11px] text-[#8b98a9]">
+          <span
+            className="inline-flex items-center gap-1.5 text-[11px] text-[#8b98a9] min-w-0"
+            title={connectionLabel}
+          >
             <span
-              className={`w-1.5 h-1.5 rounded-full ${connectionDotClass(connectionTone)}`}
+              className={`size-1.5 rounded-full shrink-0 ${connectionDotClass(connectionTone)}`}
               aria-hidden="true"
             />
-            {connectionLabel}
+            <span className="truncate">{connectionLabel}</span>
           </span>
         </div>
       </div>

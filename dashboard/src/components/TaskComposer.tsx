@@ -1,4 +1,4 @@
-import { type JSX, type SyntheticEvent } from "react";
+import { type JSX, type SyntheticEvent, useEffect, useRef } from "react";
 
 export interface TaskComposerProps {
   repoUrl: string;
@@ -43,7 +43,16 @@ export function TaskComposer({
   onSubmit,
   onClear,
 }: TaskComposerProps): JSX.Element {
-  const sendDisabled = busy || task.trim() === "";
+  const sendDisabled = busy || task.trim() === "" || repoUrl.trim() === "";
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Auto-grow the task field up to ~192px, then scroll.
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 192)}px`;
+  }, [task]);
 
   const handleSubmit = (event: SyntheticEvent) => {
     event.preventDefault();
@@ -68,18 +77,20 @@ export function TaskComposer({
       className="rounded-xl border border-[#1e2530] bg-[#0a0c10] p-3 flex flex-col gap-2.5 shadow-lg"
     >
       <textarea
+        ref={textareaRef}
         value={task}
         onChange={(event) => onTaskChange(event.target.value)}
         onKeyDown={handleKeyDown}
         placeholder="Describe the change you want…"
-        rows={3}
+        rows={1}
         className="w-full resize-none bg-transparent text-sm text-[#e6edf3] placeholder-[#8b98a9]/70 focus:outline-none min-h-[72px] max-h-48 overflow-y-auto leading-relaxed"
         aria-label="Task description"
       />
 
       <div className="flex items-center gap-2 flex-wrap">
         <input
-          type="text"
+          type="url"
+          required
           value={repoUrl}
           onChange={(event) => onRepoUrlChange(event.target.value)}
           placeholder="github.com/owner/repo"

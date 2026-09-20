@@ -14,50 +14,16 @@ import { ArchitectureView } from "./components/ArchitectureView";
 import { OnboardingModal, detectSetupSteps } from "./components/OnboardingModal";
 import { SessionsSidebar, type SessionItem } from "./components/SessionsSidebar";
 import { StepTimeline } from "./components/StepTimeline";
-import { WorkspacePanel } from "./components/WorkspacePanel";
+import { WorkspacePanel, type WorkspaceTab } from "./components/WorkspacePanel";
 import { TaskComposer } from "./components/TaskComposer";
 import {
   extractPendingApprovals,
   extractCompletedDiff,
   parseRepoName,
 } from "./ui-helpers";
+import type { RetainedRun, ToolRunRecord } from "./types";
 
 const ORCHESTRATOR_AGENT = "coding-orchestrator";
-
-interface RetainedRun {
-  runId: string;
-  sandboxId: string;
-  repoUrl: string;
-  task: string;
-  baseBranch: string;
-  publishPullRequest: boolean;
-  status: string;
-  createdAt: number;
-  updatedAt: number;
-  summary?: string;
-  error?: string;
-  diff?: string;
-}
-
-interface ToolRunPart {
-  text?: string;
-  delta?: string;
-  message?: string;
-  body?: string;
-  [key: string]: unknown;
-}
-
-interface ToolRunRecord {
-  runId: string;
-  status: string;
-  agentType?: string;
-  parentToolCallId?: string;
-  parts: ToolRunPart[];
-  summary?: string;
-  error?: string;
-  diff?: string;
-  [key: string]: unknown;
-}
 
 function useRetainedRuns(refreshToken: number): { runs: RetainedRun[]; error: string | null } {
   const [runs, setRuns] = useState<RetainedRun[]>([]);
@@ -143,6 +109,8 @@ export function App(): React.JSX.Element {
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [selectedSessionId, setSelectedSessionId] = useState<string>("live");
   const [workspaceCollapsed, setWorkspaceCollapsed] = useState(false);
+  const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("runs");
+  const [mobileSessionsOpen, setMobileSessionsOpen] = useState(false);
 
   // Header setup pill: count deployment-proven steps; refreshes when the
   // onboarding modal closes so fixes show up immediately.
@@ -305,6 +273,10 @@ export function App(): React.JSX.Element {
       if (submitInFlight.current || clearInFlight.current) return;
       if (!repoUrl.trim() || !task.trim()) {
         setNotice("Enter a repository URL and a task first.");
+        return;
+      }
+      if (!repoUrl.trim().startsWith("https://github.com/")) {
+        setNotice("Repository URL must be a GitHub URL like https://github.com/owner/repo.");
         return;
       }
       setNotice(null);
@@ -493,21 +465,23 @@ export function App(): React.JSX.Element {
     toolRuns,
   ]);
 
-  const selectedSession = useMemo(
-    () => sessions.find((session) => session.id === selectedSessionId) ?? null,
-    [sessions, selectedSessionId],
-  );
+  // The center pane always shows the live chat session; picking a sidebar
+  // row selects that run inside the workspace panel (VM / Diff / Runs tabs).
+  const liveSession = sessions[0];
 
   const handleSelectSession = useCallback((id: string) => {
     setSelectedSessionId(id);
+    setMobileSessionsOpen(false);
     if (id !== "live") {
       setSelectedRunId(id);
       setWorkspaceCollapsed(false);
+      setWorkspaceTab("vm");
     }
   }, []);
 
   const handleNewTask = useCallback(() => {
     setSelectedSessionId("live");
+    setMobileSessionsOpen(false);
     setMainView("tasks");
     window.setTimeout(() => {
       document
@@ -531,17 +505,8 @@ export function App(): React.JSX.Element {
 
   const busy = submitting || clearing || chat.isStreaming || chat.status === "streaming" || chat.status === "submitted";
 
-  const statusColors: Record<string, string> = {
-    completed: "text-[#4cc38a] border-[#4cc38a]/30 bg-[#4cc38a]/10",
-    running: "text-[#4f9cf0] border-[#4f9cf0]/30 bg-[#4f9cf0]/10",
-    pending: "text-[#c9a227] border-[#c9a227]/30 bg-[#c9a227]/10",
-    error: "text-[#f06666] border-[#f06666]/30 bg-[#f06666]/10",
-    aborted: "text-[#f06666] border-[#f06666]/30 bg-[#f06666]/10",
-    cancelled: "text-[#f06666] border-[#f06666]/30 bg-[#f06666]/10",
-  };
-
   return (
-    <div className="min-h-screen bg-black text-[#e6edf3] font-sans selection:bg-[#63c8c1] selection:text-black flex flex-col">
+    <div className="min-h-dvh bg-black text-[#e6edf3] font-sans selection:bg-[#63c8c1] selection:text-black flex flex-col">
       {/* TOP HEADER BAR */}
       <header className="h-14 border-b border-white/[0.08] bg-[#07090e]/95 backdrop-blur-md px-4 lg:px-6 flex items-center justify-between z-20 shrink-0 sticky top-0 shadow-[0_1px_3px_rgba(0,0,0,0.5)]">
         <div className="flex items-center gap-3">
@@ -686,28 +651,64 @@ export function App(): React.JSX.Element {
           />
         </div>
 
+        {/* Mobile sessions drawer (below lg) */}
+        {mobileSessionsOpen ? (
+          <div className="fixed inset-0 z-40 lg:hidden">
+            <div
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setMobileSessionsOpen(false)}
+            />
+            <div className="absolute inset-y-0 left-0 shadow-2xl">
+              <SessionsSidebar
+                sessions={sessions}
+                selectedId={selectedSessionId}
+                onSelect={handleSelectSession}
+                onNewTask={handleNewTask}
+                connectionLabel={connectionState}
+                connectionTone={
+                  identityError || agent.connectionError
+                    ? "error"
+                    : agent.identified
+                    ? "ok"
+                    : "pending"
+                }
+                setupDone={setupDone}
+                setupTotal={SETUP_TOTAL_STEPS}
+                onOpenSetup={() => {
+                  setMobileSessionsOpen(false);
+                  setShowOnboardingModal(true);
+                }}
+              />
+            </div>
+          </div>
+        ) : null}
+
         {/* CENTER: conversation timeline + composer */}
         <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-black">
           {/* SESSION HEADER */}
           <div className="border-b border-white/[0.08] bg-[#07090e]/60 px-5 xl:px-6 py-2.5 flex items-center justify-between gap-3 shrink-0">
             <div className="flex items-center gap-3 min-w-0">
+              <button
+                type="button"
+                onClick={() => setMobileSessionsOpen(true)}
+                aria-label="Open sessions"
+                className="lg:hidden w-7 h-7 rounded-lg border border-white/[0.08] bg-[#0d1117] text-[#8b98a9] hover:text-white flex items-center justify-center transition-colors shrink-0"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
               <img
                 src="/assets/mascot/pet-logo.png"
                 alt="Shiba"
                 className="w-6 h-6 rounded-full bg-white object-contain border border-teal-500/40 shrink-0"
               />
               <h1 className="text-sm font-semibold text-white font-display tracking-tight truncate">
-                {selectedSession ? selectedSession.title : "New coding task"}
+                {liveSession ? liveSession.title : "New coding task"}
               </h1>
-              {selectedSession && selectedSession.id !== "live" ? (
-                <span className={`text-[10px] font-bold uppercase tracking-wider border rounded-full px-2 py-0.5 shrink-0 ${statusColors[selectedSession.status] || "text-[#8b98a9] border-neutral-800 bg-[#090b0e]"}`}>
-                  {selectedSession.status}
-                </span>
-              ) : (
-                <span className="text-[10px] font-bold uppercase tracking-wider border rounded-full px-2 py-0.5 shrink-0 text-teal-300 border-teal-800/50 bg-teal-950/50">
-                  Live
-                </span>
-              )}
+              <span className="text-[10px] font-bold uppercase tracking-wider border rounded-full px-2 py-0.5 shrink-0 text-teal-300 border-teal-800/50 bg-teal-950/50">
+                Live
+              </span>
             </div>
             <div className="hidden md:flex items-center gap-4 text-xs font-mono text-[#8b98a9] shrink-0">
               <span>
@@ -823,18 +824,29 @@ export function App(): React.JSX.Element {
         <WorkspacePanel
           toolRuns={toolRuns}
           retainedRuns={retainedRuns}
+          vmRuns={allRuns}
           pendingApprovals={pendingApprovals}
           decisions={decisions}
           onDecideApproval={decideApproval}
           onRefreshRuns={refreshRuns}
           onInspectVM={(id) => {
             setSelectedRunId(id);
-            setMainView("vm");
+            setWorkspaceCollapsed(false);
+            setWorkspaceTab("vm");
+          }}
+          onCancelRun={cancelRun}
+          onReuseParams={(run) => {
+            setRepoUrl(run.repoUrl);
+            setBaseBranch(run.baseBranch);
+            setTask(run.task);
+            setPublishPullRequest(run.publishPullRequest);
           }}
           selectedRunId={selectedRunId}
           onSelectRun={setSelectedRunId}
           collapsed={workspaceCollapsed}
           onToggleCollapsed={() => setWorkspaceCollapsed((current) => !current)}
+          tab={workspaceTab}
+          onTabChange={setWorkspaceTab}
         />
       </div>
       ) : mainView === "vm" ? (

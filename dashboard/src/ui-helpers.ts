@@ -54,10 +54,28 @@ const STATUS_LABELS: Record<string, string> = {
   error: "Error",
   aborted: "Aborted",
   cancelled: "Cancelled",
+  live: "Live",
+  "waiting-approval": "Waiting",
 };
 
 export function statusLabel(status: string): string {
   return STATUS_LABELS[status] ?? status;
+}
+
+// Status chip classes — single source for app.tsx, WorkspacePanel, and any
+// future pane that renders run/session status pills.
+export const STATUS_CHIP_CLASSES: Record<string, string> = {
+  completed: "text-[#4cc38a] border-[#4cc38a]/30 bg-[#4cc38a]/10",
+  running: "text-[#4f9cf0] border-[#4f9cf0]/30 bg-[#4f9cf0]/10",
+  pending: "text-[#c9a227] border-[#c9a227]/30 bg-[#c9a227]/10",
+  "waiting-approval": "text-[#c9a227] border-[#c9a227]/30 bg-[#c9a227]/10",
+  error: "text-[#f06666] border-[#f06666]/30 bg-[#f06666]/10",
+  aborted: "text-[#f06666] border-[#f06666]/30 bg-[#f06666]/10",
+  cancelled: "text-[#f06666] border-[#f06666]/30 bg-[#f06666]/10",
+};
+
+export function statusChipClass(status: string): string {
+  return STATUS_CHIP_CLASSES[status] ?? "text-[#8b98a9] border-neutral-800 bg-[#090b0e]";
 }
 
 export function emptyDiffText(): string {

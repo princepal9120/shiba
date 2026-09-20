@@ -133,27 +133,37 @@ setup, docs.
 
 ### Panes
 
-- **Sessions sidebar (~300px):** "Sessions" header, search input,
-  "+ New task" primary CTA, session rows (`.session-row`). Row =
-  title (truncated), mono meta line (repo · status · time-ago).
-  Selected row: `--panel-elevated` bg + `--line-light` border.
-  Live session row tints title `--accent-light`.
+- **Sessions sidebar (280px):** mono uppercase "SESSIONS" micro-label
+  + count, search input, "New task" primary teal CTA. Sessions grouped
+  "Active" (live chat + running/waiting runs pinned first) then
+  "Recent". Borderless rows: 6px status dot + 13px title (truncate)
+  + 11px mono meta line (repo · status · time-ago, tabular-nums).
+  Selected row: `#161a22` bg fill only — no border. Live row tints
+  title `--accent-light`. Footer: setup progress pill, Docs link,
+  truncated connection label with status dot. Below `lg` the sidebar
+  becomes a fixed left drawer (backdrop dim) opened from a sessions
+  button in the session header.
 - **Conversation timeline:** Devin-style step feed on a left icon
-  rail (`.step-rail`): 1px `--line` vertical connector, 24px icon
-  circles on `--panel`. Steps: "Ran \<tool\>" mono label + status
-  chip + expandable `<details>` output (mono, max-h-56 scroll).
-  User messages stay right-aligned blue bubbles. Waiting-approval
-  steps also render an inline approval card (amber `--pending`
-  border, Approve `--ok` fill / Reject `--danger` outline) — the
-  approval gate is sacred: never auto-approve, never hide.
+  rail (Tailwind `before:` connector): 1px `--line` vertical line,
+  24px icon circles on `--panel`. Steps: "Ran <tool>" mono label
+  + status chip + expandable `<details>` output (mono, max-h-56
+  scroll). User messages stay right-aligned blue bubbles.
+  Waiting-approval steps also render an inline approval card
+  (amber `--pending` border, Approve `--ok` fill / Reject
+  `--danger` outline) — the approval gate is sacred: never
+  auto-approve, never hide.
 - **Workspace panel (~400px):** tab bar Runs | VM | Diff |
-  Approvals (`.workspace-tab`, count badges via
-  `.workspace-tab-badge`). Collapses to a 40px icon rail.
-- **Task composer (`.composer`):** pinned at timeline bottom.
-  Rounded-xl `--panel` card, `--line` border (`--accent` on
-  focus-within). Auto-growing textarea + collapsed config row
-  (repo, branch, harness select, PR checkbox, Clear ghost, Send
-  primary teal). ⌘Enter submits.
+  Approvals with mono count badges; controlled by app state so
+  session picks and Inspect-VM jump straight to the right tab.
+  Collapses to a 40px icon rail; below `lg` the expanded panel
+  becomes a fixed right drawer. Runs tab merges live tool runs
+  and retained runs with Select / Inspect VM / Reuse params /
+  Cancel actions; VM and Diff tabs read the merged run list.
+- **Task composer:** pinned at timeline bottom. Rounded-xl
+  `--panel` card, `--line` border. Auto-growing textarea (<=192px)
+  + config row (repo type=url required, branch, harness
+  select, PR checkbox, Clear ghost, Send primary teal — disabled
+  until repo + task are non-empty). Cmd+Enter submits.
 
 ### Workbench rules
 
@@ -163,6 +173,6 @@ setup, docs.
   `--line`, `--line-light`; ink `--text`/`--muted`; semantics
   `--ok`, `--pending` (#c9a227 for approvals), `--danger`,
   running blue #4f9cf0.
-- Status chips reuse the existing `statusColors` map in app.tsx.
+- Status chips come from `statusChipClass` / `STATUS_CHIP_CLASSES` in `dashboard/src/ui-helpers.ts` (single source for every pane).
 - Density: 8pt spacing, radius 8–12px, `transition-colors` ≤200ms,
   silent success (no toasts).

@@ -1,21 +1,9 @@
 import { useState, useMemo, type JSX } from "react";
 import { DiffViewer } from "./DiffViewer";
 import { formatTimeAgo, parseRepoName, statusLabel } from "../ui-helpers";
+import type { RetainedRun } from "../types";
 
-export interface RetainedRun {
-  runId: string;
-  sandboxId: string;
-  repoUrl: string;
-  task: string;
-  baseBranch: string;
-  publishPullRequest: boolean;
-  status: string;
-  createdAt: number;
-  updatedAt: number;
-  summary?: string;
-  error?: string;
-  diff?: string;
-}
+export type { RetainedRun };
 
 export interface RunRegistryViewProps {
   runs: RetainedRun[];
@@ -342,4 +330,3 @@ export function RunRegistryView({
     </div>
   );
 }
-
