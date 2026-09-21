@@ -89,7 +89,7 @@ export function TaskComposer({
         aria-label="Task description"
       />
 
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-center gap-2 flex-wrap border-t border-white/[0.07] pt-2">
         <Tooltip content="Target GitHub repository URL (cloned into container)" side="top" align="start">
           <input
             type="url"
@@ -129,7 +129,7 @@ export function TaskComposer({
         </Tooltip>
 
         <Tooltip content="Publish branch and open Pull Request on completion" side="top">
-          <label className="flex items-center gap-1.5 text-xs text-[#8b98a9] hover:text-[#e6edf3] cursor-pointer select-none px-1.5 py-1 rounded hover:bg-white/[0.04] transition-colors">
+          <label className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-200 cursor-pointer select-none px-1.5 py-1 rounded-md hover:bg-white/[0.04] transition-colors">
             <input
               type="checkbox"
               checked={publishPullRequest}
@@ -139,38 +139,35 @@ export function TaskComposer({
             <span>Create PR</span>
           </label>
         </Tooltip>
-      </div>
 
-      <div className="flex items-center justify-between gap-3 pt-1 border-t border-white/[0.07]">
-        <span className="text-[11px] text-zinc-500 font-mono flex items-center gap-1">
+        <span className="text-[11px] text-zinc-500 font-mono flex items-center gap-1 ml-auto">
           <span className="text-zinc-500">●</span>
           <span>approval-gated · container isolated</span>
         </span>
-        <div className="flex items-center gap-2">
-          <Tooltip content="Clear task description and reset inputs" side="top">
-            <button
-              type="button"
-              onClick={onClear}
-              disabled={clearing || busy}
-              className="text-xs text-zinc-300 hover:text-white bg-transparent border border-white/10 hover:bg-white/5 font-medium py-1.5 px-3 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {clearing ? "Clearing…" : "Clear"}
-            </button>
-          </Tooltip>
 
-          <Tooltip content="Submit task to coding sandbox agent" shortcut="⌘↵" side="top">
-            <button
-              type="submit"
-              disabled={sendDisabled || isSubmitting}
-              className="bg-zinc-100 hover:bg-white text-zinc-900 font-medium py-1.5 px-4 rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-xs flex items-center gap-1.5 active:scale-[0.98]"
-            >
-              {isSubmitting ? "Sending…" : "Send"}
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 12h14M13 6l6 6-6 6" />
-              </svg>
-            </button>
-          </Tooltip>
-        </div>
+        <Tooltip content="Clear task description and reset inputs" side="top">
+          <button
+            type="button"
+            onClick={onClear}
+            disabled={clearing || busy}
+            className="text-xs text-zinc-300 hover:text-white bg-transparent border border-white/10 hover:bg-white/5 font-medium py-1.5 px-3 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {clearing ? "Clearing…" : "Clear"}
+          </button>
+        </Tooltip>
+
+        <Tooltip content="Submit task to coding sandbox agent" shortcut="⌘↵" side="top">
+          <button
+            type="submit"
+            disabled={sendDisabled || isSubmitting}
+            className="bg-zinc-100 hover:bg-white text-zinc-900 font-medium py-1.5 px-4 rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-xs flex items-center gap-1.5 active:scale-[0.98]"
+          >
+            {isSubmitting ? "Sending…" : "Send"}
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 12h14M13 6l6 6-6 6" />
+            </svg>
+          </button>
+        </Tooltip>
       </div>
     </form>
   );

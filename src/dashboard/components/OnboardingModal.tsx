@@ -238,14 +238,14 @@ export function OnboardingModal({
       aria-modal="true"
       aria-labelledby={modalTitleId}
     >
-      <div className="bg-[#101013] border border-white/[0.07] rounded-lg max-w-2xl w-full p-5 sm:p-7  my-auto text-zinc-200 max-h-[90dvh] flex flex-col">
+      <div className="bg-[#101013] border border-white/[0.09] rounded-lg max-w-2xl w-full p-5 sm:p-7  my-auto text-zinc-200 max-h-[90dvh] flex flex-col">
         {/* Modal Header */}
         <div className="flex items-start justify-between gap-4 pb-4 border-b border-white/[0.07] shrink-0">
           <div className="flex items-center gap-3">
             <div>
               <h2 id={modalTitleId} className="text-sm font-semibold text-zinc-100 flex items-center gap-2 text-balance">
                 Setup & Onboarding Guide
-                <span className="text-[10px] font-mono font-normal text-teal-400 bg-white/[0.04] border border-white/[0.10] px-2 py-0.5 rounded-full">
+                <span className="text-[10px] font-mono font-normal text-zinc-300 bg-white/[0.04] border border-white/[0.10] px-2 py-0.5 rounded-md">
                   PLAN.md End-to-End
                 </span>
               </h2>
@@ -269,15 +269,15 @@ export function OnboardingModal({
           <div className="flex items-center justify-between text-xs mb-1.5">
             <span className="font-semibold text-zinc-100 flex items-center gap-2">
               <span>Setup Progress</span>
-              <span className="text-[11px] font-mono text-teal-400 font-normal tabular-nums">
+              <span className="text-[11px] font-mono text-zinc-300 font-normal tabular-nums">
                 {completedCount} of {totalSteps} steps completed
               </span>
             </span>
             <span className="font-mono text-zinc-300 font-semibold tabular-nums">{progressPercent}%</span>
           </div>
-          <div className="w-full bg-white/[0.04] rounded-full h-2 overflow-hidden border border-white/[0.07]">
+          <div className="w-full bg-white/[0.08] rounded-md h-2 overflow-hidden border border-white/[0.07]">
             <div
-              className="bg-zinc-100 h-full rounded-full transition-all duration-300 ease-out "
+              className="bg-zinc-100 h-full rounded-md transition-all duration-300 ease-out "
               style={{ width: `${progressPercent}%` }}
               role="progressbar"
               aria-valuenow={progressPercent}
@@ -317,7 +317,7 @@ export function OnboardingModal({
                 <button
                   type="button"
                   onClick={markAllComplete}
-                  className="text-zinc-500 hover:text-teal-300 transition-colors"
+                  className="text-zinc-500 hover:text-zinc-300 transition-colors"
                 >
                   Mark all done
                 </button>
@@ -334,7 +334,7 @@ export function OnboardingModal({
             </div>
           </div>
           {isAllComplete ? (
-            <div className="mt-3 text-xs bg-white/[0.04] border border-white/[0.10] text-teal-300 px-3 py-2 rounded-lg flex items-center justify-between">
+            <div className="mt-3 text-xs bg-white/[0.04] border border-white/[0.10] text-zinc-300 px-3 py-2 rounded-lg flex items-center justify-between">
               <span><strong>All systems configured!</strong> You are ready to run tasks safely.</span>
               <button
                 type="button"
@@ -346,7 +346,7 @@ export function OnboardingModal({
                   );
                   onClose();
                 }}
-                className="bg-teal-400 text-black font-semibold text-[11px] px-3 py-1 rounded hover:bg-teal-300 transition-colors  ml-2 shrink-0"
+                className="bg-zinc-100 text-zinc-900 font-semibold text-[11px] px-3 py-1 rounded-md hover:bg-white transition-colors  ml-2 shrink-0"
               >
                 Run First Task →
               </button>
@@ -385,7 +385,7 @@ export function OnboardingModal({
                       onClick={() => toggleStep(step.id)}
                       className={`w-5 h-5 rounded-md mt-0.5 flex items-center justify-center border transition-colors shrink-0 ${
                         isDone
-                          ? "bg-teal-400 border-teal-400 text-black font-semibold text-xs "
+                          ? "bg-zinc-100 border-zinc-100 text-zinc-900 font-semibold text-xs "
                           : "border-white/[0.10] bg-black hover:border-teal-500"
                       }`}
                       role="checkbox"
@@ -403,7 +403,7 @@ export function OnboardingModal({
                     >
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-[11px] font-mono text-zinc-500">Step {idx + 1}</span>
-                        <span className={`text-xs font-semibold ${isDone ? "text-teal-200 line-through opacity-80" : "text-zinc-100"}`}>
+                        <span className={`text-xs font-semibold ${isDone ? "text-zinc-300 line-through opacity-80" : "text-zinc-100"}`}>
                           {step.title}
                         </span>
                         <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-white/[0.04] border border-white/[0.07] text-zinc-500">
@@ -413,7 +413,7 @@ export function OnboardingModal({
                           <span className="text-[10px] text-zinc-500 italic">(optional)</span>
                         ) : null}
                         {isDetected ? (
-                          <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-white/[0.04] border border-white/[0.10] text-teal-300">
+                          <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-white/[0.04] border border-white/[0.10] text-zinc-300">
                             detected live
                           </span>
                         ) : null}
@@ -427,7 +427,7 @@ export function OnboardingModal({
                   <button
                     type="button"
                     onClick={() => setExpandedStep(isExpanded ? null : step.id)}
-                    className="text-xs text-zinc-500 hover:text-zinc-100 font-mono px-2 py-1 rounded hover:bg-white/[0.04] transition-colors shrink-0"
+                    className="text-xs text-zinc-500 hover:text-zinc-100 font-mono px-2 py-1 rounded-md hover:bg-white/[0.04] transition-colors shrink-0"
                   >
                     {isExpanded ? "▲ Hide" : "▼ Details"}
                   </button>
@@ -437,10 +437,10 @@ export function OnboardingModal({
                   <div className="px-3 sm:px-4 pb-3.5 pt-1 border-t border-white/[0.07] text-xs text-zinc-500 flex flex-col gap-2.5">
                     <p className="leading-relaxed text-zinc-300">{step.detail}</p>
                     <div className="flex items-center justify-between text-[11px] font-mono text-zinc-500">
-                      <span>Source: <strong className="text-teal-400">{step.planRef}</strong></span>
+                      <span>Source: <strong className="text-zinc-300">{step.planRef}</strong></span>
                       <a
                         href={`/docs/onboarding/#${step.docAnchor}`}
-                        className="text-teal-400 hover:underline inline-flex items-center gap-1"
+                        className="text-zinc-300 hover:underline inline-flex items-center gap-1"
                       >
                         Read Onboarding Docs →
                       </a>
@@ -468,7 +468,7 @@ export function OnboardingModal({
                         className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors ${
                           isDone
                             ? "border-white/[0.10] bg-[#101013] text-zinc-500 hover:text-zinc-100"
-                            : "border-white/[0.10] bg-white/[0.04] text-teal-300 hover:bg-white/[0.07]"
+                            : "border-white/[0.10] bg-white/[0.04] text-zinc-300 hover:bg-white/[0.07]"
                         }`}
                       >
                         {isDone ? "Mark as Incomplete" : "Mark as Completed ✓"}
@@ -485,7 +485,7 @@ export function OnboardingModal({
                             );
                             onClose();
                           }}
-                          className="text-xs bg-teal-400 text-black font-semibold px-3 py-1.5 rounded-lg hover:bg-teal-300 transition-colors "
+                          className="text-xs bg-zinc-100 text-zinc-900 font-semibold px-3 py-1.5 rounded-lg hover:bg-white transition-colors "
                         >
                           Fill Starter Task & Start →
                         </button>
@@ -503,7 +503,7 @@ export function OnboardingModal({
         <div className="pt-3.5 border-t border-white/[0.07] flex items-center justify-between gap-3 shrink-0 flex-wrap">
           <a
             href="/docs/onboarding/"
-            className="text-xs text-teal-400 hover:underline font-mono inline-flex items-center gap-1"
+            className="text-xs text-zinc-300 hover:underline font-mono inline-flex items-center gap-1"
           >
             Full Architecture & Verification Guide ↗
           </a>

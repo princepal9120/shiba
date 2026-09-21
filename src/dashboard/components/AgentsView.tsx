@@ -26,7 +26,7 @@ interface AgentCli {
 function statusChip(configured: boolean | null): JSX.Element {
   if (configured === true) {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-md border border-white/[0.10] bg-white/[0.04] px-2 py-0.5 text-[11px] font-medium text-teal-300">
+      <span className="inline-flex items-center gap-1.5 rounded-md border border-white/[0.10] bg-white/[0.04] px-2 py-0.5 text-[11px] font-medium text-zinc-300">
         <span className="size-1.5 rounded-full bg-teal-400" />
         Ready
       </span>
@@ -77,7 +77,7 @@ export function AgentsView(): JSX.Element {
       <div className="mx-auto max-w-5xl px-6 py-5">
         <div className="mb-6">
           <h2 className="text-sm font-semibold text-zinc-100">Agents</h2>
-          <p className="mt-1 text-sm text-zinc-500 leading-relaxed">
+          <p className="mt-1 text-[13px] text-zinc-500 leading-relaxed">
             Agent CLIs baked into the sandbox image on this account. Pick one per task in the composer;
             credentials are injected at the egress boundary and never enter the container.
           </p>
@@ -131,7 +131,7 @@ export function AgentsView(): JSX.Element {
                     href={agent.docsUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-[11px] text-teal-400/80 hover:text-teal-300 transition-colors"
+                    className="text-[11px] text-zinc-300/80 hover:text-zinc-300 transition-colors"
                   >
                     Docs →
                   </a>

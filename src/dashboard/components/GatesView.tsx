@@ -82,13 +82,13 @@ export function GatesView(): JSX.Element {
     <div className="flex-1 overflow-y-auto text-zinc-200">
       <div className="mx-auto max-w-5xl w-full px-6 py-5 flex flex-col gap-6">
         <div className="border-b border-white/[0.07] pb-4">
-          <h2 className="text-sm font-semibold text-zinc-200 flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
             <span>Quality Gates</span>
-            <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-white/[0.04] border border-white/[0.10] text-[#2dd4bf]">
+            <span className="text-xs font-mono px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.10] text-zinc-300">
               Review · QA · Security
             </span>
           </h2>
-          <p className="text-xs text-zinc-500">
+          <p className="text-[13px] text-zinc-500">
             Typed entry points onto the same approval-gated sandbox pipeline. Every gate queues a run; a human still approves before a container starts.
           </p>
         </div>
@@ -138,11 +138,11 @@ export function GatesView(): JSX.Element {
                 type="button"
                 disabled={busyId === gate.id}
                 onClick={() => void launch(gate)}
-                className="text-xs font-semibold self-start text-[#2dd4bf] border border-white/[0.10] bg-white/[0.04] hover:bg-white/[0.07] rounded-md px-2.5 py-1 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                className="text-xs font-semibold self-start text-zinc-300 border border-white/[0.10] bg-white/[0.04] hover:bg-white/[0.07] rounded-md px-2.5 py-1 transition-colors disabled:opacity-50 flex items-center gap-1.5"
               >
                 {busyId === gate.id ? (
                   <>
-                    <span className="animate-spin inline-block w-3 h-3 border-2 border-[#2dd4bf] border-t-transparent rounded-full" />
+                    <span className="animate-spin inline-block w-3 h-3 border-2 border-[#2dd4bf] border-t-transparent rounded-md" />
                     <span>Queueing…</span>
                   </>
                 ) : (

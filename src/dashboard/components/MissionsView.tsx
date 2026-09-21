@@ -101,13 +101,13 @@ export function MissionsView(): JSX.Element {
     <div className="flex-1 overflow-y-auto text-zinc-200">
       <div className="mx-auto max-w-5xl w-full px-6 py-5 flex flex-col gap-6">
         <div className="border-b border-white/[0.07] pb-4">
-          <h2 className="text-sm font-semibold text-zinc-200 flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
             <span>Missions</span>
-            <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-white/[0.04] border border-white/[0.10] text-[#2dd4bf]">
+            <span className="text-xs font-mono px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.10] text-zinc-300">
               Standing goals
             </span>
           </h2>
-          <p className="text-xs text-zinc-500">
+          <p className="text-[13px] text-zinc-500">
             A mission is a goal that persists across days: each cadence, a gate judges whether work remains and queues a run only while it does. Every run stays approval-gated.
           </p>
         </div>
@@ -152,11 +152,11 @@ export function MissionsView(): JSX.Element {
               type="button"
               disabled={busy}
               onClick={() => void deployMission()}
-              className="text-xs font-semibold text-[#2dd4bf] border border-white/[0.10] bg-white/[0.04] hover:bg-white/[0.07] rounded-md px-3 py-1.5 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+              className="text-xs font-semibold text-zinc-300 border border-white/[0.10] bg-white/[0.04] hover:bg-white/[0.07] rounded-md px-3 py-1.5 transition-colors disabled:opacity-50 flex items-center gap-1.5"
             >
               {busy ? (
                 <>
-                  <span className="animate-spin inline-block w-3 h-3 border-2 border-[#2dd4bf] border-t-transparent rounded-full" />
+                  <span className="animate-spin inline-block w-3 h-3 border-2 border-[#2dd4bf] border-t-transparent rounded-md" />
                   <span>Deploying…</span>
                 </>
               ) : (
@@ -180,7 +180,7 @@ export function MissionsView(): JSX.Element {
           </div>
           {missions === null ? (
             <div className="flex items-center gap-2 text-xs text-zinc-500 font-mono py-2">
-              <span className="animate-spin inline-block w-3 h-3 border-2 border-[#8b98a9] border-t-transparent rounded-full" />
+              <span className="animate-spin inline-block w-3 h-3 border-2 border-[#8b98a9] border-t-transparent rounded-md" />
               <span>Loading…</span>
             </div>
           ) : missions.length === 0 ? (
@@ -194,11 +194,11 @@ export function MissionsView(): JSX.Element {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-xs font-mono font-semibold text-zinc-200">{m.id}</span>
-                      <span className="text-[10px] font-mono text-[#2dd4bf] bg-white/[0.04] border border-white/[0.10] px-1.5 py-0.5 rounded">
+                      <span className="text-[10px] font-mono text-zinc-300 bg-white/[0.04] border border-white/[0.10] px-1.5 py-0.5 rounded">
                         {m.triggers.find((t) => t.kind === "schedule")?.cron ?? "manual"}
                       </span>
                       <span
-                        className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${
+                        className={`text-[10px] font-mono px-1.5 py-0.5 rounded-md border ${
                           m.enabled
                             ? "text-[#4cc38a] border-[#4cc38a]/30 bg-[#4cc38a]/10"
                             : "text-zinc-500 border-white/[0.07] bg-black"
@@ -219,7 +219,7 @@ export function MissionsView(): JSX.Element {
                     type="button"
                     disabled={busy}
                     onClick={() => void runNow(m.id)}
-                    className="text-xs font-semibold border border-white/[0.10] text-[#2dd4bf] bg-white/[0.04] hover:bg-white/[0.07] rounded-md px-2.5 py-1 shrink-0 transition-colors disabled:opacity-50"
+                    className="text-xs font-semibold border border-white/[0.10] text-zinc-300 bg-white/[0.04] hover:bg-white/[0.07] rounded-md px-2.5 py-1 shrink-0 transition-colors disabled:opacity-50"
                   >
                     Check in now
                   </button>

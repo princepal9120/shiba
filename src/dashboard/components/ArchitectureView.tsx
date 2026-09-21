@@ -7,16 +7,16 @@ export function ArchitectureView(): JSX.Element {
         <div className="border-b border-white/[0.07] pb-4">
           <h2 className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
             <span>System Architecture & Isolation Boundary</span>
-            <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-white/[0.04] border border-white/[0.10] text-teal-400">Zero-Trust</span>
+            <span className="text-xs font-mono px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.10] text-zinc-300">Zero-Trust</span>
           </h2>
-          <p className="text-xs text-zinc-500">Deep dive into the Cloudflare Native runtime topology, durable object coordination, and egress firewalling.</p>
+          <p className="text-[13px] text-zinc-500">Deep dive into the Cloudflare Native runtime topology, durable object coordination, and egress firewalling.</p>
         </div>
         <div className="border border-white/[0.07] rounded-lg bg-[#101013]  p-6 flex flex-col gap-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-teal-400 font-mono">End-to-End System Topology</h3>
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-300 font-mono">End-to-End System Topology</h3>
           <div className="flex flex-col gap-3 font-mono text-xs">
             <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
               <div className="w-full md:w-56 bg-[#101013] border border-white/[0.07] p-3 rounded-lg shrink-0">
-                <div className="text-teal-400 font-semibold mb-0.5">1. Inbound Surfaces</div>
+                <div className="text-zinc-300 font-semibold mb-0.5">1. Inbound Surfaces</div>
                 <div className="text-[11px] text-zinc-500">Web UI, Slack Bot, GitHub Webhook, Cron</div>
               </div>
               <div className="hidden md:flex text-teal-500 font-semibold px-1">→</div>
@@ -24,7 +24,7 @@ export function ArchitectureView(): JSX.Element {
             </div>
             <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
               <div className="w-full md:w-56 bg-[#101013] border border-white/[0.07] p-3 rounded-lg shrink-0">
-                <div className="text-teal-400 font-semibold mb-0.5">2. Worker Gateway</div>
+                <div className="text-zinc-300 font-semibold mb-0.5">2. Worker Gateway</div>
                 <div className="text-[11px] text-zinc-500">Edge routing & proxyToSandbox</div>
               </div>
               <div className="hidden md:flex text-teal-500 font-semibold px-1">→</div>
@@ -32,7 +32,7 @@ export function ArchitectureView(): JSX.Element {
             </div>
             <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
               <div className="w-full md:w-56 bg-[#101013] border border-white/[0.07] p-3 rounded-lg shrink-0">
-                <div className="text-teal-400 font-semibold mb-0.5">3. Coding Orchestrator</div>
+                <div className="text-zinc-300 font-semibold mb-0.5">3. Coding Orchestrator</div>
                 <div className="text-[11px] text-zinc-500">Durable Object (@cf/think)</div>
               </div>
               <div className="hidden md:flex text-teal-500 font-semibold px-1">→</div>

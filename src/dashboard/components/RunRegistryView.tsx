@@ -27,12 +27,12 @@ export function RunRegistryView({
   const [expandedRunId, setExpandedRunId] = useState<string | null>(runs[0]?.runId || null);
 
   const statusColors: Record<string, string> = {
-    pending: "text-[#f59e0b] border-[#f59e0b]/40 bg-[#f59e0b]/10",
-    running: "text-[#2dd4bf] border-white/[0.10] bg-white/[0.04]",
-    completed: "text-[#4cc38a] border-[#4cc38a]/30 bg-[#4cc38a]/10",
-    error: "text-[#f06666] border-white/[0.10] bg-white/[0.04]",
-    aborted: "text-[#f06666] border-white/[0.10] bg-white/[0.04]",
-    cancelled: "text-[#f06666] border-white/[0.10] bg-white/[0.04]",
+    pending: "text-zinc-400",
+    running: "text-zinc-400",
+    completed: "text-zinc-400",
+    error: "text-zinc-400",
+    aborted: "text-zinc-400",
+    cancelled: "text-zinc-400",
   };
 
   const filteredRuns = useMemo(() => {
@@ -73,17 +73,17 @@ export function RunRegistryView({
   }, [runs]);
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#101013] text-zinc-200">
+    <div className="flex-1 overflow-y-auto text-zinc-200 px-6 py-5 max-w-5xl mx-auto w-full">
       {/* Top Header */}
-      <div className="border-b border-white/[0.07] bg-[#101013]/95 px-4 lg:px-8 py-4 flex flex-wrap items-center justify-between gap-4 shrink-0">
+      <div className="border-b border-white/[0.07] bg-[#101013]/95 py-4 flex flex-wrap items-center justify-between gap-4 shrink-0">
         <div>
-          <h2 className="text-sm font-semibold text-zinc-200 flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
             <span>Run Registry & Workspaces</span>
-            <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-black border border-white/[0.07] text-zinc-500">
+            <span className="text-xs font-mono px-2 py-0.5 rounded-md bg-black border border-white/[0.07] text-zinc-500">
               {stats.total} total
             </span>
           </h2>
-          <p className="text-xs text-zinc-500">
+          <p className="text-[13px] text-zinc-500">
             History of all delegated coding tasks, sandbox containers, and generated pull requests.
           </p>
         </div>
@@ -121,8 +121,8 @@ export function RunRegistryView({
             <span className="text-xl font-semibold text-zinc-200 font-mono">{stats.total}</span>
           </div>
           <div className="bg-[#101013] border border-white/[0.07] rounded-lg p-3.5 flex flex-col gap-1">
-            <span className="text-[11px] font-mono text-[#2dd4bf] uppercase">Active Now</span>
-            <span className="text-xl font-semibold text-[#2dd4bf] font-mono">{stats.active}</span>
+            <span className="text-[11px] font-mono text-zinc-300 uppercase">Active Now</span>
+            <span className="text-xl font-semibold text-zinc-300 font-mono">{stats.active}</span>
           </div>
           <div className="bg-[#101013] border border-white/[0.07] rounded-lg p-3.5 flex flex-col gap-1">
             <span className="text-[11px] font-mono text-[#4cc38a] uppercase">Completed</span>
@@ -218,7 +218,7 @@ export function RunRegistryView({
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <svg
-                        className={`w-4 h-4 text-zinc-500 transform transition-transform shrink-0 ${isExpanded ? "rotate-90 text-[#2dd4bf]" : ""}`}
+                        className={`w-4 h-4 text-zinc-500 transform transition-transform shrink-0 ${isExpanded ? "rotate-90 text-zinc-300" : ""}`}
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -256,7 +256,7 @@ export function RunRegistryView({
                           <span>Sandbox: <span className="text-[#4f9cf0]">{run.sandboxId}</span></span>
                           <span>Branch: <span className="text-zinc-200">{run.baseBranch}</span></span>
                           {run.publishPullRequest ? (
-                            <span className="text-[#2dd4bf] font-semibold">✓ PR Requested</span>
+                            <span className="text-zinc-300 font-semibold">✓ PR Requested</span>
                           ) : null}
                         </div>
 
@@ -264,7 +264,7 @@ export function RunRegistryView({
                         <button
                           type="button"
                           onClick={() => onInspectVM(run.runId)}
-                          className="bg-[#0B9F95] hover:bg-[#2dd4bf] text-black font-semibold text-xs px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 "
+                          className="bg-zinc-100 hover:bg-white text-zinc-900 font-semibold text-xs px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 "
                         >
                           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -282,7 +282,7 @@ export function RunRegistryView({
                       {/* Summary */}
                       {run.summary ? (
                         <div className="border border-white/[0.07] rounded-lg p-3 bg-[#101013]">
-                          <span className="text-[11px] font-mono uppercase text-[#2dd4bf] font-semibold block mb-1">
+                          <span className="text-[11px] font-mono uppercase text-zinc-300 font-semibold block mb-1">
                             Result Summary
                           </span>
                           <pre className="font-mono text-xs text-zinc-200 whitespace-pre-wrap break-words max-h-48 overflow-auto">
