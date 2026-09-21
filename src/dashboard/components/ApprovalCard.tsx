@@ -3,7 +3,6 @@
 // via the parent's onDecideApproval. Never auto-approve; never hide.
 import type { JSX } from "react";
 import type { PendingApproval } from "../ui-helpers";
-import { Tooltip } from "./Tooltip";
 
 export interface ApprovalCardProps {
   approval: PendingApproval;
@@ -13,38 +12,31 @@ export interface ApprovalCardProps {
 
 export function ApprovalCard({ approval, decided, onDecideApproval }: ApprovalCardProps): JSX.Element {
   return (
-    <div className="border border-[#c9a227]/60 bg-[#0a0c10] rounded-xl p-4 shadow-lg shadow-[#c9a227]/5 flex flex-col gap-3">
+    <div className="border border-white/[0.07] bg-[#101013] rounded-lg p-4 flex flex-col gap-3">
       <div className="flex items-center justify-between gap-3">
-        <div className="font-mono font-bold text-sm text-[#e6edf3] flex items-center gap-2 min-w-0">
-          <Tooltip content="Sacred Approval Gate — Zero Trust Security" side="bottom">
-            <img
-              src="/assets/mascot/pet-logo.png"
-              alt="Shiba Guard"
-              className="w-5 h-5 rounded-full bg-white object-contain border border-amber-500/50 shrink-0 cursor-default"
-            />
-          </Tooltip>
+        <div className="font-mono font-medium text-sm text-zinc-200 flex items-center gap-2 min-w-0">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#d9a13b] shrink-0" aria-hidden="true" />
           <span className="truncate">{approval.tool}</span>
         </div>
-        <span className="text-[10px] uppercase tracking-wider font-bold bg-[#c9a227]/15 border border-[#c9a227]/30 text-[#c9a227] px-2 py-0.5 rounded-full shrink-0">
+        <span className="text-[10px] uppercase tracking-wide font-medium bg-[#d9a13b]/10 border border-[#d9a13b]/30 text-[#d9a13b] px-2 py-0.5 rounded-md shrink-0">
           Action Required
         </span>
       </div>
 
-      <pre className="whitespace-pre-wrap font-mono text-xs text-[#8b98a9] bg-black p-3 rounded-lg border border-[#1e2530] max-h-56 overflow-auto">
+      <pre className="whitespace-pre-wrap font-mono text-xs text-zinc-500 bg-[#0a0a0b] p-3 rounded-md border border-white/[0.07] max-h-56 overflow-auto">
         {typeof approval.input === "string"
           ? approval.input
           : JSON.stringify(approval.input, null, 2)}
       </pre>
 
-      <p className="text-xs text-[#8b98a9] leading-relaxed">
+      <p className="text-xs text-zinc-500 leading-relaxed">
         Approving starts an isolated sandbox run. Rejecting stops the tool call.
       </p>
 
       <div className="flex items-center gap-3 pt-1">
-        <Tooltip content="Approve tool execution inside isolated container" side="top">
-          <button
+        <button
             type="button"
-            className="bg-[#4cc38a] hover:bg-[#3ba875] text-[#06121f] font-semibold py-2 px-5 rounded-lg transition-all disabled:opacity-50 text-sm shadow-sm flex items-center gap-1.5 active:scale-[0.98]"
+            className="bg-zinc-100 hover:bg-white text-zinc-900 font-medium py-2 px-5 rounded-md transition-colors disabled:opacity-50 text-sm flex items-center gap-1.5 active:scale-[0.98]"
             disabled={decided}
             onClick={() => onDecideApproval(approval.approvalId, true)}
           >
@@ -52,13 +44,11 @@ export function ApprovalCard({ approval, decided, onDecideApproval }: ApprovalCa
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
             </svg>
             <span>Approve</span>
-          </button>
-        </Tooltip>
+        </button>
 
-        <Tooltip content="Reject tool execution and cancel operation" side="top">
-          <button
+        <button
             type="button"
-            className="bg-transparent border border-[#f06666] text-[#f06666] hover:bg-[#f06666]/10 font-semibold py-2 px-5 rounded-lg transition-all disabled:opacity-50 text-sm flex items-center gap-1.5 active:scale-[0.98]"
+            className="bg-transparent border border-white/10 text-zinc-300 hover:bg-white/5 font-medium py-2 px-5 rounded-md transition-colors disabled:opacity-50 text-sm flex items-center gap-1.5 active:scale-[0.98]"
             disabled={decided}
             onClick={() => onDecideApproval(approval.approvalId, false)}
           >
@@ -66,8 +56,7 @@ export function ApprovalCard({ approval, decided, onDecideApproval }: ApprovalCa
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
             </svg>
             <span>Reject</span>
-          </button>
-        </Tooltip>
+        </button>
       </div>
     </div>
   );

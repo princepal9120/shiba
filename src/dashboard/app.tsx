@@ -13,12 +13,11 @@ import { MissionsView } from "./components/MissionsView";
 import { GatesView } from "./components/GatesView";
 import { ArchitectureView } from "./components/ArchitectureView";
 import { OnboardingModal, detectSetupSteps } from "./components/OnboardingModal";
-import { SessionsSidebar, type SessionItem } from "./components/SessionsSidebar";
 import { StepTimeline } from "./components/StepTimeline";
 import { WorkspacePanel, type WorkspaceTab } from "./components/WorkspacePanel";
 import { TaskComposer } from "./components/TaskComposer";
 import { toast } from "sonner";
-import { AppNavRail, APP_NAV_ITEMS, type AppNavView } from "./components/AppNavRail";
+import { AppSidebar, APP_NAV_ITEMS, type AppNavView, type SessionItem } from "./components/AppSidebar";
 import { CommandMenu, type CommandItem } from "./components/ui/command-menu";
 import { useTheme } from "./components/ThemeProvider";
 import { Tooltip } from "./components/Tooltip";
@@ -73,22 +72,18 @@ const SETUP_TOTAL_STEPS = 6;
 
 const STARTER_TEMPLATES = [
   {
-    icon: "🧪",
     label: "Fix Failing Tests",
     task: "Investigate test failures in the repository, fix the root cause, and verify all test suites pass with zero regressions.",
   },
   {
-    icon: "⚡",
     label: "Add Unit Tests",
     task: "Identify uncovered functions in the core modules and add thorough unit test coverage with edge case tests.",
   },
   {
-    icon: "🧹",
     label: "Refactor & Clean",
     task: "Refactor duplicate utility logic, remove unused imports and dead code, and ensure clean types across the codebase.",
   },
   {
-    icon: "📖",
     label: "Documentation",
     task: "Review and update README and code comments to match recent API changes and architecture decisions.",
   },
@@ -553,6 +548,7 @@ export function App(): React.JSX.Element {
   const handleSelectSession = useCallback((id: string) => {
     setSelectedSessionId(id);
     setMobileSessionsOpen(false);
+    setMainView("tasks");
     if (id !== "live") {
       setSelectedRunId(id);
       setWorkspaceCollapsed(false);
@@ -626,181 +622,154 @@ export function App(): React.JSX.Element {
   ];
 
   return (
-    <div className="min-h-dvh bg-black text-[#e6edf3] font-sans selection:bg-[#63c8c1] selection:text-black flex">
-      {/* LEFT: app navigation rail (all views) */}
-      <AppNavRail
-        activeView={mainView}
-        onNavigate={setMainView}
-        theme={theme}
-        onToggleTheme={toggleTheme}
-        activeSandboxCount={activeSandboxCount}
-        setupDone={setupDone}
-        setupTotal={SETUP_TOTAL_STEPS}
-        onOpenSetup={() => setShowOnboardingModal(true)}
-        onOpenShortcuts={() => setShowShortcutsModal(true)}
-      />
+    <div className="min-h-dvh bg-[#0a0a0b] text-zinc-200 font-sans flex">
+      {/* LEFT: unified sidebar — all views */}
+      <div
+        className={`hidden lg:block self-stretch transition-[width] duration-200 ease-out overflow-hidden shrink-0 ${
+          sessionsCollapsed ? "w-14" : "w-[248px]"
+        }`}
+      >
+        <AppSidebar
+          activeView={mainView}
+          onNavigate={setMainView}
+          collapsed={sessionsCollapsed}
+          onToggleCollapse={toggleSessionsCollapsed}
+          sessions={sessions}
+          selectedId={selectedSessionId}
+          onSelect={handleSelectSession}
+          onNewTask={handleNewTask}
+          connectionLabel={connectionState}
+          connectionTone={
+            identityError || agent.connectionError
+              ? "error"
+              : agent.identified
+              ? "ok"
+              : "pending"
+          }
+          activeSandboxCount={activeSandboxCount}
+          setupDone={setupDone}
+          setupTotal={SETUP_TOTAL_STEPS}
+          onOpenSetup={() => setShowOnboardingModal(true)}
+          onOpenShortcuts={() => setShowShortcutsModal(true)}
+          theme={theme}
+          onToggleTheme={toggleTheme}
+        />
+      </div>
+
+      {/* Mobile sidebar drawer (below lg) */}
+      {mobileSessionsOpen ? (
+        <div className="fixed inset-0 z-40 lg:hidden">
+          <button
+            type="button"
+            aria-label="Close sessions"
+            className="absolute inset-0 bg-black/70"
+            onClick={() => setMobileSessionsOpen(false)}
+          />
+          <div className="absolute inset-y-0 left-0">
+            <AppSidebar
+              activeView={mainView}
+              onNavigate={(view) => {
+                setMainView(view);
+                setMobileSessionsOpen(false);
+              }}
+              sessions={sessions}
+              selectedId={selectedSessionId}
+              onSelect={handleSelectSession}
+              onNewTask={handleNewTask}
+              connectionLabel={connectionState}
+              connectionTone={
+                identityError || agent.connectionError
+                  ? "error"
+                  : agent.identified
+                  ? "ok"
+                  : "pending"
+              }
+              activeSandboxCount={activeSandboxCount}
+              setupDone={setupDone}
+              setupTotal={SETUP_TOTAL_STEPS}
+              onOpenSetup={() => {
+                setMobileSessionsOpen(false);
+                setShowOnboardingModal(true);
+              }}
+              onOpenShortcuts={() => {
+                setMobileSessionsOpen(false);
+                setShowShortcutsModal(true);
+              }}
+              isMobileDrawer={true}
+              onToggleCollapse={() => setMobileSessionsOpen(false)}
+              theme={theme}
+              onToggleTheme={toggleTheme}
+            />
+          </div>
+        </div>
+      ) : null}
 
       <div className="flex-1 flex min-w-0 min-h-0">
       {mainView === "tasks" ? (
       <div className="flex-1 flex overflow-hidden">
-        {/* LEFT: Devin-style sessions rail with collapse / expand */}
-        <div
-          className={`hidden lg:block self-stretch transition-all duration-200 ease-out overflow-hidden shrink-0 ${
-            sessionsCollapsed ? "w-0 opacity-0 pointer-events-none" : "w-[280px] opacity-100"
-          }`}
-          aria-hidden={sessionsCollapsed}
-        >
-          <SessionsSidebar
-            sessions={sessions}
-            selectedId={selectedSessionId}
-            onSelect={handleSelectSession}
-            onNewTask={handleNewTask}
-            connectionLabel={connectionState}
-            connectionTone={
-              identityError || agent.connectionError
-                ? "error"
-                : agent.identified
-                ? "ok"
-                : "pending"
-            }
-            setupDone={setupDone}
-            setupTotal={SETUP_TOTAL_STEPS}
-            onOpenSetup={() => setShowOnboardingModal(true)}
-            onToggleCollapse={toggleSessionsCollapsed}
-          />
-        </div>
-
-        {/* Mobile sessions drawer (below lg) */}
-        {mobileSessionsOpen ? (
-          <div className="fixed inset-0 z-40 lg:hidden">
-            <button
-              type="button"
-              aria-label="Close sessions"
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-              onClick={() => setMobileSessionsOpen(false)}
-            />
-            <div className="absolute inset-y-0 left-0 shadow-2xl">
-              <SessionsSidebar
-                sessions={sessions}
-                selectedId={selectedSessionId}
-                onSelect={handleSelectSession}
-                onNewTask={handleNewTask}
-                connectionLabel={connectionState}
-                connectionTone={
-                  identityError || agent.connectionError
-                    ? "error"
-                    : agent.identified
-                    ? "ok"
-                    : "pending"
-                }
-                setupDone={setupDone}
-                setupTotal={SETUP_TOTAL_STEPS}
-                onOpenSetup={() => {
-                  setMobileSessionsOpen(false);
-                  setShowOnboardingModal(true);
-                }}
-                isMobileDrawer={true}
-                onToggleCollapse={() => setMobileSessionsOpen(false)}
-              />
-            </div>
-          </div>
-        ) : null}
-
         {/* CENTER: conversation timeline + composer */}
-        <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-black" aria-busy={busy}>
-          {/* SESSION HEADER */}
-          <div className="border-b border-white/[0.08] bg-[#07090e]/60 px-5 xl:px-6 py-2.5 flex items-center justify-between gap-3 shrink-0">
-            <div className="flex items-center gap-2.5 min-w-0">
-              {/* Desktop sidebar toggle button */}
-              <Tooltip
-                content={sessionsCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-                shortcut="⌘B"
-                side="bottom"
-              >
-                <button
-                  type="button"
-                  onClick={toggleSessionsCollapsed}
-                  aria-label={sessionsCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-                  aria-expanded={!sessionsCollapsed}
-                  className="hidden lg:flex w-7 h-7 rounded-lg border border-white/[0.08] bg-[#0d1117] text-[#8b98a9] hover:text-[#e6edf3] hover:bg-[#161a22] items-center justify-center transition-colors shrink-0"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    {sessionsCollapsed ? (
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
-                    ) : (
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
-                    )}
-                  </svg>
-                </button>
-              </Tooltip>
-
-              {/* Mobile open sessions button */}
-              <Tooltip content="Open sessions drawer" side="bottom">
+        <main className="flex-1 flex flex-col min-w-0 overflow-hidden" aria-busy={busy}>
+          {/* TOP BAR */}
+          <div className="h-11 border-b border-white/[0.07] px-4 flex items-center gap-2.5 shrink-0">
+            {/* Mobile open sessions button */}
+            <Tooltip content="Open sessions drawer" side="bottom">
               <button
                 type="button"
                 onClick={() => setMobileSessionsOpen(true)}
                 aria-label="Open sessions"
-                className="lg:hidden w-7 h-7 rounded-lg border border-white/[0.08] bg-[#0d1117] text-[#8b98a9] hover:text-white flex items-center justify-center transition-colors shrink-0"
+                className="lg:hidden size-7 rounded-md text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.06] flex items-center justify-center transition-colors shrink-0"
               >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
               </button>
-              </Tooltip>
+            </Tooltip>
 
-              <Tooltip content="Shiba Coding Agent" side="bottom">
-              <img
-                src="/assets/mascot/pet-logo.png"
-                alt="Shiba"
-                className="w-6 h-6 rounded-full bg-white object-contain border border-teal-500/40 shrink-0 cursor-default"
-              />
-              </Tooltip>
-              <h1 className="text-sm font-semibold text-white font-display tracking-tight truncate">
-                {liveSession ? liveSession.title : "New coding task"}
-              </h1>
-              <Tooltip content="Active real-time agent orchestration stream" side="bottom">
-              <span className="text-[10px] font-bold uppercase tracking-wider border rounded-full px-2 py-0.5 shrink-0 text-teal-300 border-teal-800/50 bg-teal-950/50">
-                Live
-              </span>
-              </Tooltip>
-            </div>
-            <div className="hidden md:flex items-center gap-4 text-xs font-mono text-[#8b98a9] shrink-0">
-              <Tooltip content="Tool runs actively isPending" side="bottom">
-              <span className="cursor-default">
-                <span className="text-neutral-500">Active</span>{" "}
-                <span className="text-teal-400 font-bold">{toolRuns.length}</span>
-              </span>
-              </Tooltip>
-              <Tooltip content="Actions waiting for human approval" side="bottom">
-              <span className="cursor-default">
-                <span className="text-neutral-500">Approvals</span>{" "}
-                <span className={pendingApprovals.length > 0 ? "font-bold text-[#f59e0b]" : "font-bold text-neutral-400"}>
-                  {pendingApprovals.length}
+            {/* Desktop sidebar toggle (kept for keyboard/screen-reader parity) */}
+            <Tooltip
+              content={sessionsCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              shortcut="⌘B"
+              side="bottom"
+            >
+              <button
+                type="button"
+                onClick={toggleSessionsCollapsed}
+                aria-label={sessionsCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                aria-expanded={!sessionsCollapsed}
+                className="hidden lg:flex size-7 rounded-md text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.06] items-center justify-center transition-colors shrink-0"
+              >
+                <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  {sessionsCollapsed ? (
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                  ) : (
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                  )}
+                </svg>
+              </button>
+            </Tooltip>
+
+            <h1 className="text-[13px] font-medium text-zinc-100 tracking-[-0.01em] truncate">
+              {liveSession ? liveSession.title : "New coding task"}
+            </h1>
+            <Tooltip content="Active real-time agent orchestration stream" side="bottom">
+              <span className="size-1.5 rounded-full bg-[#2dd4bf] shrink-0" aria-hidden="true" />
+            </Tooltip>
+
+            <div className="ml-auto flex items-center gap-2 shrink-0">
+              {pendingApprovals.length > 0 ? (
+                <span className="text-[11px] text-[#d9a13b] tabular-nums">
+                  {pendingApprovals.length} pending approval{pendingApprovals.length === 1 ? "" : "s"}
                 </span>
-              </span>
-              </Tooltip>
-              <Tooltip content="Total completed and retained runs" side="bottom">
-              <span className="cursor-default">
-                <span className="text-neutral-500">Runs</span>{" "}
-                <span className="text-white font-bold">{allRuns.length}</span>
-              </span>
-              </Tooltip>
-              <Tooltip content="Container has zero secrets; provider keys stay at AI Gateway egress" side="bottom">
-              <span className="text-[10px] uppercase tracking-wider font-mono text-teal-400/80 bg-teal-950/60 border border-teal-800/40 px-2 py-0.5 rounded">
-                Zero-Trust Boundary
-              </span>
-              </Tooltip>
-
-              {/* Quick toggle for workspace panel when collapsed */}
+              ) : null}
               {workspaceCollapsed ? (
-                <Tooltip content="Expand workspace panel" shortcut="⌘\\" side="bottom">
+                <Tooltip content="Expand workspace panel" shortcut="⌘\" side="bottom">
                   <button
                     type="button"
                     onClick={() => setWorkspaceCollapsed(false)}
                     aria-label="Expand workspace panel"
-                    className="w-7 h-7 rounded-lg border border-white/[0.08] bg-[#0d1117] text-[#8b98a9] hover:text-[#e6edf3] hover:bg-[#161a22] flex items-center justify-center transition-colors shrink-0"
+                    className="size-7 rounded-md text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.06] flex items-center justify-center transition-colors"
                   >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
                     </svg>
                   </button>
@@ -811,16 +780,16 @@ export function App(): React.JSX.Element {
 
           {/* PENDING APPROVALS STRIP */}
           {(pendingApprovals.length > 0 || approvalAnnouncement) ? (
-            <div className="bg-[#090b0e] border-b border-neutral-800 px-5 xl:px-6 py-3 flex items-center justify-between shadow-sm z-10 shrink-0">
-              <p className="text-sm font-medium text-[#e6edf3]" role="status" aria-live="polite">
+            <div className="border-b border-white/[0.07] px-4 py-2.5 flex items-center justify-between shrink-0">
+              <p className="text-[13px] text-zinc-300" role="status" aria-live="polite">
                 {pendingApprovals.length > 0 ? (
-                  <span className="flex items-center gap-2 text-[#c9a227]">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#c9a227] animate-pulse shadow-[0_0_8px_rgba(201,162,39,0.6)]" />
+                  <span className="flex items-center gap-2 text-[#d9a13b]">
+                    <span className="size-1.5 rounded-full bg-[#d9a13b] animate-pulse-subtle" />
                     {pendingApprovals.length} task{pendingApprovals.length === 1 ? "" : "s"} waiting for your approval.
                   </span>
                 ) : (
                   <span className="text-[#4cc38a] flex items-center gap-2">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
                     {approvalAnnouncement}
@@ -832,26 +801,26 @@ export function App(): React.JSX.Element {
 
           {/* NOTICES / ERRORS */}
           {notice || chat.error || runsError ? (
-            <div className="px-5 xl:px-6 pt-3 flex flex-col gap-2 shrink-0">
+            <div className="px-4 pt-3 flex flex-col gap-2 shrink-0">
               {notice ? (
-                <div role="status" aria-live="polite" className="text-xs text-[#8b98a9] bg-black p-3 rounded-lg border border-neutral-800 flex items-start gap-2">
-                  <svg className="w-4 h-4 text-[#4f9cf0] shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div role="status" aria-live="polite" className="text-xs text-zinc-400 bg-[#101013] p-2.5 rounded-md border border-white/[0.07] flex items-start gap-2">
+                  <svg className="size-3.5 text-[#4f9cf0] shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   <div className="break-words">{notice}</div>
                 </div>
               ) : null}
               {chat.error ? (
-                <div role="alert" className="text-xs text-[#f06666] bg-[#f06666]/10 p-3 rounded-lg border border-[#f06666]/30 flex items-start gap-2">
-                  <svg className="w-4 h-4 text-[#f06666] shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div role="alert" className="text-xs text-[#f06666] bg-[#f06666]/[0.06] p-2.5 rounded-md border border-[#f06666]/20 flex items-start gap-2">
+                  <svg className="size-3.5 text-[#f06666] shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                   </svg>
                   <div className="break-words">Chat error: {chat.error.message}</div>
                 </div>
               ) : null}
               {runsError ? (
-                <div className="text-xs text-[#f06666] bg-[#f06666]/10 p-3 rounded-lg border border-[#f06666]/30 flex items-start gap-2">
-                  <svg className="w-4 h-4 text-[#f06666] shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div className="text-xs text-[#f06666] bg-[#f06666]/[0.06] p-2.5 rounded-md border border-[#f06666]/20 flex items-start gap-2">
+                  <svg className="size-3.5 text-[#f06666] shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   <div className="break-words">Runs registry: {runsError}</div>
@@ -861,7 +830,7 @@ export function App(): React.JSX.Element {
           ) : null}
 
           {/* TIMELINE (scrollable) */}
-          <div className="flex-1 overflow-y-auto px-5 xl:px-8 py-5">
+          <div className="flex-1 overflow-y-auto px-4 xl:px-6 py-4">
             <StepTimeline
               messages={chat.messages}
               isStreaming={chat.isStreaming || chat.status === "streaming"}
@@ -877,7 +846,7 @@ export function App(): React.JSX.Element {
           </div>
 
           {/* COMPOSER (sticky bottom) */}
-          <div className="border-t border-white/[0.08] bg-[#07090e]/60 px-5 xl:px-8 py-4 shrink-0">
+          <div className="px-4 xl:px-6 pb-4 pt-1 shrink-0">
             <TaskComposer
               repoUrl={repoUrl}
               task={task}
@@ -965,23 +934,23 @@ export function App(): React.JSX.Element {
 
       {/* CLEAR HISTORY CONFIRMATION MODAL */}
       {showClearModal ? (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#090b0e] border border-neutral-800 rounded-xl max-w-md w-full p-6 shadow-2xl">
-            <h3 className="text-lg font-bold text-white mb-2">Clear Conversation & Runs?</h3>
-            <p className="text-sm text-[#8b98a9] mb-5 leading-relaxed">
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+          <div className="bg-[#101013] border border-white/[0.09] rounded-lg max-w-md w-full p-5 shadow-[0_8px_30px_rgba(0,0,0,0.5)]">
+            <h3 className="text-sm font-semibold text-zinc-100 mb-1.5">Clear Conversation & Runs?</h3>
+            <p className="text-[13px] text-zinc-400 mb-4 leading-relaxed">
               This will erase all active conversation history and delete retained run registry records on the orchestrator. Active sandboxes will not be destroyed automatically.
             </p>
-            <div className="flex items-center justify-end gap-3">
+            <div className="flex items-center justify-end gap-2">
               <button
                 type="button"
-                className="px-4 py-2 rounded-lg text-sm font-medium text-[#8b98a9] hover:text-white bg-black border border-neutral-800 transition-colors"
+                className="px-3 h-8 rounded-md text-[13px] font-medium text-zinc-400 hover:text-zinc-200 border border-white/10 hover:bg-white/5 transition-colors"
                 onClick={() => setShowClearModal(false)}
               >
                 Cancel
               </button>
               <button
                 type="button"
-                className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-[#f06666] hover:bg-[#d85555] transition-colors shadow-sm"
+                className="px-3 h-8 rounded-md text-[13px] font-medium text-[#f06666] bg-[#f06666]/10 border border-[#f06666]/25 hover:bg-[#f06666]/20 transition-colors"
                 onClick={confirmClearAll}
               >
                 Yes, Clear History
@@ -1004,70 +973,61 @@ export function App(): React.JSX.Element {
 
       {/* KEYBOARD SHORTCUTS MODAL */}
       {showShortcutsModal ? (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#090b0e] border border-neutral-800 rounded-xl max-w-md w-full p-6 shadow-2xl">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-bold text-white">Keyboard Shortcuts</h3>
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+          <div className="bg-[#101013] border border-white/[0.09] rounded-lg max-w-md w-full p-5 shadow-[0_8px_30px_rgba(0,0,0,0.5)]">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-zinc-100">Keyboard Shortcuts</h3>
               <button
                 type="button"
                 onClick={() => setShowShortcutsModal(false)}
-                className="text-[#8b98a9] hover:text-white text-sm font-mono"
+                className="text-zinc-500 hover:text-zinc-200 text-sm font-mono"
               >
                 ✕
               </button>
             </div>
-            <div className="flex flex-col gap-2.5 text-xs">
-              <div className="flex items-center justify-between py-1.5 border-b border-neutral-800">
-                <span className="text-[#8b98a9]">Submit Task</span>
-                <span className="font-mono bg-black border border-neutral-800 px-2 py-0.5 rounded text-[#e6edf3]">
+            <div className="flex flex-col text-xs">
+              <div className="flex items-center justify-between py-2 border-b border-white/[0.06]">
+                <span className="text-zinc-400">Submit Task</span>
+                <kbd className="font-mono bg-white/[0.05] border border-white/[0.08] px-1.5 py-0.5 rounded text-[11px] text-zinc-300">
                   ⌘ / Ctrl + Enter
-                </span>
+                </kbd>
               </div>
-              <div className="flex items-center justify-between py-1.5 border-b border-neutral-800">
-                <span className="text-[#8b98a9]">Toggle Sessions Sidebar</span>
-                <span className="font-mono bg-black border border-neutral-800 px-2 py-0.5 rounded text-[#e6edf3]">
+              <div className="flex items-center justify-between py-2 border-b border-white/[0.06]">
+                <span className="text-zinc-400">Toggle Sessions Sidebar</span>
+                <kbd className="font-mono bg-white/[0.05] border border-white/[0.08] px-1.5 py-0.5 rounded text-[11px] text-zinc-300">
                   ⌘ / Ctrl + B  or  [
-                </span>
+                </kbd>
               </div>
-              <div className="flex items-center justify-between py-1.5 border-b border-neutral-800">
-                <span className="text-[#8b98a9]">Toggle Workspace Panel</span>
-                <span className="font-mono bg-black border border-neutral-800 px-2 py-0.5 rounded text-[#e6edf3]">
+              <div className="flex items-center justify-between py-2 border-b border-white/[0.06]">
+                <span className="text-zinc-400">Toggle Workspace Panel</span>
+                <kbd className="font-mono bg-white/[0.05] border border-white/[0.08] px-1.5 py-0.5 rounded text-[11px] text-zinc-300">
                   ⌘ / Ctrl + \  or  ]
-                </span>
+                </kbd>
               </div>
-              <div className="flex items-center justify-between py-1.5 border-b border-neutral-800">
-                <span className="text-[#8b98a9]">Close Modals</span>
-                <span className="font-mono bg-black border border-neutral-800 px-2 py-0.5 rounded text-[#e6edf3]">
+              <div className="flex items-center justify-between py-2 border-b border-white/[0.06]">
+                <span className="text-zinc-400">Close Modals</span>
+                <kbd className="font-mono bg-white/[0.05] border border-white/[0.08] px-1.5 py-0.5 rounded text-[11px] text-zinc-300">
                   Escape
-                </span>
+                </kbd>
               </div>
-              <div className="flex items-center justify-between py-1.5 border-b border-neutral-800">
-                <span className="text-[#8b98a9]">Open Shortcuts Guide</span>
-                <span className="font-mono bg-black border border-neutral-800 px-2 py-0.5 rounded text-[#e6edf3]">
+              <div className="flex items-center justify-between py-2 border-b border-white/[0.06]">
+                <span className="text-zinc-400">Open Shortcuts Guide</span>
+                <kbd className="font-mono bg-white/[0.05] border border-white/[0.08] px-1.5 py-0.5 rounded text-[11px] text-zinc-300">
                   ?
-                </span>
+                </kbd>
               </div>
-              <div className="flex items-center justify-between py-1.5 border-b border-neutral-800">
-                <span className="text-[#8b98a9]">Command Menu</span>
-                <span className="font-mono bg-black border border-neutral-800 px-2 py-0.5 rounded text-[#e6edf3]">
+              <div className="flex items-center justify-between py-2 border-b border-white/[0.06]">
+                <span className="text-zinc-400">Command Menu</span>
+                <kbd className="font-mono bg-white/[0.05] border border-white/[0.08] px-1.5 py-0.5 rounded text-[11px] text-zinc-300">
                   ⌘ / Ctrl + K
-                </span>
+                </kbd>
               </div>
-              <div className="flex items-center justify-between py-1.5 border-b border-neutral-800">
-                <span className="text-[#8b98a9]">Toggle Light / Dark Theme</span>
-                <span className="font-mono bg-black border border-neutral-800 px-2 py-0.5 rounded text-[#e6edf3]">
+              <div className="flex items-center justify-between py-2">
+                <span className="text-zinc-400">Toggle Light / Dark Theme</span>
+                <kbd className="font-mono bg-white/[0.05] border border-white/[0.08] px-1.5 py-0.5 rounded text-[11px] text-zinc-300">
                   D
-                </span>
+                </kbd>
               </div>
-            </div>
-            <div className="mt-5 text-right">
-              <button
-                type="button"
-                className="px-4 py-1.5 rounded-lg text-xs font-medium text-[#e6edf3] bg-black border border-neutral-800 hover:bg-[#2a3441] transition-colors"
-                onClick={() => setShowShortcutsModal(false)}
-              >
-                Done
-              </button>
             </div>
           </div>
         </div>

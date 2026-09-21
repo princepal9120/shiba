@@ -243,13 +243,13 @@ export function Tooltip({
               transform: coords.transform,
             }}
             className={
-              "z-[9999] pointer-events-none select-none px-2.5 py-1 text-[11px] font-sans font-medium text-[#e6edf3] bg-[#0e1217]/95 border border-white/[0.14] rounded-md shadow-[0_4px_16px_rgba(0,0,0,0.6)] backdrop-blur-md flex items-center gap-1.5 tracking-tight transition-opacity duration-150 animate-in fade-in zoom-in-95 " +
+              "z-[9999] pointer-events-none select-none px-2.5 py-1 text-[11px] font-sans font-medium text-zinc-300 bg-[#161619] border border-white/[0.09] rounded-md flex items-center gap-1.5 tracking-tight transition-opacity duration-150 animate-in fade-in zoom-in-95 " +
               className
             }
           >
             <span className="truncate">{content}</span>
             {shortcut ? (
-              <kbd className="font-mono text-[9px] font-semibold text-[#8b98a9] bg-white/[0.08] border border-white/[0.1] px-1 py-0.5 rounded leading-none">
+              <kbd className="font-mono text-[9px] font-semibold text-zinc-400 bg-white/[0.08] border border-white/[0.1] px-1 py-0.5 rounded leading-none">
                 {shortcut}
               </kbd>
             ) : null}

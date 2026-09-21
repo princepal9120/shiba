@@ -79,30 +79,30 @@ export function GatesView(): JSX.Element {
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-y-auto bg-[#11141b] text-[#e6edf3] p-4 lg:p-8">
-      <div className="max-w-5xl mx-auto w-full flex flex-col gap-6">
-        <div className="border-b border-[#1e2530] pb-4">
-          <h2 className="text-base font-semibold text-[#e6edf3] flex items-center gap-2">
+    <div className="flex-1 overflow-y-auto text-zinc-200">
+      <div className="mx-auto max-w-5xl w-full px-6 py-5 flex flex-col gap-6">
+        <div className="border-b border-white/[0.07] pb-4">
+          <h2 className="text-sm font-semibold text-zinc-200 flex items-center gap-2">
             <span>Quality Gates</span>
-            <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-[#0B9F95]/10 border border-[#0B9F95]/30 text-[#2dd4bf]">
+            <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-white/[0.04] border border-white/[0.10] text-[#2dd4bf]">
               Review · QA · Security
             </span>
           </h2>
-          <p className="text-xs text-[#8b98a9]">
+          <p className="text-xs text-zinc-500">
             Typed entry points onto the same approval-gated sandbox pipeline. Every gate queues a run; a human still approves before a container starts.
           </p>
         </div>
 
-        <div className="border border-[#1e2530] rounded-xl bg-[#0a0c10] shadow-sm p-5 flex flex-wrap items-center gap-3 transition-colors focus-within:border-[#0B9F95]/30">
+        <div className="border border-white/[0.07] rounded-lg bg-[#101013]  p-5 flex flex-wrap items-center gap-3 transition-colors focus-within:border-white/[0.10]">
           <input
             type="text"
             aria-label="Repository URL"
             value={repoUrl}
             onChange={(e) => setRepoUrl(e.target.value)}
             placeholder="https://github.com/owner/repo"
-            className="flex-1 min-w-56 bg-black text-xs font-mono text-[#e6edf3] border border-[#1e2530] rounded-lg px-3 py-1.5 transition-colors focus:outline-none focus:border-[#0B9F95] focus:ring-1 focus:ring-[#0B9F95]/30 placeholder:text-[#8b98a9]/50"
+            className="flex-1 min-w-56 bg-[#101013] text-xs font-mono text-zinc-200 border border-white/[0.07] rounded-lg px-3 py-1.5 transition-colors focus:outline-none focus:border-[#0B9F95] focus:ring-1 focus:ring-[#0B9F95]/30 placeholder:text-zinc-500/50"
           />
-          <label className="flex items-center gap-2 text-xs text-[#8b98a9] hover:text-[#e6edf3] cursor-pointer select-none transition-colors">
+          <label className="flex items-center gap-2 text-xs text-zinc-500 hover:text-zinc-200 cursor-pointer select-none transition-colors">
             <input
               type="checkbox"
               checked={publishPr}
@@ -117,10 +117,10 @@ export function GatesView(): JSX.Element {
           {GATES.map((gate) => (
             <div
               key={gate.id}
-              className="border border-[#1e2530] hover:border-[#2c3545] rounded-xl bg-[#0a0c10] shadow-sm p-5 flex flex-col gap-3 transition-colors"
+              className="border border-white/[0.07] hover:border-white/[0.12] rounded-lg bg-[#101013]  p-5 flex flex-col gap-3 transition-colors"
             >
-              <h3 className="text-sm font-semibold text-[#e6edf3]">{gate.name}</h3>
-              <p className="text-[11px] text-[#8b98a9] leading-relaxed flex-1">{gate.description}</p>
+              <h3 className="text-sm font-semibold text-zinc-200">{gate.name}</h3>
+              <p className="text-[11px] text-zinc-500 leading-relaxed flex-1">{gate.description}</p>
               {gate.extraLabel ? (
                 <input
                   type="text"
@@ -128,17 +128,17 @@ export function GatesView(): JSX.Element {
                   value={extras[gate.id] ?? ""}
                   onChange={(e) => setExtras((x) => ({ ...x, [gate.id]: e.target.value }))}
                   placeholder={gate.extraPlaceholder}
-                  className="w-full bg-black text-xs font-mono text-[#e6edf3] border border-[#1e2530] rounded-lg px-3 py-1.5 transition-colors focus:outline-none focus:border-[#0B9F95] focus:ring-1 focus:ring-[#0B9F95]/30 placeholder:text-[#8b98a9]/50"
+                  className="w-full bg-[#101013] text-xs font-mono text-zinc-200 border border-white/[0.07] rounded-lg px-3 py-1.5 transition-colors focus:outline-none focus:border-[#0B9F95] focus:ring-1 focus:ring-[#0B9F95]/30 placeholder:text-zinc-500/50"
                 />
               ) : null}
               {notices[gate.id] ? (
-                <p className="text-[11px] font-mono text-[#c9a227] bg-[#c9a227]/10 border border-[#c9a227]/20 rounded-md px-2 py-1">{notices[gate.id]}</p>
+                <p className="text-[11px] font-mono text-[#c9a227] bg-white/[0.04] border border-white/[0.10] rounded-md px-2 py-1">{notices[gate.id]}</p>
               ) : null}
               <button
                 type="button"
                 disabled={busyId === gate.id}
                 onClick={() => void launch(gate)}
-                className="text-xs font-semibold self-start text-[#2dd4bf] border border-[#0B9F95]/40 bg-[#0B9F95]/10 hover:bg-[#0B9F95]/20 rounded-md px-2.5 py-1 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                className="text-xs font-semibold self-start text-[#2dd4bf] border border-white/[0.10] bg-white/[0.04] hover:bg-white/[0.07] rounded-md px-2.5 py-1 transition-colors disabled:opacity-50 flex items-center gap-1.5"
               >
                 {busyId === gate.id ? (
                   <>

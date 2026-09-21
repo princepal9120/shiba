@@ -1,32 +1,28 @@
-/* Hallmark · genre: modern-minimal · macrostructure: Workbench · design-system: design.md · designed-as-app */
+/* AI Intern dashboard — minimal Linear-style dark workbench.
+   See src/dashboard/DESIGN.md for the contract. */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --font-display: 'Space Grotesk', 'Inter', ui-sans-serif, sans-serif;
   --font-body: 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'DM Mono', ui-monospace, SFMono-Regular, monospace;
-  --bg: #000000;
-  --panel: #0a0c10;
-  --panel-elevated: #11141b;
-  --line: #1e2530;
-  --line-light: #2c3545;
-  --text: #e6edf3;
-  --muted: #8b98a9;
+  --bg: #0a0a0b;
+  --panel: #101013;
+  --panel-elevated: #161619;
+  --line: rgba(255, 255, 255, 0.07);
+  --line-strong: #232529;
+  --text: #e4e4e7;
+  --text-secondary: #a1a1aa;
+  --muted: #71717a;
   --accent: #0B9F95;
   --accent-light: #2dd4bf;
-  --accent-ink: #000000;
-  --brand: #0B9F95;
-  --brand-light: #2dd4bf;
   --danger: #f06666;
   --ok: #4cc38a;
-  --pending: #f59e0b;
-  --running: #0B9F95;
-  --radius: 12px;
-  --space: 8px;
-  --gutter: 16px;
-  --focus: 2px solid var(--accent-light);
+  --pending: #d9a13b;
+  --running: #2dd4bf;
+  --radius: 6px;
+  --focus: 2px solid rgba(45, 212, 191, 0.5);
 }
 
 * {
@@ -38,51 +34,39 @@ body {
   background-color: var(--bg);
   color: var(--text);
   font-family: var(--font-body);
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.5;
   overflow-x: hidden;
-  background-image: 
-    radial-gradient(circle at 50% 0%, rgba(11, 159, 149, 0.08) 0%, transparent 40%),
-    radial-gradient(circle at 100% 100%, rgba(79, 156, 240, 0.04) 0%, transparent 40%);
-  background-attachment: fixed;
-}
-
-h1, h2, h3, .font-display {
-  font-family: var(--font-display);
-  font-style: normal;
-  letter-spacing: -0.02em;
+  -webkit-font-smoothing: antialiased;
 }
 
 code, pre, kbd, samp, .font-mono {
   font-family: var(--font-mono);
 }
 
-/* Glass and subtle elevation panels */
+/* Flat elevated panel — kept for existing class usages, no blur/glow. */
 .glass-panel {
-  background: rgba(9, 11, 14, 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0px 2px 4px -1px rgba(0, 0, 0, 0.5), 0px 1px 0px 0px rgba(255, 255, 255, 0.02);
+  background: var(--panel);
+  border: 1px solid var(--line);
 }
 
-/* Custom Scrollbars */
+/* Custom scrollbars */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #05070a;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1f2733;
+  background: #232529;
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #2d3848;
+  background: #32353b;
 }
 
 /* Focus styles */
@@ -93,10 +77,9 @@ textarea:focus-visible,
 button:focus-visible,
 [tabindex]:focus-visible {
   outline: var(--focus);
-  outline-offset: 2px;
+  outline-offset: 1px;
 }
 
-/* Details summary animation */
 details summary::-webkit-details-marker {
   display: none;
 }
@@ -106,10 +89,11 @@ details summary::-webkit-details-marker {
     opacity: 1;
   }
   50% {
-    opacity: 0.5;
+    opacity: 0.45;
   }
 }
 
+/* Reserved for live status dots only. */
 .animate-pulse-subtle {
   animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
