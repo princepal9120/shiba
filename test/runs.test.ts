@@ -88,7 +88,12 @@ describe("run registry", () => {
     expect(pending.updatedAt).toBe(5000);
     vi.setSystemTime(6000);
     const running = transitionRun(pending, "running");
-    expect(running).toEqual({ ...pending, status: "running", updatedAt: 6000 });
+    expect(running).toEqual({
+      ...pending,
+      status: "running",
+      generation: pending.generation + 1,
+      updatedAt: 6000,
+    });
     expect(pending.status).toBe("pending");
     expect(pending.updatedAt).toBe(5000);
     expect(running).not.toBe(pending);
@@ -109,6 +114,7 @@ describe("run registry", () => {
       expect(finished).toEqual({
         ...c,
         status,
+        generation: c.generation + 1,
         summary: "progress",
         error: "diagnostic",
         updatedAt: 3000,
@@ -131,7 +137,12 @@ describe("run registry", () => {
   it.each(["pending", "running"] as const)("cancels a %s run without dropping its progress", (status) => {
     const active = { ...makeRun("r1", status), summary: "partial progress", error: "earlier diagnostic" };
     const cancelled = transitionRun(active, "cancelled", undefined, 3000);
-    expect(cancelled).toEqual({ ...active, status: "cancelled", updatedAt: 3000 });
+    expect(cancelled).toEqual({
+      ...active,
+      status: "cancelled",
+      generation: active.generation + 1,
+      updatedAt: 3000,
+    });
     expect(countActiveRuns([cancelled])).toBe(0);
     expect(active.status).toBe(status);
   });

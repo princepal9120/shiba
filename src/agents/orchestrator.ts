@@ -112,8 +112,9 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       .filter((run): run is DelegatedRun => run !== null && isActiveStatus(run.status));
     // Do not retry potentially published work after losing the execution context.
     for (const run of interrupted) {
-      this.store.transition(run.runId, "error", {
+      this.store.transition(run.runId, "unknown", {
         error: "Execution interrupted by orchestrator restart. Inspect repository state before retrying.",
+        errorCode: "outcome_unknown",
       });
     }
     await Promise.all(interrupted.map((run) => this.destroySandbox(run.sandboxId)));

@@ -8,6 +8,7 @@
  * deliberately cut (PLAN.md §4, "Future work").
  */
 import { appendReceipt, makeReceipt, type Receipt } from "./receipts.js";
+import type { RunErrorCode } from "./run-errors.js";
 
 export type RunStatus =
   | "pending"
@@ -15,7 +16,8 @@ export type RunStatus =
   | "completed"
   | "error"
   | "aborted"
-  | "cancelled";
+  | "cancelled"
+  | "unknown";
 
 export interface DelegatedRun {
   runId: string;
@@ -24,11 +26,19 @@ export interface DelegatedRun {
   task: string;
   baseBranch: string;
   publishPullRequest: boolean;
+  /**
+   * Fencing token: 0 at creation, bumped by every successful transition.
+   * A writer carrying a stale expectedGeneration is dropped — a late child
+   * result after cancel/reclaim cannot overwrite terminal state.
+   */
+  generation: number;
   status: RunStatus;
   createdAt: number;
   updatedAt: number;
   summary?: string;
   error?: string;
+  /** Classified error code; set on every error/unknown transition. */
+  errorCode?: RunErrorCode;
   diff?: string;
   receipts?: Receipt[];
 }
@@ -36,10 +46,17 @@ export interface DelegatedRun {
 export type RunPatch = {
   summary?: string;
   error?: string;
+  errorCode?: RunErrorCode;
   diff?: string;
   receipts?: Receipt[];
   sandboxId?: string;
 };
+
+/** Backfills fields persisted runs predate; never rejects a legacy record. */
+export function normalizeRun(run: DelegatedRun): DelegatedRun {
+  if (typeof run.generation === "number" && !Number.isNaN(run.generation)) return run;
+  return { ...run, generation: 0 };
+}
 
 /**
  * Maximum concurrent coding agents. Must match `max_instances` in
@@ -66,6 +83,7 @@ export function createRun(args: {
     baseBranch: args.baseBranch,
     publishPullRequest: args.publishPullRequest,
     status: "pending",
+    generation: 0,
     createdAt: now,
     updatedAt: now,
     receipts: [makeReceipt("init", `Queued ${args.repoUrl} (${args.baseBranch}).`, now)],
@@ -73,7 +91,13 @@ export function createRun(args: {
 }
 
 export function isTerminalStatus(status: RunStatus): boolean {
-  return status === "completed" || status === "error" || status === "aborted" || status === "cancelled";
+  return (
+    status === "completed" ||
+    status === "error" ||
+    status === "aborted" ||
+    status === "cancelled" ||
+    status === "unknown"
+  );
 }
 
 export function isActiveStatus(status: RunStatus): boolean {
@@ -85,6 +109,7 @@ function applyPatch(run: DelegatedRun, patch: RunPatch | undefined): DelegatedRu
   const next: DelegatedRun = { ...run };
   if (patch.summary !== undefined) next.summary = patch.summary;
   if (patch.error !== undefined) next.error = patch.error;
+  if (patch.errorCode !== undefined) next.errorCode = patch.errorCode;
   if (patch.diff !== undefined) next.diff = patch.diff;
   if (patch.receipts !== undefined) next.receipts = patch.receipts;
   if (patch.sandboxId !== undefined) next.sandboxId = patch.sandboxId;
@@ -101,7 +126,7 @@ export function transitionRun(
   const stamped = now ?? Date.now();
   const next = applyPatch(run, patch);
   const kind =
-    status === "error" || status === "aborted"
+    status === "error" || status === "aborted" || status === "unknown"
       ? "error"
       : status === "completed"
         ? "submit"
@@ -112,6 +137,7 @@ export function transitionRun(
   return {
     ...next,
     status,
+    generation: next.generation + 1,
     receipts,
     updatedAt: stamped,
   };
@@ -144,8 +170,11 @@ export function reclaimStaleRuns(
     reclaimed.push(run.runId);
     return transitionRun(
       run,
-      "error",
-      { error: `Run exceeded its ${Math.round(deadlineMs / 60000)}-minute deadline and was reclaimed.` },
+      "unknown",
+      {
+        error: `Run exceeded its ${Math.round(deadlineMs / 60000)}-minute deadline and was reclaimed; side effects are unverified — it may have pushed or opened a PR.`,
+        errorCode: "outcome_unknown",
+      },
       now,
     );
   });
@@ -169,21 +198,38 @@ export class RunStore {
   ) {}
 
   list(): DelegatedRun[] {
-    return this.read();
+    return this.read().map(normalizeRun);
   }
 
   get(runId: string): DelegatedRun | null {
-    return this.read().find((run) => run.runId === runId) ?? null;
+    const run = this.read().find((run) => run.runId === runId);
+    return run ? normalizeRun(run) : null;
   }
 
   add(run: DelegatedRun): void {
     this.write([...this.read(), run]);
   }
 
-  transition(runId: string, status: RunStatus, patch?: RunPatch): DelegatedRun | null {
+  /**
+   * A provided expectedGeneration fences the write: a mismatch means the
+   * writer's snapshot is stale (cancel/reclaim landed in between) and the
+   * transition is dropped silently — nothing is written, null is returned.
+   */
+  transition(
+    runId: string,
+    status: RunStatus,
+    patch?: RunPatch,
+    expectedGeneration?: number,
+  ): DelegatedRun | null {
+    const runs = this.read().map(normalizeRun);
+    const current = runs.find((run) => run.runId === runId);
+    if (!current) return null;
+    if (expectedGeneration !== undefined && current.generation !== expectedGeneration) {
+      return null;
+    }
     let updated: DelegatedRun | null = null;
     this.write(
-      this.read().map((run) => {
+      runs.map((run) => {
         if (run.runId !== runId) return run;
         updated = transitionRun(run, status, patch);
         return updated;
@@ -193,7 +239,7 @@ export class RunStore {
   }
 
   replace(runId: string, next: DelegatedRun): void {
-    this.write(this.read().map((run) => (run.runId === runId ? next : run)));
+    this.write(this.read().map((run) => (run.runId === runId ? next : normalizeRun(run))));
   }
 
   clear(): void {

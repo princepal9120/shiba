@@ -23,6 +23,7 @@ function run(overrides: Partial<DelegatedRun> = {}): DelegatedRun {
     baseBranch: "main",
     publishPullRequest: false,
     status: "running",
+    generation: 0,
     createdAt: 0,
     updatedAt: 0,
     ...overrides,
@@ -69,11 +70,12 @@ describe("pending approvals (#2)", () => {
 });
 
 describe("run deadline (#6)", () => {
-  it("reclaims a running run past its deadline as error", () => {
+  it("reclaims a running run past its deadline as unknown", () => {
     const stale = run({ updatedAt: 0 });
     const out = reclaimStaleRuns([stale], RUN_DEADLINE_MS + 10);
     expect(out.reclaimed).toEqual(["r1"]);
-    expect(out.runs[0]?.status).toBe("error");
+    expect(out.runs[0]?.status).toBe("unknown");
+    expect(out.runs[0]?.errorCode).toBe("outcome_unknown");
     expect(out.runs[0]?.error).toContain("deadline");
   });
 
