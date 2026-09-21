@@ -46,7 +46,7 @@ export function toolDisplayName(part: ToolPart): string {
   return typeof raw === "string" ? raw : "tool";
 }
 
-// Registry statuses: pending|running|completed|error|aborted|cancelled.
+// Registry statuses: pending|running|completed|error|aborted|cancelled|unknown.
 const STATUS_LABELS: Record<string, string> = {
   pending: "Pending",
   running: "Running",
@@ -54,6 +54,7 @@ const STATUS_LABELS: Record<string, string> = {
   error: "Error",
   aborted: "Aborted",
   cancelled: "Cancelled",
+  unknown: "Unknown",
   live: "Live",
   "waiting-approval": "Waiting",
 };
@@ -61,6 +62,17 @@ const STATUS_LABELS: Record<string, string> = {
 export function statusLabel(status: string): string {
   return STATUS_LABELS[status] ?? status;
 }
+
+/**
+ * The error family for filters and counters: failures plus "unknown" — an
+ * indeterminate outcome is grouped with failures for triage, not with success.
+ */
+export const ERROR_FAMILY_STATUSES: ReadonlySet<string> = new Set([
+  "error",
+  "aborted",
+  "cancelled",
+  "unknown",
+]);
 
 // Status chip classes — single source for app.tsx, WorkspacePanel, and any
 // future pane that renders run/session status pills.
@@ -72,6 +84,8 @@ export const STATUS_CHIP_CLASSES: Record<string, string> = {
   error: "text-[#f06666] border-[#f06666]/30 bg-[#f06666]/10",
   aborted: "text-[#f06666] border-[#f06666]/30 bg-[#f06666]/10",
   cancelled: "text-[#f06666] border-[#f06666]/30 bg-[#f06666]/10",
+  // Amber, not error red: ambiguous outcome is not a known failure.
+  unknown: "text-[#d97706] border-[#d97706]/30 bg-[#d97706]/10",
 };
 
 export function statusChipClass(status: string): string {
