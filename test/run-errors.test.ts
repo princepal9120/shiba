@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
+
 import { OpenCodeErrorEvent } from "../src/harness/opencode.js";
 import { CodexErrorEvent } from "../src/harness/codex.js";
 import {
+  classifyExecutorError,
   classifyRunError,
   RUN_ERROR_DEFS,
   runErrorWire,
@@ -85,6 +87,20 @@ describe("classifyRunError", () => {
       "resource_not_found",
     );
     expect(classifyRunError(new OpenCodeErrorEvent("status code: 408")).code).toBe("request_timeout");
+  });
+});
+
+describe("classifyExecutorError", () => {
+  it("maps an unclassified structured failure to executor_failed", () => {
+    expect(classifyExecutorError(new Error("sandbox crashed without detail")).code).toBe("executor_failed");
+    expect(classifyExecutorError("plain string failure").code).toBe("executor_failed");
+  });
+
+  it("still honors explicit statuses and aborts", () => {
+    expect(classifyExecutorError(new Error("upstream returned status 429")).code).toBe("rate_limit_exceeded");
+    const abort = new Error("aborted");
+    abort.name = "AbortError";
+    expect(classifyExecutorError(abort).code).toBe("cancelled");
   });
 });
 

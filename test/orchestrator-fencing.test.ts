@@ -5,7 +5,8 @@ import { createRun, type DelegatedRun } from "../src/runs.js";
 import { formatAgentResult } from "../src/opencode-input.js";
 import { OpenCodeErrorEvent } from "../src/harness/opencode.js";
 
-const mocks = vi.hoisted(() => ({ destroy: vi.fn(), execute: vi.fn() }));
+const mocks = vi.hoisted(() => ({ destroy: vi.fn(), execute: vi.fn(), grade: vi.fn(async () => null) }));
+vi.mock("../src/result-quality.js", () => ({ evaluateResultQuality: mocks.grade }));
 vi.mock("@cloudflare/think", () => ({ Think: class {
   onStart() {}
   getTools() { return {}; }
@@ -95,5 +96,41 @@ describe("orchestrator generation fencing", () => {
     const run = (instance.state.runs as DelegatedRun[])[0]!;
     expect(run.status).toBe("error");
     expect(run.errorCode).toBe("rate_limit_exceeded");
+  });
+
+  it("classifies a structured failure envelope as executor_failed, not internal_error", async () => {
+    const instance = agent();
+    mocks.execute.mockResolvedValueOnce(formatAgentResult({
+      status: "error", exitCode: 1, stderrTail: "",
+      changedFiles: [], diff: "", files: [], summary: "harness crashed mid-task",
+    }));
+    const execution = delegate(instance).execute(INPUT, { toolCallId: "tc-envfail" }) as Promise<string>;
+    await expect(execution).resolves.toBeDefined();
+    const run = (instance.state.runs as DelegatedRun[])[0]!;
+    expect(run.status).toBe("error");
+    expect(run.errorCode).toBe("executor_failed");
+  });
+
+  it("does not evaluate quality on a dropped finish (stale grade on cancelled run)", async () => {
+    const instance = agent();
+    Object.assign(instance.env, { TYPESAFE_API_KEY: "ts-test" });
+    let resolveChild: (value: string) => void = () => {};
+    mocks.execute.mockImplementation(
+      () => new Promise<string>((resolve) => { resolveChild = resolve; }),
+    );
+    const execution = delegate(instance).execute(INPUT, { toolCallId: "tc-grade" }) as Promise<string>;
+    await vi.waitFor(() => expect(mocks.execute).toHaveBeenCalledOnce());
+    await instance.cancelRun("agent-tool:tc-grade");
+    resolveChild(formatAgentResult({
+      status: "completed", exitCode: 0, stderrTail: "",
+      changedFiles: [], diff: "", files: [], summary: "late success",
+    }));
+    await execution;
+    // The eval call is synchronous inside the completed branch — after the
+    // child resolves, it has either happened or never will.
+    expect(mocks.grade).not.toHaveBeenCalled();
+    const run = (instance.state.runs as DelegatedRun[])[0]!;
+    expect(run.status).toBe("cancelled");
+    expect(run.receipts?.some((r) => r.kind === "grade")).toBeFalsy();
   });
 });

@@ -69,6 +69,18 @@ export function classifyRunError(error: unknown): { code: RunErrorCode; message:
   }
 }
 
+/**
+ * Classify a structured failure envelope returned BY the executor. The error
+ * name is lost at the agent/RPC boundary, so harness classes cannot match —
+ * an unclassified envelope is an executor failure, not an internal error.
+ */
+export function classifyExecutorError(error: unknown): { code: RunErrorCode; message: string } {
+  const classified = classifyRunError(error);
+  return classified.code === "internal_error"
+    ? { code: "executor_failed", message: classified.message }
+    : classified;
+}
+
 export const RUN_ERROR_DEFS = {
   authentication_error: {
     userFacing: true,
@@ -112,7 +124,7 @@ export const RUN_ERROR_DEFS = {
   },
   cancelled: {
     userFacing: true,
-    summary: "The run was cancelled.",
+    summary: "The run was cancelled. Side effects already in flight may have completed — verify repository state before retrying.",
   },
   internal_error: {
     userFacing: false,

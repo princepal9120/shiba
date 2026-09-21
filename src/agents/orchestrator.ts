@@ -35,7 +35,7 @@ import {
   type ResolveResult,
 } from "../pending-approvals.js";
 import { makeSandboxId, parseGitHubRepoUrl, redactSecrets } from "../security.js";
-import { classifyRunError, runErrorWire, type RunErrorCode, type RunErrorWire } from "../run-errors.js";
+import { classifyExecutorError, classifyRunError, runErrorWire, type RunErrorCode, type RunErrorWire } from "../run-errors.js";
 import { parseSlackThreadName } from "../slack-thread.js";
 import { evaluateResultQuality } from "../result-quality.js";
 import { HARNESS_DEFAULT_MODELS, allowedHostsFor, resolveHarness } from "../harness/index.js";
@@ -246,11 +246,11 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         publishPullRequest: fullInput.publishPullRequest,
       }),
     );
-    const finish = (status: RunStatus, patch?: RunPatch) => {
+    const finish = (status: RunStatus, patch?: RunPatch): DelegatedRun | null => {
       // Fenced write: a stale generation (cancel/reclaim landed while the
       // child was running) drops the transition AND every side effect.
       const updated = this.store.transition(runId, status, patch, generation);
-      if (updated === null) return;
+      if (updated === null) return null;
       // Slack-originated runs get the outcome back in the thread; the
       // summary carries the PR link when one was published.
       if (status === "completed") {
@@ -261,6 +261,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
           `${status === "unknown" ? "Run outcome unknown" : "Run failed"} for ${fullInput.repoUrl}\n${wire.userMessage}\n${patch?.error?.slice(0, 1000) ?? ""}`.trim(),
         );
       }
+      return updated;
     };
     const running = this.store.transition(runId, "running", undefined, this.store.get(runId)?.generation);
     if (running === null || running.status !== "running") {
@@ -279,17 +280,19 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         // type instead would mark failed runs "completed".
         const parsed = parseAgentResult(output);
         if (parsed?.status === "completed") {
-          finish("completed", { summary: output.slice(0, 4000), diff: parsed?.diff ? parsed.diff.slice(0, 20000) : undefined });
+          const finished = finish("completed", { summary: output.slice(0, 4000), diff: parsed?.diff ? parsed.diff.slice(0, 20000) : undefined });
           // TypeSafe Score: grade the run quality (fail-open — never blocks completion).
           // Terminal runs are immutable (transitionRun refuses them), so the
           // grade lands as a "grade" receipt on the finished record — never
           // as a second transition, which would be silently discarded.
+          // A dropped finish means the run went terminal mid-flight — do not
+          // grade stale output onto a cancelled/reclaimed record.
           const tsKey = this.env.TYPESAFE_API_KEY?.trim() ?? "";
-          if (tsKey) {
+          if (finished !== null && tsKey) {
             evaluateResultQuality(tsKey, output.slice(0, 2000)).then((quality) => {
               if (!quality) return;
               const run = this.store.get(runId);
-              if (run) {
+              if (run && run.status === "completed") {
                 this.store.replace(
                   runId,
                   recordReceipt(run, makeReceipt("grade", `Result quality: ${quality.level} (score ${quality.score.toFixed(2)}, confidence ${quality.confidence.toFixed(2)}).`)),
@@ -299,7 +302,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
           }
           return output;
         }
-        const failure = classifyRunError(new Error(parsed?.summary ?? output.slice(0, 4000)));
+        const failure = classifyExecutorError(new Error(parsed?.summary ?? output.slice(0, 4000)));
         finish(terminalStatusFor(failure.code), {
           summary: output.slice(0, 4000),
           error: redactSecrets(parsed?.summary ?? output.slice(0, 4000)).slice(0, 4000),
@@ -445,7 +448,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     // Cancellation is deliberately unfenced: it is allowed to win races.
     const updated = this.store.transition(runId, "cancelled", { errorCode: "cancelled" });
     this.runControllers.get(runId)?.abort();
-    this.postToSlackThread(`Run cancelled for ${run.repoUrl}.`);
+    this.postToSlackThread(`Run cancelled for ${run.repoUrl}. If a publish was in flight it may still land — check the repository before retrying.`);
     await this.destroySandbox(run.sandboxId);
     return updated;
   }
