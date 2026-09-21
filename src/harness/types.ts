@@ -13,13 +13,17 @@
 import type { CodingTaskInput } from "../opencode-input.js";
 
 /** Implemented harnesses. Aider was in the original sketch but has no adapter — add it here with one, not before. */
-export type AgentHarnessName = "opencode" | "claude-code" | "codex";
+export type AgentHarnessName = "opencode" | "claude-code" | "codex" | "devin";
 
 /** Provider id → the single host its API lives on. Feeds allowedHosts (T5). */
 export const PROVIDER_HOSTS: Record<string, string> = {
   google: "generativelanguage.googleapis.com",
   anthropic: "api.anthropic.com",
   openai: "api.openai.com",
+  // Devin is a service harness, not a raw LLM provider: the CLI authenticates
+  // to Cognition's control plane, which also fronts the model traffic for
+  // Pro accounts (server.codeium.com is added by the adapter's egressHosts).
+  devin: "api.devin.ai",
 };
 
 /** Container env var carrying the dummy key, per provider. */
@@ -27,6 +31,9 @@ export const PROVIDER_KEY_ENV: Record<string, string> = {
   google: "GOOGLE_GENERATIVE_AI_API_KEY",
   anthropic: "ANTHROPIC_API_KEY",
   openai: "OPENAI_API_KEY",
+  // The Devin CLI reads its key from credentials.toml, not the environment;
+  // the dummy still rides along so a future env-auth path stays covered.
+  devin: "DEVIN_API_KEY",
 };
 
 /** Hosts every harness needs regardless of provider. */

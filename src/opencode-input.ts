@@ -17,7 +17,7 @@ const codingTaskInputSchema = z.object({
   sandboxId: z.string().min(1),
   codingModel: z.string().min(1),
   /** Which coding agent runs the task. Validated at approval time, never in the container. */
-  harness: z.enum(["opencode", "claude-code", "codex"]).optional(),
+  harness: z.enum(["opencode", "claude-code", "codex", "devin"]).optional(),
 });
 
 export type CodingTaskInput = z.infer<typeof codingTaskInputSchema>;

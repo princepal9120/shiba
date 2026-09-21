@@ -6,6 +6,8 @@ import { Sandbox as SandboxBase } from "@cloudflare/sandbox";
 import {
   denyUnscopedGitHub,
   forwardAnthropic,
+  forwardDevinApi,
+  forwardDevinInference,
   forwardGitHubScoped,
   forwardGoogle,
   forwardOpenAI,
@@ -62,5 +64,7 @@ Sandbox.outboundByHost = {
   "generativelanguage.googleapis.com": forwardGoogle,
   "api.anthropic.com": forwardAnthropic,
   "api.openai.com": forwardOpenAI,
+  "api.devin.ai": forwardDevinApi,
+  "server.codeium.com": forwardDevinInference,
   "github.com": denyUnscopedGitHub,
 };

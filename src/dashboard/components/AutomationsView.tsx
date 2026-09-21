@@ -185,6 +185,7 @@ export function AutomationsView(): JSX.Element {
             </div>
             <input
               type="text"
+              aria-label="Repository URL"
               value={repoUrl}
               onChange={(e) => setRepoUrl(e.target.value)}
               placeholder="https://github.com/owner/repo"

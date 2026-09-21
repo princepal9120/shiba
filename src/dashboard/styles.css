@@ -114,6 +114,19 @@ details summary::-webkit-details-marker {
   animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
+/* ponytail: light theme via invert filter — the UI uses hardcoded dark hex
+   colors, so a real light palette is a full rewrite. Inverting the root keeps
+   fixed positioning intact; media is re-inverted so it stays normal. */
+html.light {
+  filter: invert(1) hue-rotate(180deg);
+  background: #ffffff;
+}
+html.light img,
+html.light video,
+html.light canvas {
+  filter: invert(1) hue-rotate(180deg);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

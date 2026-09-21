@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { ClaudeCodeErrorEvent, claudeCodeHarness, parseClaudeCodeEvent } from "../src/harness/claude-code.js";
 import { CodexErrorEvent, codexHarness, parseCodexEvent } from "../src/harness/codex.js";
+import { DevinErrorEvent, devinHarness, parseDevinEvent } from "../src/harness/devin.js";
+import { agentCliCatalog } from "../src/harness/catalog.js";
 import { allowedHostsFor, HARNESS_DEFAULT_MODELS, resolveHarness, resolveRunHarness } from "../src/harness/index.js";
 import { opencodeHarness } from "../src/harness/opencode.js";
 import { providerOf } from "../src/harness/types.js";
@@ -215,5 +217,89 @@ describe("codex harness (T22)", () => {
     expect(() => parseCodexEvent(JSON.stringify({ type: "error", message: "boom" }))).toThrow(CodexErrorEvent);
     expect(() => parseCodexEvent("[1,2]")).toThrow(/not an object/);
     expect(parseCodexEvent("")).toBeNull();
+  });
+});
+
+describe("devin harness", () => {
+  it("resolves by name and defaults to the free swe-2 model", () => {
+    expect(resolveHarness("devin").name).toBe("devin");
+    expect(resolveHarness("DEVIN").name).toBe("devin");
+    expect(HARNESS_DEFAULT_MODELS.devin).toBe("devin/swe-2");
+  });
+
+  it("runs headless with the bare model alias and bypass inside the sandbox", () => {
+    expect(devinHarness.buildArgv(input("devin/swe-2"), "/workspace/x")).toEqual([
+      "devin", "-p", "--model", "swe-2",
+      "--permission-mode", "bypass",
+      "--respect-workspace-trust", "false",
+      "--", "Fix it.",
+    ]);
+  });
+
+  it("writes a dummy credentials.toml under the container XDG dir", () => {
+    const file = devinHarness.configFile(input("devin/swe-2"), "run-x");
+    expect(file).not.toBeNull();
+    expect(file?.path).toBe("/workspace/.xdg-data/devin/credentials.toml");
+    expect(file?.contents).toContain('windsurf_api_key = "dummy-egress-swapped"');
+    expect(file?.contents).toContain('devin_api_url = "https://api.devin.ai"');
+    expect(file?.contents).not.toMatch(/devin-key-secret|sk-/);
+  });
+
+  it("gets a dummy env key and redirects XDG_DATA_HOME", () => {
+    const env = devinHarness.env(input("devin/swe-2"), "/workspace/.xdg-data/devin/credentials.toml");
+    expect(env.XDG_DATA_HOME).toBe("/workspace/.xdg-data");
+    expect(env.DEVIN_API_KEY).toBeTruthy();
+    expect(env.DEVIN_API_KEY).not.toContain("devin-key-secret");
+  });
+
+  it("narrows egress to both Devin hosts plus git — never the provider union", () => {
+    expect(devinHarness.egressHosts("devin/swe-2")).toEqual(["api.devin.ai", "server.codeium.com"]);
+    expect(allowedHostsFor(devinHarness, "devin/swe-2")).toEqual([
+      "api.devin.ai",
+      "server.codeium.com",
+      "github.com",
+      "codeload.github.com",
+    ]);
+  });
+
+  it("refuses non-devin models and providerless ids", () => {
+    expect(() => devinHarness.buildArgv(input("google/gemini-3.5-flash-lite"), "/x")).toThrow(/devin harness supports/);
+    expect(() => devinHarness.buildArgv(input("swe-2"), "/x")).toThrow(/provider\/model/);
+  });
+
+  it("passes plain-text lines through and drops the login banner", () => {
+    expect(parseDevinEvent("Editing src/a.ts")).toBe("Editing src/a.ts");
+    expect(parseDevinEvent("   ")).toBeNull();
+    expect(parseDevinEvent("Welcome to Devin CLI!")).toBeNull();
+    expect(parseDevinEvent(" ✓ Logged in as someone@example.com.")).toBeNull();
+  });
+
+  it("throws on auth failures rather than reporting success", () => {
+    expect(() => parseDevinEvent("Not logged in.")).toThrow(DevinErrorEvent);
+    expect(() => parseDevinEvent("Login failed. Browser auth error")).toThrow(DevinErrorEvent);
+  });
+});
+
+describe("agent cli catalog", () => {
+  it("lists every registered harness with its pinned version", () => {
+    const catalog = agentCliCatalog({});
+    expect(catalog.map((a) => a.id)).toEqual(["opencode", "claude-code", "codex", "devin"]);
+    expect(catalog.find((a) => a.id === "devin")?.version).toBe("3000.10.31");
+    expect(catalog.find((a) => a.id === "devin")?.defaultModel).toBe("devin/swe-2");
+  });
+
+  it("reports devin's secret presence without exposing the value", () => {
+    const unset = agentCliCatalog({}).find((a) => a.id === "devin");
+    expect(unset?.credential.configured).toBe(false);
+    expect(unset?.credential.setupHint).toContain("DEVIN_API_KEY");
+    const set = agentCliCatalog({ DEVIN_API_KEY: "real-secret" }).find((a) => a.id === "devin");
+    expect(set?.credential.configured).toBe(true);
+    expect(JSON.stringify(set)).not.toContain("real-secret");
+  });
+
+  it("marks gateway-backed harnesses as not introspectable", () => {
+    const opencode = agentCliCatalog({}).find((a) => a.id === "opencode");
+    expect(opencode?.credential.kind).toBe("ai-gateway-byok");
+    expect(opencode?.credential.configured).toBeNull();
   });
 });

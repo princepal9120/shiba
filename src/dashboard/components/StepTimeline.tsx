@@ -13,6 +13,7 @@ import {
 } from "@cloudflare/ai-chat/react";
 import { isToolUIPart, type UIMessage } from "ai";
 import { ApprovalCard } from "./ApprovalCard";
+import { Tooltip } from "./Tooltip";
 import {
   toolDisplayName,
   type PendingApproval,
@@ -120,15 +121,16 @@ export function StepTimeline({
         {starters && starters.length > 0 ? (
           <div className="flex flex-wrap items-center justify-center gap-2 mt-3 max-w-md">
             {starters.map((starter) => (
-              <button
-                key={starter.label}
-                type="button"
-                onClick={() => onStarter?.(starter.task)}
-                className="inline-flex items-center gap-1.5 text-xs text-[#e6edf3] bg-[#11141b] hover:bg-[#1e2530] border border-[#1e2530] rounded-full px-3 py-1.5 transition-colors"
-              >
-                <span aria-hidden="true">{starter.icon}</span>
-                {starter.label}
-              </button>
+              <Tooltip key={starter.label} content={starter.task} side="bottom" delayMs={200}>
+                <button
+                  type="button"
+                  onClick={() => onStarter?.(starter.task)}
+                  className="inline-flex items-center gap-1.5 text-xs text-[#e6edf3] bg-[#11141b] hover:bg-[#1e2530] border border-[#1e2530] rounded-full px-3 py-1.5 transition-colors active:scale-95"
+                >
+                  <span aria-hidden="true">{starter.icon}</span>
+                  {starter.label}
+                </button>
+              </Tooltip>
             ))}
           </div>
         ) : null}

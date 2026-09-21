@@ -397,8 +397,11 @@ export function OnboardingModal({
                     >
                       {isDone ? "✓" : null}
                     </button>
-                    <div
-                      className="cursor-pointer min-w-0"
+                    <button
+                      type="button"
+                      aria-expanded={isExpanded}
+                      aria-label={`Toggle details for step ${idx + 1}: ${step.title}`}
+                      className="cursor-pointer min-w-0 text-left"
                       onClick={() => setExpandedStep(isExpanded ? null : step.id)}
                     >
                       <div className="flex items-center gap-2 flex-wrap">
@@ -421,7 +424,7 @@ export function OnboardingModal({
                       <p className="text-xs text-[#8b98a9] mt-1 leading-relaxed line-clamp-1">
                         {step.summary}
                       </p>
-                    </div>
+                    </button>
                   </div>
 
                   <button

@@ -44,7 +44,7 @@ function testDeps(overrides: Partial<{ pending: boolean }> = {}) {
     dispatchApprove: vi.fn(async (_pointer: ApprovalPointer, _userId: string): Promise<void> => {}),
     dispatchReject: vi.fn(async (_pointer: ApprovalPointer, _userId: string): Promise<void> => {}),
     respond: vi.fn(async (_responseUrl: string, _text: string): Promise<void> => {}),
-    isPending: vi.fn(async (_pointer: ApprovalPointer): Promise<boolean> => pending),
+    isUnresolved: vi.fn(async (_pointer: ApprovalPointer): Promise<boolean> => pending),
   };
 }
 
@@ -152,7 +152,7 @@ describe("handleSlackInteract", () => {
     });
     const response = await handleSlackInteract(request, routeEnv("U1,U2"), deps);
     expect(response?.status).toBe(200);
-    expect(deps.isPending).toHaveBeenCalledOnce();
+    expect(deps.isUnresolved).toHaveBeenCalledOnce();
     expect(deps.dispatchApprove).toHaveBeenCalledOnce();
     expect(deps.dispatchApprove).toHaveBeenCalledWith(
       { threadKey: THREAD, approvalId: "appr_1" },
@@ -173,7 +173,7 @@ describe("handleSlackInteract", () => {
     expect(response?.status).toBe(200);
     expect(deps.dispatchApprove).not.toHaveBeenCalled();
     expect(deps.dispatchReject).not.toHaveBeenCalled();
-    expect(deps.isPending).not.toHaveBeenCalled();
+    expect(deps.isUnresolved).not.toHaveBeenCalled();
     expect(deps.respond).toHaveBeenCalledOnce();
     const [, text] = deps.respond.mock.calls[0] as [string, string];
     expect(text).toMatch(/not on the approver list/i);

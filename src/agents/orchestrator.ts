@@ -58,11 +58,11 @@ const delegateInputSchema = z.object({
     .default(false)
     .describe("Open a pull request with the result. Requires GITHUB_TOKEN."),
   harness: z
-    .enum(["opencode", "claude-code", "codex"])
+    .enum(["opencode", "claude-code", "codex", "devin"])
     .optional()
     .describe(
       "Coding agent harness. Defaults to the deployment's AGENT_HARNESS, else opencode. " +
-        "claude-code needs an anthropic/* model; codex needs an openai/* model.",
+        "claude-code needs an anthropic/* model; codex needs an openai/* model; devin needs a devin/* model.",
     ),
   codingModel: z
     .string()
@@ -128,7 +128,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       "You are AI Intern, a planning and delegation agent.",
       "You never edit repositories yourself. When the user describes a coding task,",
       "call delegate_coding_task with the repository URL and the task.",
-      "Pass the harness the user asked for (opencode, claude-code, or codex) when they name one,",
+      "Pass the harness the user asked for (opencode, claude-code, codex, or devin) when they name one,",
       "and a codingModel as provider/model when they name a model; otherwise leave both unset.",
       "The tool requires human approval before anything runs: summarize exactly",
       "what will happen (repository, branch, task, whether a pull request is requested).",
@@ -170,7 +170,9 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         ? this.env.CODING_MODEL?.trim()
         : harness.name === "claude-code"
           ? this.env.CLAUDE_CODE_MODEL?.trim()
-          : this.env.CODEX_MODEL?.trim();
+          : harness.name === "codex"
+            ? this.env.CODEX_MODEL?.trim()
+            : this.env.DEVIN_MODEL?.trim();
     const codingModel =
       input.codingModel?.trim() ||
       perHarnessVar ||
@@ -532,5 +534,3 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     return Response.json({ error: "Method not allowed." }, { status: 405 });
   }
 }
-
-

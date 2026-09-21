@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   denyUnscopedGitHub,
   forwardAnthropic,
+  forwardDevinApi,
+  forwardDevinInference,
   forwardGitHubScoped,
   forwardGoogle,
   forwardOpenAI,
@@ -191,5 +193,95 @@ describe("provider egress forwarders (T22)", () => {
       gatewayEnv({}),
     );
     expect(response.status).toBe(405);
+  });
+});
+
+describe("devin egress forwarders", () => {
+  function spyOnFetch(seen: { auth?: string | null; url?: string }): void {
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = input instanceof Request ? input.url : String(input);
+      seen.url = url;
+      // Headers may come from init (when forwardDevin passes fetch(url, {headers,...}))
+      // or from the Request object itself.
+      const initHeaders = init?.headers instanceof Headers
+        ? init.headers
+        : new Headers(init?.headers as HeadersInit | undefined);
+      const reqHeaders = input instanceof Request ? input.headers : new Headers();
+      seen.auth = initHeaders.get("authorization") ?? reqHeaders.get("authorization");
+      return new Response("ok", { status: 200 });
+    }) as typeof fetch;
+  }
+  const devinEnv = { DEVIN_API_KEY: "devin-key-secret" } as unknown as EgressEnv;
+
+  it("injects DEVIN_API_KEY as Bearer on api.devin.ai, replacing the dummy", async () => {
+    const seen: { auth?: string | null; url?: string } = {};
+    const original = globalThis.fetch;
+    spyOnFetch(seen);
+    try {
+      const response = await forwardDevinApi(
+        new Request("https://api.devin.ai/v3/self", {
+          headers: { authorization: "Bearer dummy-egress-swapped" },
+        }),
+        devinEnv,
+      );
+      expect(response.status).toBe(200);
+      expect(seen.auth).toBe("Bearer devin-key-secret");
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
+  it("injects DEVIN_API_KEY on server.codeium.com too", async () => {
+    const seen: { auth?: string | null; url?: string } = {};
+    const original = globalThis.fetch;
+    spyOnFetch(seen);
+    try {
+      const response = await forwardDevinInference(
+        new Request("https://server.codeium.com/exa.api_server_pb.ApiServerService/GetCompletions", {
+          method: "POST",
+          body: "{}",
+        }),
+        devinEnv,
+      );
+      expect(response.status).toBe(200);
+      expect(seen.auth).toBe("Bearer devin-key-secret");
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
+  it("refuses a host that is not its own", async () => {
+    const response = await forwardDevinApi(
+      new Request("https://server.codeium.com/v3/self"),
+      { DEVIN_API_KEY: "k" } as unknown as EgressEnv,
+    );
+    expect(response.status).toBe(403);
+  });
+
+  it("leaves the dummy header untouched when DEVIN_API_KEY is unset", async () => {
+    const seen: { auth?: string | null } = {};
+    const original = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const initHeaders = init?.headers instanceof Headers
+        ? init.headers
+        : new Headers(init?.headers as HeadersInit | undefined);
+      const reqHeaders = input instanceof Request ? input.headers : new Headers();
+      seen.auth = initHeaders.get("authorization") ?? reqHeaders.get("authorization");
+      return new Response("denied", { status: 403 });
+    }) as typeof fetch;
+    try {
+      const response = await forwardDevinApi(
+        new Request("https://api.devin.ai/v3/self", {
+          headers: { authorization: "Bearer dummy-egress-swapped" },
+        }),
+        {} as unknown as EgressEnv,
+      );
+      // outboundHeaders strips the dummy authorization (only content-type etc pass).
+      // Without DEVIN_API_KEY the egress sends no auth header — upstream rejects.
+      expect(response.status).toBe(403);
+      expect(seen.auth).toBeNull();
+    } finally {
+      globalThis.fetch = original;
+    }
   });
 });

@@ -1,6 +1,7 @@
 /** Harness registry (PLAN.md T22). Selection is by name, default OpenCode. */
 import { claudeCodeHarness } from "./claude-code.js";
 import { codexHarness } from "./codex.js";
+import { devinHarness } from "./devin.js";
 import { opencodeHarness } from "./opencode.js";
 import { GIT_EGRESS_HOSTS, type AgentHarness, type AgentHarnessName } from "./types.js";
 
@@ -8,6 +9,7 @@ export const HARNESSES: Record<string, AgentHarness> = {
   opencode: opencodeHarness,
   "claude-code": claudeCodeHarness,
   codex: codexHarness,
+  devin: devinHarness,
 };
 
 export function resolveHarness(name: string | undefined): AgentHarness {
@@ -40,7 +42,7 @@ export function allowedHostsFor(harness: AgentHarness, model: string): string[] 
 
 export type { AgentHarness, AgentHarnessName };
 
-export const HARNESS_NAMES = ["opencode", "claude-code", "codex"] as const;
+export const HARNESS_NAMES = ["opencode", "claude-code", "codex", "devin"] as const;
 
 /**
  * Per-harness default coding model. The checked-in ids are defaults, not
@@ -52,4 +54,6 @@ export const HARNESS_DEFAULT_MODELS: Record<string, string> = {
   opencode: "google/gemini-3.5-flash-lite",
   "claude-code": "anthropic/claude-sonnet-4-6",
   codex: "openai/gpt-5.3-codex",
+  // swe-2 is free on Devin Pro; the alias resolves to the latest SWE-2.
+  devin: "devin/swe-2",
 };

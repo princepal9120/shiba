@@ -36,7 +36,7 @@ export interface SlackApprovalEnv {
 
 export interface SlackApprovalDeps {
   /** Re-resolve the pointer server-side. False = already resolved/replayed. */
-  isPending?: (pointer: ApprovalPointer) => Promise<boolean>;
+  isUnresolved?: (pointer: ApprovalPointer) => Promise<boolean>;
   /** Approve path: resolves the pending call and starts the run. */
   dispatchApprove?: (pointer: ApprovalPointer, userId: string) => Promise<void>;
   /** Reject path: resolves the pending call, starts no container. */
@@ -276,8 +276,8 @@ export async function handleSlackInteract(
   }
 
   // Re-resolve the pointer server-side; stale/replayed clicks resolve nothing.
-  const isPending = deps.isPending ?? (async () => true);
-  if (!(await isPending(interaction.pointer))) {
+  const isUnresolved = deps.isUnresolved ?? (async () => true);
+  if (!(await isUnresolved(interaction.pointer))) {
     const stale = respondEphemeral(
       interaction.responseUrl,
       "This approval is already resolved — nothing to do.",

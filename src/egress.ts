@@ -8,7 +8,10 @@
 import type { Env as WorkerEnv } from "./env.js";
 import { sanitizeContainerHeaders, stripCredentialParams } from "./provider-gateway.js";
 
-export type EgressEnv = Pick<WorkerEnv, "AI" | "GATEWAY_ID" | "AI_GATEWAY_TOKEN" | "GITHUB_TOKEN">;
+export type EgressEnv = Pick<
+  WorkerEnv,
+  "AI" | "GATEWAY_ID" | "AI_GATEWAY_TOKEN" | "GITHUB_TOKEN" | "DEVIN_API_KEY"
+>;
 
 /**
  * Handler ctx carries the per-run params passed to `setOutboundByHost`. The
@@ -90,6 +93,48 @@ export function forwardAnthropic(request: Request, env: EgressEnv): Promise<Resp
 
 export function forwardOpenAI(request: Request, env: EgressEnv): Promise<Response> {
   return forwardProvider(request, env, "api.openai.com");
+}
+
+/**
+ * Devin CLI is not an AI Gateway provider — it authenticates to Cognition's
+ * own backends with an account API key. The container holds a dummy key in
+ * credentials.toml; here the real DEVIN_API_KEY replaces whatever
+ * Authorization header repository code sent, exactly like the GitHub
+ * forwarder. Verified: api.devin.ai/v3/self accepts Bearer (200) and rejects
+ * x-api-key / missing auth (403).
+ */
+async function forwardDevin(request: Request, env: EgressEnv, host: string): Promise<Response> {
+  const target = new URL(request.url);
+  if (target.protocol !== "https:" || target.hostname !== host) {
+    return new Response("Invalid Devin destination.", { status: 403 });
+  }
+  target.username = "";
+  target.password = "";
+  target.search = stripCredentialParams(target.search);
+  const headers = outboundHeaders(request);
+  if (env.DEVIN_API_KEY) {
+    headers.set("Authorization", "Bearer " + env.DEVIN_API_KEY);
+  }
+  try {
+    return await fetch(target, {
+      method: request.method,
+      headers,
+      body: request.method === "GET" || request.method === "HEAD" ? undefined : request.body,
+      redirect: "manual",
+    });
+  } catch {
+    return new Response("Devin request failed.", { status: 502 });
+  }
+}
+
+/** api.devin.ai — Devin control plane (sessions, billing, org). */
+export function forwardDevinApi(request: Request, env: EgressEnv): Promise<Response> {
+  return forwardDevin(request, env, "api.devin.ai");
+}
+
+/** server.codeium.com — inference backend Devin Pro accounts talk to. */
+export function forwardDevinInference(request: Request, env: EgressEnv): Promise<Response> {
+  return forwardDevin(request, env, "server.codeium.com");
 }
 
 async function forwardGitHub(request: Request, env: EgressEnv): Promise<Response> {

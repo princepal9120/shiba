@@ -96,6 +96,7 @@ export function GatesView(): JSX.Element {
         <div className="border border-[#1e2530] rounded-xl bg-[#0a0c10] shadow-sm p-5 flex flex-wrap items-center gap-3 transition-colors focus-within:border-[#0B9F95]/30">
           <input
             type="text"
+            aria-label="Repository URL"
             value={repoUrl}
             onChange={(e) => setRepoUrl(e.target.value)}
             placeholder="https://github.com/owner/repo"
@@ -123,6 +124,7 @@ export function GatesView(): JSX.Element {
               {gate.extraLabel ? (
                 <input
                   type="text"
+                  aria-label={gate.extraLabel}
                   value={extras[gate.id] ?? ""}
                   onChange={(e) => setExtras((x) => ({ ...x, [gate.id]: e.target.value }))}
                   placeholder={gate.extraPlaceholder}

@@ -25,6 +25,8 @@ export interface Env {
   CLAUDE_CODE_MODEL?: string;
   /** Optional default model for the codex harness, e.g. openai/gpt-5.3-codex. */
   CODEX_MODEL?: string;
+  /** Optional default model for the devin harness, e.g. devin/swe-2. */
+  DEVIN_MODEL?: string;
   /** Optional kill switch. "false"/"0"/"off" stops every automation firing. */
   AUTOMATIONS_ENABLED?: string;
   /** Agent harness: "opencode" (default), "claude-code", or "codex". */
@@ -50,6 +52,13 @@ export interface Env {
   GITHUB_TOKEN?: string;
   /** Optional. Server-side credential for AI Gateway. Never sent to containers. */
   AI_GATEWAY_TOKEN?: string;
+  /**
+   * Optional. Devin account API key for the devin harness — injected as a
+   * Bearer header by the egress forwarders on api.devin.ai and
+   * server.codeium.com. Never sent to containers; the sandboxed CLI holds a
+   * dummy credentials.toml. Unset means devin runs fail auth honestly.
+   */
+  DEVIN_API_KEY?: string;
   /** Optional. Verifies incoming GitHub webhook signatures. */
   GITHUB_WEBHOOK_SECRET?: string;
   /**

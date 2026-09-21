@@ -1,4 +1,5 @@
 import { useState, useMemo, type JSX } from "react";
+import { Tooltip } from "./Tooltip";
 
 export interface DiffViewerProps {
   diff: string;
@@ -97,39 +98,42 @@ export function DiffViewer({ diff, runId }: DiffViewerProps): JSX.Element {
           <span className="text-[#f06666] font-semibold">-{stats.deletions}</span>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={copyDiff}
-            className="text-[11px] font-sans px-2.5 py-1 rounded bg-[#07090e] hover:bg-[#1f2937] text-[#e6edf3] border border-white/[0.08] transition-colors flex items-center gap-1.5"
-            title="Copy diff to clipboard"
-          >
-            {copied ? (
-              <>
-                <svg className="w-3.5 h-3.5 text-[#4cc38a]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                <span>Copied</span>
-              </>
-            ) : (
-              <>
-                <svg className="w-3.5 h-3.5 text-[#8b98a9]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                </svg>
-                <span>Copy diff</span>
-              </>
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={downloadPatch}
-            className="text-[11px] font-sans px-2.5 py-1 rounded bg-[#07090e] hover:bg-[#1f2937] text-[#8b98a9] hover:text-[#e6edf3] border border-white/[0.08] transition-colors flex items-center gap-1"
-            title="Download unified .diff file"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-            <span>.diff</span>
-          </button>
+          <Tooltip content={copied ? "Diff copied to clipboard!" : "Copy unified diff to clipboard"} side="top">
+            <button
+              type="button"
+              onClick={copyDiff}
+              className="text-[11px] font-sans px-2.5 py-1 rounded bg-[#07090e] hover:bg-[#1f2937] text-[#e6edf3] border border-white/[0.08] transition-colors flex items-center gap-1.5"
+            >
+              {copied ? (
+                <>
+                  <svg className="w-3.5 h-3.5 text-[#4cc38a]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span className="text-[#4cc38a] font-medium">Copied</span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-3.5 h-3.5 text-[#8b98a9]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  <span>Copy diff</span>
+                </>
+              )}
+            </button>
+          </Tooltip>
+
+          <Tooltip content="Download raw git patch file" side="top">
+            <button
+              type="button"
+              onClick={downloadPatch}
+              className="text-[11px] font-sans px-2.5 py-1 rounded bg-[#07090e] hover:bg-[#1f2937] text-[#8b98a9] hover:text-[#e6edf3] border border-white/[0.08] transition-colors flex items-center gap-1"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              <span>.diff</span>
+            </button>
+          </Tooltip>
         </div>
       </div>
 

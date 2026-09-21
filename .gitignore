@@ -15,3 +15,6 @@ wrangler-devenv.json
 .build/
 ai-intern-docs/
 
+
+.playwright-mcp/
+.reticle/

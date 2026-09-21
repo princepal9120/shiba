@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { VMInspector, type VMRun } from "./components/VMInspector";
 import { RunRegistryView } from "./components/RunRegistryView";
 import { AutomationsView } from "./components/AutomationsView";
+import { AgentsView } from "./components/AgentsView";
 import { MissionsView } from "./components/MissionsView";
 import { GatesView } from "./components/GatesView";
 import { ArchitectureView } from "./components/ArchitectureView";
@@ -16,7 +17,11 @@ import { SessionsSidebar, type SessionItem } from "./components/SessionsSidebar"
 import { StepTimeline } from "./components/StepTimeline";
 import { WorkspacePanel, type WorkspaceTab } from "./components/WorkspacePanel";
 import { TaskComposer } from "./components/TaskComposer";
+import { toast } from "sonner";
 import { AppNavRail, APP_NAV_ITEMS, type AppNavView } from "./components/AppNavRail";
+import { CommandMenu, type CommandItem } from "./components/ui/command-menu";
+import { useTheme } from "./components/ThemeProvider";
+import { Tooltip } from "./components/Tooltip";
 import {
   extractPendingApprovals,
   extractCompletedDiff,
@@ -25,6 +30,14 @@ import {
 import type { RetainedRun, ToolRunRecord } from "./types";
 
 const ORCHESTRATOR_AGENT = "coding-orchestrator";
+
+// Guard for single-key shortcuts: never fire while the user is typing.
+function isEditableTarget(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  return Boolean(
+    el?.closest?.("input, textarea, select, [contenteditable]"),
+  );
+}
 
 function useRetainedRuns(refreshToken: number): { runs: RetainedRun[]; error: string | null } {
   const [runs, setRuns] = useState<RetainedRun[]>([]);
@@ -90,10 +103,23 @@ export function App(): React.JSX.Element {
   const [refreshToken, setRefreshToken] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const [submitting, setSubmitting] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [showClearModal, setShowClearModal] = useState(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+  const [commandMenuOpen, setCommandMenuOpen] = useState(false);
+  const { resolvedTheme, setTheme } = useTheme();
+  const theme = (resolvedTheme === "light" ? "light" : "dark") as "dark" | "light";
+  const toggleTheme = () => setTheme(theme === "dark" ? "light" : "dark");
+
+  useEffect(() => {
+    document.title = "AI Intern Dashboard · Cloudflare Native Coding Agent";
+  }, []);
+
+  // Surface transient notices through the toast channel (aria-live inside sonner).
+  useEffect(() => {
+    if (notice) toast(notice);
+  }, [notice]);
   const [showOnboardingModal, setShowOnboardingModal] = useState(false);
   const [mainView, setMainView] = useState<MainView>("tasks");
   const [setupDone, setSetupDone] = useState<number | null>(null);
@@ -108,6 +134,25 @@ export function App(): React.JSX.Element {
   );
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("runs");
   const [mobileSessionsOpen, setMobileSessionsOpen] = useState(false);
+  const [sessionsCollapsed, setSessionsCollapsed] = useState(() =>
+    typeof window !== "undefined"
+      ? localStorage.getItem("ai-intern:sidebar-collapsed") === "true"
+      : false,
+  );
+
+  const toggleSessionsCollapsed = useCallback(() => {
+    setSessionsCollapsed((current) => {
+      const next = !current;
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem("ai-intern:sidebar-collapsed", String(next));
+        } catch {
+          // Ignore storage quota or access errors in private mode
+        }
+      }
+      return next;
+    });
+  }, []);
 
   // Header setup pill: count deployment-proven steps; refreshes when the
   // onboarding modal closes so fixes show up immediately.
@@ -276,6 +321,18 @@ export function App(): React.JSX.Element {
         setNotice("Repository URL must be a GitHub URL like https://github.com/owner/repo.");
         return;
       }
+      // Without a live agent connection sendMessage resolves silently, so the
+      // task would vanish as if it had been accepted.
+      if (agent.connectionError || !agent.identified) {
+        setNotice(
+          `Task not sent: ${
+            agent.connectionError
+              ? `connection error: ${agent.connectionError.message ?? "unknown"}`
+              : "still connecting to the orchestrator"
+          }.`,
+        );
+        return;
+      }
       setNotice(null);
       const branch = baseBranch.trim() || "main";
       const text = [
@@ -288,7 +345,7 @@ export function App(): React.JSX.Element {
       ].join("\n");
       submitInFlight.current = true;
       submitFailed.current = false;
-      setSubmitting(true);
+      setIsSubmitting(true);
       try {
         await chat.sendMessage({ text });
         if (!submitFailed.current) {
@@ -299,10 +356,10 @@ export function App(): React.JSX.Element {
         setNotice(`Task could not be sent: ${error instanceof Error ? error.message : String(error)}`);
       } finally {
         submitInFlight.current = false;
-        setSubmitting(false);
+        setIsSubmitting(false);
       }
     },
-    [repoUrl, baseBranch, task, publishPullRequest, harness, chat, refreshRuns],
+    [repoUrl, baseBranch, task, publishPullRequest, harness, chat, agent, refreshRuns],
   );
 
   const confirmClearAll = useCallback(async () => {
@@ -346,22 +403,49 @@ export function App(): React.JSX.Element {
   // Keyboard shortcut listener: Cmd/Ctrl+Enter submits, Escape closes modals
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-        if (!submitting && repoUrl.trim() && task.trim()) {
-          e.preventDefault();
-          submitTask();
-        }
-      } else if (e.key === "Escape") {
+      if (e.key === "Escape") {
         setShowClearModal(false);
         setShowShortcutsModal(false);
         setShowOnboardingModal(false);
-      } else if (e.key === "?" && !["INPUT", "TEXTAREA"].includes((e.target as HTMLElement)?.tagName)) {
+        setMobileSessionsOpen(false);
+        setCommandMenuOpen(false);
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+        if (!isSubmitting && repoUrl.trim() && task.trim()) {
+          e.preventDefault();
+          submitTask();
+        }
+        return;
+      }
+      if (isEditableTarget(e.target)) return;
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setCommandMenuOpen((prev) => !prev);
+      } else if ((e.metaKey || e.ctrlKey) && (e.key === "b" || e.key === "B")) {
+        e.preventDefault();
+        toggleSessionsCollapsed();
+      } else if (
+        e.key.toLowerCase() === "d" &&
+        !e.metaKey && !e.ctrlKey && !e.altKey
+      ) {
+        toggleTheme();
+      } else if (e.key === "[") {
+        e.preventDefault();
+        toggleSessionsCollapsed();
+      } else if (e.key === "]") {
+        e.preventDefault();
+        setWorkspaceCollapsed((prev) => !prev);
+      } else if ((e.metaKey || e.ctrlKey) && (e.key === "\\" || e.key === "|")) {
+        e.preventDefault();
+        setWorkspaceCollapsed((prev) => !prev);
+      } else if (e.key === "?") {
         setShowShortcutsModal((prev) => !prev);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [submitting, repoUrl, task, submitTask]);
+  }, [isSubmitting, repoUrl, task, submitTask, toggleSessionsCollapsed, toggleTheme]);
 
   const allRuns: VMRun[] = useMemo(() => {
     const map = new Map<string, VMRun>();
@@ -500,7 +584,46 @@ export function App(): React.JSX.Element {
       ? "Connected"
       : "Connecting";
 
-  const busy = submitting || clearing || chat.isStreaming || chat.status === "streaming" || chat.status === "submitted";
+  const busy = isSubmitting || clearing || chat.isStreaming || chat.status === "streaming" || chat.status === "submitted";
+
+  const commands: CommandItem[] = [
+    ...APP_NAV_ITEMS.map((item) => ({
+      id: `nav-${item.id}`,
+      label: `Go to ${item.label}`,
+      hint: item.description,
+      run: () => setMainView(item.id),
+    })),
+    { id: "new-task", label: "New task", run: handleNewTask },
+    {
+      id: "toggle-sessions",
+      label: "Toggle sessions sidebar",
+      hint: "⌘B",
+      run: toggleSessionsCollapsed,
+    },
+    {
+      id: "toggle-workspace",
+      label: "Toggle workspace panel",
+      hint: "⌘\\",
+      run: () => setWorkspaceCollapsed((prev) => !prev),
+    },
+    {
+      id: "toggle-theme",
+      label: theme === "dark" ? "Switch to light theme" : "Switch to dark theme",
+      hint: "D",
+      run: toggleTheme,
+    },
+    {
+      id: "setup-guide",
+      label: "Open setup guide",
+      run: () => setShowOnboardingModal(true),
+    },
+    {
+      id: "shortcuts",
+      label: "Keyboard shortcuts",
+      hint: "?",
+      run: () => setShowShortcutsModal(true),
+    },
+  ];
 
   return (
     <div className="min-h-dvh bg-black text-[#e6edf3] font-sans selection:bg-[#63c8c1] selection:text-black flex">
@@ -508,6 +631,8 @@ export function App(): React.JSX.Element {
       <AppNavRail
         activeView={mainView}
         onNavigate={setMainView}
+        theme={theme}
+        onToggleTheme={toggleTheme}
         activeSandboxCount={activeSandboxCount}
         setupDone={setupDone}
         setupTotal={SETUP_TOTAL_STEPS}
@@ -515,51 +640,16 @@ export function App(): React.JSX.Element {
         onOpenShortcuts={() => setShowShortcutsModal(true)}
       />
 
-      <div className="flex-1 flex flex-col min-w-0 min-h-0">
-      {/* SLIM CONTEXT HEADER */}
-      <header className="h-14 border-b border-white/[0.08] bg-[#07090e]/95 backdrop-blur-md px-4 lg:px-6 flex items-center justify-between gap-3 z-20 shrink-0">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <span className="text-sm font-semibold text-white font-display tracking-tight">
-            {APP_NAV_ITEMS.find((item) => item.id === mainView)?.label ?? "Tasks"}
-          </span>
-          <span className="text-[10px] font-mono text-teal-400 bg-teal-950/60 border border-teal-800/60 px-1.5 py-0.5 rounded">
-            Cloudflare Native
-          </span>
-        </div>
-
-        <div className="flex items-center gap-3 sm:gap-4">
-          {/* Active Sandboxes Pill */}
-          <div className="hidden sm:inline-flex items-center gap-1.5 border border-white/[0.08] bg-[#0d1117] rounded-full px-2.5 py-1 text-xs font-mono text-[#8b98a9] shadow-sm whitespace-nowrap">
-            <span className={`w-1.5 h-1.5 rounded-full ${activeSandboxCount > 0 ? "bg-[#4f9cf0] animate-pulse" : "bg-zinc-600"}`} />
-            <span>{activeSandboxCount} / 5 sandboxes active</span>
-          </div>
-
-          {/* Connection Status */}
-          <div
-            className="inline-flex items-center gap-2 border border-white/[0.08] bg-[#0d1117] rounded-full px-3 py-1 text-xs font-medium text-[#8b98a9] shadow-sm max-w-[240px]"
-            role="status"
-            aria-live="polite"
-            title={connectionState}
-          >
-            <span
-              className={`w-2 h-2 rounded-full ${
-                agent.connectionError
-                  ? "bg-[#f06666]"
-                  : agent.identified
-                  ? "bg-[#4cc38a] shadow-[0_0_8px_rgba(76,195,138,0.5)]"
-                  : "bg-[#c9a227] animate-pulse"
-              }`}
-              aria-hidden="true"
-            />
-            <span className="truncate">{connectionState}</span>
-          </div>
-        </div>
-      </header>
-
+      <div className="flex-1 flex min-w-0 min-h-0">
       {mainView === "tasks" ? (
       <div className="flex-1 flex overflow-hidden">
-        {/* LEFT: Devin-style sessions rail */}
-        <div className="hidden lg:block self-stretch">
+        {/* LEFT: Devin-style sessions rail with collapse / expand */}
+        <div
+          className={`hidden lg:block self-stretch transition-all duration-200 ease-out overflow-hidden shrink-0 ${
+            sessionsCollapsed ? "w-0 opacity-0 pointer-events-none" : "w-[280px] opacity-100"
+          }`}
+          aria-hidden={sessionsCollapsed}
+        >
           <SessionsSidebar
             sessions={sessions}
             selectedId={selectedSessionId}
@@ -576,13 +666,16 @@ export function App(): React.JSX.Element {
             setupDone={setupDone}
             setupTotal={SETUP_TOTAL_STEPS}
             onOpenSetup={() => setShowOnboardingModal(true)}
+            onToggleCollapse={toggleSessionsCollapsed}
           />
         </div>
 
         {/* Mobile sessions drawer (below lg) */}
         {mobileSessionsOpen ? (
           <div className="fixed inset-0 z-40 lg:hidden">
-            <div
+            <button
+              type="button"
+              aria-label="Close sessions"
               className="absolute inset-0 bg-black/60 backdrop-blur-sm"
               onClick={() => setMobileSessionsOpen(false)}
             />
@@ -606,16 +699,43 @@ export function App(): React.JSX.Element {
                   setMobileSessionsOpen(false);
                   setShowOnboardingModal(true);
                 }}
+                isMobileDrawer={true}
+                onToggleCollapse={() => setMobileSessionsOpen(false)}
               />
             </div>
           </div>
         ) : null}
 
         {/* CENTER: conversation timeline + composer */}
-        <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-black">
+        <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-black" aria-busy={busy}>
           {/* SESSION HEADER */}
           <div className="border-b border-white/[0.08] bg-[#07090e]/60 px-5 xl:px-6 py-2.5 flex items-center justify-between gap-3 shrink-0">
-            <div className="flex items-center gap-3 min-w-0">
+            <div className="flex items-center gap-2.5 min-w-0">
+              {/* Desktop sidebar toggle button */}
+              <Tooltip
+                content={sessionsCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                shortcut="⌘B"
+                side="bottom"
+              >
+                <button
+                  type="button"
+                  onClick={toggleSessionsCollapsed}
+                  aria-label={sessionsCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                  aria-expanded={!sessionsCollapsed}
+                  className="hidden lg:flex w-7 h-7 rounded-lg border border-white/[0.08] bg-[#0d1117] text-[#8b98a9] hover:text-[#e6edf3] hover:bg-[#161a22] items-center justify-center transition-colors shrink-0"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    {sessionsCollapsed ? (
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                    ) : (
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                    )}
+                  </svg>
+                </button>
+              </Tooltip>
+
+              {/* Mobile open sessions button */}
+              <Tooltip content="Open sessions drawer" side="bottom">
               <button
                 type="button"
                 onClick={() => setMobileSessionsOpen(true)}
@@ -626,36 +746,66 @@ export function App(): React.JSX.Element {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
               </button>
+              </Tooltip>
+
+              <Tooltip content="Shiba Coding Agent" side="bottom">
               <img
                 src="/assets/mascot/pet-logo.png"
                 alt="Shiba"
-                className="w-6 h-6 rounded-full bg-white object-contain border border-teal-500/40 shrink-0"
+                className="w-6 h-6 rounded-full bg-white object-contain border border-teal-500/40 shrink-0 cursor-default"
               />
+              </Tooltip>
               <h1 className="text-sm font-semibold text-white font-display tracking-tight truncate">
                 {liveSession ? liveSession.title : "New coding task"}
               </h1>
+              <Tooltip content="Active real-time agent orchestration stream" side="bottom">
               <span className="text-[10px] font-bold uppercase tracking-wider border rounded-full px-2 py-0.5 shrink-0 text-teal-300 border-teal-800/50 bg-teal-950/50">
                 Live
               </span>
+              </Tooltip>
             </div>
             <div className="hidden md:flex items-center gap-4 text-xs font-mono text-[#8b98a9] shrink-0">
-              <span>
+              <Tooltip content="Tool runs actively isPending" side="bottom">
+              <span className="cursor-default">
                 <span className="text-neutral-500">Active</span>{" "}
                 <span className="text-teal-400 font-bold">{toolRuns.length}</span>
               </span>
-              <span>
+              </Tooltip>
+              <Tooltip content="Actions waiting for human approval" side="bottom">
+              <span className="cursor-default">
                 <span className="text-neutral-500">Approvals</span>{" "}
                 <span className={pendingApprovals.length > 0 ? "font-bold text-[#f59e0b]" : "font-bold text-neutral-400"}>
                   {pendingApprovals.length}
                 </span>
               </span>
-              <span>
+              </Tooltip>
+              <Tooltip content="Total completed and retained runs" side="bottom">
+              <span className="cursor-default">
                 <span className="text-neutral-500">Runs</span>{" "}
                 <span className="text-white font-bold">{allRuns.length}</span>
               </span>
+              </Tooltip>
+              <Tooltip content="Container has zero secrets; provider keys stay at AI Gateway egress" side="bottom">
               <span className="text-[10px] uppercase tracking-wider font-mono text-teal-400/80 bg-teal-950/60 border border-teal-800/40 px-2 py-0.5 rounded">
                 Zero-Trust Boundary
               </span>
+              </Tooltip>
+
+              {/* Quick toggle for workspace panel when collapsed */}
+              {workspaceCollapsed ? (
+                <Tooltip content="Expand workspace panel" shortcut="⌘\\" side="bottom">
+                  <button
+                    type="button"
+                    onClick={() => setWorkspaceCollapsed(false)}
+                    aria-label="Expand workspace panel"
+                    className="w-7 h-7 rounded-lg border border-white/[0.08] bg-[#0d1117] text-[#8b98a9] hover:text-[#e6edf3] hover:bg-[#161a22] flex items-center justify-center transition-colors shrink-0"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                    </svg>
+                  </button>
+                </Tooltip>
+              ) : null}
             </div>
           </div>
 
@@ -684,7 +834,7 @@ export function App(): React.JSX.Element {
           {notice || chat.error || runsError ? (
             <div className="px-5 xl:px-6 pt-3 flex flex-col gap-2 shrink-0">
               {notice ? (
-                <div className="text-xs text-[#8b98a9] bg-black p-3 rounded-lg border border-neutral-800 flex items-start gap-2">
+                <div role="status" aria-live="polite" className="text-xs text-[#8b98a9] bg-black p-3 rounded-lg border border-neutral-800 flex items-start gap-2">
                   <svg className="w-4 h-4 text-[#4f9cf0] shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
@@ -692,7 +842,7 @@ export function App(): React.JSX.Element {
                 </div>
               ) : null}
               {chat.error ? (
-                <div className="text-xs text-[#f06666] bg-[#f06666]/10 p-3 rounded-lg border border-[#f06666]/30 flex items-start gap-2">
+                <div role="alert" className="text-xs text-[#f06666] bg-[#f06666]/10 p-3 rounded-lg border border-[#f06666]/30 flex items-start gap-2">
                   <svg className="w-4 h-4 text-[#f06666] shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                   </svg>
@@ -735,7 +885,7 @@ export function App(): React.JSX.Element {
               publishPullRequest={publishPullRequest}
               harness={harness}
               busy={busy}
-              submitting={submitting}
+              isSubmitting={isSubmitting}
               clearing={clearing}
               onRepoUrlChange={setRepoUrl}
               onTaskChange={setTask}
@@ -803,6 +953,8 @@ export function App(): React.JSX.Element {
         />
       ) : mainView === "automations" ? (
         <AutomationsView />
+      ) : mainView === "agents" ? (
+        <AgentsView />
       ) : mainView === "missions" ? (
         <MissionsView />
       ) : mainView === "gates" ? (
@@ -872,6 +1024,18 @@ export function App(): React.JSX.Element {
                 </span>
               </div>
               <div className="flex items-center justify-between py-1.5 border-b border-neutral-800">
+                <span className="text-[#8b98a9]">Toggle Sessions Sidebar</span>
+                <span className="font-mono bg-black border border-neutral-800 px-2 py-0.5 rounded text-[#e6edf3]">
+                  ⌘ / Ctrl + B  or  [
+                </span>
+              </div>
+              <div className="flex items-center justify-between py-1.5 border-b border-neutral-800">
+                <span className="text-[#8b98a9]">Toggle Workspace Panel</span>
+                <span className="font-mono bg-black border border-neutral-800 px-2 py-0.5 rounded text-[#e6edf3]">
+                  ⌘ / Ctrl + \  or  ]
+                </span>
+              </div>
+              <div className="flex items-center justify-between py-1.5 border-b border-neutral-800">
                 <span className="text-[#8b98a9]">Close Modals</span>
                 <span className="font-mono bg-black border border-neutral-800 px-2 py-0.5 rounded text-[#e6edf3]">
                   Escape
@@ -881,6 +1045,18 @@ export function App(): React.JSX.Element {
                 <span className="text-[#8b98a9]">Open Shortcuts Guide</span>
                 <span className="font-mono bg-black border border-neutral-800 px-2 py-0.5 rounded text-[#e6edf3]">
                   ?
+                </span>
+              </div>
+              <div className="flex items-center justify-between py-1.5 border-b border-neutral-800">
+                <span className="text-[#8b98a9]">Command Menu</span>
+                <span className="font-mono bg-black border border-neutral-800 px-2 py-0.5 rounded text-[#e6edf3]">
+                  ⌘ / Ctrl + K
+                </span>
+              </div>
+              <div className="flex items-center justify-between py-1.5 border-b border-neutral-800">
+                <span className="text-[#8b98a9]">Toggle Light / Dark Theme</span>
+                <span className="font-mono bg-black border border-neutral-800 px-2 py-0.5 rounded text-[#e6edf3]">
+                  D
                 </span>
               </div>
             </div>
@@ -896,6 +1072,11 @@ export function App(): React.JSX.Element {
           </div>
         </div>
       ) : null}
+      <CommandMenu
+        open={commandMenuOpen}
+        onClose={() => setCommandMenuOpen(false)}
+        commands={commands}
+      />
       </div>
     </div>
   );

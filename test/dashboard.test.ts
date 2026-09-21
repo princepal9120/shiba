@@ -38,13 +38,14 @@ vi.mock("ai", () => ({
     typeof part.type === "string" && part.type.startsWith("tool-"),
 }));
 
-import { App } from "../dashboard/src/app";
-import { VMInspector } from "../dashboard/src/components/VMInspector";
-import { RunRegistryView } from "../dashboard/src/components/RunRegistryView";
-import { AutomationsView } from "../dashboard/src/components/AutomationsView";
-import { ArchitectureView } from "../dashboard/src/components/ArchitectureView";
-import { OnboardingModal, ONBOARDING_STEPS } from "../dashboard/src/components/OnboardingModal";
+import { App } from "../src/dashboard/app";
+import { VMInspector } from "../src/dashboard/components/VMInspector";
+import { RunRegistryView } from "../src/dashboard/components/RunRegistryView";
+import { AutomationsView } from "../src/dashboard/components/AutomationsView";
+import { ArchitectureView } from "../src/dashboard/components/ArchitectureView";
+import { OnboardingModal, ONBOARDING_STEPS } from "../src/dashboard/components/OnboardingModal";
 import { TaskForm } from "../web/src/components/TaskForm";
+import { Tooltip } from "../src/dashboard/components/Tooltip";
 
 afterEach(() => {
   mocks.chat.messages = [];
@@ -174,7 +175,7 @@ describe("dashboard rendering", () => {
   });
 
   it("renders the Missions surface with standing-goal framing", async () => {
-    const { MissionsView } = await import("../dashboard/src/components/MissionsView");
+    const { MissionsView } = await import("../src/dashboard/components/MissionsView");
     const markup = renderToStaticMarkup(React.createElement(MissionsView));
     expect(markup).toContain("Standing goal");
     expect(markup).toContain("Deploy mission");
@@ -182,7 +183,7 @@ describe("dashboard rendering", () => {
   });
 
   it("renders the Gates surface with review, QA, and security entry points", async () => {
-    const { GatesView } = await import("../dashboard/src/components/GatesView");
+    const { GatesView } = await import("../src/dashboard/components/GatesView");
     const markup = renderToStaticMarkup(React.createElement(GatesView));
     expect(markup).toContain("Code Review");
     expect(markup).toContain("QA");
@@ -274,5 +275,26 @@ describe("dashboard rendering", () => {
     expect(markup).toContain("Completed (1)");
     expect(markup).toContain('role="progressbar"');
     expect(markup).toContain('role="checkbox"');
+  });
+  it("renders sidebar toggle button and keyboard shortcuts for sidebar", () => {
+    const markup = renderApp();
+    expect(markup).toContain('aria-label="Collapse sidebar"');
+    expect(markup).toContain('aria-expanded="true"');
+    expect(markup).toContain('aria-label="Open sessions"');
+  });
+
+  it("renders Tooltip component wrapping trigger elements", () => {
+    const tooltipMarkup = renderToStaticMarkup(
+      React.createElement(
+        Tooltip,
+        {
+          content: "Test Tooltip Content",
+          shortcut: "⌘T",
+          children: React.createElement("button", { type: "button" }, "Hover Me"),
+        }
+      )
+    );
+    expect(tooltipMarkup).toContain("<button");
+    expect(tooltipMarkup).toContain("Hover Me");
   });
 });

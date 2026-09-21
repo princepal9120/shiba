@@ -58,7 +58,10 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
   
   // Terminal / Exec State
   const [customCommand, setCustomCommand] = useState<string>("");
-  const [executing, setExecuting] = useState<boolean>(false);
+  const [formState, setFormState] = useState<{ errors: { command?: string } }>({
+    errors: {},
+  });
+  const [isPending, setIsPending] = useState<boolean>(false);
   const [terminalHistory, setTerminalHistory] = useState<Array<{ command: string; stdout: string; stderr: string; exitCode: number; time: string }>>([]);
 
   // Sandbox Live Info
@@ -149,7 +152,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
   // Execute terminal command inside VM
   const executeCommand = useCallback(async (cmd: string) => {
     if (!cmd.trim() || !sandboxId) return;
-    setExecuting(true);
+    setIsPending(true);
     try {
       const res = await fetch(`/api/sandboxes/${encodeURIComponent(sandboxId)}/exec`, {
         method: "POST",
@@ -194,7 +197,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
         },
       ]);
     } finally {
-      setExecuting(false);
+      setIsPending(false);
     }
   }, [sandboxId, currentPath]);
 
@@ -252,6 +255,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
           {/* Run Switcher Dropdown */}
           <div className="relative">
             <select
+              aria-label="Select run"
               value={activeRunId}
               onChange={(e) => {
                 const nextId = e.target.value;
@@ -648,7 +652,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
                     </div>
                   ))
                 )}
-                {executing ? (
+                {isPending ? (
                   <div className="text-teal-400 flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-teal-400 animate-ping" />
                     Executing command in container...
@@ -660,6 +664,11 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
+                  if (!customCommand.trim()) {
+                    setFormState({ errors: { command: "Enter a command to run." } });
+                    return;
+                  }
+                  setFormState({ errors: {} });
                   void executeCommand(customCommand);
                   setCustomCommand("");
                 }}
@@ -668,19 +677,26 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
                 <span className="text-teal-400 font-mono text-xs font-bold">$</span>
                 <input
                   type="text"
+                  required={true}
+                  aria-label="Sandbox command"
                   value={customCommand}
                   onChange={(e) => setCustomCommand(e.target.value)}
                   placeholder="Enter command (e.g. npm test, ls -lh, git diff)..."
                   className="flex-1 bg-transparent border-none text-xs font-mono text-white focus:outline-none placeholder:text-[#8b98a9]/50"
-                  disabled={executing}
+                  disabled={isPending}
                 />
                 <button
                   type="submit"
-                  disabled={executing || !customCommand.trim()}
+                  disabled={isPending || !customCommand.trim()}
                   className="bg-teal-500 hover:bg-teal-400 disabled:opacity-40 text-black font-semibold text-xs px-3 py-1 rounded transition-colors"
                 >
                   Run
                 </button>
+                {formState.errors.command ? (
+                  <p role="alert" className="text-[#f06666] text-[11px] font-mono">
+                    {formState.errors.command}
+                  </p>
+                ) : null}
               </form>
             </div>
           </div>
@@ -740,6 +756,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
               <div className="flex items-center gap-3 pt-2">
                 <input
                   type="text"
+                  aria-label="Custom preview URL or token"
                   value={previewUrlInput}
                   onChange={(e) => setPreviewUrlInput(e.target.value)}
                   placeholder="Optional custom preview URL or token..."

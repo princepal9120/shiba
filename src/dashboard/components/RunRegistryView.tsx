@@ -176,6 +176,7 @@ export function RunRegistryView({
           <div className="relative flex-1 max-w-xs">
             <input
               type="text"
+              aria-label="Search runs"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search repository or task..."
@@ -207,9 +208,12 @@ export function RunRegistryView({
                   key={run.runId}
                   className="border border-[#1e2530] rounded-xl bg-[#0a0c10] overflow-hidden transition-all hover:border-[#2c3545]"
                 >
-                  <div
+                  <button
+                    type="button"
+                    aria-expanded={isExpanded}
+                    aria-label={`Toggle details for run ${run.runId}`}
                     onClick={() => setExpandedRunId(isExpanded ? null : run.runId)}
-                    className="p-4 flex items-center justify-between cursor-pointer hover:bg-[#1e2530]/30 select-none gap-3"
+                    className="w-full text-left p-4 flex items-center justify-between cursor-pointer hover:bg-[#1e2530]/30 select-none gap-3"
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <svg
@@ -240,7 +244,7 @@ export function RunRegistryView({
                         {statusLabel(run.status)}
                       </span>
                     </div>
-                  </div>
+                  </button>
 
                   {/* Expanded Run Detail Body */}
                   {isExpanded ? (

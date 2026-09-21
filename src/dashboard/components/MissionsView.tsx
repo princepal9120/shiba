@@ -122,6 +122,7 @@ export function MissionsView(): JSX.Element {
         <div className="border border-[#1e2530] rounded-xl bg-[#0a0c10] shadow-sm p-5 flex flex-col gap-3">
           <h3 className="text-sm font-semibold text-[#e6edf3]">New Mission</h3>
           <textarea
+            aria-label="Mission goal"
             value={goal}
             onChange={(e) => setGoal(e.target.value)}
             placeholder="e.g. Keep dependency vulnerabilities at zero and the test suite green on main"
@@ -131,12 +132,14 @@ export function MissionsView(): JSX.Element {
           <div className="flex flex-wrap items-center gap-3">
             <input
               type="text"
+              aria-label="Repository URL"
               value={repoUrl}
               onChange={(e) => setRepoUrl(e.target.value)}
               placeholder="https://github.com/owner/repo"
               className="flex-1 min-w-56 bg-black text-xs font-mono text-[#e6edf3] border border-[#1e2530] rounded-lg px-3 py-1.5 transition-colors focus:outline-none focus:border-[#0B9F95] focus:ring-1 focus:ring-[#0B9F95]/30 placeholder:text-[#8b98a9]/50"
             />
             <select
+              aria-label="Run cadence"
               value={cron}
               onChange={(e) => setCron(e.target.value)}
               className="bg-black text-xs text-[#e6edf3] border border-[#1e2530] rounded-lg px-2.5 py-1.5 transition-colors focus:outline-none focus:border-[#0B9F95] focus:ring-1 focus:ring-[#0B9F95]/30"

@@ -12,6 +12,7 @@ import { Automations } from "./automations-do.js";
 import { parseAutomationWebhookPath } from "./automations.js";
 import { assertLiveCodingModel } from "./coding-model.js";
 import type { Env } from "./env.js";
+import { agentCliCatalog } from "./harness/catalog.js";
 import { Sandbox } from "./sandbox.js";
 import { redactSecrets, verifyGitHubWebhookSignature } from "./security.js";
 import { handleSlackInteract } from "./slack-approval.js";
@@ -180,6 +181,15 @@ export default {
         return Response.json(await readSetupStatus(env), {
           headers: { "Cache-Control": "no-store" },
         });
+      }
+      if (url.pathname === "/api/agents") {
+        if (request.method !== "GET") {
+          return Response.json({ error: "Method not allowed." }, { status: 405 });
+        }
+        return Response.json(
+          { agents: agentCliCatalog(env) },
+          { headers: { "Cache-Control": "no-store" } },
+        );
       }
       if (url.pathname === "/api/approvals" || url.pathname.startsWith("/internal/")) {
         return Response.json({ error: "Not found." }, { status: 404 });
