@@ -23,12 +23,16 @@
  * `Redacted.make` is used instead of Config helpers — it exists on both
  * effect 3 (this repo) and effect 4 (alchemy's declared peer).
  *
- * Worker name: pinned to "ai-intern" so the first deploy adopts the
- * wrangler-managed script in place (a pinned `name` is used verbatim — no
- * stage suffix). On any non-live stage ($ALCHEMY_STAGE) the name is
- * suffixed instead, so `alchemy deploy --stage test-*` / `destroy` can
- * never clobber the live worker — the same isolation the wrangler
- * ephemeral deploys got from a name override.
+ * Worker + container names: pinned to the wrangler names on live stages so
+ * the first deploy adopts the wrangler-managed resources in place; on any
+ * non-live stage BOTH are suffixed, so `deploy --stage test-*` / `destroy`
+ * can never collide with or clobber the live worker or container app — the
+ * same isolation the wrangler ephemeral deploys got from a name override.
+ * Names are static (not `Effect`s): an unresolved name makes the engine
+ * skip the pre-deploy adopt-read, which would break live adoption. The
+ * stage is therefore read from $ALCHEMY_STAGE at module level — do NOT
+ * pass `--stage`; the stack effect asserts env/flag agreement and dies
+ * with a clear error if they diverge.
  *
  * State backend: `Alchemy.localState()` (filesystem) by default — it works
  * with a plain CLOUDFLARE_API_TOKEN and no bootstrap step. Set
@@ -47,16 +51,27 @@ const secrets = (names: readonly string[]) => {
   const entries: Record<string, ReturnType<typeof Redacted.make>> = {};
   for (const name of names) {
     const value = process.env[name];
-    if (value !== undefined) entries[name] = Redacted.make(value);
+    if (value) entries[name] = Redacted.make(value);
   }
   return entries;
 };
 
+// Deploy-time config that is NOT a secret (feature flags, model picks) —
+// bound as plain vars like wrangler's vars[] block, only when exported.
+const configVars = (names: readonly string[]) => {
+  const entries: Record<string, string> = {};
+  for (const name of names) {
+    const value = process.env[name];
+    if (value) entries[name] = value;
+  }
+  return entries;
+};
+
+const LIVE_STAGE = /^live(_|$)/;
 const stage = process.env.ALCHEMY_STAGE;
-const workerName =
-  stage === undefined || /^live(_|$)/.test(stage)
-    ? "ai-intern"
-    : `ai-intern-${stage}`;
+const isLiveStage = stage === undefined || LIVE_STAGE.test(stage);
+const workerName = isLiveStage ? "ai-intern" : `ai-intern-${stage}`;
+const containerName = isLiveStage ? "ai-intern-sandbox" : `ai-intern-sandbox-${stage}`;
 
 export const Worker = Cloudflare.Worker("Worker", {
   name: workerName,
@@ -98,7 +113,7 @@ export const Worker = Cloudflare.Worker("Worker", {
     // wrangler durable_objects.bindings Sandbox + containers[0]: the
     // Container decl is the DO namespace binding plus its container app.
     Sandbox: Cloudflare.Container<Sandbox>("Sandbox", {
-      name: "ai-intern-sandbox",
+      name: containerName,
       context: ".",
       dockerfile: "./Dockerfile",
       instanceType: "standard-1",
@@ -115,6 +130,8 @@ export const Worker = Cloudflare.Worker("Worker", {
       "TYPESAFE_API_KEY",
       "AI_GATEWAY_TOKEN",
       "DEVIN_API_KEY",
+    ]),
+    ...configVars([
       "REQUIRE_ACCESS",
       "AUTOMATIONS_ENABLED",
       "AGENT_HARNESS",
@@ -141,7 +158,24 @@ export default Alchemy.Stack(
   // worker/bindings, not a foreign one). Test stages never adopt — their
   // stage-suffixed names create fresh resources instead.
   Effect.gen(function* () {
+    // The resource names above are derived from $ALCHEMY_STAGE at module
+    // load; a `--stage` flag that disagrees with it would deploy
+    // unsuffixed names from a non-live stage (or vice versa). Fail loudly
+    // instead of colliding with live.
+    const resolvedStage = yield* Alchemy.Stage;
+    const envStage = process.env.ALCHEMY_STAGE;
+    if (
+      resolvedStage !== envStage &&
+      !(envStage === undefined && LIVE_STAGE.test(resolvedStage))
+    ) {
+      yield* Effect.die(
+        new Error(
+          `alchemy stage mismatch: engine resolved stage '${resolvedStage}' but $ALCHEMY_STAGE is '${envStage ?? "(unset)"}'. ` +
+            `Select the stage via $ALCHEMY_STAGE only — resource names are derived from it, so a diverging --stage would bypass the suffix.`,
+        ),
+      );
+    }
     const worker = yield* Worker;
     return { url: worker.url };
-  }).pipe(Alchemy.AdoptPolicy.adopt(stage === undefined || /^live(_|$)/.test(stage))),
+  }).pipe(Alchemy.AdoptPolicy.adopt(isLiveStage)),
 );

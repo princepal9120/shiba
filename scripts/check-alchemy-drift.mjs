@@ -354,6 +354,12 @@ const propNumber = (value, prop) => {
   const m = value.match(new RegExp(`${prop}\\s*:\\s*(\\d+)`));
   return m ? Number(m[1]) : undefined;
 };
+// `prop: identifier` (a const reference) — returns the identifier name.
+const propIdent = (value, prop) => {
+  const m = value.match(new RegExp(`${prop}\\s*:\\s*([A-Za-z_$][A-Za-z0-9_$]*)`));
+  return m ? m[1] : undefined;
+};
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 let cfg;
 try {
@@ -401,9 +407,7 @@ const nameOk =
   literal(nameVal) === cfg.name ||
   // stage-conditional workerName const — verify it still pins the base name
   (nameVal === "workerName" &&
-    new RegExp(`const\\s+workerName[\\s\\S]*?"${cfg.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`).test(
-      alchemyText,
-    ));
+    new RegExp(`const\\s+workerName[\\s\\S]*?"${escapeRe(cfg.name)}"`).test(alchemyText));
 if (!nameOk) {
   drift.push(`worker name: wrangler "${cfg.name}" vs alchemy.run.ts ${JSON.stringify(nameVal)}`);
 }
@@ -509,8 +513,14 @@ for (const c of cfg.containers ?? []) {
     drift.push(`drift: container class "${c.class_name}" has no Cloudflare.Container env entry`);
     continue;
   }
-  if (propString(entry, "name") !== c.name) {
-    drift.push(`container "${c.name}": alchemy name "${propString(entry, "name")}" != wrangler name "${c.name}"`);
+  const cName = propString(entry, "name");
+  const cNameOk =
+    cName === c.name ||
+    // stage-conditional containerName const — verify it still pins the base name
+    (propIdent(entry, "name") === "containerName" &&
+      new RegExp(`const\\s+containerName[\\s\\S]*?"${escapeRe(c.name)}"`).test(alchemyText));
+  if (!cNameOk) {
+    drift.push(`container "${c.name}": alchemy name "${cName ?? propIdent(entry, "name")}" != wrangler name "${c.name}"`);
   }
   if (propString(entry, "dockerfile") !== c.image) {
     drift.push(`container "${c.name}": alchemy dockerfile "${propString(entry, "dockerfile")}" != wrangler image "${c.image}"`);

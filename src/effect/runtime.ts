@@ -48,9 +48,10 @@ export const toRunFailure = (cause: Cause.Cause<unknown>): RunFailure => {
     const { code, message } = classifyRunError(defect.success);
     return new RunFailure(code, message);
   }
-  const failure = Cause.findError(cause);
-  if (Result.isSuccess(failure) && failure.success instanceof RunError) {
-    return new RunFailure(failure.success.code, failure.success.message);
+  for (const reason of cause.reasons) {
+    if (Cause.isFailReason(reason) && reason.error instanceof RunError) {
+      return new RunFailure(reason.error.code, reason.error.message);
+    }
   }
   const { code, message } = classifyRunError(Cause.squash(cause));
   return new RunFailure(code, message);

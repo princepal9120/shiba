@@ -179,6 +179,8 @@ export async function withRetry<T>(
     const exit = await Effect.runPromiseExit(Fiber.join(fiber));
     if (Exit.isSuccess(exit)) return exit.value;
     if (Cause.hasInterruptsOnly(exit.cause)) throw cancelled();
+    // squash surfaces the first Fail over a Die in a mixed cause — the
+    // task's own typed error is the more informative throwable.
     throw Cause.squash(exit.cause);
   } finally {
     signal?.removeEventListener("abort", onAbort);
