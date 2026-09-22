@@ -24,6 +24,7 @@ import {
   MailboxStore,
   type AddEmailInput,
   type CreateDraftInput,
+  type EmailAttachmentInput,
   type EmailStatus,
   type MailboxRecord,
   type SqlExec,
@@ -78,6 +79,37 @@ function optString(value: unknown): string | undefined {
 
 function optNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function requiredNumber(value: unknown, field: string): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new InputError(`${field} must be a finite number.`);
+  }
+  return value;
+}
+
+/** Attachment manifest entries — shape-checked here, value-checked in the store. */
+function optAttachmentList(value: unknown): EmailAttachmentInput[] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!Array.isArray(value)) {
+    throw new InputError("attachments must be an array of objects.");
+  }
+  return value.map((entry) => {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+      throw new InputError("attachments entries must be objects.");
+    }
+    const attachment = entry as Record<string, unknown>;
+    return {
+      part_id: requiredString(attachment.part_id, "attachments[].part_id"),
+      filename: optString(attachment.filename),
+      mime_type: optString(attachment.mime_type),
+      size: requiredNumber(attachment.size, "attachments[].size"),
+      content_id: optString(attachment.content_id),
+      r2_key: requiredString(attachment.r2_key, "attachments[].r2_key"),
+    };
+  });
 }
 
 function optStringList(value: unknown): string[] | undefined {
@@ -246,6 +278,7 @@ export class Mailbox {
           references: optStringList(body.references),
           thread_id: optString(body.thread_id),
           id: optString(body.id),
+          attachments: optAttachmentList(body.attachments),
         };
         return json({ email: this.store.addEmail(input) }, { status: 201 });
       }
@@ -264,7 +297,11 @@ export class Mailbox {
     if (seg.length === 2) {
       if (request.method === "GET") {
         const email = this.store.getEmail(id);
-        return email ? json({ email }) : notFound("Email not found.");
+        // The manifest rides along so consumers never list the R2 bucket
+        // (or HEAD its objects) to learn a part's name/type/size/location.
+        return email
+          ? json({ email, attachments: this.store.getAttachments(id) })
+          : notFound("Email not found.");
       }
       if (request.method === "DELETE") {
         return this.store.deleteEmail(id)

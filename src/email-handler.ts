@@ -3,27 +3,36 @@
  * calls {@link handleInboundEmail} once per delivery.
  *
  * Pipeline: envelope recipient → registered-mailbox check via the Mailbox
- * directory stub → buffer the raw message → `postal-mime` parse → store the
- * email through the per-address Mailbox DO (threading headers are passed
- * through; the store resolves In-Reply-To/References/subject itself) →
- * attachment bodies to the `ATTACHMENTS` R2 bucket keyed `emailId/partId`.
+ * directory stub → `message.raw.tee()` (one branch streams into
+ * `postal-mime`, the other stays queued for the raw-source dump and is
+ * consumed only on parse failure, so the message is never held as a second
+ * whole buffer beside the parser's own copy) → store the email through the
+ * per-address Mailbox DO with a manifest row per MIME part → attachment
+ * bodies to the `ATTACHMENTS` R2 bucket keyed `emailId/partId`.
  *
  * Registered-only rule (megaplan constraint): a recipient with no registry
  * row is rejected with `message.setReject("Unknown address")` and counted —
  * no store call is made. A directory lookup that *fails* (rather than
  * answering "not registered") is also rejected: storing unchecked mail
  * would silently bypass the gate, while a bounce at least reports the drop
- * to the sender's MTA.
+ * to the sender's MTA. The same policy covers a failed store write: a
+ * registered recipient whose POST to the MailboxDO fails has its message
+ * permanently lost unless rejected, so `setReject` runs there too.
  *
  * Parse failure: never thrown, never rejected. The raw Subject header is
  * stored verbatim and the record is flagged with {@link PARSE_FAILED_FLAG}
  * in `body_text`; the untouched RFC822 source lands in R2 as
- * `emailId/raw-source` so nothing is lost to a parser bug or hostile MIME.
+ * `emailId/raw-source` (recorded in the attachment manifest) so nothing is
+ * lost to a parser bug or hostile MIME.
  */
 import PostalMime, { type Address, type Attachment } from "postal-mime";
 import type { Env } from "./env.js";
 import { mailboxDirectoryStub, mailboxStub } from "./mailbox-do.js";
-import type { AddEmailInput } from "./mailbox-store.js";
+import {
+  randomHex,
+  type AddEmailInput,
+  type EmailAttachmentInput,
+} from "./mailbox-store.js";
 import { redactSecrets } from "./security.js";
 
 const ROUTE_BASE = "https://internal/internal/mailbox";
@@ -42,6 +51,9 @@ const stats = {
   stored: 0,
   parseFailed: 0,
   unregisteredDrops: 0,
+  // Directory lookups that fail are gate failures, not correct rejections —
+  // folding them into `unregisteredDrops` would hide real drops' signal.
+  directoryErrors: 0,
 };
 
 /** Per-isolate counters for observability; durable accounting is via logs. */
@@ -55,6 +67,7 @@ export function resetInboundEmailStats(): void {
   stats.stored = 0;
   stats.parseFailed = 0;
   stats.unregisteredDrops = 0;
+  stats.directoryErrors = 0;
 }
 
 function logWarn(event: string, detail: Record<string, unknown>): void {
@@ -142,10 +155,21 @@ function messageDateMs(date: string | undefined): number | undefined {
   return Number.isFinite(ms) ? ms : undefined;
 }
 
+/** Decode a parsed part body to bytes once — the R2 write and manifest size share it. */
+function contentBytes(content: Attachment["content"]): Uint8Array {
+  if (typeof content === "string") {
+    return new TextEncoder().encode(content);
+  }
+  if (content instanceof ArrayBuffer) {
+    return new Uint8Array(content);
+  }
+  return new Uint8Array(content.buffer, content.byteOffset, content.byteLength);
+}
+
 async function putAttachment(
   env: Env,
   key: string,
-  content: Attachment["content"],
+  content: Uint8Array,
   meta: Record<string, string>,
 ): Promise<void> {
   const customMetadata = Object.fromEntries(
@@ -157,23 +181,52 @@ async function putAttachment(
   });
 }
 
-/** Every attachment body lands under `emailId/att-<i>`; failures are logged, never thrown. */
-async function storeAttachments(
-  env: Env,
-  emailId: string,
-  attachments: Attachment[],
-): Promise<void> {
-  const writes = attachments.map(async (attachment, i) => {
-    try {
-      await putAttachment(env, `${emailId}/att-${i}`, attachment.content, {
+/** One parsed attachment plus its minted part id and decoded body. */
+interface PreparedAttachment {
+  partId: string;
+  bytes: Uint8Array;
+  meta: { filename: string; mimeType: string; contentId: string };
+}
+
+function prepareAttachments(attachments: Attachment[]): PreparedAttachment[] {
+  return attachments.map((attachment, i) => {
+    const partId = `part-${i}`;
+    return {
+      partId,
+      bytes: contentBytes(attachment.content),
+      meta: {
         filename: attachment.filename ?? "",
         mimeType: attachment.mimeType ?? "",
         contentId: attachment.contentId ?? "",
-      });
+      },
+    };
+  });
+}
+
+function attachmentManifest(emailId: string, prepared: PreparedAttachment[]): EmailAttachmentInput[] {
+  return prepared.map(({ partId, bytes, meta }) => ({
+    part_id: partId,
+    filename: meta.filename || undefined,
+    mime_type: meta.mimeType || undefined,
+    size: bytes.byteLength,
+    content_id: meta.contentId || undefined,
+    r2_key: `${emailId}/${partId}`,
+  }));
+}
+
+/** Every attachment body lands under `emailId/partId`; failures are logged, never thrown. */
+async function storeAttachments(
+  env: Env,
+  emailId: string,
+  prepared: PreparedAttachment[],
+): Promise<void> {
+  const writes = prepared.map(async ({ partId, bytes, meta }) => {
+    try {
+      await putAttachment(env, `${emailId}/${partId}`, bytes, meta);
     } catch (error) {
       logWarn("inbound_email_attachment_write_failed", {
         emailId,
-        part: i,
+        part: partId,
         error: error instanceof Error ? error.message : String(error),
       });
     }
@@ -206,39 +259,46 @@ export async function handleInboundEmail(
     registered = "error";
   }
   if (registered !== true) {
-    stats.unregisteredDrops += 1;
+    if (registered === "error") {
+      stats.directoryErrors += 1;
+    } else {
+      stats.unregisteredDrops += 1;
+    }
     logWarn("inbound_email_dropped_unregistered", { to, reason: registered });
     message.setReject("Unknown address");
     return;
   }
 
-  // Buffer once: the parse consumes the bytes, and the same buffer is the
-  // raw-source dump on parse failure. A stream that errors mid-read lands
-  // in the same flag-and-store fallback as unparseable content.
-  let raw: ArrayBuffer | null = null;
+  // Tee the raw stream: one branch streams into the parser; the other stays
+  // queued for the raw-source dump and is read only when parsing fails —
+  // buffered up front, the message would sit in memory twice beside
+  // postal-mime's own copy.
+  const [parseRaw, dumpRaw] = message.raw.tee();
+  let parsed = null;
   try {
-    raw = await new Response(message.raw).arrayBuffer();
+    parsed = await PostalMime.parse(parseRaw);
   } catch (error) {
-    logWarn("inbound_email_raw_read_failed", {
+    // The parse failure path below still stores the mail — this log is the
+    // only trace of *why* the parser rejected it, so the error is kept.
+    logWarn("inbound_email_parse_failed", {
       to,
       error: error instanceof Error ? error.message : String(error),
     });
-  }
-
-  let parsed = null;
-  if (raw !== null) {
-    try {
-      parsed = await PostalMime.parse(raw);
-    } catch {
-      parsed = null;
-    }
+    parsed = null;
   }
 
   if (parsed !== null) {
+    await dumpRaw.cancel().catch(() => undefined);
+    // The email id is minted here (not by the store) so attachment R2 keys
+    // and manifest rows can be built before the record write — one DO call
+    // stores the row and its manifest together.
+    const id = `eml-${randomHex(8)}`;
+    const prepared = prepareAttachments(parsed.attachments);
     const from =
       firstValidAddress(firstMailboxAddress(parsed.from), envelopeAddress(message.from ?? "")) ??
       "unknown@unknown.invalid";
     const input: AddEmailInput = {
+      id,
       direction: "inbound",
       from_addr: from,
       to_addr: to,
@@ -249,26 +309,43 @@ export async function handleInboundEmail(
       in_reply_to: parsed.inReplyTo,
       references: splitMessageIds(parsed.references),
       created_at: messageDateMs(parsed.date),
+      attachments: attachmentManifest(id, prepared),
     };
     const emailId = await storeEmail(env, to, input);
-    if (emailId !== null) {
-      stats.stored += 1;
-      const writes = storeAttachments(env, emailId, parsed.attachments);
-      ctx?.waitUntil?.(writes);
-      await writes;
+    if (emailId === null) {
+      // A registered recipient whose store write fails would be acked and
+      // permanently lost; the bounce reports the drop to the sender's MTA.
+      message.setReject("Mailbox storage failed");
+      return;
     }
+    stats.stored += 1;
+    const writes = storeAttachments(env, emailId, prepared);
+    ctx?.waitUntil?.(writes);
+    await writes;
     return;
   }
 
   // Parse failure: keep the raw Subject verbatim, flag the record, and dump
-  // the untouched source to R2 — the mail is stored, never crashed on.
+  // the untouched source to R2 — the mail is stored, never crashed on. The
+  // dump branch of the tee is buffered only now, on the path that needs it.
   stats.parseFailed += 1;
+  let raw: ArrayBuffer | null = null;
+  try {
+    raw = await new Response(dumpRaw).arrayBuffer();
+  } catch (error) {
+    logWarn("inbound_email_raw_read_failed", {
+      to,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
   const rawSubject = message.headers?.get("subject")?.trim() || EMPTY_SUBJECT;
   const from = firstValidAddress(
     envelopeAddress(message.headers?.get("from") ?? ""),
     envelopeAddress(message.from ?? ""),
   ) ?? "unknown@unknown.invalid";
+  const id = `eml-${randomHex(8)}`;
   const emailId = await storeEmail(env, to, {
+    id,
     direction: "inbound",
     from_addr: from,
     to_addr: to,
@@ -277,11 +354,25 @@ export async function handleInboundEmail(
     message_id: message.headers?.get("message-id") ?? undefined,
     in_reply_to: message.headers?.get("in-reply-to") ?? undefined,
     references: splitMessageIds(message.headers?.get("references") ?? undefined),
+    attachments:
+      raw === null
+        ? undefined
+        : [
+            {
+              part_id: "raw-source",
+              filename: "raw-source.eml",
+              mime_type: "message/rfc822",
+              size: raw.byteLength,
+              r2_key: `${id}/raw-source`,
+            },
+          ],
   });
-  if (emailId !== null) {
-    stats.stored += 1;
+  if (emailId === null) {
+    message.setReject("Mailbox storage failed");
+    return;
   }
-  if (emailId !== null && raw !== null) {
+  stats.stored += 1;
+  if (raw !== null) {
     const write = env.ATTACHMENTS.put(`${emailId}/raw-source`, raw, {
       httpMetadata: { contentType: "message/rfc822" },
     }).catch((error: unknown) => {

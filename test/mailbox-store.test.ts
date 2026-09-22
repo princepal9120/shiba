@@ -210,6 +210,46 @@ describe("emails CRUD", () => {
     expect(store.getThread(pinned.thread_id)?.emails).toEqual([]);
   });
 
+  it("stores an attachment manifest per email and clears it on delete", () => {
+    const store = makeStore();
+    const email = inbound(store, {
+      attachments: [
+        {
+          part_id: "part-0",
+          filename: "data.csv",
+          mime_type: "text/csv",
+          size: 13,
+          r2_key: "x/part-0",
+        },
+      ],
+    });
+    expect(store.getAttachments(email.id)).toEqual([
+      {
+        part_id: "part-0",
+        filename: "data.csv",
+        mime_type: "text/csv",
+        size: 13,
+        content_id: null,
+        r2_key: "x/part-0",
+      },
+    ]);
+    expect(store.getAttachments("eml-none")).toEqual([]);
+    store.deleteEmail(email.id);
+    expect(store.getAttachments(email.id)).toEqual([]);
+  });
+
+  it("validates attachment manifest entries before writing the email", () => {
+    const store = makeStore();
+    expect(() =>
+      inbound(store, { attachments: [{ part_id: "", size: 1, r2_key: "k" }] }),
+    ).toThrow(InputError);
+    expect(() =>
+      inbound(store, { attachments: [{ part_id: "p", size: -1, r2_key: "k" }] }),
+    ).toThrow(InputError);
+    // The rejected writes must not have stranded emails or threads.
+    expect(store.listEmails()).toEqual([]);
+  });
+
   it("returns no rows for limit 0", () => {
     const store = makeStore();
     inbound(store);

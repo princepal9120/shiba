@@ -78,6 +78,20 @@ export const MAILBOX_STATEMENTS: readonly string[] = [
      email_id TEXT NOT NULL
    )`,
   `CREATE INDEX IF NOT EXISTS email_ids_email ON email_ids(email_id)`,
+  // Attachment manifest: bodies never live in this database — each row maps a
+  // MIME part to its `emailId/partId` object key in the ATTACHMENTS bucket (the
+  // megaplan's R2 layout) plus the filename/mime/size a consumer would
+  // otherwise have to list the bucket and HEAD objects to learn.
+  `CREATE TABLE IF NOT EXISTS email_attachments (
+     email_id TEXT NOT NULL REFERENCES emails(id),
+     part_id TEXT NOT NULL,
+     filename TEXT,
+     mime_type TEXT,
+     size INTEGER NOT NULL,
+     content_id TEXT,
+     r2_key TEXT NOT NULL,
+     PRIMARY KEY (email_id, part_id)
+   )`,
   `CREATE VIRTUAL TABLE IF NOT EXISTS emails_fts USING fts5(
      subject, from_addr, to_addr, body_text, body_html,
      content='emails', content_rowid='rowid'
@@ -184,6 +198,18 @@ export interface MailboxRecord {
   created_at: number;
 }
 
+/** One row of an email's attachment manifest — metadata only; bodies are in R2. */
+export interface StoredAttachment {
+  part_id: string;
+  filename: string | null;
+  mime_type: string | null;
+  /** Decoded body size in bytes. */
+  size: number;
+  content_id: string | null;
+  /** Object key inside the `ATTACHMENTS` bucket (`emailId/partId`). */
+  r2_key: string;
+}
+
 // ---------------------------------------------------------------------------
 // Input shapes
 // ---------------------------------------------------------------------------
@@ -213,6 +239,20 @@ export interface AddEmailInput {
   references?: string[];
   /** Skip thread resolution and pin to this thread id. */
   thread_id?: string;
+  /** MIME parts to record in the email's attachment manifest. */
+  attachments?: EmailAttachmentInput[];
+}
+
+/** Manifest entry for one MIME part of an inbound email. */
+export interface EmailAttachmentInput {
+  part_id: string;
+  filename?: string;
+  mime_type?: string;
+  /** Decoded body size in bytes. */
+  size: number;
+  content_id?: string;
+  /** `emailId/partId` key the body is written under in the attachments bucket. */
+  r2_key: string;
 }
 
 export interface ListEmailsFilter {
@@ -251,7 +291,7 @@ export interface UpdateDraftInput {
 const DEFAULT_LIST_LIMIT = 50;
 const MAX_LIST_LIMIT = 500;
 
-function randomHex(bytes: number): string {
+export function randomHex(bytes: number): string {
   const raw = crypto.getRandomValues(new Uint8Array(bytes));
   return Array.from(raw)
     .map((b) => b.toString(16).padStart(2, "0"))
@@ -373,6 +413,17 @@ function rowToMailbox(row: SqlRow): MailboxRecord {
     label: row.label === null ? null : String(row.label),
     agent: row.agent === null ? null : String(row.agent),
     created_at: Number(row.created_at),
+  };
+}
+
+function rowToAttachment(row: SqlRow): StoredAttachment {
+  return {
+    part_id: String(row.part_id),
+    filename: row.filename === null ? null : String(row.filename),
+    mime_type: row.mime_type === null ? null : String(row.mime_type),
+    size: Number(row.size),
+    content_id: row.content_id === null ? null : String(row.content_id),
+    r2_key: String(row.r2_key),
   };
 }
 
@@ -558,6 +609,20 @@ export class MailboxStore {
     if (input.id !== undefined && this.getEmail(id) !== null) {
       throw new InputError(`id already exists: ${id}.`);
     }
+    // Validate the manifest before the email row exists — a bad entry must
+    // not strand a stored email with a half-written manifest.
+    const attachments = input.attachments ?? [];
+    for (const attachment of attachments) {
+      if (attachment.part_id.trim() === "") {
+        throw new InputError("attachments.part_id must be a non-empty string.");
+      }
+      if (!Number.isFinite(attachment.size) || attachment.size < 0) {
+        throw new InputError("attachments.size must be a non-negative finite number.");
+      }
+      if (attachment.r2_key.trim() === "") {
+        throw new InputError("attachments.r2_key must be a non-empty string.");
+      }
+    }
     let threadId: string;
     let createdThread = false;
     if (input.thread_id !== undefined) {
@@ -604,6 +669,19 @@ export class MailboxStore {
         id,
       );
     }
+    for (const attachment of attachments) {
+      this.exec(
+        `INSERT INTO email_attachments (email_id, part_id, filename, mime_type, size, content_id, r2_key)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        id,
+        attachment.part_id,
+        attachment.filename ?? null,
+        attachment.mime_type ?? null,
+        attachment.size,
+        attachment.content_id ?? null,
+        attachment.r2_key,
+      );
+    }
     this.exec(
       `UPDATE threads SET last_message_at = MAX(last_message_at, ?) WHERE id = ?`,
       now,
@@ -619,6 +697,15 @@ export class MailboxStore {
   getEmail(id: string): StoredEmail | null {
     const row = this.exec(`SELECT * FROM emails WHERE id = ?`, id)[0];
     return row ? rowToEmail(row) : null;
+  }
+
+  /** Attachment manifest for one email, in part order ([] when none). */
+  getAttachments(emailId: string): StoredAttachment[] {
+    return this.exec(
+      `SELECT part_id, filename, mime_type, size, content_id, r2_key
+         FROM email_attachments WHERE email_id = ? ORDER BY rowid ASC`,
+      emailId,
+    ).map(rowToAttachment);
   }
 
   /** Thread plus its emails, oldest first. Null when the thread is unknown. */
@@ -714,6 +801,9 @@ export class MailboxStore {
    * Drafts pin their thread.
    */
   deleteEmail(id: string): boolean {
+    // Children first — `email_attachments` REFERENCES emails(id), so the
+    // parent delete violates the FK while manifest rows still point at it.
+    this.exec(`DELETE FROM email_attachments WHERE email_id = ?`, id);
     const deleted = this.exec(`DELETE FROM emails WHERE id = ? RETURNING thread_id`, id)[0];
     if (!deleted) {
       return false;
