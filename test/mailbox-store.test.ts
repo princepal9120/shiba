@@ -168,6 +168,15 @@ describe("emails CRUD", () => {
     expect(store.searchEmails("deploy")).toEqual([]);
     expect(store.deleteEmail(email.id)).toBe(false);
   });
+
+  it("returns no rows for limit 0", () => {
+    const store = makeStore();
+    inbound(store);
+    store.createDraft({ to_addr: "sender@example.com", subject: "d", body_text: "b" });
+    expect(store.listEmails({ limit: 0 })).toEqual([]);
+    expect(store.listDrafts({ limit: 0 })).toEqual([]);
+    expect(store.searchEmails("deploy", { limit: 0 })).toEqual([]);
+  });
 });
 
 describe("drafts", () => {
@@ -281,6 +290,22 @@ describe("threading", () => {
     const other = inbound(store, { subject: "Totally different", created_at: 3 });
     expect(other.thread_id).not.toBe(first.thread_id);
   });
+
+  it("threadFor probes without ever creating a thread", () => {
+    const db = new DatabaseSync(":memory:");
+    const exec: SqlExec = (sql, ...params) => db.prepare(sql).all(...params) as SqlRow[];
+    const store = new MailboxStore(exec);
+    store.init();
+    // A miss returns null and leaves the threads table empty.
+    expect(store.threadFor({ subject: "speculative probe" })).toBeNull();
+    expect(db.prepare(`SELECT COUNT(*) AS n FROM threads`).all()[0]?.n).toBe(0);
+    // Hits resolve by In-Reply-To and by normalized subject.
+    const first = inbound(store, { message_id: "<m1@example.com>" });
+    expect(store.threadFor({ inReplyTo: "<m1@example.com>", subject: "Re: x" })).toBe(
+      first.thread_id,
+    );
+    expect(store.threadFor({ subject: "RE: Deploy report" })).toBe(first.thread_id);
+  });
 });
 
 describe("flagLinks", () => {
@@ -338,6 +363,37 @@ describe("flagLinks", () => {
       "http://first.example.com",
       "https://second.example.com",
     ]);
+  });
+
+  it("flags anchors whose href follows `/` instead of whitespace", () => {
+    // HTML5 re-enters before-attribute-name on `/`, so `<a/href=…>` is a
+    // real anchor — missing it would let TAG_RE hide the URL entirely.
+    expect(flagLinks('<a/href="http://evil.example.com">click</a>')).toEqual([
+      { url: "http://evil.example.com", flags: ["non_https"] },
+    ]);
+    expect(flagLinks('<a /href="http://evil.example.com">click</a>')).toEqual([
+      { url: "http://evil.example.com", flags: ["non_https"] },
+    ]);
+  });
+
+  it("flags IPv4-mapped IPv6 literals pointing at private IPv4 space", () => {
+    const flagsFor = (url: string) => flagLinks(url)[0]?.flags;
+    // WHATWG normalizes the dotted tail to hex hextets — both must flag.
+    expect(flagsFor("https://[::ffff:169.254.169.254]/meta")).toEqual(["private_ip"]);
+    expect(flagsFor("https://[::ffff:a9fe:a9fe]/meta")).toEqual(["private_ip"]);
+    expect(flagsFor("https://[::ffff:a00:1]/")).toEqual(["private_ip"]);
+    // A mapped public address is not private.
+    expect(flagsFor("https://[::ffff:808:808]/")).toEqual([]);
+  });
+
+  it("flags sender_mismatch for IDN anchor text, punycode-normalized", () => {
+    // Cyrillic lookalike display text pointing at a different host.
+    const links = flagLinks('<a href="https://evil.example.com">раураl.com</a>');
+    expect(links[0]?.flags).toEqual(["sender_mismatch"]);
+    // A genuine IDN link whose display text is the unicode form of the
+    // punycode href does not flag.
+    const idn = flagLinks('<a href="https://xn--bcher-kva.example">bücher.example</a>');
+    expect(idn[0]?.flags).toEqual([]);
   });
 
   it("flags IPv6 ULA/link-local but not ordinary fc*/fd* hostnames", () => {

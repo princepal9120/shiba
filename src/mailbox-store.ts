@@ -281,7 +281,8 @@ function clampLimit(limit: number | undefined): number {
   if (limit === undefined) {
     return DEFAULT_LIST_LIMIT;
   }
-  return Math.max(1, Math.min(MAX_LIST_LIMIT, Math.floor(limit)));
+  // 0 is a real bound (empty page), not "unset" — clamp to [0, MAX].
+  return Math.max(0, Math.min(MAX_LIST_LIMIT, Math.floor(limit)));
 }
 
 function rowToEmail(row: SqlRow): StoredEmail {
@@ -437,9 +438,13 @@ export class MailboxStore {
     return { id: this.createThread(input.subject, input.nowMs ?? Date.now()), created: true };
   }
 
-  /** Public thread resolution — see {@link resolveThread}. */
-  threadFor(input: ThreadInput): string {
-    return this.resolveThread(input).id;
+  /**
+   * Public thread lookup with the same precedence as the internal resolver
+   * (In-Reply-To → References → normalized subject) but non-creating: a miss
+   * returns null so speculative probes cannot leave empty `threads` rows.
+   */
+  threadFor(input: ThreadInput): string | null {
+    return this.findThreadId(input);
   }
 
   /**
@@ -737,6 +742,20 @@ function isPrivateHost(hostname: string): boolean {
   ) {
     return true;
   }
+  // IPv4-mapped IPv6 (`::ffff:…`): WHATWG URL normalizes the dotted tail to
+  // two hex hextets (`[::ffff:169.254.169.254]` → `::ffff:a9fe:a9fe`), so
+  // rebuild the dotted quad and run it through the IPv4 check below; a tail
+  // still in dotted form (unnormalized input) is handled the same way.
+  const v4Mapped = /^::ffff:(.+)$/.exec(bare)?.[1];
+  if (v4Mapped !== undefined) {
+    const hextets = v4Mapped.split(":");
+    if (hextets.length === 2 && hextets.every((h) => /^[0-9a-f]{1,4}$/.test(h))) {
+      const hi = Number.parseInt(hextets[0] ?? "", 16);
+      const lo = Number.parseInt(hextets[1] ?? "", 16);
+      return isPrivateHost(`${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`);
+    }
+    return isPrivateHost(v4Mapped);
+  }
   const parts = bare.split(".");
   if (parts.length !== 4 || parts.some((p) => !/^\d+$/.test(p))) {
     return false;
@@ -753,7 +772,8 @@ function isPrivateHost(hostname: string): boolean {
 }
 
 /** Domain-looking anchor text: `example.com`, `https://example.com/path`, … */
-const ANCHOR_DOMAIN_RE = /^(?:https?:\/\/)?(?:www\.)?([a-z0-9-]+(?:\.[a-z0-9-]+)+)(?:[/?#:]|$)/i;
+const ANCHOR_DOMAIN_RE =
+  /^(?:https?:\/\/)?(?:www\.)?([\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)+)(?:[/?#:]|$)/iu;
 
 function flagsForUrl(raw: string, anchorText?: string): LinkFlag[] {
   const flags = new Set<LinkFlag>();
@@ -773,8 +793,17 @@ function flagsForUrl(raw: string, anchorText?: string): LinkFlag[] {
   if (anchorText !== undefined) {
     const textDomain = ANCHOR_DOMAIN_RE.exec(anchorText.trim())?.[1]?.toLowerCase();
     if (textDomain) {
+      // `new URL` IDNA-normalizes to punycode, so Cyrillic/IDN display text
+      // (`раураl.com`) compares equal to its ASCII href — and mismatches when
+      // the display domain is a lookalike pointing elsewhere.
+      let displayDomain = textDomain;
+      try {
+        displayDomain = new URL(`https://${textDomain}`).hostname;
+      } catch {
+        // Not a parseable host — compare the raw capture.
+      }
       const hrefDomain = url.hostname.toLowerCase().replace(/^www\./, "");
-      if (textDomain !== hrefDomain) {
+      if (displayDomain !== hrefDomain) {
         flags.add("sender_mismatch");
       }
     }
@@ -783,15 +812,18 @@ function flagsForUrl(raw: string, anchorText?: string): LinkFlag[] {
 }
 
 /**
- * Every `<a>` tag carrying an href — quoted (`"x"`/`'x'`) or unquoted
- * (`href=x`), closed or left unclosed. Requiring a `</a>` pair would let
- * `href` attributes survive until TAG_RE strips the whole tag, hiding the
- * URL from the bare-URL pass, so anchor text is optional: it ends at `</a>`,
- * the next `<a`, or end of input. Groups: 1 = double-quoted href,
+ * Every `<a>` tag carrying an href — quoted (`"x"`/`'x'`), unquoted
+ * (`href=x`), closed or left unclosed. `href` may follow whitespace *or*
+ * `/` — HTML5 parses `<a/href=x>` as a real anchor (the solidus re-enters
+ * before-attribute-name), and missing that form lets TAG_RE strip the tag
+ * and hide the URL from flagLinks. Requiring a `</a>` pair would likewise
+ * let `href` attributes survive until TAG_RE strips the whole tag, hiding
+ * the URL from the bare-URL pass, so anchor text is optional: it ends at
+ * `</a>`, the next `<a`, or end of input. Groups: 1 = double-quoted href,
  * 2 = single-quoted href, 3 = unquoted href, 4 = anchor text.
  */
 const ANCHOR_RE =
-  /<a\b(?:[^>"']|"[^"]*"|'[^']*')*?\shref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))(?:[^>"']|"[^"]*"|'[^']*')*>([\s\S]*?)(?:<\/a\s*>|(?=<a\b)|$)/gi;
+  /<a\b(?:[^>"']|"[^"]*"|'[^']*')*?[\s/]href\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))(?:[^>"']|"[^"]*"|'[^']*')*>([\s\S]*?)(?:<\/a\s*>|(?=<a\b)|$)/gi;
 const TAG_RE = /<[^>]*>/g;
 const BARE_URL_RE = /\bhttps?:\/\/[^\s<>"')]+/gi;
 
