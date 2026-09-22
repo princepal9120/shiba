@@ -2,12 +2,17 @@
 
 Structured evaluation, not a migration plan. Both repos were read, not just homepages.
 
+> **Update:** this was the pattern-port analysis. The project has since adopted both —
+> `effect` as a worker dependency (v3 stable) and `alchemy` as a deploy-time devDependency.
+> See `src/effect/runtime.ts` and `alchemy.run.ts`; the verdicts below are preserved as
+> the evaluation record.
+
 Sources read:
 - Effect (`/tmp/effect`, `effect` package version `4.0.0-rc.117`):
   `packages/effect/src/Effect.ts` (`gen` at L1432, `catchTag` L2744),
   `Layer.ts`, `Scope.ts`, `Fiber.ts`, `Ref.ts`, `Queue.ts`, `Schema.ts`,
-  `Data.ts` (`TaggedError` at L761). CF-Open-Agents-API runs the pinned v3
-  line (`3.22.2`) — our references to "Effect" semantics span both.
+  `Data.ts` (`TaggedError` at L761). The reference implementation runs the pinned
+  v3 line (`3.22.2`) — our references to "Effect" semantics span both.
 - Alchemy (`/tmp/alchemy`, `alchemy` version `2.0.0-beta.79`):
   `packages/alchemy/src/Cloudflare/Workers/Worker.ts` (resource + imports
   `effect/Effect` in core), `Workers/InferEnv.ts`, `Stage.ts`,
@@ -76,8 +81,9 @@ Worker resource (`Workers/InferEnv.ts`), and Effect is used inside the core
 
 ## S8.3 — Combined recommendation
 
-Adopt Effect-TS the library? **No.** The durability semantics it was carrying
-in CF-Open-Agents-API — fenced identities, `outcome_unknown`, tagged error
+Adopt Effect-TS the library? **No** (superseded — see the update note above).
+The durability semantics it was carrying in the reference implementation — fenced
+identities, `outcome_unknown`, tagged error
 vocabulary, uninterruptible writes, sync transactions, boundary squashing —
 are now ported in plain TypeScript (`src/run-errors.ts`, `src/runs.ts`,
 `src/agents/orchestrator.ts`, `src/agents/opencode-agent.ts`), and the features
