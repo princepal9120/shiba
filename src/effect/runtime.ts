@@ -37,9 +37,11 @@ export class RunFailure extends Error {
  * Cause → RunFailure. A solely-interrupted cause maps to cancelled (a
  * mixed cause reports the defect/failure, which is more informative);
  * then defects; then tagged RunError failures, whose code is already
- * authoritative.
+ * authoritative. Exported so Effect pipelines can classify a cause the
+ * same way the boundary will (fenced finish writes record the code the
+ * rejection carries).
  */
-const toRunFailure = (cause: Cause.Cause<unknown>): RunFailure => {
+export const toRunFailure = (cause: Cause.Cause<unknown>): RunFailure => {
   if (Cause.isInterruptedOnly(cause)) {
     return new RunFailure("cancelled", "interrupted");
   }

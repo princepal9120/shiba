@@ -4,6 +4,7 @@ import type { OrchestratorState } from "../src/agents/orchestrator.js";
 import { createRun, type DelegatedRun } from "../src/runs.js";
 import { formatAgentResult } from "../src/opencode-input.js";
 import { OpenCodeErrorEvent } from "../src/harness/opencode.js";
+import { RunFailure } from "../src/effect/runtime.js";
 import { setSandboxHandleResolver } from "../src/sandbox/lifecycle.js";
 
 const mocks = vi.hoisted(() => ({ destroy: vi.fn(), execute: vi.fn(), grade: vi.fn(async () => null) }));
@@ -146,5 +147,77 @@ describe("orchestrator generation fencing", () => {
     const run = (instance.state.runs as DelegatedRun[])[0]!;
     expect(run.status).toBe("cancelled");
     expect(run.receipts?.some((r) => r.kind === "grade")).toBeFalsy();
+  });
+
+  it("rejects with a RunFailure carrying the classified code and wire projection", async () => {
+    const instance = agent();
+    mocks.execute.mockRejectedValueOnce(new OpenCodeErrorEvent("provider returned status 429: rate limited"));
+    const execution = delegate(instance).execute(INPUT, { toolCallId: "tc-failure" });
+    const settled = execution.then(
+      () => { throw new Error("expected rejection"); },
+      (error: unknown) => error,
+    );
+    const failure = await settled;
+    // The Effect boundary shape: same code + message the old catch classified.
+    expect(failure).toBeInstanceOf(RunFailure);
+    expect((failure as RunFailure).code).toBe("rate_limit_exceeded");
+    expect((failure as RunFailure).wire.code).toBe("rate_limit_exceeded");
+    expect((failure as RunFailure).message).toMatch(/status 429/);
+    const run = (instance.state.runs as DelegatedRun[])[0]!;
+    expect(run.errorCode).toBe("rate_limit_exceeded");
+  });
+
+  it("rejects cancelled when the run is cancelled mid-childExecute", async () => {
+    const instance = agent();
+    mocks.execute.mockImplementation(async (_input, options: { abortSignal?: AbortSignal }) => {
+      await new Promise((_resolve, reject) => {
+        options?.abortSignal?.addEventListener(
+          "abort",
+          () => reject(options.abortSignal!.reason),
+          { once: true },
+        );
+      });
+      return "unreachable";
+    });
+    const execution = delegate(instance).execute(INPUT, { toolCallId: "tc-midabort" }) as Promise<string>;
+    const settled = execution.then(
+      () => { throw new Error("expected rejection"); },
+      (error: unknown) => error,
+    );
+    await vi.waitFor(() => expect(mocks.execute).toHaveBeenCalledOnce());
+    await instance.cancelRun("agent-tool:tc-midabort");
+    const failure = await settled;
+    expect(failure).toBeInstanceOf(RunFailure);
+    expect((failure as RunFailure).code).toBe("cancelled");
+    const run = (instance.state.runs as DelegatedRun[])[0]!;
+    expect(run.status).toBe("cancelled");
+    expect(run.errorCode).toBe("cancelled");
+  });
+
+  it("returns completed output when an abort lands during sandbox cleanup", async () => {
+    const instance = agent();
+    const caller = new AbortController();
+    let resolveDestroy: () => void = () => {};
+    mocks.destroy.mockImplementationOnce(
+      () => new Promise<void>((resolve) => { resolveDestroy = resolve; }),
+    );
+    mocks.execute.mockImplementation(async () => formatAgentResult({
+      status: "completed", exitCode: 0, stderrTail: "",
+      changedFiles: [], diff: "", files: [], summary: "done",
+    }));
+    const execution = delegate(instance).execute(INPUT, {
+      toolCallId: "tc-cleanup-abort",
+      abortSignal: caller.signal,
+    }) as Promise<string>;
+    // Wait until the release phase is in-flight: the child resolved and
+    // destroySandbox is blocked inside the finally-equivalent.
+    await vi.waitFor(() => expect(mocks.destroy).toHaveBeenCalledOnce());
+    caller.abort();
+    resolveDestroy();
+    // The abort only matters while work is in-flight — during cleanup the
+    // completed output still returns instead of flipping to cancelled.
+    await expect(execution).resolves.toContain("done");
+    const run = (instance.state.runs as DelegatedRun[])[0]!;
+    expect(run.status).toBe("completed");
   });
 });

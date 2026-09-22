@@ -103,6 +103,17 @@ export function classifyRunError(error: unknown): { code: RunErrorCode; message:
   try {
     const message = error instanceof Error ? error.message : String(error ?? "unknown");
     if (isAbortError(error)) return { code: "cancelled", message };
+    // An already-classified failure is authoritative: RunFailure carries the
+    // code the Effect boundary chose from this same vocabulary, so re-deriving
+    // it from name/message would lose information (e.g. cancelled).
+    if (
+      error instanceof Error &&
+      "code" in error &&
+      typeof error.code === "string" &&
+      error.code in RUN_ERROR_DEFS
+    ) {
+      return { code: error.code as RunErrorCode, message };
+    }
     // The retry budget being spent is the failure, whatever the attempts saw.
     if (
       (error instanceof Error && error.name === "RetryExhaustedError") ||
