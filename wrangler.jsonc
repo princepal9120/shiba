@@ -32,6 +32,7 @@
       { "name": "Sandbox", "class_name": "Sandbox" },
       { "name": "Automations", "class_name": "Automations" },
       { "name": "Mailbox", "class_name": "Mailbox" },
+      { "name": "McpGateway", "class_name": "McpGateway" },
     ],
   },
   // Email attachment bodies >256KB go here, keyed `emailId/partId`
@@ -62,5 +63,6 @@
     { "tag": "v1", "new_sqlite_classes": ["CodingOrchestrator", "OpenCodeAgent", "Sandbox"] },
     { "tag": "v2", "new_sqlite_classes": ["Automations"] },
     { "tag": "v3", "new_sqlite_classes": ["Mailbox"] },
+    { "tag": "v4", "new_sqlite_classes": ["McpGateway"] },
   ],
 }
