@@ -15,9 +15,9 @@ describe("dashboard unknown status", () => {
     expect(statusLabel("unknown")).toBe("Unknown");
     const chip = STATUS_CHIP_CLASSES["unknown"];
     expect(chip).toBeDefined();
-    expect(chip).toContain("text-[#d97706]");
-    expect(chip).toContain("border-[#d97706]");
-    expect(chip).toContain("bg-[#d97706]");
+    expect(chip).toContain("text-[#b45309]");
+    expect(chip).toContain("border-[#b45309]");
+    expect(chip).toContain("bg-[#b45309]");
   });
 
   it("groups unknown with the error family for filters and counters", () => {
@@ -32,7 +32,7 @@ describe("dashboard unknown status", () => {
     const error = statusDotClass({ ...base, status: "error" });
     const completed = statusDotClass({ ...base, status: "completed" });
     const pending = statusDotClass({ ...base, status: "pending" });
-    expect(unknown).toContain("#d97706");
+    expect(unknown).toContain("#b45309");
     expect(unknown).not.toBe(error);
     expect(unknown).not.toBe(completed);
     expect(unknown).not.toBe(pending);
@@ -59,6 +59,6 @@ describe("dashboard unknown status", () => {
       onRefresh: () => {},
     }));
     expect(markup).toContain("Unknown");
-    expect(markup).toContain("#d97706");
+    expect(markup).toContain("#b45309");
   });
 });

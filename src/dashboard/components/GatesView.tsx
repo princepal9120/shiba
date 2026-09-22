@@ -79,35 +79,35 @@ export function GatesView(): JSX.Element {
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-y-auto bg-[#11141b] text-[#e6edf3] p-4 lg:p-8">
+    <div className="flex-1 flex flex-col h-full overflow-y-auto bg-[#f6f4ed] text-[#222320] p-4 lg:p-8">
       <div className="max-w-5xl mx-auto w-full flex flex-col gap-6">
-        <div className="border-b border-[#1e2530] pb-4">
-          <h2 className="text-base font-semibold text-[#e6edf3] flex items-center gap-2">
+        <div className="border-b border-[#e0ded5] pb-4">
+          <h2 className="text-base font-semibold text-[#222320] flex items-center gap-2">
             <span>Quality Gates</span>
-            <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-[#0B9F95]/10 border border-[#0B9F95]/30 text-[#2dd4bf]">
+            <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-[#0000a8]/10 border border-[#0000a8]/30 text-[#1c1cc8]">
               Review · QA · Security
             </span>
           </h2>
-          <p className="text-xs text-[#8b98a9]">
+          <p className="text-xs text-[#6a6f63]">
             Typed entry points onto the same approval-gated sandbox pipeline. Every gate queues a run; a human still approves before a container starts.
           </p>
         </div>
 
-        <div className="border border-[#1e2530] rounded-xl bg-[#0a0c10] shadow-sm p-5 flex flex-wrap items-center gap-3 transition-colors focus-within:border-[#0B9F95]/30">
+        <div className="border border-[#e0ded5] rounded-xl bg-[#f1efe6] shadow-sm p-5 flex flex-wrap items-center gap-3 transition-colors focus-within:border-[#0000a8]/30">
           <input
             type="text"
             aria-label="Repository URL"
             value={repoUrl}
             onChange={(e) => setRepoUrl(e.target.value)}
             placeholder="https://github.com/owner/repo"
-            className="flex-1 min-w-56 bg-black text-xs font-mono text-[#e6edf3] border border-[#1e2530] rounded-lg px-3 py-1.5 transition-colors focus:outline-none focus:border-[#0B9F95] focus:ring-1 focus:ring-[#0B9F95]/30 placeholder:text-[#8b98a9]/50"
+            className="flex-1 min-w-56 bg-[#fffef8] text-xs font-mono text-[#222320] border border-[#e0ded5] rounded-lg px-3 py-1.5 transition-colors focus:outline-none focus:border-[#0000a8] focus:ring-1 focus:ring-[#0000a8]/30 placeholder:text-[#6a6f63]/50"
           />
-          <label className="flex items-center gap-2 text-xs text-[#8b98a9] hover:text-[#e6edf3] cursor-pointer select-none transition-colors">
+          <label className="flex items-center gap-2 text-xs text-[#6a6f63] hover:text-[#222320] cursor-pointer select-none transition-colors">
             <input
               type="checkbox"
               checked={publishPr}
               onChange={(e) => setPublishPr(e.target.checked)}
-              className="accent-[#0B9F95] cursor-pointer"
+              className="accent-[#0000a8] cursor-pointer"
             />
             Publish result as a PR
           </label>
@@ -117,10 +117,10 @@ export function GatesView(): JSX.Element {
           {GATES.map((gate) => (
             <div
               key={gate.id}
-              className="border border-[#1e2530] hover:border-[#2c3545] rounded-xl bg-[#0a0c10] shadow-sm p-5 flex flex-col gap-3 transition-colors"
+              className="border border-[#e0ded5] hover:border-[#d3d2c8] rounded-xl bg-[#f1efe6] shadow-sm p-5 flex flex-col gap-3 transition-colors"
             >
-              <h3 className="text-sm font-semibold text-[#e6edf3]">{gate.name}</h3>
-              <p className="text-[11px] text-[#8b98a9] leading-relaxed flex-1">{gate.description}</p>
+              <h3 className="text-sm font-semibold text-[#222320]">{gate.name}</h3>
+              <p className="text-[11px] text-[#6a6f63] leading-relaxed flex-1">{gate.description}</p>
               {gate.extraLabel ? (
                 <input
                   type="text"
@@ -128,21 +128,21 @@ export function GatesView(): JSX.Element {
                   value={extras[gate.id] ?? ""}
                   onChange={(e) => setExtras((x) => ({ ...x, [gate.id]: e.target.value }))}
                   placeholder={gate.extraPlaceholder}
-                  className="w-full bg-black text-xs font-mono text-[#e6edf3] border border-[#1e2530] rounded-lg px-3 py-1.5 transition-colors focus:outline-none focus:border-[#0B9F95] focus:ring-1 focus:ring-[#0B9F95]/30 placeholder:text-[#8b98a9]/50"
+                  className="w-full bg-[#fffef8] text-xs font-mono text-[#222320] border border-[#e0ded5] rounded-lg px-3 py-1.5 transition-colors focus:outline-none focus:border-[#0000a8] focus:ring-1 focus:ring-[#0000a8]/30 placeholder:text-[#6a6f63]/50"
                 />
               ) : null}
               {notices[gate.id] ? (
-                <p className="text-[11px] font-mono text-[#c9a227] bg-[#c9a227]/10 border border-[#c9a227]/20 rounded-md px-2 py-1">{notices[gate.id]}</p>
+                <p className="text-[11px] font-mono text-[#b45309] bg-[#b45309]/10 border border-[#b45309]/20 rounded-md px-2 py-1">{notices[gate.id]}</p>
               ) : null}
               <button
                 type="button"
                 disabled={busyId === gate.id}
                 onClick={() => void launch(gate)}
-                className="text-xs font-semibold self-start text-[#2dd4bf] border border-[#0B9F95]/40 bg-[#0B9F95]/10 hover:bg-[#0B9F95]/20 rounded-md px-2.5 py-1 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                className="text-xs font-semibold self-start text-[#1c1cc8] border border-[#0000a8]/40 bg-[#0000a8]/10 hover:bg-[#0000a8]/20 rounded-md px-2.5 py-1 transition-colors disabled:opacity-50 flex items-center gap-1.5"
               >
                 {busyId === gate.id ? (
                   <>
-                    <span className="animate-spin inline-block w-3 h-3 border-2 border-[#2dd4bf] border-t-transparent rounded-full" />
+                    <span className="animate-spin inline-block w-3 h-3 border-2 border-[#1c1cc8] border-t-transparent rounded-full" />
                     <span>Queueing…</span>
                   </>
                 ) : (

@@ -7,17 +7,17 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        display: ['"Bebas Neue"', 'Impact', 'sans-serif'],
+        display: ['"Instrument Serif"', 'Georgia', 'serif'],
         comic: ['Bangers', '"Comic Sans MS"', 'cursive', 'sans-serif'],
-        tech: ['"DM Mono"', '"Geist Mono"', 'monospace'],
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        tech: ['"Geist Mono"', '"DM Mono"', 'monospace'],
+        sans: ['Geist', 'Inter', 'system-ui', 'sans-serif'],
       },
       colors: {
         brand: {
-          DEFAULT: '#0B9F95',
-          light: '#2dd4bf',
-          dark: '#097d75',
-          glow: 'rgba(11, 159, 149, 0.25)',
+          DEFAULT: '#0000a8',
+          light: '#1c1cc8',
+          dark: '#000086',
+          glow: 'rgba(0, 0, 168, 0.18)',
         }
       }
     },

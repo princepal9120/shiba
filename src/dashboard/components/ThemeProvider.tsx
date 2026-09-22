@@ -9,7 +9,7 @@ export function ThemeProvider({
   return (
     <NextThemesProvider
       attribute="class"
-      defaultTheme="dark"
+      defaultTheme="light"
       enableSystem
       storageKey="ai-intern-theme"
       themes={["dark", "light"]}

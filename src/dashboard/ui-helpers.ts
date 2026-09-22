@@ -77,19 +77,19 @@ export const ERROR_FAMILY_STATUSES: ReadonlySet<string> = new Set([
 // Status chip classes — single source for app.tsx, WorkspacePanel, and any
 // future pane that renders run/session status pills.
 export const STATUS_CHIP_CLASSES: Record<string, string> = {
-  completed: "text-[#4cc38a] border-[#4cc38a]/30 bg-[#4cc38a]/10",
-  running: "text-[#4f9cf0] border-[#4f9cf0]/30 bg-[#4f9cf0]/10",
-  pending: "text-[#c9a227] border-[#c9a227]/30 bg-[#c9a227]/10",
-  "waiting-approval": "text-[#c9a227] border-[#c9a227]/30 bg-[#c9a227]/10",
-  error: "text-[#f06666] border-[#f06666]/30 bg-[#f06666]/10",
-  aborted: "text-[#f06666] border-[#f06666]/30 bg-[#f06666]/10",
-  cancelled: "text-[#f06666] border-[#f06666]/30 bg-[#f06666]/10",
+  completed: "text-[#15803d] border-[#15803d]/30 bg-[#15803d]/10",
+  running: "text-[#0000a8] border-[#0000a8]/30 bg-[#0000a8]/10",
+  pending: "text-[#b45309] border-[#f99c00]/40 bg-[#f99c00]/10",
+  "waiting-approval": "text-[#b45309] border-[#f99c00]/40 bg-[#f99c00]/10",
+  error: "text-[#fb2c36] border-[#fb2c36]/30 bg-[#fb2c36]/10",
+  aborted: "text-[#fb2c36] border-[#fb2c36]/30 bg-[#fb2c36]/10",
+  cancelled: "text-[#fb2c36] border-[#fb2c36]/30 bg-[#fb2c36]/10",
   // Amber, not error red: ambiguous outcome is not a known failure.
-  unknown: "text-[#d97706] border-[#d97706]/30 bg-[#d97706]/10",
+  unknown: "text-[#b45309] border-[#b45309]/30 bg-[#b45309]/10",
 };
 
 export function statusChipClass(status: string): string {
-  return STATUS_CHIP_CLASSES[status] ?? "text-[#8b98a9] border-neutral-800 bg-[#090b0e]";
+  return STATUS_CHIP_CLASSES[status] ?? "text-[#6a6f63] border-[#eae8e1] bg-[#fffef8]";
 }
 
 export function emptyDiffText(): string {

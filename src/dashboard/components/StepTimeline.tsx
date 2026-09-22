@@ -92,9 +92,9 @@ function RailIcon({ kind }: { kind: "tool" | "text" | "approval" }) {
 }
 
 function statusChipClass(rejected: boolean, waiting: boolean): string {
-  if (rejected) return "text-[#f06666] border-[#f06666]/30 bg-[#f06666]/10";
-  if (waiting) return "text-[#c9a227] border-[#c9a227]/30 bg-[#c9a227]/10 animate-pulse";
-  return "text-[#8b98a9] border-[#1e2530] bg-[#0a0c10]";
+  if (rejected) return "text-[#fb2c36] border-[#fb2c36]/30 bg-[#fb2c36]/10";
+  if (waiting) return "text-[#b45309] border-[#b45309]/30 bg-[#b45309]/10 animate-pulse";
+  return "text-[#6a6f63] border-[#e0ded5] bg-[#f1efe6]";
 }
 
 export function StepTimeline({
@@ -109,13 +109,13 @@ export function StepTimeline({
 }: StepTimelineProps) {
   if (messages.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 border border-dashed border-[#1e2530] rounded-xl bg-[#0a0c10]/40 px-6 text-center">
+      <div className="flex flex-col items-center justify-center py-16 border border-dashed border-[#e0ded5] rounded-xl bg-[#f1efe6]/40 px-6 text-center">
         <img
           src="/assets/mascot/shiba-sticker-hero.webp"
           alt="Shiba illustration mascot"
-          className="w-56 h-auto max-h-40 rounded-xl shadow-lg border border-[#0B9F95]/30 mb-3 object-cover"
+          className="w-56 h-auto max-h-40 rounded-xl shadow-lg border border-[#0000a8]/30 mb-3 object-cover"
         />
-        <p className="text-[#8b98a9] text-sm mb-2 font-medium">
+        <p className="text-[#6a6f63] text-sm mb-2 font-medium">
           No messages yet. Submit a task to start.
         </p>
         {starters && starters.length > 0 ? (
@@ -125,7 +125,7 @@ export function StepTimeline({
                 <button
                   type="button"
                   onClick={() => onStarter?.(starter.task)}
-                  className="inline-flex items-center gap-1.5 text-xs text-[#e6edf3] bg-[#11141b] hover:bg-[#1e2530] border border-[#1e2530] rounded-full px-3 py-1.5 transition-colors active:scale-95"
+                  className="inline-flex items-center gap-1.5 text-xs text-[#222320] bg-[#fffef8] hover:bg-[#e0ded5] border border-[#e0ded5] rounded-full px-3 py-1.5 transition-colors active:scale-95"
                 >
                   <span aria-hidden="true">{starter.icon}</span>
                   {starter.label}
@@ -144,11 +144,11 @@ export function StepTimeline({
         if (message.role === "user") {
           return (
             <li key={message.id} className="flex flex-col items-end">
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-[#8b98a9] uppercase tracking-wider mb-1 px-1">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-[#6a6f63] uppercase tracking-wider mb-1 px-1">
                 <span>You</span>
-                <span className="w-1.5 h-1.5 rounded-full bg-[#4f9cf0]" />
+                <span className="w-1.5 h-1.5 rounded-full bg-[#0000a8]" />
               </div>
-              <div className="flex flex-col gap-2 max-w-[92%] md:max-w-[85%] bg-[#4f9cf0] text-[#06121f] rounded-2xl rounded-tr-sm p-4 font-medium shadow-sm">
+              <div className="flex flex-col gap-2 max-w-[92%] md:max-w-[85%] bg-[#0000a8] text-[#222320] rounded-2xl rounded-tr-sm p-4 font-medium shadow-sm">
                 {message.parts.map((part, index) => {
                   const text = partText(part);
                   if (text === null) return null;
@@ -169,16 +169,16 @@ export function StepTimeline({
         // Assistant / tool steps on the left icon rail.
         return (
           <li key={message.id} className="flex flex-col items-start">
-            <div className="relative pl-9 flex flex-col gap-3 w-full before:content-[''] before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-px before:bg-[#1e2530]">
+            <div className="relative pl-9 flex flex-col gap-3 w-full before:content-[''] before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-px before:bg-[#e0ded5]">
               {message.parts.map((part, index) => {
                 const text = partText(part);
                 if (text !== null) {
                   return (
                     <div key={message.id + ":text:" + index} className="relative">
-                      <span className="absolute -left-9 top-0.5 w-6 h-6 rounded-full bg-[#0a0c10] border border-[#1e2530] flex items-center justify-center text-[#8b98a9]">
+                      <span className="absolute -left-9 top-0.5 w-6 h-6 rounded-full bg-[#f1efe6] border border-[#e0ded5] flex items-center justify-center text-[#6a6f63]">
                         <RailIcon kind="text" />
                       </span>
-                      <div className="bg-[#0a0c10] border border-[#1e2530] text-[#e6edf3] rounded-2xl rounded-tl-sm p-4 shadow-sm max-w-[92%] md:max-w-[85%]">
+                      <div className="bg-[#f1efe6] border border-[#e0ded5] text-[#222320] rounded-2xl rounded-tl-sm p-4 shadow-sm max-w-[92%] md:max-w-[85%]">
                         <pre className="whitespace-pre-wrap font-sans text-sm break-words leading-relaxed">
                           {text}
                         </pre>
@@ -211,16 +211,16 @@ export function StepTimeline({
                   return (
                     <div key={callId ?? (message.id + ":tool:" + index)} className="relative flex flex-col gap-3">
                       <span
-                        className={`absolute -left-9 top-0.5 w-6 h-6 rounded-full bg-[#0a0c10] border flex items-center justify-center ${
+                        className={`absolute -left-9 top-0.5 w-6 h-6 rounded-full bg-[#f1efe6] border flex items-center justify-center ${
                           waiting
-                            ? "border-[#c9a227]/60 text-[#c9a227]"
-                            : "border-[#1e2530] text-[#8b98a9]"
+                            ? "border-[#b45309]/60 text-[#b45309]"
+                            : "border-[#e0ded5] text-[#6a6f63]"
                         }`}
                       >
                         <RailIcon kind={waiting ? "approval" : "tool"} />
                       </span>
-                      <div className="flex flex-wrap items-center gap-2 bg-[#0a0c10]/70 p-2.5 rounded-lg border border-[#1e2530]/60 font-mono text-xs w-fit max-w-full">
-                        <span className="text-[#2dd4bf] font-semibold bg-[#11141b] px-2 py-0.5 rounded">
+                      <div className="flex flex-wrap items-center gap-2 bg-[#f1efe6]/70 p-2.5 rounded-lg border border-[#e0ded5]/60 font-mono text-xs w-fit max-w-full">
+                        <span className="text-[#1c1cc8] font-semibold bg-[#fffef8] px-2 py-0.5 rounded">
                           Ran {toolDisplayName(part)}
                         </span>
                         <span
@@ -234,10 +234,10 @@ export function StepTimeline({
                       </div>
                       {output !== null && output !== "" ? (
                         <details className="max-w-[92%] md:max-w-[85%] group">
-                          <summary className="cursor-pointer text-[11px] font-mono text-[#8b98a9] hover:text-[#e6edf3] transition-colors select-none">
+                          <summary className="cursor-pointer text-[11px] font-mono text-[#6a6f63] hover:text-[#222320] transition-colors select-none">
                             Output
                           </summary>
-                          <pre className="mt-1 whitespace-pre-wrap font-mono text-xs text-[#8b98a9] bg-black p-3 rounded-lg border border-[#1e2530] max-h-56 overflow-auto">
+                          <pre className="mt-1 whitespace-pre-wrap font-mono text-xs text-[#6a6f63] bg-[#fffef8] p-3 rounded-lg border border-[#e0ded5] max-h-56 overflow-auto">
                             {output}
                           </pre>
                         </details>
@@ -263,16 +263,16 @@ export function StepTimeline({
       {isStreaming ? (
         <li className="flex flex-col items-start">
           <div className="relative pl-9">
-            <span className="absolute left-0 top-0.5 w-6 h-6 rounded-full bg-[#0a0c10] border border-[#0B9F95]/40 flex items-center justify-center">
+            <span className="absolute left-0 top-0.5 w-6 h-6 rounded-full bg-[#f1efe6] border border-[#0000a8]/40 flex items-center justify-center">
               <img
                 src="/assets/mascot/pet-logo.png"
                 alt=""
                 className="w-4 h-4 rounded-full bg-white object-contain animate-bounce"
               />
             </span>
-            <div className="bg-[#0a0c10] border border-[#1e2530] rounded-2xl rounded-tl-sm p-4 text-xs text-[#8b98a9] flex items-center gap-2 w-fit">
-              <span className="animate-spin inline-block w-3.5 h-3.5 border-2 border-[#2dd4bf] border-t-transparent rounded-full" />
-              <span className="text-[#2dd4bf] font-semibold">Shiba is reasoning…</span>
+            <div className="bg-[#f1efe6] border border-[#e0ded5] rounded-2xl rounded-tl-sm p-4 text-xs text-[#6a6f63] flex items-center gap-2 w-fit">
+              <span className="animate-spin inline-block w-3.5 h-3.5 border-2 border-[#1c1cc8] border-t-transparent rounded-full" />
+              <span className="text-[#1c1cc8] font-semibold">Shiba is reasoning…</span>
             </div>
           </div>
         </li>
