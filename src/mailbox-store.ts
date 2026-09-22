@@ -100,6 +100,13 @@ export const MAILBOX_SCHEMA = `${MAILBOX_STATEMENTS.join(";\n\n")};\n`;
 // Records
 // ---------------------------------------------------------------------------
 
+/**
+ * `"deleted"` is a soft trash state: the row is kept (and stays searchable via
+ * the FTS UPDATE trigger) and `moveStatus` can restore it. Permanent removal
+ * is {@link MailboxStore.deleteEmail}. Callers exposing delete — the
+ * approval-gated `delete_email` tool (T6) and the inbox UI (T11) — must pick
+ * deliberately between the two.
+ */
 export const EMAIL_STATUSES = ["unread", "read", "archived", "sent", "deleted"] as const;
 export type EmailStatus = (typeof EMAIL_STATUSES)[number];
 
@@ -377,12 +384,8 @@ export class MailboxStore {
 
   // -- threading -----------------------------------------------------------
 
-  /**
-   * Resolve the thread for an incoming message: `In-Reply-To`, then each
-   * `References` id (nearest ancestor first), then normalized-subject match,
-   * else a fresh thread. Returns the thread id.
-   */
-  threadFor(input: ThreadInput): string {
+  /** Existing thread id for an incoming message, or null when none matches. */
+  private findThreadId(input: ThreadInput): string | null {
     const candidates: string[] = [];
     if (input.inReplyTo) {
       candidates.push(input.inReplyTo);
@@ -407,17 +410,49 @@ export class MailboxStore {
       `SELECT id FROM threads WHERE subject = ? ORDER BY last_message_at DESC LIMIT 1`,
       normalized,
     )[0];
-    if (bySubject) {
-      return String(bySubject.id);
-    }
+    return bySubject ? String(bySubject.id) : null;
+  }
+
+  private createThread(subject: string, nowMs: number): string {
     const id = `thr-${randomHex(8)}`;
     this.exec(
       `INSERT INTO threads (id, subject, last_message_at) VALUES (?, ?, ?)`,
       id,
-      normalized,
-      input.nowMs ?? Date.now(),
+      normalizeSubject(subject),
+      nowMs,
     );
     return id;
+  }
+
+  /**
+   * Resolve the thread for an incoming message: `In-Reply-To`, then each
+   * `References` id (nearest ancestor first), then normalized-subject match,
+   * else a fresh thread. Returns the thread id.
+   */
+  private resolveThread(input: ThreadInput): { id: string; created: boolean } {
+    const found = this.findThreadId(input);
+    if (found !== null) {
+      return { id: found, created: false };
+    }
+    return { id: this.createThread(input.subject, input.nowMs ?? Date.now()), created: true };
+  }
+
+  /** Public thread resolution — see {@link resolveThread}. */
+  threadFor(input: ThreadInput): string {
+    return this.resolveThread(input).id;
+  }
+
+  /**
+   * `emails.thread_id` / `drafts.thread_id` are REFERENCES columns, but
+   * `PRAGMA foreign_keys` defaults OFF under `node:sqlite` while DO
+   * `ctx.storage.sql` enforces it — validate explicitly so a dangling
+   * thread_id fails deterministically (InputError) on both.
+   */
+  private requireThread(threadId: string): void {
+    const exists = this.exec(`SELECT 1 AS ok FROM threads WHERE id = ?`, threadId)[0];
+    if (!exists) {
+      throw new InputError("thread_id does not reference an existing thread.");
+    }
   }
 
   // -- emails ----------------------------------------------------------------
@@ -434,29 +469,45 @@ export class MailboxStore {
     }
     const now = input.created_at ?? Date.now();
     const id = input.id ?? `eml-${randomHex(8)}`;
-    const threadId =
-      input.thread_id ??
-      this.threadFor({
+    let threadId: string;
+    let createdThread = false;
+    if (input.thread_id !== undefined) {
+      this.requireThread(input.thread_id);
+      threadId = input.thread_id;
+    } else {
+      const resolved = this.resolveThread({
         subject: input.subject,
         inReplyTo: input.in_reply_to,
         references: input.references,
         nowMs: now,
       });
-    this.exec(
-      `INSERT INTO emails
-         (id, thread_id, direction, from_addr, to_addr, subject, body_text, body_html, status, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      id,
-      threadId,
-      input.direction,
-      from,
-      to,
-      input.subject,
-      input.body_text ?? null,
-      input.body_html ?? null,
-      status,
-      now,
-    );
+      threadId = resolved.id;
+      createdThread = resolved.created;
+    }
+    try {
+      this.exec(
+        `INSERT INTO emails
+           (id, thread_id, direction, from_addr, to_addr, subject, body_text, body_html, status, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        id,
+        threadId,
+        input.direction,
+        from,
+        to,
+        input.subject,
+        input.body_text ?? null,
+        input.body_html ?? null,
+        status,
+        now,
+      );
+    } catch (error) {
+      if (createdThread) {
+        // The fresh thread belongs to this email only — remove it so a failed
+        // insert never leaves an empty thread behind.
+        this.exec(`DELETE FROM threads WHERE id = ?`, threadId);
+      }
+      throw error;
+    }
     if (input.message_id) {
       this.exec(
         `INSERT OR IGNORE INTO email_ids (message_id, email_id) VALUES (?, ?)`,
@@ -551,6 +602,10 @@ export class MailboxStore {
     );
   }
 
+  /**
+   * Soft state transitions only — `"deleted"` here means trash (recoverable);
+   * permanent removal goes through {@link deleteEmail}.
+   */
   moveStatus(id: string, status: EmailStatus): StoredEmail | null {
     if (!EMAIL_STATUSES.includes(status)) {
       throw new InputError(`status must be one of ${EMAIL_STATUSES.join(", ")}.`);
@@ -563,6 +618,7 @@ export class MailboxStore {
     return row ? rowToEmail(row) : null;
   }
 
+  /** Hard delete: row and Message-Id mapping gone for good (see EMAIL_STATUSES). */
   deleteEmail(id: string): boolean {
     this.exec(`DELETE FROM email_ids WHERE email_id = ?`, id);
     return this.exec(`DELETE FROM emails WHERE id = ? RETURNING id`, id).length > 0;
@@ -572,6 +628,9 @@ export class MailboxStore {
 
   createDraft(input: CreateDraftInput): DraftRecord {
     const to = requireAddress(input.to_addr, "to_addr");
+    if (input.thread_id !== undefined) {
+      this.requireThread(input.thread_id);
+    }
     const now = input.nowMs ?? Date.now();
     const id = `drf-${randomHex(8)}`;
     this.exec(
@@ -663,13 +722,18 @@ export const UNTRUSTED_SECURITY_NOTICE =
 function isPrivateHost(hostname: string): boolean {
   const host = hostname.toLowerCase();
   const bare = host.startsWith("[") && host.endsWith("]") ? host.slice(1, -1) : host;
+  if (bare === "localhost" || bare.endsWith(".localhost") || bare === "::1") {
+    return true;
+  }
+  // ULA (fc00::/7) and link-local (fe80::/10) are IPv6 ranges — the literal
+  // must contain `:` so ordinary hostnames like `fdj.fr`/`fcbarcelona.com`
+  // are not misclassified. Parse the first hextet instead of prefix-matching.
+  const firstHextet = bare.includes(":")
+    ? Number.parseInt(bare.split(":", 1)[0] ?? "", 16)
+    : Number.NaN;
   if (
-    bare === "localhost" ||
-    bare.endsWith(".localhost") ||
-    bare === "::1" ||
-    bare.startsWith("fe80:") ||
-    bare.startsWith("fc") ||
-    bare.startsWith("fd")
+    (firstHextet >= 0xfc00 && firstHextet <= 0xfdff) ||
+    (firstHextet >= 0xfe80 && firstHextet <= 0xfebf)
   ) {
     return true;
   }
@@ -718,7 +782,16 @@ function flagsForUrl(raw: string, anchorText?: string): LinkFlag[] {
   return [...flags];
 }
 
-const ANCHOR_RE = /<a\b[^>]*?href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+/**
+ * Every `<a>` tag carrying an href — quoted (`"x"`/`'x'`) or unquoted
+ * (`href=x`), closed or left unclosed. Requiring a `</a>` pair would let
+ * `href` attributes survive until TAG_RE strips the whole tag, hiding the
+ * URL from the bare-URL pass, so anchor text is optional: it ends at `</a>`,
+ * the next `<a`, or end of input. Groups: 1 = double-quoted href,
+ * 2 = single-quoted href, 3 = unquoted href, 4 = anchor text.
+ */
+const ANCHOR_RE =
+  /<a\b(?:[^>"']|"[^"]*"|'[^']*')*?\shref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))(?:[^>"']|"[^"]*"|'[^']*')*>([\s\S]*?)(?:<\/a\s*>|(?=<a\b)|$)/gi;
 const TAG_RE = /<[^>]*>/g;
 const BARE_URL_RE = /\bhttps?:\/\/[^\s<>"')]+/gi;
 
@@ -732,8 +805,8 @@ export function flagLinks(content: string): FlaggedLink[] {
   const links: FlaggedLink[] = [];
   let text = content;
   for (const match of content.matchAll(ANCHOR_RE)) {
-    const href = match[1] ?? "";
-    const anchorText = (match[2] ?? "").replace(TAG_RE, " ").trim();
+    const href = match[1] ?? match[2] ?? match[3] ?? "";
+    const anchorText = (match[4] ?? "").replace(TAG_RE, " ").trim();
     links.push({ url: href, flags: flagsForUrl(href, anchorText) });
     text = text.replace(match[0], " ");
   }
@@ -750,16 +823,28 @@ export function flagLinks(content: string): FlaggedLink[] {
  * through verbatim under `untrusted`; `link_flags` carries the per-link
  * classification from {@link flagLinks}.
  */
+/**
+ * `from_addr`/`subject` come from the same untrusted email — collapse
+ * whitespace and drop control/format chars so a crafted subject cannot
+ * inject newlines or phrasing into the notice itself, and cap the length.
+ */
+function sanitizeNoticeMeta(value: string): string {
+  const cleaned = value.replace(/[\p{Cc}\p{Cf}\s]+/gu, " ").trim();
+  return cleaned.length > 200 ? `${cleaned.slice(0, 200)}…` : cleaned;
+}
+
 export function wrapUntrusted(
   body: string,
   meta: { from_addr?: string; subject?: string } = {},
 ): UntrustedWrap {
   let notice = UNTRUSTED_SECURITY_NOTICE;
-  if (meta.from_addr) {
-    notice += ` Sender: ${meta.from_addr}.`;
+  const sender = meta.from_addr === undefined ? "" : sanitizeNoticeMeta(meta.from_addr);
+  const subject = meta.subject === undefined ? "" : sanitizeNoticeMeta(meta.subject);
+  if (sender !== "") {
+    notice += ` Sender (unverified): ${sender}.`;
   }
-  if (meta.subject) {
-    notice += ` Subject: ${meta.subject}.`;
+  if (subject !== "") {
+    notice += ` Subject (unverified): ${subject}.`;
   }
   return { untrusted: body, security_notice: notice, link_flags: flagLinks(body) };
 }
