@@ -1,9 +1,16 @@
 /**
- * Run-level error classification, ported from CF-Open-Agents-API's
- * statusToTurnCode + DEFINITE error table, in plain TypeScript.
- * Deterministic only: no model calls, no parsing of unstructured prose
- * beyond an explicit "status <3-digit>" context.
+ * Run-level error classification in plain TypeScript: a closed
+ * RunErrorCode vocabulary, an HTTP-status/known-text classifier, and a
+ * single wire projection (`runErrorWire`) for API responses and Slack
+ * posts. Deterministic only: no model calls, no parsing of unstructured
+ * prose beyond an explicit "status <3-digit>" context.
+ *
+ * Effect bridge (spec B3): a single `RunError` Data.TaggedError carrying
+ * `code` — chosen over one tagged class per code as the smallest bridge
+ * that lets Effect code `catchTag("RunError")` while keeping
+ * `RunErrorCode` the only vocabulary.
  */
+import { Data } from "effect";
 
 export type RunErrorCode =
   | "authentication_error"
@@ -228,3 +235,13 @@ export function runErrorWire(code: RunErrorCode): RunErrorWire {
     userMessage: RUN_ERROR_DEFS[code].summary,
   };
 }
+
+/** One tagged class for every run error — the code does the dispatching. */
+export class RunError extends Data.TaggedError("RunError")<{
+  code: RunErrorCode;
+  message: string;
+}> {}
+
+/** Lift a classified run error into an Effect-typed failure. */
+export const toTaggedError = (code: RunErrorCode, message: string): RunError =>
+  new RunError({ code, message });

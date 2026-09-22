@@ -6,8 +6,10 @@ import {
   classifyExecutorError,
   classifyRunError,
   RUN_ERROR_DEFS,
+  RunError,
   runErrorWire,
   statusToRunCode,
+  toTaggedError,
   type RunErrorCode,
 } from "../src/run-errors.js";
 
@@ -290,4 +292,21 @@ describe("runErrorWire", () => {
       expect(wire.userMessage).toBe(RUN_ERROR_DEFS[code].summary);
     },
   );
+});
+
+describe("toTaggedError", () => {
+  it("builds an Error-shaped RunError carrying _tag, code, and message", () => {
+    const err = toTaggedError("rate_limit_exceeded", "slow down");
+    expect(err).toBeInstanceOf(Error);
+    expect(err).toBeInstanceOf(RunError);
+    expect(err._tag).toBe("RunError");
+    expect(err.code).toBe("rate_limit_exceeded");
+    expect(err.message).toBe("slow down");
+  });
+
+  it("covers every RunErrorCode", () => {
+    for (const code of ALL_CODES) {
+      expect(toTaggedError(code, "m").code).toBe(code);
+    }
+  });
 });
