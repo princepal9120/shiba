@@ -34,10 +34,10 @@ export class RunFailure extends Error {
 }
 
 /**
- * Cause → RunFailure. Interruption wins first (a cancelled run is
- * cancelled whatever else landed); then defects (the most severe kind —
- * a plain uncaught throw classifies as internal_error); then tagged
- * RunError failures, whose code is already authoritative.
+ * Cause → RunFailure. A solely-interrupted cause maps to cancelled (a
+ * mixed cause reports the defect/failure, which is more informative);
+ * then defects; then tagged RunError failures, whose code is already
+ * authoritative.
  */
 const toRunFailure = (cause: Cause.Cause<unknown>): RunFailure => {
   if (Cause.isInterruptedOnly(cause)) {
