@@ -17,9 +17,9 @@
  *   migrations new_sqlite_classes -> emitted automatically by the provider
  *                                    for DO classes new to the script
  *
- * Deploy-time secrets (the `wrangler secret put` set): each `secret(NAME)`
- * below binds `NAME` as `secret_text` only when present in the deploy
- * environment; unset names are skipped, matching optional env entries.
+ * Deploy-time secrets (the `wrangler secret put` set): `secrets(NAMES)`
+ * binds each present `NAME` as `secret_text`; unset names are skipped,
+ * matching optional env entries.
  * `Redacted.make` is used instead of Config helpers — it exists on both
  * effect 3 (this repo) and effect 4 (alchemy's declared peer).
  *
@@ -29,6 +29,12 @@
  * suffixed instead, so `alchemy deploy --stage test-*` / `destroy` can
  * never clobber the live worker — the same isolation the wrangler
  * ephemeral deploys got from a name override.
+ *
+ * State backend: `Alchemy.localState()` (filesystem) by default — it works
+ * with a plain CLOUDFLARE_API_TOKEN and no bootstrap step. Set
+ * ALCHEMY_STATE_BACKEND=cloudflare to opt back into the remote State
+ * Store after a one-time `npx alchemy provider cloudflare bootstrap`
+ * (needs a token with the account Secrets Store scope).
  */
 import { Effect, Redacted } from "effect";
 import * as Alchemy from "alchemy";
@@ -37,9 +43,13 @@ import type { CodingOrchestrator } from "./src/agents/orchestrator.js";
 import type { OpenCodeAgent } from "./src/agents/opencode-agent.js";
 import type { Sandbox } from "./src/sandbox.js";
 
-const secret = (name: string) => {
-  const value = process.env[name];
-  return value === undefined ? undefined : Redacted.make(value);
+const secrets = (names: readonly string[]) => {
+  const entries: Record<string, ReturnType<typeof Redacted.make>> = {};
+  for (const name of names) {
+    const value = process.env[name];
+    if (value !== undefined) entries[name] = Redacted.make(value);
+  }
+  return entries;
 };
 
 const stage = process.env.ALCHEMY_STAGE;
@@ -95,21 +105,23 @@ export const Worker = Cloudflare.Worker("Worker", {
       maxInstances: 5,
     }),
 
-    GITHUB_TOKEN: secret("GITHUB_TOKEN"),
-    GITHUB_WEBHOOK_SECRET: secret("GITHUB_WEBHOOK_SECRET"),
-    SLACK_SIGNING_SECRET: secret("SLACK_SIGNING_SECRET"),
-    SLACK_APPROVERS: secret("SLACK_APPROVERS"),
-    SLACK_BOT_TOKEN: secret("SLACK_BOT_TOKEN"),
-    SLACK_CHANNEL_REPOS: secret("SLACK_CHANNEL_REPOS"),
-    TYPESAFE_API_KEY: secret("TYPESAFE_API_KEY"),
-    AI_GATEWAY_TOKEN: secret("AI_GATEWAY_TOKEN"),
-    DEVIN_API_KEY: secret("DEVIN_API_KEY"),
-    REQUIRE_ACCESS: secret("REQUIRE_ACCESS"),
-    AUTOMATIONS_ENABLED: secret("AUTOMATIONS_ENABLED"),
-    AGENT_HARNESS: secret("AGENT_HARNESS"),
-    CLAUDE_CODE_MODEL: secret("CLAUDE_CODE_MODEL"),
-    CODEX_MODEL: secret("CODEX_MODEL"),
-    DEVIN_MODEL: secret("DEVIN_MODEL"),
+    ...secrets([
+      "GITHUB_TOKEN",
+      "GITHUB_WEBHOOK_SECRET",
+      "SLACK_SIGNING_SECRET",
+      "SLACK_APPROVERS",
+      "SLACK_BOT_TOKEN",
+      "SLACK_CHANNEL_REPOS",
+      "TYPESAFE_API_KEY",
+      "AI_GATEWAY_TOKEN",
+      "DEVIN_API_KEY",
+      "REQUIRE_ACCESS",
+      "AUTOMATIONS_ENABLED",
+      "AGENT_HARNESS",
+      "CLAUDE_CODE_MODEL",
+      "CODEX_MODEL",
+      "DEVIN_MODEL",
+    ]),
   },
 });
 
@@ -119,10 +131,17 @@ export default Alchemy.Stack(
   "ai-intern",
   {
     providers: Cloudflare.providers(),
-    state: Cloudflare.state(),
+    state:
+      process.env.ALCHEMY_STATE_BACKEND === "cloudflare"
+        ? Cloudflare.state()
+        : Alchemy.localState(),
   },
+  // Live stages adopt the wrangler-managed resources in place (the same
+  // resources are declared 1:1, so adoption is a takeover of our own
+  // worker/bindings, not a foreign one). Test stages never adopt — their
+  // stage-suffixed names create fresh resources instead.
   Effect.gen(function* () {
     const worker = yield* Worker;
     return { url: worker.url };
-  }),
+  }).pipe(Alchemy.AdoptPolicy.adopt(stage === undefined || /^live(_|$)/.test(stage))),
 );

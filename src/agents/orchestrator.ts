@@ -225,7 +225,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     // A pre-aborted call fails fast with the caller's reason, before the
     // program exists — same synchronous checkpoint as before.
     abortSignal?.throwIfAborted();
-    const program = Effect.gen(this, function* () {
+    const program = Effect.gen({ self: this }, function* () {
       yield* Effect.promise(() => this.reclaimRuns());
       yield* Effect.sync(() => abortSignal?.throwIfAborted());
       const runs = this.store.list();
@@ -304,7 +304,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
           return abortSignal ? AbortSignal.any([abortSignal, controller.signal]) : controller.signal;
         }),
         (signal) =>
-          Effect.gen(this, function* () {
+          Effect.gen({ self: this }, function* () {
             yield* Effect.sync(() => signal.throwIfAborted());
             const output = yield* tryRunPromise((fiberSignal) =>
               childExecute(formatAgentToolInput(fullInput), {
@@ -330,7 +330,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
                 // grade stale output onto a cancelled/reclaimed record.
                 const tsKey = this.env.TYPESAFE_API_KEY?.trim() ?? "";
                 if (finished !== null && tsKey) {
-                  yield* Effect.forkDaemon(
+                  yield* Effect.forkDetach(
                     tryRunPromise(() => evaluateResultQuality(tsKey, output.slice(0, 2000))).pipe(
                       Effect.flatMap((quality) =>
                         Effect.sync(() => {
@@ -346,7 +346,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
                       ),
                       // Detached daemon: dies with no scope, never blocks the
                       // pipeline, and stays fail-open like the old .catch.
-                      Effect.catchAllCause(() => Effect.void),
+                      Effect.catchCause(() => Effect.void),
                     ),
                   );
                 }
@@ -369,9 +369,9 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
             // still lands its fenced terminal write — classified exactly as
             // the boundary will report it — before the original cause
             // continues out as the rejection.
-            Effect.catchAllCause((cause) => {
+            Effect.catchCause((cause) => {
               const failure = toRunFailure(cause);
-              return Effect.zipRight(
+              return Effect.andThen(
                 Effect.sync(() => {
                   finish(terminalStatusFor(failure.code), {
                     error: redactSecrets(failure.message).slice(0, 4000),

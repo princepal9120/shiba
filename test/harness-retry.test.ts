@@ -201,18 +201,19 @@ describe("withRetry", () => {
 describe("retrySchedule", () => {
   it("caps each scheduled wait at maxDelayMs and stops after maxAttempts - 1 retries", async () => {
     const policy: RetryPolicy = { maxAttempts: 5, baseDelayMs: 10, maxDelayMs: 25, retryIf: () => true };
-    const driver = await Effect.runPromise(Schedule.driver(Schedule.delays(retrySchedule(policy))));
+    const step = await Effect.runPromise(Schedule.toStep(retrySchedule(policy)));
     const delays: number[] = [];
-    // Jitter pinned to its ceiling: each step reads exactly
-    // min(base * 2^(n-1), maxDelayMs). driver.next sleeps each computed
-    // delay for real, so the tiny policy keeps this under ~100ms.
+    // Jitter pinned to its ceiling via Math.random: each step reads exactly
+    // min(base * 2^(n-1), maxDelayMs). toStep never sleeps — the returned
+    // delay is data — so the whole walk is instant and deterministic.
+    vi.spyOn(Math, "random").mockReturnValue(1);
     for (let i = 0; i < policy.maxAttempts - 1; i += 1) {
-      const delay = await Effect.runPromise(Effect.withRandomFixed(driver.next(new Error("x")), [1]));
+      const [, delay] = await Effect.runPromise(step(0, new Error("x")));
       delays.push(Duration.toMillis(delay));
     }
     expect(delays).toEqual([10, 20, 25, 25]);
     // The budget is spent: the schedule refuses a fifth wait outright.
-    await expect(Effect.runPromise(driver.next(new Error("x")))).rejects.toThrow();
+    await expect(Effect.runPromise(step(0, new Error("x")))).rejects.toThrow();
   });
 });
 

@@ -12,7 +12,8 @@
  *  (c) vars.INSTANCE_TYPE equals every containers[].instance_type in
  *      wrangler AND the matching Container's instanceType in alchemy.run.ts
  *  (d) every alchemy env entry is either a wrangler-declared name or a
- *      `secret("NAME")` deploy-time secret — alchemy-only bindings are drift
+ *      `secret("NAME")`/`...secrets([...])` deploy-time secret — alchemy-only
+ *      bindings are drift
  *
  * Usage: node scripts/check-alchemy-drift.mjs [--wrangler=<path>]
  *          [--alchemy=<path>] [--help]
@@ -39,8 +40,9 @@ Options:
 
 Asserts the alchemy.run.ts stack mirrors wrangler.jsonc: binding names and
 kinds, var values, DO class names, container settings, crons, compat, and
-the worker name. secret("NAME") env entries are deploy-time secrets and
-legitimate extras; any other alchemy-only env name is reported as drift.`);
+the worker name. Deploy-time secrets — secret("NAME") members or a
+...secrets([...]) spread — are legitimate extras; any other alchemy-only
+env name is reported as drift.`);
   process.exit(0);
 }
 
@@ -529,7 +531,7 @@ for (const [key, value] of env) {
   const kind = envKind(value);
   if (kind === "secret") continue;
   if (!declared.has(key) && key !== "ASSETS") {
-    drift.push(`drift: alchemy.run.ts env "${key}" has no wrangler.jsonc counterpart (only secret(...) entries may be extra)`);
+    drift.push(`drift: alchemy.run.ts env "${key}" has no wrangler.jsonc counterpart (only deploy-time secret entries may be extra)`);
   }
 }
 

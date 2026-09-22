@@ -5,18 +5,15 @@
  *
  * `withRetry` keeps its promise/AbortSignal boundary; internally it is an
  * `Effect.retry` over a real Schedule — `exponential` backoff, each delay
- * capped at `maxDelayMs` via `modifyDelay` (not `Schedule.upTo`, which bounds
- * a schedule's total elapsed rather than any single wait), then
- * `jitteredWith({min: 0, max: 1})` — the full-jitter family member that
- * reproduces this module's documented law (each wait uniform in
- * [0, capped]); plain `jittered`'s ±20% band is a different distribution.
- * An intersected `recurs(maxAttempts - 1)` bounds the attempt count.
+ * jittered and capped inside `modifyDelay` (`Schedule.jittered` only offers
+ * a fixed ±20% band, a different distribution than the law below), then
+ * bounded by `Schedule.max([delay, recurs(maxAttempts - 1)])` — recur while
+ * BOTH schedules want another step, waiting the maximum delay, which is
+ * `delaySchedule`'s since `recurs` emits none.
  *
- * Jitter draws from a Math.random-backed `Random` service. `Random.next`
- * resolves through the runtime-services fiberRef rather than the effect
- * environment, so a `Layer`/`provide` cannot reach it — `Effect.withRandom`
- * can. That keeps `backoffDelayMs`, which literally steps the same schedule,
- * and the runtime's waits on one RNG.
+ * Jitter draws are `Math.random` — the same mockable RNG `backoffDelayMs`
+ * (the closed form of the same law) uses, so tests pin both surfaces with
+ * one `vi.spyOn(Math, "random")`.
  *
  * The caller's signal bridges to a real fiber interrupt (`runFork` +
  * `Fiber.interrupt` from an abort listener — the same seam as
@@ -31,7 +28,7 @@
  * classifier's "retry budget exhausted" text — pinned by tests since the
  * flattened form is what the orchestrator classifies.
  */
-import { Cause, Chunk, Duration, Effect, Exit, Fiber, Random, Schedule } from "effect";
+import { Cause, Duration, Effect, Exit, Fiber, Schedule } from "effect";
 
 import { classifyRunError, type RunErrorCode } from "../run-errors.js";
 
@@ -80,58 +77,29 @@ export const HARNESS_RETRY: RetryPolicy = {
 };
 
 /**
- * A `Random` service whose draws are `Math.random()` — one RNG for the
- * schedule's jitter and for callers/tests that mock `Math.random` directly.
- */
-const MATH_RANDOM: Random.Random = {
-  [Random.RandomTypeId]: Random.RandomTypeId,
-  next: Effect.sync(() => Math.random()),
-  nextBoolean: Effect.sync(() => Math.random() > 0.5),
-  nextInt: Effect.sync(() => Math.floor(Math.random() * Number.MAX_SAFE_INTEGER)),
-  nextRange: (min: number, max: number) =>
-    Effect.sync(() => min + Math.random() * (max - min)),
-  nextIntBetween: (min: number, max: number) =>
-    Effect.sync(() => min + Math.floor(Math.random() * (max - min))),
-  shuffle: <A>(elements: Iterable<A>) =>
-    Effect.sync(() => {
-      const array = Array.from(elements);
-      for (let i = array.length - 1; i > 0; i -= 1) {
-        const j = Math.floor(Math.random() * (i + 1));
-        const tmp = array[i]!;
-        array[i] = array[j]!;
-        array[j] = tmp;
-      }
-      return Chunk.fromIterable(array);
-    }),
-};
-
-/**
- * Exponential backoff with the cap folded in before jitter: the nth wait is
- * uniform in [0, min(base * 2^(n-1), maxDelayMs)], exactly the previous
- * plain-TS law. Capping before jitter keeps `maxDelayMs` a hard bound
- * regardless of the jitter band.
+ * Exponential backoff with cap and full jitter folded into `modifyDelay`:
+ * the nth wait is uniform in [0, min(base * 2^(n-1), maxDelayMs)], exactly
+ * the previous plain-TS law. Capping before jitter keeps `maxDelayMs` a
+ * hard bound. `Schedule.jittered` is not used — it only offers a fixed
+ * ±20% band, a different distribution.
  */
 const delaySchedule = (policy: RetryPolicy): Schedule.Schedule<Duration.Duration> =>
-  Schedule.jitteredWith(
-    Schedule.modifyDelay(Schedule.exponential(policy.baseDelayMs), (_out, delay) =>
-      Duration.millis(Math.min(Duration.toMillis(delay), policy.maxDelayMs)),
+  Schedule.modifyDelay(Schedule.exponential(policy.baseDelayMs), ({ duration }) =>
+    Effect.succeed(
+      Duration.millis(Math.min(Duration.toMillis(duration), policy.maxDelayMs) * Math.random()),
     ),
-    { min: 0, max: 1 },
   );
 
 /**
  * The budget as a Schedule: `delaySchedule` supplies each wait;
  * `recurs(maxAttempts - 1)` bounds the retries so attempts total
- * `maxAttempts`. Exported so tests can step the schedule's delays
- * (`Schedule.delays` + `Schedule.driver`) instead of sleeping through them.
+ * `maxAttempts` — `Schedule.max` recurs while all member schedules do,
+ * taking the maximum delay, which is `delaySchedule`'s. Exported so tests
+ * can step the schedule's delays (`Schedule.toStep`) instead of sleeping
+ * through them.
  */
-export const retrySchedule = (
-  policy: RetryPolicy,
-): Schedule.Schedule<[Duration.Duration, number]> =>
-  Schedule.intersect(
-    delaySchedule(policy),
-    Schedule.recurs(Math.max(0, policy.maxAttempts - 1)),
-  );
+export const retrySchedule = (policy: RetryPolicy): Schedule.Schedule<Duration.Duration> =>
+  Schedule.max([delaySchedule(policy), Schedule.recurs(Math.max(0, policy.maxAttempts - 1))]);
 
 /**
  * Full jitter (AWS-style): each wait is uniform in [0, capped], where the cap
@@ -139,10 +107,10 @@ export const retrySchedule = (
  * maxDelayMs stays a hard bound and the test ceiling is deterministic.
  *
  * This is the closed form of the law `delaySchedule` encodes as
- * exponential → cap → jitter(0..1): `Random.next` draws `Math.random`
- * (`MATH_RANDOM`), so one mockable RNG drives both. The `retrySchedule`
- * metadata test steps the schedule itself and pins the same values, which
- * keeps this formula and the schedule from drifting apart.
+ * exponential → cap → jitter(0..1) — one mockable `Math.random` RNG drives
+ * both. The `retrySchedule` metadata test steps the schedule itself and
+ * pins the same values, which keeps this formula and the schedule from
+ * drifting apart.
  */
 export function backoffDelayMs(policy: RetryPolicy, attempt: number): number {
   const exponential = policy.baseDelayMs * 2 ** (attempt - 1);
@@ -200,7 +168,7 @@ export async function withRetry<T>(
     ),
     (error) => finalizeRetryError(policy, signal, error),
   );
-  const fiber = Effect.runFork(Effect.withRandom(program, MATH_RANDOM));
+  const fiber = Effect.runFork(program);
   const onAbort = () => Effect.runFork(Fiber.interrupt(fiber));
   signal?.addEventListener("abort", onAbort, { once: true });
   // An abort fired between the fork and the listener attaching — e.g. the
@@ -210,7 +178,7 @@ export async function withRetry<T>(
   try {
     const exit = await Effect.runPromiseExit(Fiber.join(fiber));
     if (Exit.isSuccess(exit)) return exit.value;
-    if (Cause.isInterruptedOnly(exit.cause)) throw cancelled();
+    if (Cause.hasInterruptsOnly(exit.cause)) throw cancelled();
     throw Cause.squash(exit.cause);
   } finally {
     signal?.removeEventListener("abort", onAbort);

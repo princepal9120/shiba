@@ -9,7 +9,7 @@
  * can tell a classified failure (`instanceof RunFailure`) from any other
  * unexpected rejection.
  */
-import { Cause, Chunk, Effect, Exit } from "effect";
+import { Cause, Effect, Exit, Result } from "effect";
 
 import {
   classifyRunError,
@@ -40,18 +40,17 @@ export class RunFailure extends RunError {
  * rejection carries).
  */
 export const toRunFailure = (cause: Cause.Cause<unknown>): RunFailure => {
-  if (Cause.isInterruptedOnly(cause)) {
+  if (Cause.hasInterruptsOnly(cause)) {
     return new RunFailure("cancelled", "interrupted");
   }
-  const defects = Chunk.toReadonlyArray(Cause.defects(cause));
-  if (defects.length > 0) {
-    const { code, message } = classifyRunError(defects[0]);
+  const defect = Cause.findDefect(cause);
+  if (Result.isSuccess(defect)) {
+    const { code, message } = classifyRunError(defect.success);
     return new RunFailure(code, message);
   }
-  for (const failure of Chunk.toReadonlyArray(Cause.failures(cause))) {
-    if (failure instanceof RunError) {
-      return new RunFailure(failure.code, failure.message);
-    }
+  const failure = Cause.findError(cause);
+  if (Result.isSuccess(failure) && failure.success instanceof RunError) {
+    return new RunFailure(failure.success.code, failure.success.message);
   }
   const { code, message } = classifyRunError(Cause.squash(cause));
   return new RunFailure(code, message);
@@ -78,7 +77,7 @@ export const tryRunPromise = <A>(
   thunk: (signal: AbortSignal) => Promise<A>,
   codeHint?: RunErrorCode,
 ): Effect.Effect<A, RunError> =>
-  Effect.async<A, RunError>((resume, signal) => {
+  Effect.callback<A, RunError>((resume, signal) => {
     Promise.resolve()
       .then(() => thunk(signal))
       .then(
