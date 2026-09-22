@@ -4,11 +4,14 @@
  *
  * Pipeline: envelope recipient → registered-mailbox check via the Mailbox
  * directory stub → `message.raw.tee()` (one branch streams into
- * `postal-mime`, the other stays queued for the raw-source dump and is
- * consumed only on parse failure, so the message is never held as a second
- * whole buffer beside the parser's own copy) → store the email through the
- * per-address Mailbox DO with a manifest row per MIME part → attachment
- * bodies to the `ATTACHMENTS` R2 bucket keyed `emailId/partId`.
+ * `postal-mime`, the other stays queued for the raw-source dump; the tee
+ * is what keeps the source readable for a dump on parse failure — it does
+ * NOT save memory: tee() enqueues every chunk into both branch queues, so
+ * while the parser runs the dump branch is buffering a full second copy
+ * anyway) → attachment bodies to the `ATTACHMENTS` R2 bucket keyed
+ * `emailId/partId` → store the email through the per-address Mailbox DO
+ * with a manifest row per landed part (bodies first, so a committed
+ * `r2_key` always resolves to a real object).
  *
  * Registered-only rule (megaplan constraint): a recipient with no registry
  * row is rejected with `message.setReject("Unknown address")` and counted —
@@ -170,10 +173,16 @@ async function putAttachment(
   env: Env,
   key: string,
   content: Uint8Array,
-  meta: Record<string, string>,
+  meta: { filename: string; mimeType: string; contentId: string },
 ): Promise<void> {
+  // customMetadata values are serialized into HTTP headers — keep
+  // `filename` out of them: a non-Latin-1 name (common in real mail) would
+  // fail the whole put, and the manifest row already preserves the true
+  // name. mimeType/contentId are ASCII by RFC.
   const customMetadata = Object.fromEntries(
-    Object.entries(meta).filter(([, v]) => v !== ""),
+    Object.entries({ mimeType: meta.mimeType, contentId: meta.contentId }).filter(
+      ([, v]) => v !== "",
+    ),
   );
   await env.ATTACHMENTS.put(key, content, {
     httpMetadata: meta.mimeType === "" ? undefined : { contentType: meta.mimeType },
@@ -214,24 +223,80 @@ function attachmentManifest(emailId: string, prepared: PreparedAttachment[]): Em
   }));
 }
 
-/** Every attachment body lands under `emailId/partId`; failures are logged, never thrown. */
+/**
+ * Every attachment body lands under `emailId/partId` and runs BEFORE the
+ * record write commits the manifest — so a committed `r2_key` always
+ * resolves to a real object. A part whose put fails is logged and dropped
+ * from the returned list (it gets no manifest row); the caller's email
+ * insert can only orphan objects on failure, never dangle a row.
+ */
 async function storeAttachments(
   env: Env,
   emailId: string,
   prepared: PreparedAttachment[],
-): Promise<void> {
-  const writes = prepared.map(async ({ partId, bytes, meta }) => {
+): Promise<PreparedAttachment[]> {
+  const writes = prepared.map(async (part) => {
     try {
-      await putAttachment(env, `${emailId}/${partId}`, bytes, meta);
+      await putAttachment(env, `${emailId}/${part.partId}`, part.bytes, part.meta);
+      return part;
     } catch (error) {
       logWarn("inbound_email_attachment_write_failed", {
         emailId,
-        part: partId,
+        part: part.partId,
         error: error instanceof Error ? error.message : String(error),
       });
+      return null;
     }
   });
-  await Promise.all(writes);
+  return (await Promise.all(writes)).filter(
+    (part): part is PreparedAttachment => part !== null,
+  );
+}
+
+/** Best-effort delete of bodies whose manifest rows were never committed. */
+async function deleteObjects(env: Env, keys: string[]): Promise<void> {
+  await Promise.all(
+    keys.map(async (key) => {
+      try {
+        await env.ATTACHMENTS.delete(key);
+      } catch (error) {
+        logWarn("inbound_email_attachment_delete_failed", {
+          key,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }),
+  );
+}
+
+/**
+ * Reconcile the store POST's result after bodies were already written.
+ * `null` (the write failed) → clean up the orphaned objects and reject so
+ * the MTA reports the drop. An id different from the one we minted means
+ * the store folded this delivery into an earlier copy (the `message_id`
+ * dedup in addEmail — Email Routing is at-least-once): the fresh bodies
+ * are unreferenced duplicates, so delete them and count nothing stored.
+ */
+async function reconcileStoreResult(
+  env: Env,
+  message: ForwardableEmailMessage,
+  emailId: string | null,
+  mintedId: string,
+  orphanKeys: string[],
+): Promise<"stored" | "rejected" | "duplicate"> {
+  if (emailId === null) {
+    await deleteObjects(env, orphanKeys);
+    // A registered recipient whose store write fails would be acked and
+    // permanently lost; the bounce reports the drop to the sender's MTA.
+    message.setReject("Mailbox storage failed");
+    return "rejected";
+  }
+  if (emailId !== mintedId) {
+    await deleteObjects(env, orphanKeys);
+    logWarn("inbound_email_duplicate_delivery", { emailId });
+    return "duplicate";
+  }
+  return "stored";
 }
 
 /**
@@ -269,10 +334,12 @@ export async function handleInboundEmail(
     return;
   }
 
-  // Tee the raw stream: one branch streams into the parser; the other stays
-  // queued for the raw-source dump and is read only when parsing fails —
-  // buffered up front, the message would sit in memory twice beside
-  // postal-mime's own copy.
+  // Tee the raw stream: one branch feeds the parser, the other stays
+  // queued for the raw-source dump and is canceled once parsing succeeds.
+  // tee() enqueues every chunk into BOTH branch queues, so during the
+  // parse the dump branch is already buffering a second copy of the whole
+  // message — the same peak as pre-buffering; what the tee buys is a
+  // re-readable source for the failure path, not a smaller footprint.
   const [parseRaw, dumpRaw] = message.raw.tee();
   let parsed = null;
   try {
@@ -290,10 +357,14 @@ export async function handleInboundEmail(
   if (parsed !== null) {
     await dumpRaw.cancel().catch(() => undefined);
     // The email id is minted here (not by the store) so attachment R2 keys
-    // and manifest rows can be built before the record write — one DO call
+    // and manifest rows are built from one value: bodies are written to R2
+    // first (a committed manifest row always resolves), then one DO call
     // stores the row and its manifest together.
     const id = `eml-${randomHex(8)}`;
     const prepared = prepareAttachments(parsed.attachments);
+    const writes = storeAttachments(env, id, prepared);
+    ctx?.waitUntil?.(writes);
+    const landed = await writes;
     const from =
       firstValidAddress(firstMailboxAddress(parsed.from), envelopeAddress(message.from ?? "")) ??
       "unknown@unknown.invalid";
@@ -309,26 +380,28 @@ export async function handleInboundEmail(
       in_reply_to: parsed.inReplyTo,
       references: splitMessageIds(parsed.references),
       created_at: messageDateMs(parsed.date),
-      attachments: attachmentManifest(id, prepared),
+      attachments: attachmentManifest(id, landed),
     };
     const emailId = await storeEmail(env, to, input);
-    if (emailId === null) {
-      // A registered recipient whose store write fails would be acked and
-      // permanently lost; the bounce reports the drop to the sender's MTA.
-      message.setReject("Mailbox storage failed");
-      return;
+    const outcome = await reconcileStoreResult(
+      env,
+      message,
+      emailId,
+      id,
+      landed.map((part) => `${id}/${part.partId}`),
+    );
+    if (outcome === "stored") {
+      stats.stored += 1;
     }
-    stats.stored += 1;
-    const writes = storeAttachments(env, emailId, prepared);
-    ctx?.waitUntil?.(writes);
-    await writes;
     return;
   }
 
   // Parse failure: keep the raw Subject verbatim, flag the record, and dump
   // the untouched source to R2 — the mail is stored, never crashed on. The
-  // dump branch of the tee is buffered only now, on the path that needs it.
+  // dead parse branch is canceled first so its queued copy of the message
+  // is freed while the dump branch drains.
   stats.parseFailed += 1;
+  await parseRaw.cancel().catch(() => undefined);
   let raw: ArrayBuffer | null = null;
   try {
     raw = await new Response(dumpRaw).arrayBuffer();
@@ -338,50 +411,65 @@ export async function handleInboundEmail(
       error: error instanceof Error ? error.message : String(error),
     });
   }
+  const id = `eml-${randomHex(8)}`;
+  // Same rule as the parsed path: the manifest row is committed only when
+  // its object exists, so the dump lands before the store write. A failed
+  // put just means no row — the parse_failed flag still records the loss.
+  let rawStored = false;
+  if (raw !== null) {
+    try {
+      const write = env.ATTACHMENTS.put(`${id}/raw-source`, raw, {
+        httpMetadata: { contentType: "message/rfc822" },
+      });
+      ctx?.waitUntil?.(write);
+      await write;
+      rawStored = true;
+    } catch (error) {
+      logWarn("inbound_email_raw_source_write_failed", {
+        emailId: id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
   const rawSubject = message.headers?.get("subject")?.trim() || EMPTY_SUBJECT;
   const from = firstValidAddress(
     envelopeAddress(message.headers?.get("from") ?? ""),
     envelopeAddress(message.from ?? ""),
   ) ?? "unknown@unknown.invalid";
-  const id = `eml-${randomHex(8)}`;
+  const attachments: EmailAttachmentInput[] | undefined =
+    raw !== null && rawStored
+      ? [
+          {
+            part_id: "raw-source",
+            filename: "raw-source.eml",
+            mime_type: "message/rfc822",
+            size: raw.byteLength,
+            r2_key: `${id}/raw-source`,
+          },
+        ]
+      : undefined;
   const emailId = await storeEmail(env, to, {
     id,
     direction: "inbound",
     from_addr: from,
     to_addr: to,
     subject: rawSubject,
-    body_text: `${PARSE_FAILED_FLAG} postal-mime could not parse this message; raw source preserved in the attachments bucket as raw-source.`,
+    body_text: rawStored
+      ? `${PARSE_FAILED_FLAG} postal-mime could not parse this message; raw source preserved in the attachments bucket as raw-source.`
+      : `${PARSE_FAILED_FLAG} postal-mime could not parse this message; raw source could not be recovered to the attachments bucket.`,
     message_id: message.headers?.get("message-id") ?? undefined,
     in_reply_to: message.headers?.get("in-reply-to") ?? undefined,
     references: splitMessageIds(message.headers?.get("references") ?? undefined),
-    attachments:
-      raw === null
-        ? undefined
-        : [
-            {
-              part_id: "raw-source",
-              filename: "raw-source.eml",
-              mime_type: "message/rfc822",
-              size: raw.byteLength,
-              r2_key: `${id}/raw-source`,
-            },
-          ],
+    attachments,
   });
-  if (emailId === null) {
-    message.setReject("Mailbox storage failed");
-    return;
-  }
-  stats.stored += 1;
-  if (raw !== null) {
-    const write = env.ATTACHMENTS.put(`${emailId}/raw-source`, raw, {
-      httpMetadata: { contentType: "message/rfc822" },
-    }).catch((error: unknown) => {
-      logWarn("inbound_email_raw_source_write_failed", {
-        emailId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    });
-    ctx?.waitUntil?.(write);
-    await write;
+  const outcome = await reconcileStoreResult(
+    env,
+    message,
+    emailId,
+    id,
+    rawStored ? [`${id}/raw-source`] : [],
+  );
+  if (outcome === "stored") {
+    stats.stored += 1;
   }
 }

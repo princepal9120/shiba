@@ -69,6 +69,9 @@ function makeEnv(): Env & { r2: Map<string, FakeR2Object>; stubs: Map<string, Fa
         r2.set(key, { key, content: bytes, httpMetadata: opts?.httpMetadata, customMetadata: opts?.customMetadata });
       },
       get: async (key: string) => r2.get(key) ?? null,
+      delete: async (key: string) => {
+        r2.delete(key);
+      },
     },
   };
   const typed = env as unknown as Env & {
@@ -235,7 +238,10 @@ describe("handleInboundEmail", () => {
     const obj = env.r2.get(`${email!.id}/part-0`);
     expect(obj).toBeTruthy();
     expect(new TextDecoder().decode(obj!.content)).toBe("col1,col2\n1,2\n");
-    expect(obj!.customMetadata?.filename).toBe("data.csv");
+    // Filename stays out of customMetadata (non-Latin-1 names would fail
+    // the put); the manifest row below is the durable record of it.
+    expect(obj!.customMetadata?.filename).toBeUndefined();
+    expect(obj!.customMetadata?.mimeType).toBe("text/csv");
     expect(obj!.httpMetadata?.contentType).toContain("text/csv");
     // The manifest row is what consumers (get_email, InboxTab) read — no
     // R2 list + HEAD needed to learn a part's name, type, size, or key.
@@ -250,6 +256,56 @@ describe("handleInboundEmail", () => {
         r2_key: `${email!.id}/part-0`,
       },
     ]);
+  });
+
+  it("drops the manifest row when an attachment body's R2 put fails", async () => {
+    const env = makeEnv();
+    await registerMailbox(env);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    env.ATTACHMENTS.put = async () => {
+      throw new Error("r2 unavailable");
+    };
+    try {
+      const raw =
+        `From: a@example.com\nTo: ${REGISTERED}\nSubject: with file\nMIME-Version: 1.0\n` +
+        `Content-Type: multipart/mixed; boundary=y\n\n` +
+        `--y\nContent-Type: text/plain; charset=utf-8\n\nsee attached\n\n` +
+        `--y\nContent-Type: text/csv; name="data.csv"\nContent-Disposition: attachment; filename="data.csv"\nContent-Transfer-Encoding: base64\n\nY29sMSxjbGwyCjEsMgo=\n\n--y--\n`;
+      const { message, rejectReason } = makeMessage(raw);
+      await handleInboundEmail(message, env);
+      // The email still stores — the failed part simply gets no manifest
+      // row, so consumers never see an r2_key pointing at a missing object.
+      expect(rejectReason()).toBeUndefined();
+      const [email] = await listEmails(env);
+      expect(email).toBeTruthy();
+      const { attachments } = await getEmailDetail(env, email!.id);
+      expect(attachments).toEqual([]);
+      expect(env.r2.size).toBe(0);
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining("inbound_email_attachment_write_failed"),
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("dedups an at-least-once redelivery by Message-ID and cleans up duplicate bodies", async () => {
+    resetInboundEmailStats();
+    const env = makeEnv();
+    await registerMailbox(env);
+    const raw =
+      `From: a@example.com\nTo: ${REGISTERED}\nSubject: report\nMessage-ID: <dup@example.com>\nMIME-Version: 1.0\n` +
+      `Content-Type: multipart/mixed; boundary=y\n\n` +
+      `--y\nContent-Type: text/plain; charset=utf-8\n\nsee attached\n\n` +
+      `--y\nContent-Type: text/csv; name="data.csv"\nContent-Disposition: attachment; filename="data.csv"\nContent-Transfer-Encoding: base64\n\nY29sMSxjbGwyCjEsMgo=\n\n--y--\n`;
+    await handleInboundEmail(makeMessage(raw).message, env);
+    await handleInboundEmail(makeMessage(raw).message, env);
+    const emails = await listEmails(env);
+    expect(emails).toHaveLength(1);
+    expect(inboundEmailStats().stored).toBe(1);
+    // Only the first delivery's objects remain — the redelivery's duplicate
+    // bodies (written under a fresh id before the dedup was known) are gone.
+    expect([...env.r2.keys()]).toEqual([`${emails[0]!.id}/part-0`]);
   });
 
   it("rejects a registered recipient when the store write fails", async () => {

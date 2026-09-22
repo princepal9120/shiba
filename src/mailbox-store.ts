@@ -233,7 +233,12 @@ export interface AddEmailInput {
   body_html?: string | null;
   status?: EmailStatus;
   created_at?: number;
-  /** RFC822 Message-ID of this email — recorded for reply threading. */
+  /**
+   * RFC822 Message-ID of this email — recorded for reply threading, and
+   * the delivery-dedup key: when it already maps to a stored email
+   * (`email_ids`), addEmail returns that row instead of writing a second
+   * copy, so at-least-once inbound delivery replays idempotently.
+   */
   message_id?: string;
   in_reply_to?: string;
   references?: string[];
@@ -603,6 +608,21 @@ export class MailboxStore {
     }
     const now = input.created_at ?? Date.now();
     const id = input.id ?? `eml-${randomHex(8)}`;
+    // At-least-once delivery (Email Routing redelivery, a retried POST)
+    // replays the same Message-ID: fold it into the first stored copy
+    // rather than inserting a second row whose `email_ids` mapping the
+    // INSERT OR IGNORE below would silently drop. Runs before the id
+    // collision check so an exact replay returns the row instead of 400ing.
+    if (input.message_id !== undefined) {
+      const mapping = this.exec(
+        `SELECT email_id FROM email_ids WHERE message_id = ?`,
+        input.message_id,
+      )[0];
+      const prior = mapping ? this.getEmail(String(mapping.email_id)) : null;
+      if (prior !== null) {
+        return prior;
+      }
+    }
     // A caller-supplied id must be fresh: checked up front (before any
     // thread row is created) so a PK collision surfaces as a 400 input
     // error, not a raw SQLite constraint failure.
@@ -610,12 +630,20 @@ export class MailboxStore {
       throw new InputError(`id already exists: ${id}.`);
     }
     // Validate the manifest before the email row exists — a bad entry must
-    // not strand a stored email with a half-written manifest.
+    // not strand a stored email with a half-written manifest. part_id
+    // uniqueness is checked here too: the manifest PK is (email_id,
+    // part_id), so a duplicate would commit the email then throw mid-loop
+    // on a constraint violation instead of failing as a clean 400.
     const attachments = input.attachments ?? [];
+    const seenPartIds = new Set<string>();
     for (const attachment of attachments) {
       if (attachment.part_id.trim() === "") {
         throw new InputError("attachments.part_id must be a non-empty string.");
       }
+      if (seenPartIds.has(attachment.part_id)) {
+        throw new InputError(`attachments.part_id must be unique: ${attachment.part_id}.`);
+      }
+      seenPartIds.add(attachment.part_id);
       if (!Number.isFinite(attachment.size) || attachment.size < 0) {
         throw new InputError("attachments.size must be a non-negative finite number.");
       }

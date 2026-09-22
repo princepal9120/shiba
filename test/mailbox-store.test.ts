@@ -250,6 +250,41 @@ describe("emails CRUD", () => {
     expect(store.listEmails()).toEqual([]);
   });
 
+  it("rejects duplicate part_ids before the email row commits", () => {
+    const store = makeStore();
+    expect(() =>
+      inbound(store, {
+        attachments: [
+          { part_id: "p", size: 1, r2_key: "x/p" },
+          { part_id: "p", size: 2, r2_key: "x/p2" },
+        ],
+      }),
+    ).toThrow(InputError);
+    // Without the up-front check the email + first manifest row would
+    // commit and the loop would die on the (email_id, part_id) PK.
+    expect(store.listEmails()).toEqual([]);
+  });
+
+  it("folds a message_id redelivery into the first stored email", () => {
+    const store = makeStore();
+    const first = inbound(store, { message_id: "<m@x>" });
+    // Email Routing is at-least-once: a replayed delivery returns the
+    // original row instead of writing a second one (the fresh id and
+    // manifest in the replay are ignored).
+    const replayed = inbound(store, {
+      message_id: "<m@x>",
+      subject: "redelivered",
+      attachments: [{ part_id: "p", size: 1, r2_key: "new/p" }],
+    });
+    expect(replayed.id).toBe(first.id);
+    expect(store.listEmails()).toHaveLength(1);
+    expect(store.getAttachments(first.id)).toEqual([]);
+    // A different message_id still stores normally.
+    const other = inbound(store, { message_id: "<other@x>" });
+    expect(other.id).not.toBe(first.id);
+    expect(store.listEmails()).toHaveLength(2);
+  });
+
   it("returns no rows for limit 0", () => {
     const store = makeStore();
     inbound(store);
