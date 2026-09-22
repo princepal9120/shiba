@@ -159,6 +159,7 @@ describe("withRetry", () => {
   });
 
   it("interrupts the backoff wait itself when the signal aborts mid-delay", async () => {
+    vi.spyOn(Math, "random").mockReturnValue(1); // jitter at its ceiling: the full 60s wait
     const controller = new AbortController();
     let calls = 0;
     const pending = withRetry(
@@ -199,16 +200,17 @@ describe("withRetry", () => {
 
 describe("retrySchedule", () => {
   it("caps each scheduled wait at maxDelayMs and stops after maxAttempts - 1 retries", async () => {
-    const policy: RetryPolicy = { maxAttempts: 5, baseDelayMs: 100, maxDelayMs: 250, retryIf: () => true };
+    const policy: RetryPolicy = { maxAttempts: 5, baseDelayMs: 10, maxDelayMs: 25, retryIf: () => true };
     const driver = await Effect.runPromise(Schedule.driver(Schedule.delays(retrySchedule(policy))));
     const delays: number[] = [];
     // Jitter pinned to its ceiling: each step reads exactly
-    // min(base * 2^(n-1), maxDelayMs), with no real time passing.
+    // min(base * 2^(n-1), maxDelayMs). driver.next sleeps each computed
+    // delay for real, so the tiny policy keeps this under ~100ms.
     for (let i = 0; i < policy.maxAttempts - 1; i += 1) {
       const delay = await Effect.runPromise(Effect.withRandomFixed(driver.next(new Error("x")), [1]));
       delays.push(Duration.toMillis(delay));
     }
-    expect(delays).toEqual([100, 200, 250, 250]);
+    expect(delays).toEqual([10, 20, 25, 25]);
     // The budget is spent: the schedule refuses a fifth wait outright.
     await expect(Effect.runPromise(driver.next(new Error("x")))).rejects.toThrow();
   });

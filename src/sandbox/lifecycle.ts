@@ -225,6 +225,9 @@ export async function runWithContainer<T>(
     if (taskInFlight) Effect.runFork(Fiber.interrupt(fiber));
   };
   opts.signal?.addEventListener("abort", onAbort, { once: true });
+  // An abort fired between the fork and the listener attaching isn't seen
+  // by the listener — check once more after attaching.
+  if (opts.signal?.aborted) onAbort();
   try {
     return await runWorkerEffect(Fiber.join(fiber));
   } finally {
