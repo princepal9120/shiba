@@ -1,25 +1,32 @@
 #!/usr/bin/env node
 /**
- * Ephemeral stack — the plain-wrangler stand-in for Alchemy stages
- * (per-PR `staging-{number}` deploys with destroy-on-close).
+ * Ephemeral stack — deploys an isolated `--stage <prefix>` copy of the
+ * app, smoke-tests it, then destroys the stage in a finally block.
  *
- * wrangler.jsonc is frozen — no `env.<name>` sections — so this script
- * writes a TEMPORARY override config `.wrangler-ephemeral-<prefix>.jsonc`
- * (a copy of wrangler.jsonc with the worker name suffixed `-<prefix>` and
- * preview_urls forced off), deploys it, smoke-tests the workers.dev URL,
- * then deletes the worker in a finally block (best-effort).
+ * Two drivers:
+ *   --alchemy (primary): `npx alchemy deploy --stage <prefix> --yes`
+ *     against alchemy.run.ts. ALCHEMY_STAGE=<prefix> is exported to the
+ *     child so the config's stage-conditional name produces
+ *     `ai-intern-<prefix>` — a pinned `name` is used verbatim by alchemy,
+ *     so without that suffix the stage would overwrite the live worker.
+ *   default (rollback): writes a TEMPORARY override config
+ *     `.wrangler-ephemeral-<prefix>.jsonc` (wrangler.jsonc with the worker
+ *     name suffixed `-<prefix>` and preview_urls forced off), then
+ *     `wrangler deploy --config` + `wrangler delete --config`.
  *
  * Smoke test: GET `/` first — this worker has no `/healthz` route and
  * gates every path behind Access/auth, so ANY HTTP status (401 included)
  * counts as "worker reachable"; only a network error or timeout fails.
  *
  * Usage:
- *   node scripts/ephemeral-stack.mjs [--prefix=<name>] [--wrangler=<path>]
- *                                    [--smoke-timeout-ms=<n>] [--keep]
+ *   node scripts/ephemeral-stack.mjs [--alchemy] [--prefix=<name>]
+ *          [--wrangler=<path>] [--smoke-timeout-ms=<n>] [--keep]
  *   node scripts/ephemeral-stack.mjs --dry-run [--prefix=<name>]
  *
- * Requires wrangler auth (`npx wrangler whoami`) and CLOUDFLARE secrets in
- * the environment when actually deploying. Never prints .dev.vars contents.
+ * Requires Cloudflare credentials in the environment (CLOUDFLARE_API_TOKEN
+ * / CLOUDFLARE_ACCOUNT_ID or an `alchemy profile`) when actually deploying,
+ * or wrangler auth (`npx wrangler whoami`) in wrangler mode. Never prints
+ * .dev.vars contents.
  */
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -38,18 +45,22 @@ if (flag("help") || flag("h")) {
   console.log(`Usage: node scripts/ephemeral-stack.mjs [options]
 
 Options:
-  --prefix=<name>          stage prefix (default: test-<unix-ts>)
-  --wrangler=<path>        base wrangler config (default: wrangler.jsonc)
+  --alchemy                drive the alchemy CLI: deploy --stage <prefix>,
+                           smoke, then destroy --stage <prefix> (primary)
+  --prefix=<name>          stage/worker suffix (default: test-<unix-ts>)
+  --wrangler=<path>        base wrangler config (wrangler mode only;
+                           default: wrangler.jsonc)
   --smoke-timeout-ms=<n>   smoke-test fetch timeout (default: 15000)
-  --keep                   skip teardown (leave the ephemeral worker live)
+  --keep                   skip teardown (leave the ephemeral stage live)
   --dry-run                print the plan without executing anything
   --help                   show this text
 
-Writes .wrangler-ephemeral-<prefix>.jsonc next to wrangler.jsonc, runs
-wrangler deploy --config <tmp>, fetches the deployed worker URL (GET / —
-the worker has no /healthz; any HTTP status, including the Access-gate
-401, counts as reachable), then wrangler delete --config <tmp> (unless
---keep).`);
+Alchemy mode runs alchemy deploy --stage <prefix> --yes with
+ALCHEMY_STAGE=<prefix> in the child env (the stage-suffixed worker name
+ai-intern-<prefix> comes from alchemy.run.ts). Wrangler mode writes
+.wrangler-ephemeral-<prefix>.jsonc, runs wrangler deploy --config <tmp>,
+then wrangler delete --config <tmp>. Both smoke-test GET / — the worker
+has no /healthz; any HTTP status (incl. the Access-gate 401) counts.`);
   process.exit(0);
 }
 
@@ -134,6 +145,7 @@ function stripTrailingCommas(text) {
 
 const parseJsonc = (text) => JSON.parse(stripTrailingCommas(stripJsoncComments(text)));
 
+const useAlchemy = flag("alchemy");
 const prefix = arg("prefix") ?? `test-${Math.floor(Date.now() / 1000)}`;
 if (!/^[a-z0-9][a-z0-9-]*$/.test(prefix)) {
   console.error(`ephemeral-stack: invalid --prefix "${prefix}" (lowercase dns-safe required)`);
@@ -158,27 +170,47 @@ const baseName = cfg.name;
 const workerName = `${baseName}-${prefix}`;
 const tmpConfig = resolve(root, `.wrangler-ephemeral-${prefix}.jsonc`);
 
-const deployCmd = `npx wrangler deploy --config ${tmpConfig}`;
-const deleteCmd = `npx wrangler delete --config ${tmpConfig} --name ${workerName}`;
+// Alchemy mode: --stage <prefix> drives alchemy.run.ts; ALCHEMY_STAGE in
+// the child env makes the config's stage-conditional name resolve to the
+// same ai-intern-<prefix> the wrangler mode writes into its temp config.
+const childEnv = useAlchemy ? { ...process.env, ALCHEMY_STAGE: prefix } : process.env;
+const deployCmd = useAlchemy
+  ? `npx alchemy deploy --stage ${prefix} --yes`
+  : `npx wrangler deploy --config ${tmpConfig}`;
+const deleteCmd = useAlchemy
+  ? `npx alchemy destroy --stage ${prefix} --yes`
+  : `npx wrangler delete --config ${tmpConfig} --name ${workerName}`;
 
 if (dryRun) {
   log(`prefix ${prefix} -> worker name ${workerName}`);
-  log(`would write temp config ${tmpConfig} (name="${workerName}", preview_urls=false)`);
-  log(`would run: ${deployCmd}`);
+  if (useAlchemy) {
+    log(`stage ${prefix} (ALCHEMY_STAGE exported to the child; name suffix comes from alchemy.run.ts)`);
+    log(`would run: ALCHEMY_STAGE=${prefix} ${deployCmd}`);
+  } else {
+    log(`would write temp config ${tmpConfig} (name="${workerName}", preview_urls=false)`);
+    log(`would run: ${deployCmd}`);
+  }
   log(`would smoke-test: GET https://${workerName}.<subdomain>.workers.dev/ (any HTTP status = reachable; timeout ${smokeTimeoutMs}ms)`);
   if (keep) log("--keep: teardown skipped");
-  else log(`would run: ${deleteCmd}`);
+  else log(`would run: ${useAlchemy ? `ALCHEMY_STAGE=${prefix} ` : ""}${deleteCmd}`);
   process.exit(0);
 }
 
-cfg.name = workerName;
-cfg.preview_urls = false;
-// Plain JSON is valid JSONC; write the resolved config rather than patching text.
-writeFileSync(tmpConfig, JSON.stringify(cfg, null, 2) + "\n");
-log(`wrote ${tmpConfig} (name="${workerName}", preview_urls=false)`);
+if (!useAlchemy) {
+  cfg.name = workerName;
+  cfg.preview_urls = false;
+  // Plain JSON is valid JSONC; write the resolved config rather than patching text.
+  writeFileSync(tmpConfig, JSON.stringify(cfg, null, 2) + "\n");
+  log(`wrote ${tmpConfig} (name="${workerName}", preview_urls=false)`);
+}
 
 function run(cmdArgs) {
-  const res = spawnSync("npx", cmdArgs, { cwd: root, encoding: "utf8", timeout: 600_000 });
+  const res = spawnSync("npx", cmdArgs, {
+    cwd: root,
+    env: childEnv,
+    encoding: "utf8",
+    timeout: 600_000,
+  });
   const out = `${res.stdout ?? ""}\n${res.stderr ?? ""}`;
   return { ok: !res.error && res.status === 0, out };
 }
@@ -207,10 +239,17 @@ async function smoke(url) {
   return null;
 }
 
+const deployArgs = useAlchemy
+  ? ["alchemy", "deploy", "--stage", prefix, "--yes"]
+  : ["wrangler", "deploy", "--config", tmpConfig];
+const destroyArgs = useAlchemy
+  ? ["alchemy", "destroy", "--stage", prefix, "--yes"]
+  : ["wrangler", "delete", "--config", tmpConfig, "--name", workerName];
+
 let exitCode = 0;
 try {
   log(`deploying ${workerName} ...`);
-  const deploy = run(["wrangler", "deploy", "--config", tmpConfig]);
+  const deploy = run(deployArgs);
   if (!deploy.ok) {
     console.error(`ephemeral-stack: deploy failed:\n${deploy.out.trim().split("\n").slice(-25).join("\n")}`);
     exitCode = 1;
@@ -228,16 +267,20 @@ try {
   }
 } finally {
   if (keep) {
-    log(`--keep: leaving ${workerName} live; config kept at ${tmpConfig}`);
+    log(
+      `--keep: leaving ${workerName} live${useAlchemy ? "" : `; config kept at ${tmpConfig}`}`,
+    );
   } else {
     log(`tearing down ${workerName} ...`);
-    const del = run(["wrangler", "delete", "--config", tmpConfig, "--name", workerName]);
+    const del = run(destroyArgs);
     if (!del.ok) {
       console.error(`ephemeral-stack: teardown failed (manual cleanup needed): ${deleteCmd}`);
       exitCode = exitCode || 1;
     }
-    rmSync(tmpConfig, { force: true });
-    log(`removed ${tmpConfig}`);
+    if (!useAlchemy) {
+      rmSync(tmpConfig, { force: true });
+      log(`removed ${tmpConfig}`);
+    }
   }
   log("done");
 }

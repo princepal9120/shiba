@@ -7,7 +7,10 @@
   "scripts": {
     "build": "pnpm run build:dashboard && pnpm run docs:build && node scripts/copy-docs.mjs && pnpm run docs:verify",
     "build:dashboard": "vite build --config vite.config.ts",
-    "deploy": "wrangler deploy",
+    "deploy": "alchemy deploy",
+    "deploy:preview": "alchemy plan",
+    "deploy:preview:wrangler": "node scripts/plan-deploy.mjs",
+    "deploy:destroy": "alchemy destroy",
     "dev": "vite --config vite.config.ts",
     "docs:build": "astro build --root web",
     "docs:check": "astro check --root web",
@@ -17,6 +20,7 @@
     "lint": "eslint src test",
     "setup": "node scripts/setup.mjs",
     "test": "vitest run",
+    "test:ephemeral": "node scripts/ephemeral-stack.mjs --alchemy",
     "test:live": "vitest run test/typesafe-live.test.ts",
     "typecheck": "tsc --noEmit"
   },

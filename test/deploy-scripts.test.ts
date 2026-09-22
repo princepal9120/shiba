@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -94,6 +94,57 @@ describe("ephemeral-stack", () => {
     expect(out.status).toBe(0);
     expect(out.stdout).toMatch(/workers\.dev\/ /);
     expect(out.stdout).toContain("any HTTP status");
+  });
+
+  it("--alchemy --dry-run prints the staged alchemy lifecycle", () => {
+    const out = run("ephemeral-stack.mjs", ["--alchemy", "--dry-run", "--prefix=ci7"]);
+    expect(out.status).toBe(0);
+    expect(out.stdout).toContain("ai-intern-ci7");
+    expect(out.stdout).toContain("ALCHEMY_STAGE=ci7");
+    expect(out.stdout).toContain("alchemy deploy --stage ci7 --yes");
+    expect(out.stdout).toContain("alchemy destroy --stage ci7 --yes");
+    expect(existsSync(join(ROOT, ".wrangler-ephemeral-ci7.jsonc"))).toBe(false);
+  });
+
+  it("--alchemy honors --keep and rejects bad prefixes", () => {
+    const kept = run("ephemeral-stack.mjs", ["--alchemy", "--dry-run", "--keep", "--prefix=ci9"]);
+    expect(kept.status).toBe(0);
+    expect(kept.stdout).toContain("--keep: teardown skipped");
+    const bad = run("ephemeral-stack.mjs", ["--alchemy", "--dry-run", "--prefix=Bad_Prefix"]);
+    expect(bad.status).toBe(1);
+  });
+});
+
+describe("check-alchemy-drift", () => {
+  it("alchemy.run.ts mirrors wrangler.jsonc in the real repo files", () => {
+    const out = run("check-alchemy-drift.mjs");
+    expect(out.status).toBe(0);
+    expect(out.stdout).toContain("in sync");
+  });
+
+  it("exits 1 when wrangler.jsonc gains a binding alchemy.run.ts lacks", () => {
+    const out = run("check-alchemy-drift.mjs", [
+      `--wrangler=${join(FIXTURES, "drift-wrangler.jsonc")}`,
+    ]);
+    expect(out.status).toBe(1);
+    expect(out.stderr).toContain("MY_KV");
+    expect(out.stderr).toContain("Automations");
+  });
+
+  it("exits 1 when alchemy.run.ts drops a var, renames the worker, or adds a non-secret entry", () => {
+    const out = run("check-alchemy-drift.mjs", [
+      `--alchemy=${join(FIXTURES, "drift-alchemy-run.txt")}`,
+    ]);
+    expect(out.status).toBe(1);
+    expect(out.stderr).toContain("RUNTIME");
+    expect(out.stderr).toContain("ROGUE");
+    expect(out.stderr).toContain("renamed-worker");
+  });
+
+  it("prints help", () => {
+    const out = run("check-alchemy-drift.mjs", ["--help"]);
+    expect(out.status).toBe(0);
+    expect(out.stdout).toContain("--alchemy");
   });
 });
 
@@ -222,6 +273,7 @@ describe("scripts/ built-ins-only guard (L6)", () => {
     "plan-deploy.mjs",
     "ephemeral-stack.mjs",
     "validate-credentials.mjs",
+    "check-alchemy-drift.mjs",
   ];
 
   for (const script of SCRIPTS) {
@@ -257,5 +309,20 @@ describe("scripts/ built-ins-only guard (L6)", () => {
         expect(specAllowed(spec)).toBe(true);
       }
     }
+  });
+});
+
+describe("alchemy adoption guards", () => {
+  it("src/ never imports alchemy — the app must stay runtime-agnostic", () => {
+    const walk = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+        e.isDirectory() ? walk(join(dir, e.name)) : [join(dir, e.name)],
+      );
+    const offenders = walk(join(ROOT, "src")).filter((f) =>
+      /from\s+["']alchemy|import\s*\(\s*["']alchemy|require\s*\(\s*["']alchemy/.test(
+        readFileSync(f, "utf8"),
+      ),
+    );
+    expect(offenders).toEqual([]);
   });
 });
