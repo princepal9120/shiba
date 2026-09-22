@@ -41,6 +41,7 @@ import {
   type TokenRecord,
 } from "./agent-tokens.js";
 import { audit } from "./audit.js";
+import { registerEmailTools } from "./mcp-email-tools.js";
 import type { Env } from "./env.js";
 import { redactSecrets } from "./security.js";
 
@@ -288,8 +289,9 @@ export class McpGateway extends McpAgent<Env> {
 
   async init(): Promise<void> {
     const registry = createToolRegistry(this.env);
-    // Later tasks register domain tools here: registerEmailTools(registry,
-    // this.env) (T6), registerMemoryTools(registry, this.env) (T9).
+    registerEmailTools(registry, this.env);
+    // Later tasks register domain tools here:
+    // registerMemoryTools(registry, this.env) (T9).
     for (const tool of registry.tools()) {
       this.server.registerTool(
         tool.name,
