@@ -9,6 +9,7 @@ import {
   leakedContainerCount,
   leakedContainers,
   runWithContainer,
+  setLeakPersistence,
   setSandboxHandleResolver,
   setSandboxOpsFactory,
   type ManagedContainer,
@@ -241,6 +242,35 @@ describe("runWithContainer", () => {
     // and never with the raw error text (only the id is safe to print).
     expect(logged).toContain("sbx-leak");
     expect(logged).not.toContain("destroy boom");
+  });
+
+  it("fires the persistence sink on leak and the forget sink on forgetLeaked", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const recorded: string[] = [];
+    const forgotten: string[] = [];
+    setLeakPersistence(
+      (leak) => recorded.push(leak.sandboxId),
+      (sandboxId) => forgotten.push(sandboxId),
+    );
+    try {
+      await expect(
+        runWithContainer(
+          {
+            acquire: async () => fakeOps(),
+            release: async () => {
+              throw new Error("destroy boom");
+            },
+            sandboxId: "sbx-leak-durable",
+          },
+          async () => {},
+        ),
+      ).rejects.toThrow("destroy boom");
+      expect(recorded).toEqual(["sbx-leak-durable"]);
+      forgetLeaked("sbx-leak-durable");
+      expect(forgotten).toEqual(["sbx-leak-durable"]);
+    } finally {
+      setLeakPersistence(() => {}, () => {});
+    }
   });
 
   it("task error wins over a release failure, and the leak is still recorded", async () => {

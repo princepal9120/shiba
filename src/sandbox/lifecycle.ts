@@ -107,10 +107,22 @@ export interface LeakedContainer {
   readonly error: string;
 }
 
-// Per-isolate: a Durable Object hibernation resets this registry. A later
-// failed destroy re-records the leak, so reclaim loses at most one pass.
+// Per-isolate: a Durable Object hibernation resets this registry. Callers
+// that can persist (the orchestrator DO) should register a sink so a leak
+// recorded before hibernation still gets its destroy retried.
 const leakedRegistry = new Map<string, LeakedContainer>();
 let leakedCount = 0;
+let leakSink: ((leak: LeakedContainer) => void) | undefined;
+let forgetSink: ((sandboxId: string) => void) | undefined;
+
+/** Register durable leak/forfeit callbacks (called fire-and-forget). */
+export function setLeakPersistence(
+  onLeak: (leak: LeakedContainer) => void,
+  onForget: (sandboxId: string) => void,
+): void {
+  leakSink = onLeak;
+  forgetSink = onForget;
+}
 
 /** Total release failures seen since this module loaded. */
 export function leakedContainerCount(): number {
@@ -125,12 +137,15 @@ export function leakedContainers(): readonly LeakedContainer[] {
 /** Drop the registry entry after a retry-destroy succeeded. */
 export function forgetLeaked(sandboxId: string): void {
   leakedRegistry.delete(sandboxId);
+  forgetSink?.(sandboxId);
 }
 
 function recordLeak(sandboxId: string, error: unknown): void {
   leakedCount += 1;
   const message = redactSecrets(error instanceof Error ? error.message : String(error));
-  leakedRegistry.set(sandboxId, { sandboxId, leakedAt: Date.now(), error: message.slice(0, 2000) });
+  const leak = { sandboxId, leakedAt: Date.now(), error: message.slice(0, 2000) };
+  leakedRegistry.set(sandboxId, leak);
+  leakSink?.(leak);
 }
 
 /**

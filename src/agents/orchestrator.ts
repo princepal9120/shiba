@@ -36,7 +36,11 @@ import {
   type ResolveResult,
 } from "../pending-approvals.js";
 import { makeSandboxId, parseGitHubRepoUrl, redactSecrets } from "../security.js";
-import { destroyManagedContainer, leakedContainers } from "../sandbox/lifecycle.js";
+import {
+  destroyManagedContainer,
+  leakedContainers,
+  setLeakPersistence,
+} from "../sandbox/lifecycle.js";
 import { runWorkerEffect, toRunFailure, tryRunPromise } from "../effect/runtime.js";
 import { classifyExecutorError, classifyRunError, runErrorWire, toTaggedError, type RunErrorCode, type RunErrorWire } from "../run-errors.js";
 import { parseSlackThreadName } from "../slack-thread.js";
@@ -47,6 +51,8 @@ import { OpenCodeAgent } from "./opencode-agent.js";
 export interface OrchestratorState {
   runs: DelegatedRun[];
   pendingApprovals?: PendingApproval[];
+  /** Leaks recorded before a hibernation still get their destroy retried. */
+  leakedContainers?: Record<string, { sandboxId: string; leakedAt: number; error: string }>;
 }
 
 /** A classified error lands as its matching terminal status. */
@@ -546,13 +552,37 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     return run.errorCode ? { ...run, errorWire: runErrorWire(run.errorCode) } : run;
   }
 
+  private leakPersistenceArmed = false;
+  /** Mirror the per-isolate leak registry into DO state so hibernation
+   * can't strand a failed destroy — the sink is registered lazily because
+   * subclasses in tests may skip the base constructor. */
+  private armLeakPersistence(): void {
+    if (this.leakPersistenceArmed) return;
+    this.leakPersistenceArmed = true;
+    setLeakPersistence(
+      (leak) =>
+        this.setState({
+          ...this.state,
+          leakedContainers: { ...this.state?.leakedContainers, [leak.sandboxId]: leak },
+        }),
+      (sandboxId) => {
+        if (this.state?.leakedContainers?.[sandboxId] === undefined) return;
+        const next = { ...this.state.leakedContainers };
+        delete next[sandboxId];
+        this.setState({ ...this.state, leakedContainers: next });
+      },
+    );
+  }
+
   private async destroySandbox(sandboxId: string): Promise<void> {
     // Release goes through the scoped lifecycle: failures are tracked as
     // leaked containers (warn + registry) instead of only logged.
+    this.armLeakPersistence();
     await destroyManagedContainer(this.env, sandboxId);
   }
 
   private async reclaimRuns(): Promise<void> {
+    this.armLeakPersistence();
     const { runs, reclaimed } = reclaimStaleRuns(this.store.list(), Date.now());
     if (reclaimed.length > 0) {
       this.setState({ ...this.state, runs });
@@ -563,7 +593,12 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     }
     // Leaked containers outlive the run that leaked them: retry destroy on
     // every reclaim pass; a successful destroy clears its own registry entry.
-    await Promise.all(leakedContainers().map((leak) => this.destroySandbox(leak.sandboxId)));
+    // Durable entries from before a hibernation union with this isolate's.
+    const leaks = new Map<string, { sandboxId: string; leakedAt: number; error: string }>(
+      Object.values(this.state?.leakedContainers ?? {}).map((leak) => [leak.sandboxId, leak]),
+    );
+    for (const leak of leakedContainers()) leaks.set(leak.sandboxId, leak);
+    await Promise.all([...leaks.values()].map((leak) => this.destroySandbox(leak.sandboxId)));
   }
 
   async clearRuns(): Promise<void> {
