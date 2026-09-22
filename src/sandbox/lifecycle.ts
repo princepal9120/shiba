@@ -198,19 +198,32 @@ export async function runWithContainer<T>(
   },
   task: (container: ManagedContainer) => T | Promise<T>,
 ): Promise<T> {
+  // Aborts interrupt the fiber only while the task is in-flight: an abort
+  // landing during release must not poison a completed task's result — a
+  // late result beats a fake-failed real one. The flag flips inside the
+  // program so the abort listener can't race the scope close.
+  let taskInFlight = false;
   const program = Effect.scoped(
     effectWithSignal((scopeSignal) =>
       Effect.gen(function* () {
         const container = yield* acquireContainer({ ...opts, signal: scopeSignal });
         yield* Effect.sync(() => opts.signal?.throwIfAborted());
-        return yield* Effect.promise(() => Promise.resolve(task(container)));
+        taskInFlight = true;
+        return yield* Effect.ensuring(
+          Effect.promise(() => Promise.resolve(task(container))),
+          Effect.sync(() => {
+            taskInFlight = false;
+          }),
+        );
       }),
     ),
   );
   // The caller's signal bridges to a real fiber interrupt: the program's
   // fiber is only ever awaited through runWorkerEffect — the single edge.
   const fiber = Effect.runFork(program);
-  const onAbort = () => Effect.runFork(Fiber.interrupt(fiber));
+  const onAbort = () => {
+    if (taskInFlight) Effect.runFork(Fiber.interrupt(fiber));
+  };
   opts.signal?.addEventListener("abort", onAbort, { once: true });
   try {
     return await runWorkerEffect(Fiber.join(fiber));

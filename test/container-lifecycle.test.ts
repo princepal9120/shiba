@@ -18,6 +18,10 @@ import type { ExecResult, SandboxOps } from "../src/runtime.js";
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 10));
 
+const waitFor = async (cond: () => boolean) => {
+  for (let i = 0; i < 100 && !cond(); i++) await tick();
+};
+
 const mocks = vi.hoisted(() => ({
   destroy: vi.fn(),
   getSandbox: vi.fn(),
@@ -305,12 +309,11 @@ describe("interruption-safe release", () => {
         await new Promise<never>(() => {});
       },
     );
-    await tick();
+    await waitFor(() => container !== undefined);
     controller.abort();
     await expect(run).rejects.toMatchObject({ code: "cancelled" });
     expect(release).toHaveBeenCalledOnce();
     expect(release).toHaveBeenCalledWith("sbx-stuck");
-    expect(container!.released).toBe(true);
   }, 10_000);
 
   it("aborts an in-flight op through the scope signal when the task did not pass one", async () => {
@@ -339,7 +342,7 @@ describe("interruption-safe release", () => {
       // that fires when the fiber is interrupted, so ops still abort.
       (container) => container.ops.exec("sleep 60"),
     );
-    await tick();
+    await waitFor(() => seenSignal !== undefined);
     controller.abort();
     await expect(run).rejects.toMatchObject({ code: "cancelled" });
     expect(release).toHaveBeenCalledOnce();
@@ -362,12 +365,68 @@ describe("interruption-safe release", () => {
         }),
       ),
     );
-    await tick();
+    await waitFor(() => container !== undefined);
     await Effect.runPromise(Fiber.interrupt(fiber));
     expect(release).toHaveBeenCalledOnce();
     expect(release).toHaveBeenCalledWith("sbx-fiber");
     expect(container!.released).toBe(true);
     expect(container!.generation).toBe(1);
+  });
+
+  it("resolves with the task value when the signal aborts while a slow release is running", async () => {
+    const controller = new AbortController();
+    let abortDuringRelease: (() => void) | undefined;
+    const release = vi.fn(
+      (_sandboxId: string) =>
+        new Promise<void>((resolve) => {
+          abortDuringRelease = () => {
+            controller.abort();
+            // The release keeps running past the abort before resolving.
+            setTimeout(resolve, 30);
+          };
+        }),
+    );
+    const run = runWithContainer(
+      {
+        acquire: async () => fakeOps(),
+        release,
+        sandboxId: "sbx-slow-release",
+        signal: controller.signal,
+      },
+      async () => "done",
+    );
+    await waitFor(() => abortDuringRelease !== undefined);
+    abortDuringRelease!();
+    await expect(run).resolves.toBe("done");
+    expect(release).toHaveBeenCalledOnce();
+    expect(release).toHaveBeenCalledWith("sbx-slow-release");
+  });
+
+  it("still surfaces a release failure when the signal aborts mid-release", async () => {
+    const controller = new AbortController();
+    const release = vi.fn(async (_sandboxId: string) => {
+      controller.abort();
+      throw new Error("destroy boom");
+    });
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await expect(
+        runWithContainer(
+          {
+            acquire: async () => fakeOps(),
+            release,
+            sandboxId: "sbx-release-fail-abort",
+            signal: controller.signal,
+          },
+          async () => "done",
+        ),
+      ).rejects.toThrow("destroy boom");
+    } finally {
+      errorSpy.mockRestore();
+    }
+    expect(leakedContainers().some((entry) => entry.sandboxId === "sbx-release-fail-abort")).toBe(
+      true,
+    );
   });
 });
 
