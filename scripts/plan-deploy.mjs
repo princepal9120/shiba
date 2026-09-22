@@ -2,12 +2,16 @@
 /**
  * Deploy plan — the plain-wrangler stand-in for `alchemy plan`. Runs
  * `wrangler deploy --dry-run` (or parses a saved capture via --fixture),
- * summarizes the resources the deploy would touch, and compares them
- * against the bindings/vars expected from wrangler.jsonc.
+ * summarizes the resources the deploy would touch, and compares them —
+ * name AND resource kind — against the bindings/vars expected from
+ * wrangler.jsonc (including `env.<name>` sections).
  *
  * Safety net, not a blocker: unexpected diffs print warnings but exit 0 by
- * default; pass --strict to fail on any unexpected/missing item. A wrangler
- * invocation failure is a real failure and exits 1.
+ * default; pass --strict to fail on any unexpected/missing/changed item. A
+ * wrangler invocation failure is a real failure and exits 1.
+ *
+ * Note: --dry-run exits before the "Deployed <name> triggers" block, so
+ * routes/crons never appear in plan output — only bindings and containers.
  *
  * Usage: node scripts/plan-deploy.mjs [--fixture=<file>] [--strict]
  *          [--wrangler=<path>] [--outdir=<dir>] [--help]
@@ -29,7 +33,7 @@ if (flag("help") || flag("h")) {
   console.log(`Usage: node scripts/plan-deploy.mjs [options]
 
 Options:
-  --fixture=<file>   parse a saved \`wrangler deploy --dry-run\` output file
+  --fixture=<file>   parse a saved wrangler-deploy-dry-run output file
                      instead of invoking wrangler (unit-testable, offline)
   --strict           exit 1 when the plan differs from wrangler.jsonc
   --wrangler=<path>  wrangler config for the expectation set
@@ -37,9 +41,9 @@ Options:
   --outdir=<dir>     dry-run output dir (default: ./.wrangler/deploy-preview)
   --help             show this text
 
-Prints "This deploy will: ..." — bound resources, vars, routes, containers —
-then warns about anything wrangler.jsonc expects that the plan dropped or
-added. Default exit 0 with warnings; a wrangler failure exits 1.`);
+Prints "This deploy will: ..." — bound resources, vars, containers — then
+warns about anything wrangler.jsonc expects that the plan dropped, added,
+or re-kinded. Default exit 0 with warnings; a wrangler failure exits 1.`);
   process.exit(0);
 }
 
@@ -47,8 +51,8 @@ const wranglerPath = resolve(root, arg("wrangler") ?? "wrangler.jsonc");
 const fixturePath = arg("fixture");
 const strict = flag("strict");
 
-// --- JSONC parse (comments + trailing commas, string-aware).
-function parseJsonc(text) {
+// --- JSONC: two string-aware passes — strip comments BEFORE trailing commas.
+function stripJsoncComments(text) {
   let out = "";
   let i = 0;
   let inString = false;
@@ -82,6 +86,36 @@ function parseJsonc(text) {
       i += 2;
       continue;
     }
+    out += c;
+    i++;
+  }
+  return out;
+}
+
+function stripTrailingCommas(text) {
+  let out = "";
+  let i = 0;
+  let inString = false;
+  while (i < text.length) {
+    const c = text[i];
+    const n = text[i + 1];
+    if (inString) {
+      out += c;
+      if (c === "\\") {
+        if (n !== undefined) out += n;
+        i += 2;
+        continue;
+      }
+      if (c === '"') inString = false;
+      i++;
+      continue;
+    }
+    if (c === '"') {
+      inString = true;
+      out += c;
+      i++;
+      continue;
+    }
     if (c === ",") {
       let j = i + 1;
       while (j < text.length && /\s/.test(text[j])) j++;
@@ -93,43 +127,71 @@ function parseJsonc(text) {
     out += c;
     i++;
   }
-  return JSON.parse(out);
+  return out;
 }
 
+const parseJsonc = (text) => JSON.parse(stripTrailingCommas(stripJsoncComments(text)));
+
+// --- Expected bindings: name -> canonical kind label matching wrangler's
+// bindings-table "Resource" column. Anything not producing an `env.X` field
+// (queues.consumers, tail_consumers, placement, routes, crons) is excluded.
 const BINDING_ARRAY_FIELDS = [
-  "kv_namespaces",
-  "r2_buckets",
-  "d1_databases",
-  "vectorize",
-  "hyperdrive",
-  "services",
-  "analytics_engine_datasets",
-  "dispatch_namespaces",
-  "mtls_certificates",
-  "pipelines",
-  "workflows",
-  "secrets_store_secrets",
-  "send_email",
+  ["kv_namespaces", "KV Namespace", (b) => b.binding],
+  ["r2_buckets", "R2 Bucket", (b) => b.binding],
+  ["d1_databases", "D1 Database", (b) => b.binding],
+  ["services", "Service", (b) => b.binding],
+  ["analytics_engine_datasets", "Analytics Engine Dataset", (b) => b.binding],
+  ["dispatch_namespaces", "Dispatch Namespace", (b) => b.binding],
+  ["hyperdrive", "Hyperdrive", (b) => b.binding],
+  ["vectorize", "Vectorize Index", (b) => b.binding],
+  ["secrets_store_secrets", "Secrets Store Secret", (b) => b.binding],
+  ["workflows", "Workflow", (b) => b.binding ?? b.name],
+  ["ratelimits", "Rate Limit", (b) => b.name],
+  ["send_email", "Send Email", (b) => b.name ?? b.binding],
+  ["pipelines", "Pipeline", (b) => b.binding],
+  ["mtls_certificates", "mTLS Certificate", (b) => b.binding],
+];
+const BINDING_OBJECT_FIELDS = [
+  ["ai", "AI", (o) => o.binding],
+  ["version_metadata", "Version Metadata", (o) => o.binding],
+  ["media", "Media", (o) => o.binding],
+  ["browser", "Browser", (o) => o.binding],
+  ["images", "Images", (o) => o.binding],
+];
+const BINDING_MAP_FIELDS = [
+  ["wasm_modules", "WASM Module"],
+  ["data_blobs", "Data Blob"],
+  ["text_blobs", "Text Blob"],
 ];
 
-function collectDeclared(cfg) {
-  const declared = new Map(); // name -> kind
+function collectDeclaredInto(cfg, declared) {
   const put = (name, kind) => {
     if (typeof name === "string" && name) declared.set(name, kind);
   };
-  put(cfg.ai?.binding, "AI");
-  for (const b of cfg.durable_objects?.bindings ?? []) put(b.name, "Durable Object");
-  // `assets` does not appear in wrangler's binding table; the dry run instead
-  // logs "Read N files from the assets directory", handled separately below.
-  if (cfg.assets) put("ASSETS", "Static Assets");
-  for (const field of BINDING_ARRAY_FIELDS) {
-    for (const b of cfg[field] ?? []) put(b.binding ?? b.name, field);
+  for (const [field, kind, pick] of BINDING_OBJECT_FIELDS) {
+    if (cfg[field] && typeof cfg[field] === "object") put(pick(cfg[field]), kind);
   }
-  for (const p of cfg.queues?.producers ?? []) put(p.binding, "Queue Producer");
-  for (const b of cfg.unsafe?.bindings ?? []) put(b.name, `unsafe(${b.type ?? "?"})`);
-  put(cfg.browser?.binding, "Browser");
-  put(cfg.images?.binding, "Images");
+  for (const b of cfg.durable_objects?.bindings ?? []) put(b.name, "Durable Object");
+  // `assets.binding` renames the implicit ASSETS Fetcher.
+  if (cfg.assets) put(cfg.assets.binding ?? "ASSETS", "Static Assets");
+  for (const [field, kind, pick] of BINDING_ARRAY_FIELDS) {
+    for (const b of cfg[field] ?? []) put(pick(b) ?? b.binding ?? b.name, kind);
+  }
+  for (const p of cfg.queues?.producers ?? []) put(p.binding ?? p.name, "Queue Producer");
+  for (const b of cfg.logfwdr?.bindings ?? []) put(b.name, "Logfwdr");
+  for (const b of cfg.unsafe?.bindings ?? []) put(b.name, `Unsafe (${b.type ?? "?"})`);
+  for (const [field, kind] of BINDING_MAP_FIELDS) {
+    for (const k of Object.keys(cfg[field] ?? {})) put(k, kind);
+  }
   for (const key of Object.keys(cfg.vars ?? {})) put(key, "Environment Variable");
+}
+
+function collectDeclared(cfg) {
+  const declared = new Map();
+  collectDeclaredInto(cfg, declared);
+  for (const sub of Object.values(cfg.env ?? {})) {
+    if (sub && typeof sub === "object") collectDeclaredInto(sub, declared);
+  }
   return declared;
 }
 
@@ -139,57 +201,41 @@ function collectDeclared(cfg) {
 //   Binding                          Resource
 //   env.CodingOrchestrator (CodingOrchestrator)   Durable Object
 //   env.GATEWAY_ID ("default")       Environment Variable
-// plus "The following containers are available:" and optional route blocks.
+//   The following containers are available:
+//   - ai-intern-sandbox (/repo/Dockerfile)
+// --dry-run exits before the "Deployed <name> triggers" section, so routes
+// and crons can never appear here.
 function parsePlan(output) {
-  const lines = output.split("\n").map((l) => l.replace(/\[[0-9;]*m/g, ""));
+  const lines = output.split("\n").map((l) => l.replace(/\[[0-9;]*m/g, ""));
   const seen = new Map(); // env name -> resource column
   const containers = [];
-  const routes = [];
-  const extras = [];
   let hasAssets = false;
   let inContainers = false;
-  let inRoutes = false;
 
   for (const raw of lines) {
     const line = raw.replace(/\s+$/, "");
     if (/^The following containers are available:/.test(line.trim())) {
       inContainers = true;
-      inRoutes = false;
-      continue;
-    }
-    if (/^(Routes?|Custom Domains?|Triggers)\b.*:/.test(line.trim())) {
-      inRoutes = true;
-      inContainers = false;
       continue;
     }
     if (line.trim() === "" || line.startsWith("--dry-run")) {
       inContainers = false;
-      inRoutes = false;
       continue;
     }
     if (/assets directory/.test(line)) hasAssets = true;
-
     if (inContainers) {
       const m = line.trim().match(/^-\s+(\S+)/);
       if (m) containers.push(m[1]);
       continue;
     }
-    if (inRoutes) {
-      const m = line.trim().match(/^-\s+(\S+)/);
-      if (m) routes.push(m[1]);
-      continue;
-    }
-
     const m = line.match(/^\s*env\.([A-Za-z_$][\w$]*)(?:\s+\(([^)]*)\))?\s{2,}(\S.*?)\s*$/);
-    if (m) {
-      seen.set(m[1], (m[3] ?? "").trim());
-      continue;
-    }
-    const schedule = line.match(/^\s*-\s+(cron|schedule)\s*[:=]?\s*(.+)$/i);
-    if (schedule) extras.push(`cron ${schedule[2].trim()}`);
+    if (m) seen.set(m[1], (m[3] ?? "").trim());
   }
-  return { seen, containers, routes, extras, hasAssets };
+  return { seen, containers, hasAssets };
 }
+
+// Wrangler's Resource column vs our canonical kinds — normalized for compare.
+const normKind = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
 let planOutput;
 if (fixturePath) {
@@ -225,28 +271,33 @@ const plan = parsePlan(planOutput);
 
 // --- Human-readable summary.
 const lines = ["This deploy will:"];
+const summarized = new Set(plan.seen.keys());
 for (const [name, resource] of plan.seen) {
   lines.push(`  bind ${name} (${resource})`);
 }
-for (const [name] of expected) {
-  if (name === "ASSETS" && plan.hasAssets && !plan.seen.has(name)) {
-    lines.push("  bind ASSETS (Static Assets)");
+for (const [name, kind] of expected) {
+  if (!summarized.has(name) && kind === "Static Assets" && plan.hasAssets) {
+    lines.push(`  bind ${name} (Static Assets)`);
   }
 }
 for (const c of plan.containers) lines.push(`  deploy container ${c}`);
-for (const r of plan.routes) lines.push(`  route ${r}`);
-for (const x of plan.extras) lines.push(`  trigger ${x}`);
 if (plan.seen.size === 0 && plan.containers.length === 0) {
   lines.push("  (no bindings parsed from wrangler output)");
 }
 console.log(lines.join("\n"));
 
-// --- Compare expectation vs plan.
+// --- Compare expectation vs plan: name AND kind.
 const warnings = [];
 for (const [name, kind] of expected) {
-  if (plan.seen.has(name)) continue;
-  if (name === "ASSETS" && plan.hasAssets) continue;
-  warnings.push(`missing: ${kind} "${name}" is declared in wrangler.jsonc but absent from the deploy plan`);
+  const seen = plan.seen.get(name);
+  if (seen === undefined) {
+    if (kind === "Static Assets" && plan.hasAssets) continue;
+    warnings.push(`missing: ${kind} "${name}" is declared in wrangler.jsonc but absent from the deploy plan`);
+    continue;
+  }
+  if (normKind(seen) !== normKind(kind)) {
+    warnings.push(`changed: "${name}" is ${kind} in wrangler.jsonc but "${seen}" in the deploy plan`);
+  }
 }
 for (const [name, resource] of plan.seen) {
   if (!expected.has(name)) {

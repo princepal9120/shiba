@@ -9,6 +9,10 @@
  * preview_urls forced off), deploys it, smoke-tests the workers.dev URL,
  * then deletes the worker in a finally block (best-effort).
  *
+ * Smoke test: GET `/` first — this worker has no `/healthz` route and
+ * gates every path behind Access/auth, so ANY HTTP status (401 included)
+ * counts as "worker reachable"; only a network error or timeout fails.
+ *
  * Usage:
  *   node scripts/ephemeral-stack.mjs [--prefix=<name>] [--wrangler=<path>]
  *                                    [--smoke-timeout-ms=<n>] [--keep]
@@ -42,13 +46,15 @@ Options:
   --help                   show this text
 
 Writes .wrangler-ephemeral-<prefix>.jsonc next to wrangler.jsonc, runs
-\`wrangler deploy --config <tmp>\`, fetches the deployed worker URL, then
-\`wrangler delete --config <tmp>\` (unless --keep).`);
+wrangler deploy --config <tmp>, fetches the deployed worker URL (GET / —
+the worker has no /healthz; any HTTP status, including the Access-gate
+401, counts as reachable), then wrangler delete --config <tmp> (unless
+--keep).`);
   process.exit(0);
 }
 
-// --- JSONC parse (comments + trailing commas, string-aware).
-function parseJsonc(text) {
+// --- JSONC: two string-aware passes — strip comments BEFORE trailing commas.
+function stripJsoncComments(text) {
   let out = "";
   let i = 0;
   let inString = false;
@@ -82,6 +88,36 @@ function parseJsonc(text) {
       i += 2;
       continue;
     }
+    out += c;
+    i++;
+  }
+  return out;
+}
+
+function stripTrailingCommas(text) {
+  let out = "";
+  let i = 0;
+  let inString = false;
+  while (i < text.length) {
+    const c = text[i];
+    const n = text[i + 1];
+    if (inString) {
+      out += c;
+      if (c === "\\") {
+        if (n !== undefined) out += n;
+        i += 2;
+        continue;
+      }
+      if (c === '"') inString = false;
+      i++;
+      continue;
+    }
+    if (c === '"') {
+      inString = true;
+      out += c;
+      i++;
+      continue;
+    }
     if (c === ",") {
       let j = i + 1;
       while (j < text.length && /\s/.test(text[j])) j++;
@@ -93,8 +129,10 @@ function parseJsonc(text) {
     out += c;
     i++;
   }
-  return JSON.parse(out);
+  return out;
 }
+
+const parseJsonc = (text) => JSON.parse(stripTrailingCommas(stripJsoncComments(text)));
 
 const prefix = arg("prefix") ?? `test-${Math.floor(Date.now() / 1000)}`;
 if (!/^[a-z0-9][a-z0-9-]*$/.test(prefix)) {
@@ -127,7 +165,7 @@ if (dryRun) {
   log(`prefix ${prefix} -> worker name ${workerName}`);
   log(`would write temp config ${tmpConfig} (name="${workerName}", preview_urls=false)`);
   log(`would run: ${deployCmd}`);
-  log(`would smoke-test: GET https://${workerName}.<subdomain>.workers.dev/healthz then / (timeout ${smokeTimeoutMs}ms)`);
+  log(`would smoke-test: GET https://${workerName}.<subdomain>.workers.dev/ (any HTTP status = reachable; timeout ${smokeTimeoutMs}ms)`);
   if (keep) log("--keep: teardown skipped");
   else log(`would run: ${deleteCmd}`);
   process.exit(0);
@@ -139,7 +177,7 @@ cfg.preview_urls = false;
 writeFileSync(tmpConfig, JSON.stringify(cfg, null, 2) + "\n");
 log(`wrote ${tmpConfig} (name="${workerName}", preview_urls=false)`);
 
-function run(cmdArgs, label) {
+function run(cmdArgs) {
   const res = spawnSync("npx", cmdArgs, { cwd: root, encoding: "utf8", timeout: 600_000 });
   const out = `${res.stdout ?? ""}\n${res.stderr ?? ""}`;
   return { ok: !res.error && res.status === 0, out };
@@ -151,14 +189,15 @@ function pickWorkerUrl(output) {
 }
 
 async function smoke(url) {
-  for (const path of ["/healthz", "/"]) {
+  // This worker has no /healthz and Access-gates every path: any HTTP
+  // status — including 401/404 — proves it is live. Only network failure
+  // or timeout counts as a smoke failure.
+  for (const path of ["/", "/healthz"]) {
     try {
       const res = await fetch(`${url}${path}`, {
         signal: AbortSignal.timeout(smokeTimeoutMs),
         redirect: "manual",
       });
-      // Any HTTP status — even 401 from the Access gate — proves the worker
-      // is live; only network failure/timeout is a smoke failure.
       log(`smoke: GET ${url}${path} -> ${res.status}`);
       return res.status;
     } catch (err) {
@@ -171,7 +210,7 @@ async function smoke(url) {
 let exitCode = 0;
 try {
   log(`deploying ${workerName} ...`);
-  const deploy = run(["wrangler", "deploy", "--config", tmpConfig], "deploy");
+  const deploy = run(["wrangler", "deploy", "--config", tmpConfig]);
   if (!deploy.ok) {
     console.error(`ephemeral-stack: deploy failed:\n${deploy.out.trim().split("\n").slice(-25).join("\n")}`);
     exitCode = 1;
@@ -192,7 +231,7 @@ try {
     log(`--keep: leaving ${workerName} live; config kept at ${tmpConfig}`);
   } else {
     log(`tearing down ${workerName} ...`);
-    const del = run(["wrangler", "delete", "--config", tmpConfig, "--name", workerName], "delete");
+    const del = run(["wrangler", "delete", "--config", tmpConfig, "--name", workerName]);
     if (!del.ok) {
       console.error(`ephemeral-stack: teardown failed (manual cleanup needed): ${deleteCmd}`);
       exitCode = exitCode || 1;

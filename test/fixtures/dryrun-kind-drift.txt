@@ -1,0 +1,10 @@
+⛅️ wrangler 4.118.0
+───────────────────
+Total Upload: 9154.99 KiB / gzip: 1835.32 KiB
+
+Your Worker has access to the following bindings:
+Binding                                                    Resource
+env.MY_KV ("x")                                            Environment Variable
+env.FOO ("x")                                              Environment Variable
+
+--dry-run: exiting now.

@@ -4,11 +4,13 @@
  * Alchemy's type-checked bindings/IAM. Reports, never mutates, and never
  * prints secret values (only binding and variable NAMES).
  *
- *  (a) every Durable Object class named in wrangler.jsonc is exported
- *      somewhere under src/ (`export class <name>`)
+ *  (a) every Durable Object class named in wrangler.jsonc (including
+ *      `env.<name>` sections) is exported somewhere under src/ —
+ *      `export class <name>` — or is declared external via `script_name`
  *  (b) every wrangler.jsonc `vars` key exists as a field on `Env`
- *  (c) secret-bearing OPTIONAL Env fields (name has SECRET|TOKEN|KEY) are
- *      provisioned: present in .dev.vars or listed by `wrangler secret list`
+ *  (c) secret-bearing OPTIONAL Env fields — names matching
+ *      /(?:^|_)(?:SECRET|TOKEN|KEY)(?:_|$)/ — are provisioned: present in
+ *      .dev.vars or listed by `wrangler secret list`
  *
  * Exit 1 when any REQUIRED item ((a) or (b)) is missing. Secrets are
  * optional wiring — missing ones print warnings but do not fail the run.
@@ -40,7 +42,9 @@ Options:
   --offline           skip wrangler secret list (no network/auth)
   --help              show this text
 
-Marks ✅ present, ⚠ missing-optional, ❌ missing-required. Exit 1 on ❌.`);
+Marks ✅ present, ⚠ missing-optional, ❌ missing-required. Exit 1 on ❌.
+DO bindings carrying script_name live in another worker and count as
+external, not missing exports.`);
   process.exit(0);
 }
 
@@ -50,8 +54,8 @@ const devVarsPath = resolve(root, arg("dev-vars") ?? ".dev.vars");
 const srcDir = resolve(root, arg("src") ?? "src");
 const offline = flag("offline");
 
-// --- JSONC parse (comments + trailing commas, string-aware).
-function parseJsonc(text) {
+// --- JSONC: two string-aware passes — strip comments BEFORE trailing commas.
+function stripJsoncComments(text) {
   let out = "";
   let i = 0;
   let inString = false;
@@ -85,6 +89,36 @@ function parseJsonc(text) {
       i += 2;
       continue;
     }
+    out += c;
+    i++;
+  }
+  return out;
+}
+
+function stripTrailingCommas(text) {
+  let out = "";
+  let i = 0;
+  let inString = false;
+  while (i < text.length) {
+    const c = text[i];
+    const n = text[i + 1];
+    if (inString) {
+      out += c;
+      if (c === "\\") {
+        if (n !== undefined) out += n;
+        i += 2;
+        continue;
+      }
+      if (c === '"') inString = false;
+      i++;
+      continue;
+    }
+    if (c === '"') {
+      inString = true;
+      out += c;
+      i++;
+      continue;
+    }
     if (c === ",") {
       let j = i + 1;
       while (j < text.length && /\s/.test(text[j])) j++;
@@ -96,11 +130,15 @@ function parseJsonc(text) {
     out += c;
     i++;
   }
-  return JSON.parse(out);
+  return out;
 }
 
+const parseJsonc = (text) => JSON.parse(stripTrailingCommas(stripJsoncComments(text)));
+
+// --- Env interface fields: name -> optional. Depth-tracked so nested type
+// literals don't leak members; supports `readonly` and `extends`.
 function collectEnvFields(text) {
-  const head = text.match(/export\s+interface\s+Env\s*\{/);
+  const head = text.match(/export\s+interface\s+Env\s*(?:extends\s+[^{]+?)?\s*\{/);
   if (!head || head.index === undefined) throw new Error("no `export interface Env` found");
   const start = head.index + head[0].length - 1;
   let depth = 0;
@@ -116,11 +154,39 @@ function collectEnvFields(text) {
     }
   }
   if (end === -1) throw new Error("unbalanced braces in interface Env");
-  const fields = new Map(); // name -> optional
-  for (const line of text.slice(start + 1, end).split("\n")) {
-    const m = line.match(/^\s*([A-Za-z_$][\w$]*)\s*(\?)?\s*:/);
+  const body = text
+    .slice(start + 1, end)
+    // Block comments (incl. /** doc comments */) go first: their braces and
+    // `https://` URLs must not affect member/depth detection.
+    .replace(/\/\*[\s\S]*?\*\//g, "");
+  const fields = new Map();
+  // Members end at `;`. Collect each depth-0 segment so nested type literals
+  // don't leak members and several members on one line are all seen.
+  let memberDepth = 0;
+  let pending = "";
+  const takeMember = (seg) => {
+    const m = seg.match(/^\s*(?:readonly\s+)?([A-Za-z_$][\w$]*)\s*(\?)?\s*:/);
     if (m) fields.set(m[1], m[2] === "?");
+  };
+  for (const rawLine of body.split("\n")) {
+    const line = rawLine.replace(/\/\/.*$/, ""); // remaining `//` are line comments
+    for (const ch of line) {
+      if (memberDepth === 0) {
+        if (ch === ";") {
+          takeMember(pending);
+          pending = "";
+          continue;
+        }
+        if (ch === "{") memberDepth++;
+        else if (ch === "}") memberDepth--;
+        pending += ch;
+      } else {
+        if (ch === "{") memberDepth++;
+        else if (ch === "}") memberDepth--;
+      }
+    }
   }
+  takeMember(pending);
   return fields;
 }
 
@@ -165,9 +231,18 @@ function listWranglerSecrets() {
   if (res.error || res.status !== 0) return null; // unauthenticated/unavailable
   const names = new Set();
   const out = `${res.stdout ?? ""}\n${res.stderr ?? ""}`;
-  // JSON array [{"name":"X",...}] shape, plus a tolerant NAME-ish fallback.
   for (const m of out.matchAll(/"name"\s*:\s*"([^"]+)"/g)) names.add(m[1]);
   return names;
+}
+
+// wrangler config sections to audit: root plus every env.<name> section.
+function configSections(cfg) {
+  return [
+    ["", cfg],
+    ...Object.entries(cfg.env ?? {})
+      .filter(([, v]) => v && typeof v === "object")
+      .map(([n, v]) => [`env.${n}`, v]),
+  ];
 }
 
 let cfg;
@@ -185,6 +260,8 @@ try {
   process.exit(1);
 }
 
+const sections = configSections(cfg);
+
 const results = [];
 let requiredMissing = 0;
 const ok = (msg) => results.push(`  ✅ ${msg}`);
@@ -194,28 +271,39 @@ const fail = (msg, hint) => {
   results.push(`  ❌ ${msg}${hint ? ` — fix: ${hint}` : ""}`);
 };
 
-// (a) Durable Object bindings -> exported classes under src/
+// (a) Durable Object bindings -> exported classes under src/, or external
+// when the binding carries script_name (class lives in another worker).
 const classes = collectExportedClasses(srcDir);
-const doBindings = cfg.durable_objects?.bindings ?? [];
 results.push("durable object bindings:");
-for (const b of doBindings) {
-  const cls = b.class_name ?? b.name;
-  if (classes.has(cls)) ok(`${b.name} -> class ${cls} exported under ${srcDir === resolve(root, "src") ? "src" : srcDir}/`);
-  else fail(`binding ${b.name} references class ${cls}, not exported under src/`, `add \`export class ${cls}\``);
+for (const [scope, section] of sections) {
+  const suffix = scope ? ` [${scope}]` : "";
+  for (const b of section.durable_objects?.bindings ?? []) {
+    const cls = b.class_name ?? b.name;
+    if (typeof b.script_name === "string" && b.script_name) {
+      ok(`${b.name} -> ${cls}@${b.script_name} (external worker)${suffix}`);
+    } else if (classes.has(cls)) {
+      ok(`${b.name} -> class ${cls} exported under src/${suffix}`);
+    } else {
+      fail(`binding ${b.name} references class ${cls}, not exported under src/${suffix}`, `add \`export class ${cls}\``);
+    }
+  }
 }
 
 // (b) vars -> Env fields
-const varsKeys = Object.keys(cfg.vars ?? {});
 results.push("wrangler vars:");
-for (const key of varsKeys) {
-  if (envFields.has(key)) ok(`var ${key} has Env field${envFields.get(key) ? " (optional)" : ""}`);
-  else fail(`var ${key} missing from Env interface`, "add it to src/env.ts");
+for (const [scope, section] of sections) {
+  const suffix = scope ? ` [${scope}]` : "";
+  for (const key of Object.keys(section.vars ?? {})) {
+    if (envFields.has(key)) ok(`var ${key} has Env field${envFields.get(key) ? " (optional)" : ""}${suffix}`);
+    else fail(`var ${key} missing from Env interface${suffix}`, "add it to src/env.ts");
+  }
 }
 
-// (c) secret-bearing optional Env fields -> .dev.vars or `wrangler secret`
-const secretNames = [...envFields.keys()].filter(
-  (name) => envFields.get(name) && /SECRET|TOKEN|KEY/.test(name),
-);
+// (c) secret-bearing optional Env fields -> .dev.vars or `wrangler secret`.
+// Bounded heuristic: SECRET|TOKEN|KEY as a whole word segment — MONKEY,
+// DONKEY etc. must not match.
+const SECRETISH = /(?:^|_)(?:SECRET|TOKEN|KEY)(?:_|$)/;
+const secretNames = [...envFields.keys()].filter((name) => envFields.get(name) && SECRETISH.test(name));
 const { keys: devVarKeys, present: devVarsPresent } = collectDevVarKeys(devVarsPath);
 let remoteSecrets = null;
 if (!offline) remoteSecrets = listWranglerSecrets();

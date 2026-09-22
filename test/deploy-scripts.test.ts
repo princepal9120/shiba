@@ -48,6 +48,22 @@ describe("plan-deploy", () => {
     expect(out.status).toBe(1);
   });
 
+  it("detects a kind change: declared KV shown as Environment Variable (M3)", () => {
+    const out = run("plan-deploy.mjs", [
+      `--fixture=${join(FIXTURES, "dryrun-kind-drift.txt")}`,
+      `--wrangler=${join(FIXTURES, "plan-wrangler-kv.jsonc")}`,
+    ]);
+    expect(out.status).toBe(0);
+    expect(out.stderr).toContain("changed");
+    expect(out.stderr).toContain("MY_KV");
+    const strict = run("plan-deploy.mjs", [
+      `--fixture=${join(FIXTURES, "dryrun-kind-drift.txt")}`,
+      `--wrangler=${join(FIXTURES, "plan-wrangler-kv.jsonc")}`,
+      "--strict",
+    ]);
+    expect(strict.status).toBe(1);
+  });
+
   it("prints help", () => {
     const out = run("plan-deploy.mjs", ["--help"]);
     expect(out.status).toBe(0);
@@ -72,6 +88,13 @@ describe("ephemeral-stack", () => {
     expect(out.status).toBe(0);
     expect(out.stdout).toMatch(/ai-intern-test-\d+/);
   });
+
+  it("documents the honest smoke target: GET / where any status counts (L4)", () => {
+    const out = run("ephemeral-stack.mjs", ["--dry-run", "--prefix=ci8"]);
+    expect(out.status).toBe(0);
+    expect(out.stdout).toMatch(/workers\.dev\/ /);
+    expect(out.stdout).toContain("any HTTP status");
+  });
 });
 
 describe("validate-credentials", () => {
@@ -79,19 +102,25 @@ describe("validate-credentials", () => {
     classes?: string[];
     devVars?: string;
     missingClass?: boolean;
+    externalClass?: boolean;
+    extraEnvFields?: string;
+    extraBindings?: string;
   }) {
     const dir = mkdtempSync(join(tmpdir(), "validate-creds-"));
     const wrangler = join(dir, "wrangler.jsonc");
     const env = join(dir, "env.ts");
     const src = join(dir, "src");
     mkdirSync(src);
-    const className = opts.missingClass ? "Missing" : "DoA";
+    const binding = opts.externalClass
+      ? `{ "name": "EXT", "class_name": "FarAway", "script_name": "other-worker" }`
+      : `{ "name": "DO_A", "class_name": "${opts.missingClass ? "Missing" : "DoA"}" }`;
     writeFileSync(
       wrangler,
       `{
         "name": "w",
         "vars": { "FOO": "a" },
-        "durable_objects": { "bindings": [{ "name": "DO_A", "class_name": "${className}" }] },
+        "durable_objects": { "bindings": [${binding}] },
+        ${opts.extraBindings ?? ""}
       }`,
     );
     writeFileSync(
@@ -99,12 +128,17 @@ describe("validate-credentials", () => {
       `export interface Env {
         FOO: string;
         DO_A: DurableObjectNamespace;
+        EXT: DurableObjectNamespace;
         SLACK_BOT_TOKEN?: string;
+        MONKEY?: string;
+        ${opts.extraEnvFields ?? ""}
       }`,
     );
     writeFileSync(join(src, "dummy.ts"), "");
-    const srcFile = join(src, "classes.ts");
-    writeFileSync(srcFile, (opts.classes ?? ["DoA"]).map((c) => `export class ${c} {}\n`).join(""));
+    writeFileSync(
+      join(src, "classes.ts"),
+      (opts.classes ?? ["DoA"]).map((c) => `export class ${c} {}\n`).join(""),
+    );
     const args = [`--wrangler=${wrangler}`, `--env=${env}`, `--src=${src}`, "--offline"];
     if (opts.devVars !== undefined) {
       const devVars = join(dir, ".dev.vars");
@@ -138,9 +172,51 @@ describe("validate-credentials", () => {
     expect(out.status).toBe(0);
     expect(out.stdout).toContain("SLACK_BOT_TOKEN not provisioned");
   });
+
+  it("marks script_name DO bindings as external, not missing exports (L5)", () => {
+    const out = run("validate-credentials.mjs", writeFixture({ externalClass: true }));
+    expect(out.status).toBe(0);
+    expect(out.stdout).toContain("external worker");
+    expect(out.stdout).toContain("FarAway@other-worker");
+  });
+
+  it("does not flag whole-word false positives like MONKEY as secrets (L5)", () => {
+    const out = run("validate-credentials.mjs", writeFixture({}));
+    expect(out.status).toBe(0);
+    expect(out.stdout).toContain("SLACK_BOT_TOKEN not provisioned");
+    expect(out.stdout).not.toMatch(/MONKEY.*not provisioned/);
+  });
+
+  it("audits bindings and vars inside env.<name> sections", () => {
+    const out = run(
+      "validate-credentials.mjs",
+      writeFixture({
+        extraBindings: `"env": { "staging": { "vars": { "STG_MISSING": "x" } } },`,
+      }),
+    );
+    expect(out.status).toBe(1);
+    expect(out.stdout).toContain("STG_MISSING");
+    expect(out.stdout).toContain("env.staging");
+  });
 });
 
-describe("scripts/ built-ins-only guard", () => {
+describe("scripts/ built-ins-only guard (L6)", () => {
+  const NODE_CORE = new Set([
+    "assert", "buffer", "child_process", "cluster", "console", "constants", "crypto",
+    "dgram", "diagnostics_channel", "dns", "domain", "events", "fs", "http", "http2",
+    "https", "inspector", "module", "net", "os", "path", "perf_hooks", "process",
+    "punycode", "querystring", "readline", "repl", "stream", "string_decoder", "sys",
+    "timers", "tls", "tty", "url", "util", "v8", "vm", "worker_threads", "zlib",
+  ]);
+  const specAllowed = (spec: string) =>
+    spec.startsWith("node:") || NODE_CORE.has(spec.split("/")[0]!);
+  const collectSpecifiers = (text: string) =>
+    [
+      ...text.matchAll(/from\s*["']([^"']+)["']/g),
+      ...text.matchAll(/import\s*["']([^"']+)["']/g),
+      ...text.matchAll(/import\s*\(\s*["']([^"']+)["']\s*\)/g),
+    ].map((m) => m[1]!);
+
   const SCRIPTS = [
     "check-env-types.mjs",
     "plan-deploy.mjs",
@@ -149,17 +225,37 @@ describe("scripts/ built-ins-only guard", () => {
   ];
 
   for (const script of SCRIPTS) {
-    it(`${script} imports only node: builtins`, () => {
+    it(`${script} imports only node builtins`, () => {
       const text = readFileSync(join(ROOT, "scripts", script), "utf8");
-      expect(text).not.toMatch(/require\s*\(/);
-      const specifiers = [
-        ...text.matchAll(/from\s+["']([^"']+)["']/g),
-        ...text.matchAll(/import\s+["']([^"']+)["']/g),
-        ...text.matchAll(/import\s*\(\s*["']([^"']+)["']\s*\)/g),
-      ].map((m) => m[1]);
-      for (const spec of specifiers) {
-        expect(spec?.startsWith("node:")).toBe(true);
+      expect(text).not.toMatch(/\brequire\s*\(/);
+      expect(text).not.toMatch(/\bcreateRequire\b/);
+      for (const spec of collectSpecifiers(text)) {
+        expect(specAllowed(spec)).toBe(true);
       }
     });
   }
+
+  it("the guard itself catches npm imports, require, and createRequire", () => {
+    const bad = [
+      `import x from"lodash";`,
+      `import x from "express";`,
+      `const y = require("y");`,
+      `import("zod").then(() => {});`,
+      `const r = createRequire(import.meta.url);`,
+    ];
+    for (const line of bad) {
+      const specs = collectSpecifiers(line);
+      const viaSpecifier = specs.length > 0 && specs.every(specAllowed);
+      const viaRequire = /\brequire\s*\(|\bcreateRequire\b/.test(line);
+      expect(viaSpecifier && !viaRequire).toBe(false);
+    }
+  });
+
+  it("the guard allows bare core module specifiers", () => {
+    for (const line of [`import fs from "fs";`, `import x from "path/posix";`, `import "node:test";`]) {
+      for (const spec of collectSpecifiers(line)) {
+        expect(specAllowed(spec)).toBe(true);
+      }
+    }
+  });
 });
