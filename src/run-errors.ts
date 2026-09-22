@@ -17,7 +17,12 @@ export type RunErrorCode =
   | "outcome_unknown"
   | "egress_denied"
   | "cancelled"
-  | "internal_error";
+  | "internal_error"
+  | "container_lost"
+  | "credential_expired"
+  | "quota_exhausted"
+  | "timeout_scope"
+  | "supervision_exhausted";
 
 /** HTTP status -> error code, ported from their statusToTurnCode. */
 export function statusToRunCode(httpStatus: number | null): RunErrorCode {
@@ -37,6 +42,24 @@ export function statusToRunCode(httpStatus: number | null): RunErrorCode {
  * 3-digit number (commit hash, file count, port) must never classify.
  */
 const STATUS_CONTEXT_RE = /(?:status(?: code)?|HTTP)\s*[:=]?\s*([1-5]\d{2})\b/i;
+
+/**
+ * Cloudflare quota code 10400 — like STATUS_CONTEXT_RE it requires an
+ * explicit context word ("code", "error", "status"); a bare 10400 is a
+ * count, not a quota failure.
+ */
+const QUOTA_CONTEXT_RE = /(?:status|code|error)\s*[:=]?\s*10400\b/i;
+
+/** The sandbox container died mid-run (SIGKILL, OOM); side effects unverified. */
+const CONTAINER_DEATH_RE = /\b(?:sigkill|oomkilled|oom)\b|out[\s-]of[\s-]memory/i;
+
+/**
+ * Overall-run deadline language — "run timeout"/"timed out" or a deadline
+ * that is reached or exceeded. A bare "deadline" with no timeout context
+ * (scheduling, estimates) must not classify.
+ */
+const TIMEOUT_SCOPE_RE =
+  /\brun\s+(?:timeout|timed?\s*out|deadline)\b|\b(?:overall\s+)?deadline\s*(?:was\s+|is\s+)?(?:exceeded|reached|hit|expired|missed|passed|reclaimed)\b|\b(?:exceeded|reached|hit|expired|missed|passed|reclaimed)\s+(?:its|the|a)\s+(?:[\w-]+\s+){0,4}deadline\b/i;
 
 const HARNESS_ERROR_NAMES = new Set([
   "OpenCodeErrorEvent",
@@ -58,8 +81,21 @@ export function classifyRunError(error: unknown): { code: RunErrorCode; message:
   try {
     const message = error instanceof Error ? error.message : String(error ?? "unknown");
     if (isAbortError(error)) return { code: "cancelled", message };
+    // The retry budget being spent is the failure, whatever the attempts saw.
+    if (error instanceof Error && error.name === "RetryExhaustedError") {
+      return { code: "supervision_exhausted", message };
+    }
+    if (CONTAINER_DEATH_RE.test(message)) return { code: "container_lost", message };
+    if (QUOTA_CONTEXT_RE.test(message)) return { code: "quota_exhausted", message };
+    if (TIMEOUT_SCOPE_RE.test(message)) return { code: "timeout_scope", message };
     const match = STATUS_CONTEXT_RE.exec(message);
-    if (match) return { code: statusToRunCode(Number(match[1])), message };
+    if (match) {
+      const status = Number(match[1]);
+      if (status === 401 && /expired/i.test(message)) {
+        return { code: "credential_expired", message };
+      }
+      return { code: statusToRunCode(status), message };
+    }
     if (error instanceof Error && HARNESS_ERROR_NAMES.has(error.name)) {
       return { code: "executor_failed", message };
     }
@@ -130,6 +166,26 @@ export const RUN_ERROR_DEFS = {
     userFacing: false,
     summary: "An internal error occurred.",
   },
+  container_lost: {
+    userFacing: true,
+    summary: "The sandbox container died mid-run — side effects are unverified.",
+  },
+  credential_expired: {
+    userFacing: true,
+    summary: "The provider credential expired — rotate or refresh it and retry.",
+  },
+  quota_exhausted: {
+    userFacing: true,
+    summary: "A Cloudflare or account quota was exhausted — check usage limits and billing.",
+  },
+  timeout_scope: {
+    userFacing: true,
+    summary: "The run hit its overall deadline — side effects are unverified; verify repository state before retrying.",
+  },
+  supervision_exhausted: {
+    userFacing: false,
+    summary: "The retry budget was exhausted after repeated failed attempts.",
+  },
 } satisfies Record<RunErrorCode, { userFacing: boolean; summary: string }>;
 
 export interface RunErrorWire {
@@ -144,7 +200,7 @@ export interface RunErrorWire {
  */
 export function runErrorWire(code: RunErrorCode): RunErrorWire {
   return {
-    status: code === "outcome_unknown" ? "unknown" : "error",
+    status: code === "outcome_unknown" || code === "container_lost" ? "unknown" : "error",
     code,
     userMessage: RUN_ERROR_DEFS[code].summary,
   };

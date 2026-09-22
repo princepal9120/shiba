@@ -24,6 +24,11 @@ const ALL_CODES: RunErrorCode[] = [
   "egress_denied",
   "cancelled",
   "internal_error",
+  "container_lost",
+  "credential_expired",
+  "quota_exhausted",
+  "timeout_scope",
+  "supervision_exhausted",
 ];
 
 describe("statusToRunCode", () => {
@@ -88,6 +93,89 @@ describe("classifyRunError", () => {
     );
     expect(classifyRunError(new OpenCodeErrorEvent("status code: 408")).code).toBe("request_timeout");
   });
+
+  it("maps an explicit 401 with an expired credential to credential_expired", () => {
+    expect(
+      classifyRunError(new Error("provider returned status 401: token expired")).code,
+    ).toBe("credential_expired");
+    expect(classifyRunError(new Error("HTTP 401 — credential EXPIRED")).code).toBe(
+      "credential_expired",
+    );
+  });
+
+  it("keeps a 401 without 'expired' as authentication_error", () => {
+    expect(classifyRunError(new Error("status 401 unauthorized")).code).toBe(
+      "authentication_error",
+    );
+  });
+
+  it("does not classify 'expired' without explicit HTTP context", () => {
+    expect(classifyRunError(new Error("credential expired")).code).toBe("internal_error");
+  });
+
+  it.each([
+    "Cloudflare API failed: code 10400",
+    "status 10400 quota exceeded",
+    "error 10400: container limit",
+    "code=10400",
+  ])("maps Cloudflare quota code 10400 in context: %s", (message) => {
+    expect(classifyRunError(new Error(message)).code).toBe("quota_exhausted");
+  });
+
+  it.each([
+    "10400 files scanned",
+    "saw 10400 on the dashboard",
+  ])("does not over-match a bare 10400: %s", (message) => {
+    expect(classifyRunError(new Error(message)).code).toBe("internal_error");
+    expect(classifyRunError(new OpenCodeErrorEvent(message)).code).toBe("executor_failed");
+  });
+
+  it.each([
+    "sandbox exited: SIGKILL",
+    "process oomkilled",
+    "OOMKilled by the kernel",
+    "worker hit OOM limit",
+    "out of memory in container",
+    "Out-of-memory condition",
+  ])("maps container death signals: %s", (message) => {
+    expect(classifyRunError(new Error(message)).code).toBe("container_lost");
+  });
+
+  it.each(["boom", "zoom meeting error"])(
+    "does not over-match container death substrings: %s",
+    (message) => {
+      expect(classifyRunError(new Error(message)).code).toBe("internal_error");
+    },
+  );
+
+  it("maps a RetryExhaustedError name to supervision_exhausted", () => {
+    const err = new Error("gave up after 3 attempts");
+    err.name = "RetryExhaustedError";
+    expect(classifyRunError(err).code).toBe("supervision_exhausted");
+  });
+
+  it("lets the RetryExhaustedError name win over an embedded status", () => {
+    const err = new Error("attempts failed with status 500");
+    err.name = "RetryExhaustedError";
+    expect(classifyRunError(err).code).toBe("supervision_exhausted");
+  });
+
+  it.each([
+    "Run exceeded its 45-minute deadline and was reclaimed; side effects are unverified",
+    "run timeout after 900s",
+    "run timed out waiting for the executor",
+    "overall deadline hit for run abc123",
+    "deadline exceeded",
+  ])("maps overall-run timeout language: %s", (message) => {
+    expect(classifyRunError(new Error(message)).code).toBe("timeout_scope");
+  });
+
+  it.each(["deadline estimator crashed", "the deadline field was renamed"])(
+    "does not over-match unrelated deadline text: %s",
+    (message) => {
+      expect(classifyRunError(new Error(message)).code).toBe("internal_error");
+    },
+  );
 });
 
 describe("classifyExecutorError", () => {
@@ -101,6 +189,16 @@ describe("classifyExecutorError", () => {
     const abort = new Error("aborted");
     abort.name = "AbortError";
     expect(classifyExecutorError(abort).code).toBe("cancelled");
+  });
+
+  it("delegates the new codes through classifyRunError", () => {
+    const retry = new Error("budget exhausted");
+    retry.name = "RetryExhaustedError";
+    expect(classifyExecutorError(retry).code).toBe("supervision_exhausted");
+    expect(classifyExecutorError(new Error("container oomkilled")).code).toBe("container_lost");
+    expect(classifyExecutorError(new Error("status 401: key expired")).code).toBe(
+      "credential_expired",
+    );
   });
 });
 
@@ -116,17 +214,23 @@ describe("RUN_ERROR_DEFS", () => {
 });
 
 describe("runErrorWire", () => {
-  it("projects outcome_unknown to status unknown, others to error", () => {
+  it("projects indeterminate codes to status unknown, others to error", () => {
     expect(runErrorWire("outcome_unknown").status).toBe("unknown");
-    for (const code of ALL_CODES.filter((c) => c !== "outcome_unknown")) {
-      expect(runErrorWire(code).status).toBe("error");
+    expect(runErrorWire("container_lost").status).toBe("unknown");
+    for (const code of ALL_CODES.filter(
+      (c) => c !== "outcome_unknown" && c !== "container_lost",
+    )) {
+      expect(runErrorWire(code).status, code).toBe("error");
     }
   });
 
-  it("carries exactly {status, code, userMessage} with no raw error text", () => {
-    const wire = runErrorWire("rate_limit_exceeded");
-    expect(Object.keys(wire).sort()).toEqual(["code", "status", "userMessage"]);
-    expect(wire.code).toBe("rate_limit_exceeded");
-    expect(wire.userMessage).toBe(RUN_ERROR_DEFS.rate_limit_exceeded.summary);
-  });
+  it.each(["rate_limit_exceeded", "container_lost"] as const)(
+    "carries exactly {status, code, userMessage} with no raw error text: %s",
+    (code) => {
+      const wire = runErrorWire(code);
+      expect(Object.keys(wire).sort()).toEqual(["code", "status", "userMessage"]);
+      expect(wire.code).toBe(code);
+      expect(wire.userMessage).toBe(RUN_ERROR_DEFS[code].summary);
+    },
+  );
 });
