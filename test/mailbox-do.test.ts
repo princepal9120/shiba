@@ -25,10 +25,13 @@ interface FakeStub {
 interface Harness {
   stub: (address: string) => FakeStub;
   directory: FakeStub;
+  /** In-memory ATTACHMENTS bucket — the DO deletes keys on hard delete. */
+  r2: Map<string, Uint8Array>;
 }
 
 function makeHarness(): Harness {
   const stubs = new Map<string, FakeStub>();
+  const r2 = new Map<string, Uint8Array>();
   const create = (name: string): FakeStub => {
     const db = new DatabaseSync(":memory:");
     const ctx = {
@@ -67,11 +70,21 @@ function makeHarness(): Harness {
         return stub;
       },
     },
+    ATTACHMENTS: {
+      put: async (key: string, value: Uint8Array) => {
+        r2.set(key, value);
+      },
+      get: async (key: string) => r2.get(key) ?? null,
+      delete: async (key: string) => {
+        r2.delete(key);
+      },
+    },
   } as unknown as Env;
   return {
     // Go through the real helpers so stub-name normalization is exercised.
     stub: (address) => mailboxStub(env, address) as unknown as FakeStub,
     directory: mailboxDirectoryStub(env) as unknown as FakeStub,
+    r2,
   };
 }
 
@@ -256,6 +269,38 @@ describe("email routes", () => {
 
     expect((await send(stub, "DELETE", `/emails/${email.id}`)).status).toBe(200);
     expect((await send(stub, "DELETE", `/emails/${email.id}`)).status).toBe(404);
+  });
+
+  it("hard delete removes the email's R2 objects enumerated by the manifest", async () => {
+    const h = makeHarness();
+    const stub = h.stub("agent@shiba.dev");
+    // The handler writes bodies to R2 before the store call commits their
+    // manifest rows — seed the bucket with objects under the same keys.
+    const { email } = await asJson(
+      await seedEmail(stub, {
+        id: "eml-cleanup",
+        attachments: [
+          {
+            part_id: "part-0",
+            filename: "a.csv",
+            mime_type: "text/csv",
+            size: 1,
+            r2_key: "eml-cleanup/part-0",
+          },
+          { part_id: "raw-source", mime_type: "message/rfc822", size: 2, r2_key: "eml-cleanup/raw-source" },
+        ],
+      }),
+    );
+    h.r2.set("eml-cleanup/part-0", new Uint8Array([1]));
+    h.r2.set("eml-cleanup/raw-source", new Uint8Array([2, 3]));
+    // Another email's body is untouched.
+    h.r2.set("eml-other/part-0", new Uint8Array([9]));
+
+    expect((await send(stub, "DELETE", `/emails/${email.id}`)).status).toBe(200);
+    expect(h.r2.has("eml-cleanup/part-0")).toBe(false);
+    expect(h.r2.has("eml-cleanup/raw-source")).toBe(false);
+    expect(h.r2.has("eml-other/part-0")).toBe(true);
+    expect((await get(stub, `/emails/${email.id}`)).status).toBe(404);
   });
 
   it("keeps each address's mail isolated to its own stub", async () => {

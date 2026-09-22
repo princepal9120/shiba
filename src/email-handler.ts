@@ -16,11 +16,12 @@
  * Registered-only rule (megaplan constraint): a recipient with no registry
  * row is rejected with `message.setReject("Unknown address")` and counted —
  * no store call is made. A directory lookup that *fails* (rather than
- * answering "not registered") is also rejected: storing unchecked mail
- * would silently bypass the gate, while a bounce at least reports the drop
- * to the sender's MTA. The same policy covers a failed store write: a
- * registered recipient whose POST to the MailboxDO fails has its message
- * permanently lost unless rejected, so `setReject` runs there too.
+ * answering "not registered") is not a verdict on the address: throwing
+ * fails the delivery transiently so Email Routing redelivers (the same
+ * at-least-once retry the `message_id` dedup absorbs) instead of bouncing
+ * a possibly-registered sender as "Unknown address". A failed store write
+ * is the opposite case: the recipient is confirmed registered but the
+ * record is lost unless rejected, so `setReject` runs there.
  *
  * Parse failure: never thrown, never rejected. The raw Subject header is
  * stored verbatim and the record is flagged with {@link PARSE_FAILED_FLAG}
@@ -54,6 +55,9 @@ const stats = {
   stored: 0,
   parseFailed: 0,
   unregisteredDrops: 0,
+  // Redeliveries folded into the first stored copy by `message_id` dedup —
+  // counted so at-least-once replay volume is visible, not just logged.
+  duplicates: 0,
   // Directory lookups that fail are gate failures, not correct rejections —
   // folding them into `unregisteredDrops` would hide real drops' signal.
   directoryErrors: 0,
@@ -70,6 +74,7 @@ export function resetInboundEmailStats(): void {
   stats.stored = 0;
   stats.parseFailed = 0;
   stats.unregisteredDrops = 0;
+  stats.duplicates = 0;
   stats.directoryErrors = 0;
 }
 
@@ -134,19 +139,30 @@ async function isRegistered(env: Env, address: string): Promise<boolean | "error
 
 /** POST one email record into the mailbox's DO; returns the stored id. */
 async function storeEmail(env: Env, to: string, input: AddEmailInput): Promise<string | null> {
-  const res = await mailboxStub(env, to).fetch(
-    new Request(`${ROUTE_BASE}/emails`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(input),
-    }),
-  );
-  if (!res.ok) {
-    logWarn("inbound_email_store_failed", { to, status: res.status });
+  try {
+    const res = await mailboxStub(env, to).fetch(
+      new Request(`${ROUTE_BASE}/emails`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      }),
+    );
+    if (!res.ok) {
+      logWarn("inbound_email_store_failed", { to, status: res.status });
+      return null;
+    }
+    const body = (await res.json()) as { email?: { id?: string } };
+    return body.email?.id ?? null;
+  } catch (error) {
+    // A thrown fetch (unreachable DO, dead stub) is the same store failure
+    // as a non-ok response: `null` routes it through reconcileStoreResult,
+    // which cleans up bodies already written and rejects the delivery.
+    logWarn("inbound_email_store_failed", {
+      to,
+      error: error instanceof Error ? error.message : String(error),
+    });
     return null;
   }
-  const body = (await res.json()) as { email?: { id?: string } };
-  return body.email?.id ?? null;
 }
 
 /** RFC3339/Date header → epoch ms; unparseable/absent → undefined (store defaults now). */
@@ -205,7 +221,7 @@ function prepareAttachments(attachments: Attachment[]): PreparedAttachment[] {
       bytes: contentBytes(attachment.content),
       meta: {
         filename: attachment.filename ?? "",
-        mimeType: attachment.mimeType ?? "",
+        mimeType: attachment.mimeType,
         contentId: attachment.contentId ?? "",
       },
     };
@@ -326,9 +342,14 @@ export async function handleInboundEmail(
   if (registered !== true) {
     if (registered === "error") {
       stats.directoryErrors += 1;
-    } else {
-      stats.unregisteredDrops += 1;
+      // The lookup failure says nothing about the address — it may be
+      // registered. Throwing fails this delivery transiently so Email
+      // Routing redelivers instead of bouncing the sender as "Unknown
+      // address"; a redelivery that lands after recovery hits the
+      // `message_id` dedup like any other at-least-once replay.
+      throw new Error(`Mailbox directory lookup failed for ${to}.`);
     }
+    stats.unregisteredDrops += 1;
     logWarn("inbound_email_dropped_unregistered", { to, reason: registered });
     message.setReject("Unknown address");
     return;
@@ -392,6 +413,8 @@ export async function handleInboundEmail(
     );
     if (outcome === "stored") {
       stats.stored += 1;
+    } else if (outcome === "duplicate") {
+      stats.duplicates += 1;
     }
     return;
   }
@@ -471,5 +494,7 @@ export async function handleInboundEmail(
   );
   if (outcome === "stored") {
     stats.stored += 1;
+  } else if (outcome === "duplicate") {
+    stats.duplicates += 1;
   }
 }

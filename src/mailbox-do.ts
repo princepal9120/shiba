@@ -304,9 +304,32 @@ export class Mailbox {
           : notFound("Email not found.");
       }
       if (request.method === "DELETE") {
-        return this.store.deleteEmail(id)
-          ? json({ ok: true, id })
-          : notFound("Email not found.");
+        // The manifest rows are the only map to this email's R2 bodies —
+        // capture the keys before the hard delete removes them, then drop
+        // the objects so no `emailId/*` blob outlives the record that
+        // pointed at it.
+        const keys = this.store.getAttachments(id).map((a) => a.r2_key);
+        if (!this.store.deleteEmail(id)) {
+          return notFound("Email not found.");
+        }
+        await Promise.all(
+          keys.map(async (key) => {
+            try {
+              await this.env.ATTACHMENTS.delete(key);
+            } catch (error) {
+              // Best-effort: a failed delete orphans one object — logged,
+              // never folded into a 500 that would misreport the row as
+              // undeleted.
+              console.warn(
+                `mailbox_attachment_delete_failed ${JSON.stringify({
+                  key,
+                  error: error instanceof Error ? error.message : String(error),
+                })}`,
+              );
+            }
+          }),
+        );
+        return json({ ok: true, id });
       }
       return json({ error: "Method not allowed." }, { status: 405 });
     }

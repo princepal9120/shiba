@@ -303,6 +303,7 @@ describe("handleInboundEmail", () => {
     const emails = await listEmails(env);
     expect(emails).toHaveLength(1);
     expect(inboundEmailStats().stored).toBe(1);
+    expect(inboundEmailStats().duplicates).toBe(1);
     // Only the first delivery's objects remain — the redelivery's duplicate
     // bodies (written under a fresh id before the dedup was known) are gone.
     expect([...env.r2.keys()]).toEqual([`${emails[0]!.id}/part-0`]);
@@ -325,15 +326,60 @@ describe("handleInboundEmail", () => {
     expect(inboundEmailStats().stored).toBe(0);
   });
 
-  it("counts directory lookup failures apart from unregistered drops", async () => {
+  it("treats a thrown store fetch like a failed write: reject + orphan cleanup", async () => {
+    resetInboundEmailStats();
+    const env = makeEnv();
+    await registerMailbox(env);
+    // The stub throws rather than answering — without a catch in storeEmail
+    // the exception would escape before reconcileStoreResult ran, leaving
+    // the bodies below orphaned with no manifest row to find them. The real
+    // stub is kept so the store's emptiness can be checked afterward.
+    const realStub = env.Mailbox.get(env.Mailbox.idFromName(REGISTERED));
+    env.stubs.set(REGISTERED, {
+      fetch: async () => {
+        throw new Error("do unreachable");
+      },
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const raw =
+        `From: a@example.com\nTo: ${REGISTERED}\nSubject: with file\nMIME-Version: 1.0\n` +
+        `Content-Type: multipart/mixed; boundary=y\n\n` +
+        `--y\nContent-Type: text/plain; charset=utf-8\n\nsee attached\n\n` +
+        `--y\nContent-Type: text/csv; name="data.csv"\nContent-Disposition: attachment; filename="data.csv"\nContent-Transfer-Encoding: base64\n\nY29sMSxjbGwyCjEsMgo=\n\n--y--\n`;
+      const { message, rejectReason } = makeMessage(raw);
+      await handleInboundEmail(message, env);
+      expect(rejectReason()).toBe("Mailbox storage failed");
+      expect(inboundEmailStats().stored).toBe(0);
+      // The part body was written, then deleted once the store failed —
+      // nothing is left under an id no manifest row enumerates.
+      expect(env.r2.size).toBe(0);
+      const stored = await realStub.fetch(
+        new Request("https://internal/internal/mailbox/emails"),
+      );
+      expect(((await stored.json()) as { emails: unknown[] }).emails).toHaveLength(0);
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining("inbound_email_store_failed"),
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("throws on a directory lookup failure so the delivery is retried, not bounced", async () => {
     resetInboundEmailStats();
     const env = makeEnv();
     env.stubs.set(MAILBOX_DIRECTORY_NAME, {
       fetch: async () => new Response("broken", { status: 500 }),
     });
     const { message, rejectReason } = makeMessage(rfc822({ Subject: "x" }));
-    await handleInboundEmail(message, env);
-    expect(rejectReason()).toBe("Unknown address");
+    // A lookup error is not a verdict on the address: the throw fails the
+    // delivery transiently so Email Routing redelivers instead of bouncing
+    // a possibly-registered recipient as "Unknown address".
+    await expect(handleInboundEmail(message, env)).rejects.toThrow(
+      "Mailbox directory lookup failed",
+    );
+    expect(rejectReason()).toBeUndefined();
     expect(inboundEmailStats().directoryErrors).toBe(1);
     expect(inboundEmailStats().unregisteredDrops).toBe(0);
   });

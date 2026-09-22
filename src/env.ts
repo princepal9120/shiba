@@ -20,9 +20,11 @@ export interface Env {
    */
   Mailbox: DurableObjectNamespace;
   /**
-   * R2 bucket for email attachment bodies >256KB (keyed `emailId/partId`).
-   * Bucket name: `shiba-attachments`; the bucket itself is provisioned
-   * outside code (`wrangler r2 bucket create`).
+   * R2 bucket holding every inbound attachment body (keyed `emailId/partId`)
+   * plus raw-source dumps of unparseable mail (`emailId/raw-source`). The
+   * `email_attachments` manifest records which keys exist. Bucket name:
+   * `shiba-attachments`; the bucket itself is provisioned outside code
+   * (`wrangler r2 bucket create`).
    */
   ATTACHMENTS: R2Bucket;
   ASSETS: Fetcher;
