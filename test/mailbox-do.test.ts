@@ -365,6 +365,28 @@ describe("draft routes", () => {
     expect((await asJson(await get(stub, "/drafts?status=sent"))).drafts).toHaveLength(0);
     expect((await get(stub, "/drafts?status=bogus")).status).toBe(400);
   });
+
+  it("POST /drafts/:id/queue transitions once and only from 'draft'", async () => {
+    const h = makeHarness();
+    const stub = h.stub("agent@shiba.dev");
+    const created = await send(stub, "POST", "/drafts", {
+      to_addr: "sender@example.com",
+      subject: "s",
+      body_text: "b",
+    });
+    const { draft } = await asJson(created);
+
+    const queued = await asJson(await send(stub, "POST", `/drafts/${draft.id}/queue`, {}));
+    expect(queued.draft.status).toBe("queued");
+    // Second queue is a 400, and the queued row refuses edits — the
+    // approval gate owns the row from here.
+    expect((await send(stub, "POST", `/drafts/${draft.id}/queue`, {})).status).toBe(400);
+    expect(
+      (await send(stub, "PATCH", `/drafts/${draft.id}`, { subject: "sneak" })).status,
+    ).toBe(400);
+    expect((await send(stub, "POST", "/drafts/drf-nope/queue", {})).status).toBe(404);
+    expect((await get(stub, `/drafts/${draft.id}/queue`)).status).toBe(405);
+  });
 });
 
 describe("mailbox meta", () => {

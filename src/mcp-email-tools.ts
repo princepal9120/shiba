@@ -18,7 +18,10 @@
  * - Approval gate: `send_email`, `send_reply`, and `delete_email` never
  *   execute — they freeze the request into {@link queueEmailApproval}
  *   and answer `pending_approval`. The T7 executor releases the frozen
- *   payload verbatim; callers can't rewrite it at release time.
+ *   payload verbatim; callers can't rewrite it at release time. A draft
+ *   sent for approval is locked to `queued` through the store's
+ *   send-path seam (`POST /drafts/:id/queue`) — uneditable and
+ *   un-requeueable behind a live approval.
  *
  * `move_email` maps to `email:draft`, the mailbox write scope: it
  * mutates `emails.status` inside the owning store — including the
@@ -33,6 +36,7 @@ import { queueEmailApproval } from "./email-approvals.js";
 import type { Env } from "./env.js";
 import { mailboxDirectoryStub, mailboxStub } from "./mailbox-do.js";
 import {
+  ADDRESS_RE,
   DRAFT_UPDATE_STATUSES,
   EMAIL_STATUSES,
   wrapUntrusted,
@@ -53,6 +57,20 @@ const limitField = z.number().int().min(0).max(MAX_LIMIT).optional();
 const idField = z.string().min(1);
 const mailboxField = z.string().min(1);
 const emailStatusField = z.enum(EMAIL_STATUSES);
+
+/**
+ * The same field gates the store applies (`requireAddress` /
+ * `requiredString`) for tool paths that freeze input straight into an
+ * approval payload without a store write in between — `send_email`'s
+ * composed send must refuse what `create_draft` refuses.
+ */
+const addressField = (field: string) =>
+  z.string().trim().regex(ADDRESS_RE, `${field} must be an email address.`);
+const nonEmptyField = (field: string) =>
+  z
+    .string()
+    .min(1, `${field} must be a non-empty string.`)
+    .refine((v) => v.trim() !== "", `${field} must be a non-empty string.`);
 
 // ---------------------------------------------------------------------------
 // DO plumbing
@@ -567,13 +585,14 @@ export function registerEmailTools(registry: ToolRegistry, env: Env): void {
     },
   );
 
-  const sendEmailSchema = z.object({
+  const sendEmailFields = {
     draft_id: idField.optional(),
     mailbox: mailboxField.optional(),
-    to: z.string().min(1).optional(),
-    subject: z.string().optional(),
-    body: z.string().optional(),
-  });
+    to: addressField("to").optional(),
+    subject: nonEmptyField("subject").optional(),
+    body: nonEmptyField("body").optional(),
+  };
+  const sendEmailSchema = z.object(sendEmailFields);
   registry.registerTool(
     "send_email",
     SEND,
@@ -617,6 +636,21 @@ export function registerEmailTools(registry: ToolRegistry, env: Env): void {
             draft_id: draft.id,
           },
         });
+        // Lock the row behind the approval: `draft` → `queued` through
+        // the store's send-path seam, so a second send_email(draft_id)
+        // fails the status check above (one draft mints at most one
+        // approval) and update_draft refuses edits while it awaits
+        // review. The approval is queued first so a mark failure cannot
+        // strand a `queued` row no pending approval references; a mark
+        // failure instead leaves the approval live and the row
+        // re-queueable — a duplicate T7's executor dedupes on
+        // `payload.draft_id`.
+        await stubJson(
+          env,
+          perMailbox(located.mailbox),
+          `/drafts/${encodeURIComponent(draft.id)}/queue`,
+          jsonPost({}),
+        );
         return jsonResult({
           status: "pending_approval",
           kind: "email_send",
@@ -654,13 +688,7 @@ export function registerEmailTools(registry: ToolRegistry, env: Env): void {
     {
       description:
         "Queue an email for sending — never sends directly; returns a pending approval.",
-      inputSchema: {
-        draft_id: idField.optional(),
-        mailbox: mailboxField.optional(),
-        to: z.string().min(1).optional(),
-        subject: z.string().optional(),
-        body: z.string().optional(),
-      },
+      inputSchema: sendEmailFields,
       annotations: { readOnlyHint: false, destructiveHint: true },
     },
   );

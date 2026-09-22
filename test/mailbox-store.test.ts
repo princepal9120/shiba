@@ -364,22 +364,31 @@ describe("drafts", () => {
     expect(store.listDrafts({ status: "draft" })).toEqual([]);
   });
 
-  it("freezes a queued draft — send relies on the frozen approval payload", () => {
-    const db = new DatabaseSync(":memory:");
-    const exec: SqlExec = (sql, ...params) => db.prepare(sql).all(...params) as SqlRow[];
-    const store = new MailboxStore(exec);
-    store.init();
+  it("markDraftQueued moves draft→queued once, and only from 'draft'", () => {
+    const store = makeStore();
     const draft = store.createDraft({
       to_addr: "sender@example.com",
       subject: "x",
       body_text: "y",
     });
-    // The gated send path (T7) marks the draft queued through its own seam.
-    db.prepare(`UPDATE drafts SET status = 'queued' WHERE id = ?`).run(draft.id);
+    const queued = store.markDraftQueued(draft.id, 42);
+    expect(queued?.status).toBe("queued");
+    expect(queued?.updated_at).toBe(42);
+    // One draft mints at most one approval: re-queue throws, and so do
+    // edits — the row is immutable behind a live approval.
+    expect(() => store.markDraftQueued(draft.id)).toThrow(InputError);
     expect(() => store.updateDraft(draft.id, { body_text: "mutated" })).toThrow(
       InputError,
     );
-    expect(store.listDrafts({ status: "queued" })[0]?.body_text).toBe("y");
+    expect(store.markDraftQueued("drf-nope")).toBeNull();
+    // Discarded drafts can't be revived into the send path either.
+    const gone = store.createDraft({
+      to_addr: "sender@example.com",
+      subject: "x",
+      body_text: "y",
+    });
+    store.updateDraft(gone.id, { status: "discarded" });
+    expect(() => store.markDraftQueued(gone.id)).toThrow(InputError);
   });
 });
 

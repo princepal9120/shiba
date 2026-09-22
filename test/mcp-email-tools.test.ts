@@ -201,6 +201,12 @@ describe("registerEmailTools — validation", () => {
       ["update_draft", { draft_id: "drf-1", fields: {} }], // empty fields
       ["send_email", {}], // neither draft_id nor composed fields
       ["send_email", { mailbox: REGISTERED, to: "x@y.z" }], // partial compose
+      // Composed sends enforce the same field gates create_draft gets
+      // from the store: a real address and non-empty subject/body.
+      ["send_email", { mailbox: REGISTERED, to: "garbage", subject: "s", body: "b" }],
+      ["send_email", { mailbox: REGISTERED, to: "x@y.z", subject: "", body: "b" }],
+      ["send_email", { mailbox: REGISTERED, to: "x@y.z", subject: " ", body: "b" }],
+      ["send_email", { mailbox: REGISTERED, to: "x@y.z", subject: "s", body: "" }],
       // draft_id mixed with compose fields is ambiguous — rejected, not
       // silently resolved to the draft path.
       ["send_email", { draft_id: "drf-1", mailbox: REGISTERED, to: "x@y.z", subject: "s", body: "b" }],
@@ -409,11 +415,23 @@ describe("registerEmailTools — approval-gated tools", () => {
       draft_id: draftId,
     });
 
-    // The draft was NOT sent — still sitting as a draft in the store.
+    // The draft was NOT sent — but it is no longer an editable draft:
+    // queueing the approval moved it to `queued` through the send-path
+    // seam, so it can't be re-queued or edited behind a live approval.
     const draftsRes = await (env.Mailbox.get(env.Mailbox.idFromName(REGISTERED)) as unknown as FakeStub)
       .fetch(new Request("https://internal/internal/mailbox/drafts"));
     const drafts = ((await draftsRes.json()) as { drafts: { id: string; status: string }[] }).drafts;
-    expect(drafts.find((d) => d.id === draftId)?.status).toBe("draft");
+    expect(drafts.find((d) => d.id === draftId)?.status).toBe("queued");
+
+    const requeue = await registry.invoke("send_email", { draft_id: draftId }, reader);
+    expect(requeue.isError).toBe(true);
+    const queuedEdit = await registry.invoke(
+      "update_draft",
+      { draft_id: draftId, fields: { subject: "sneak" } },
+      reader,
+    );
+    expect(queuedEdit.isError).toBe(true);
+    expect(queueCalls.filter((c) => c.payload.draft_id === draftId)).toHaveLength(1);
 
     const composed = resultData(
       await registry.invoke(

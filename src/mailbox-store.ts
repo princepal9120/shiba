@@ -303,7 +303,7 @@ export function randomHex(bytes: number): string {
     .join("");
 }
 
-const ADDRESS_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export const ADDRESS_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function requireAddress(value: string, field: string): string {
   const trimmed = value.trim();
@@ -929,6 +929,33 @@ export class MailboxStore {
     const row = this.exec(
       `UPDATE drafts SET ${sets.join(", ")} WHERE id = ? AND status = 'draft' RETURNING *`,
       ...params,
+    )[0];
+    return row ? rowToDraft(row) : null;
+  }
+
+  /**
+   * Send-path seam: `draft` → `queued`, the transition the approval
+   * gate performs when a send is queued for review. Anything but a
+   * live `"draft"` row throws — a `queued` draft can never be queued
+   * twice, so one draft mints at most one pending approval, and the
+   * row stays immutable to {@link updateDraft} while it awaits the
+   * human verdict. `queued` is never caller-settable: it is evidence
+   * that an approval exists, not a status an editor may pick.
+   */
+  markDraftQueued(id: string, nowMs?: number): DraftRecord | null {
+    const current = this.exec(`SELECT status FROM drafts WHERE id = ?`, id)[0];
+    if (!current) {
+      return null;
+    }
+    if (current.status !== "draft") {
+      throw new InputError(
+        `draft is '${String(current.status)}' — only drafts still in 'draft' can be queued.`,
+      );
+    }
+    const row = this.exec(
+      `UPDATE drafts SET status = 'queued', updated_at = ? WHERE id = ? AND status = 'draft' RETURNING *`,
+      nowMs ?? Date.now(),
+      id,
     )[0];
     return row ? rowToDraft(row) : null;
   }
