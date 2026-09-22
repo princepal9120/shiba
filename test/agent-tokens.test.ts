@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   createToken,
   hashToken,
@@ -22,6 +22,12 @@ import { InputError } from "../src/security.js";
  */
 class FakeKV {
   readonly map = new Map<string, string>();
+  /**
+   * Keys per list() page — small by default so every listing test walks
+   * the cursor loop the way real KV does (opaque cursor = next offset).
+   */
+  pageSize = 2;
+  listCalls = 0;
 
   async get(key: string, opts?: { type?: string }): Promise<unknown> {
     const value = this.map.get(key);
@@ -35,12 +41,21 @@ class FakeKV {
     this.map.set(key, value);
   }
 
-  async list(opts?: { prefix?: string; cursor?: string }) {
-    const keys = [...this.map.keys()]
+  async list(opts?: { prefix?: string; cursor?: string; limit?: number }) {
+    this.listCalls += 1;
+    const names = [...this.map.keys()]
       .filter((name) => name.startsWith(opts?.prefix ?? ""))
-      .sort()
-      .map((name) => ({ name }));
-    return { keys, list_complete: true, cursor: "", cacheStatus: null };
+      .sort();
+    const start = opts?.cursor ? Number.parseInt(opts.cursor, 10) : 0;
+    const limit = opts?.limit ?? this.pageSize;
+    const keys = names.slice(start, start + limit).map((name) => ({ name }));
+    const complete = start + limit >= names.length;
+    return {
+      keys,
+      list_complete: complete,
+      cursor: complete ? "" : String(start + limit),
+      cacheStatus: null,
+    };
   }
 }
 
@@ -190,8 +205,50 @@ describe("listTokens", () => {
     void a;
   });
 
+  it("follows the cursor across multiple pages", async () => {
+    const env = makeEnv();
+    env.kv.pageSize = 2;
+    for (let i = 0; i < 5; i += 1) {
+      await createToken(env, `p${i}-agent`, ["email:read"], 100 + i);
+    }
+    const records = await listTokens(env);
+    // 5 keys / 2 per page = 3 fetches; every record still lands, sorted.
+    expect(env.kv.listCalls).toBe(3);
+    expect(records.map((r) => r.principal)).toEqual([
+      "p0-agent",
+      "p1-agent",
+      "p2-agent",
+      "p3-agent",
+      "p4-agent",
+    ]);
+  });
+
   it("returns an empty list on a fresh namespace", async () => {
     const env = makeEnv();
     expect(await listTokens(env)).toEqual([]);
+  });
+
+  it("denies cleanly when KV is down instead of throwing", async () => {
+    const env = makeEnv();
+    const { token } = await createToken(env, "scout", ["email:read"]);
+    const down = {
+      AGENT_TOKENS: {
+        get: async () => {
+          throw new Error("kv unavailable");
+        },
+        put: async () => {
+          throw new Error("kv unavailable");
+        },
+        list: async () => {
+          throw new Error("kv unavailable");
+        },
+      } as unknown as KVNamespace,
+    };
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    expect(await verifyToken(down, token)).toBeNull();
+    expect(await revokeToken(down, token)).toBeNull();
+    expect(await listTokens(down)).toEqual([]);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
   });
 });

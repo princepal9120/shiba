@@ -67,7 +67,7 @@ describe("audit", () => {
     const insert = env.d1.calls.find((c) => c.sql.startsWith("INSERT INTO audit_log"));
     expect(insert).toBeDefined();
     const [id, ts, principal, tool, argsHash, outcome, detail] = insert!.params;
-    expect(id).toMatch(/^aud-[0-9a-f]{16}$/);
+    expect(id).toMatch(/^aud-[0-9a-f]{32}$/);
     expect(ts).toBe(1_234);
     expect(principal).toBe("scout");
     expect(tool).toBe("search_emails");

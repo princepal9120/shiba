@@ -84,7 +84,7 @@ export async function audit(env: AuditEnv, entry: AuditEntry): Promise<void> {
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
     )
       .bind(
-        `aud-${randomHex(8)}`,
+        `aud-${randomHex(16)}`,
         entry.ts ?? Date.now(),
         entry.principal,
         entry.tool,

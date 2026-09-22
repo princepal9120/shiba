@@ -8,11 +8,13 @@
  * token is returned exactly once by {@link createToken}.
  *
  * Deny-by-default: {@link verifyToken} answers null for malformed, unknown,
- * or revoked tokens; {@link requireScope} throws {@link ScopeError} on a
- * missing scope so the gateway can map it to a 403-class JSON-RPC error.
+ * or revoked tokens — and for a KV outage, which must deny like an unknown
+ * token rather than throw a 500 into the `/mcp` handler; {@link requireScope}
+ * throws {@link ScopeError} on a missing scope so the gateway can map it to
+ * a 403-class JSON-RPC error.
  */
 import { randomHex } from "./mailbox-store.js";
-import { InputError } from "./security.js";
+import { InputError, redactSecrets } from "./security.js";
 
 export const SCOPES = [
   "email:read",
@@ -117,8 +119,24 @@ function parseRecord(value: unknown): TokenRecord | null {
   };
 }
 
+/**
+ * KV read that fails closed: a store outage resolves to `null` (a miss),
+ * never a thrown error — auth callers deny instead of surfacing a 500.
+ * The warning keeps the outage visible in logs.
+ */
+async function kvGet(env: AgentTokensEnv, key: string): Promise<string | null> {
+  try {
+    return await env.AGENT_TOKENS.get(key, { type: "text" });
+  } catch (error: unknown) {
+    console.warn(
+      `agent-tokens: KV get failed: ${redactSecrets(error instanceof Error ? error.message : String(error))}`,
+    );
+    return null;
+  }
+}
+
 async function readRecord(env: AgentTokensEnv, rawToken: string): Promise<TokenRecord | null> {
-  return parseRecord(await env.AGENT_TOKENS.get(await tokenKey(rawToken), { type: "text" }));
+  return parseRecord(await kvGet(env, await tokenKey(rawToken)));
 }
 
 /**
@@ -158,7 +176,8 @@ export async function createToken(
 
 /**
  * Resolve a bearer token to its record, or null for a malformed token,
- * an unknown token, or a revoked one — callers never learn which.
+ * an unknown token, a revoked one, or an unreachable store — callers
+ * never learn which.
  */
 export async function verifyToken(
   env: AgentTokensEnv,
@@ -176,8 +195,10 @@ export async function verifyToken(
 
 /**
  * Revoke by raw token: flips `revoked` on the stored record and returns it,
- * or null when the token is malformed/unknown. Idempotent — revoking an
- * already-revoked token returns the same record without a KV write.
+ * or null when the token is malformed/unknown or the store cannot be
+ * reached — a failed revoke reports failure, never claims a dead token.
+ * Idempotent — revoking an already-revoked token returns the same record
+ * without a KV write.
  */
 export async function revokeToken(
   env: AgentTokensEnv,
@@ -187,31 +208,48 @@ export async function revokeToken(
     return null;
   }
   const key = await tokenKey(bearer);
-  const record = parseRecord(await env.AGENT_TOKENS.get(key, { type: "text" }));
+  const record = parseRecord(await kvGet(env, key));
   if (!record) {
     return null;
   }
   if (!record.revoked) {
     record.revoked = true;
-    await env.AGENT_TOKENS.put(key, JSON.stringify(record));
+    try {
+      await env.AGENT_TOKENS.put(key, JSON.stringify(record));
+    } catch (error: unknown) {
+      console.warn(
+        `agent-tokens: KV put failed during revoke: ${redactSecrets(error instanceof Error ? error.message : String(error))}`,
+      );
+      return null;
+    }
   }
   return record;
 }
 
-/** Every stored record (revoked included), oldest first — admin surface. */
+/**
+ * Every stored record (revoked included), oldest first — admin surface.
+ * A store failure mid-pagination warns and returns the records collected
+ * so far rather than throwing into the admin route.
+ */
 export async function listTokens(env: AgentTokensEnv): Promise<TokenRecord[]> {
   const records: TokenRecord[] = [];
   let cursor: string | undefined;
-  do {
-    const page = await env.AGENT_TOKENS.list({ prefix: TOKEN_PREFIX, cursor });
-    for (const key of page.keys) {
-      const record = parseRecord(await env.AGENT_TOKENS.get(key.name, { type: "text" }));
-      if (record) {
-        records.push(record);
+  try {
+    do {
+      const page = await env.AGENT_TOKENS.list({ prefix: TOKEN_PREFIX, cursor });
+      for (const key of page.keys) {
+        const record = parseRecord(await kvGet(env, key.name));
+        if (record) {
+          records.push(record);
+        }
       }
-    }
-    cursor = page.list_complete ? undefined : page.cursor;
-  } while (cursor !== undefined);
+      cursor = page.list_complete ? undefined : page.cursor;
+    } while (cursor !== undefined);
+  } catch (error: unknown) {
+    console.warn(
+      `agent-tokens: KV list failed: ${redactSecrets(error instanceof Error ? error.message : String(error))}`,
+    );
+  }
   return records.sort((a, b) => a.created - b.created);
 }
 

@@ -58,7 +58,9 @@ bindings in `wrangler.jsonc`, not an alchemy file.
 - `src/email-handler.ts` exports `handleInboundEmail(message, env, ctx)` used by
   `index.ts`'s `email()` export.
 - `src/agent-tokens.ts` exports `hashToken`, `createToken`, `verifyToken`,
-  `requireScope(principal, scope)` against `env.AGENT_TOKENS` KV.
+  `revokeToken`, `listTokens`, `hasScope`, `requireScope(record, scope)`,
+  `ScopeError`, `SCOPES` against `env.AGENT_TOKENS` KV. All KV failures
+  deny closed (null / partial list + warn) — never a throw into `/mcp`.
 - `src/audit.ts` exports `audit(env, {principal, tool, argsHash, outcome})` →
   D1 `AGENT_AUDIT` insert (best-effort, never throws into the tool path).
 - `src/mcp-gateway.ts` exports DO class `McpGateway` (extends `McpAgent` from
