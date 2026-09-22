@@ -11,6 +11,7 @@ import { AUTOMATIONS_DO_NAME } from "./automation-runner.js";
 import { Automations } from "./automations-do.js";
 import { parseAutomationWebhookPath } from "./automations.js";
 import { assertLiveCodingModel } from "./coding-model.js";
+import { handleInboundEmail } from "./email-handler.js";
 import type { Env } from "./env.js";
 import { agentCliCatalog } from "./harness/catalog.js";
 import { Mailbox } from "./mailbox-do.js";
@@ -187,6 +188,10 @@ export default {
           console.error(redactSecrets(error instanceof Error ? error.message : String(error)));
         }),
     );
+  },
+  // Email Routing delivery — registered-mailbox gate + store, see email-handler.ts.
+  async email(message: ForwardableEmailMessage, env: Env, ctx: ExecutionContext): Promise<void> {
+    await handleInboundEmail(message, env, ctx);
   },
   async fetch(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
     try {
