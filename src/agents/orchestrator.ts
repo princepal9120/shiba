@@ -35,7 +35,7 @@ import {
   type ResolveResult,
 } from "../pending-approvals.js";
 import { makeSandboxId, parseGitHubRepoUrl, redactSecrets } from "../security.js";
-import { destroyManagedContainer } from "../sandbox/lifecycle.js";
+import { destroyManagedContainer, leakedContainers } from "../sandbox/lifecycle.js";
 import { classifyExecutorError, classifyRunError, runErrorWire, type RunErrorCode, type RunErrorWire } from "../run-errors.js";
 import { parseSlackThreadName } from "../slack-thread.js";
 import { evaluateResultQuality } from "../result-quality.js";
@@ -489,12 +489,16 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
 
   private async reclaimRuns(): Promise<void> {
     const { runs, reclaimed } = reclaimStaleRuns(this.store.list(), Date.now());
-    if (reclaimed.length === 0) return;
-    this.setState({ ...this.state, runs });
-    await Promise.all(runs.filter((run) => reclaimed.includes(run.runId)).map(async (run) => {
-      this.runControllers.get(run.runId)?.abort();
-      await this.destroySandbox(run.sandboxId);
-    }));
+    if (reclaimed.length > 0) {
+      this.setState({ ...this.state, runs });
+      await Promise.all(runs.filter((run) => reclaimed.includes(run.runId)).map(async (run) => {
+        this.runControllers.get(run.runId)?.abort();
+        await this.destroySandbox(run.sandboxId);
+      }));
+    }
+    // Leaked containers outlive the run that leaked them: retry destroy on
+    // every reclaim pass; a successful destroy clears its own registry entry.
+    await Promise.all(leakedContainers().map((leak) => this.destroySandbox(leak.sandboxId)));
   }
 
   async clearRuns(): Promise<void> {

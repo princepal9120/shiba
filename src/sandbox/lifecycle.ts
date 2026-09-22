@@ -93,6 +93,8 @@ export interface LeakedContainer {
   readonly error: string;
 }
 
+// Per-isolate: a Durable Object hibernation resets this registry. A later
+// failed destroy re-records the leak, so reclaim loses at most one pass.
 const leakedRegistry = new Map<string, LeakedContainer>();
 let leakedCount = 0;
 
@@ -120,8 +122,13 @@ function recordLeak(sandboxId: string, error: unknown): void {
 /**
  * Acquire a container, run `task` with it, and release it exactly once in a
  * finally — release runs whether the task returns, throws, or the parent
- * AbortSignal fires mid-task. A pre-aborted signal does not skip release of a
- * container that was already acquired.
+ * AbortSignal fires mid-task.
+ *
+ * `signal` is checked once, after acquire and before the task starts: a
+ * pre-aborted signal skips the task but still releases the acquired
+ * container. The scope does not forward the signal into the container's ops —
+ * the task threads it through per-call opts (`SandboxOps.exec`/`readFile`
+ * already take `signal`), the same as today.
  *
  * Release failure marks the container leaked, records it for reclaim, and is
  * logged with the sandboxId only; a task error always wins over a release
@@ -134,33 +141,49 @@ export async function runWithContainer<T>(
     sandboxId: string;
     signal?: AbortSignal;
   },
-  task: (container: ManagedContainer) => Promise<T>,
+  task: (container: ManagedContainer) => T | Promise<T>,
 ): Promise<T> {
   const container = new ManagedContainerImpl(opts.sandboxId, await opts.acquire());
-  let result: T;
+  let outcome: { value: T } | { error: unknown };
   try {
-    result = await task(container);
-  } catch (taskError) {
-    try {
-      await opts.release(opts.sandboxId);
-      container.markReleased();
-    } catch (releaseError) {
-      container.markLeaked();
-      recordLeak(opts.sandboxId, releaseError);
-      console.error(`Failed to release sandbox container ${opts.sandboxId}`);
-    }
-    throw taskError;
+    opts.signal?.throwIfAborted();
+    outcome = { value: await task(container) };
+  } catch (error) {
+    outcome = { error };
   }
+  let releaseError: unknown;
   try {
     await opts.release(opts.sandboxId);
     container.markReleased();
-  } catch (releaseError) {
+  } catch (error) {
+    releaseError = error;
     container.markLeaked();
-    recordLeak(opts.sandboxId, releaseError);
+    recordLeak(opts.sandboxId, error);
     console.error(`Failed to release sandbox container ${opts.sandboxId}`);
-    throw releaseError;
   }
-  return result;
+  if ("error" in outcome) throw outcome.error;
+  if (releaseError !== undefined) throw releaseError;
+  return outcome.value;
+}
+
+/** Container handle returned by the SDK's getSandbox, narrowed to release. */
+export interface SandboxHandle {
+  destroy(): Promise<void>;
+}
+
+/** Resolves a container handle — production default loads the SDK lazily. */
+export type SandboxHandleResolver = (binding: Env["Sandbox"], sandboxId: string) => SandboxHandle;
+
+let sandboxHandleResolver: SandboxHandleResolver | undefined;
+
+/**
+ * Test seam: inject a handle resolver so tests never load @cloudflare/sandbox.
+ * A detached async continuation (an abort listener's rejection landing in a
+ * finally) can bypass vi.mock's dynamic-import interception, so tests must
+ * not rely on mocking the module — set this instead.
+ */
+export function setSandboxHandleResolver(resolver: SandboxHandleResolver | undefined): void {
+  sandboxHandleResolver = resolver;
 }
 
 /**
@@ -170,8 +193,8 @@ export async function runWithContainer<T>(
  */
 export async function destroyManagedContainer(env: Env, sandboxId: string): Promise<void> {
   try {
-    const { getSandbox } = await import("@cloudflare/sandbox");
-    await getSandbox(env.Sandbox, sandboxId).destroy();
+    const resolve = sandboxHandleResolver ?? (await import("@cloudflare/sandbox")).getSandbox;
+    await resolve(env.Sandbox, sandboxId).destroy();
     forgetLeaked(sandboxId);
   } catch (error) {
     // Cleanup failure must not overwrite the recorded outcome.
@@ -180,12 +203,22 @@ export async function destroyManagedContainer(env: Env, sandboxId: string): Prom
   }
 }
 
+/** Factory the production acquire path delegates to (opencode-agent's createSandboxOps). */
+export type SandboxOpsFactory = (env: Env, sandboxId: string, egressHosts?: string[]) => SandboxOps;
+
+let sandboxOpsFactory: SandboxOpsFactory | undefined;
+
+/** Test seam for acquireSandboxOps — same detached-continuation caveat as the resolver. */
+export function setSandboxOpsFactory(factory: SandboxOpsFactory | undefined): void {
+  sandboxOpsFactory = factory;
+}
+
 /** Production acquire path — delegates to the existing sandbox ops factory. */
 export async function acquireSandboxOps(
   env: Env,
   sandboxId: string,
   egressHosts?: string[],
 ): Promise<SandboxOps> {
-  const { createSandboxOps } = await import("../agents/opencode-agent.js");
-  return createSandboxOps(env, sandboxId, egressHosts);
+  const create = sandboxOpsFactory ?? (await import("../agents/opencode-agent.js")).createSandboxOps;
+  return create(env, sandboxId, egressHosts);
 }

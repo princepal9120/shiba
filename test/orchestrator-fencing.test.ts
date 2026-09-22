@@ -4,6 +4,7 @@ import type { OrchestratorState } from "../src/agents/orchestrator.js";
 import { createRun, type DelegatedRun } from "../src/runs.js";
 import { formatAgentResult } from "../src/opencode-input.js";
 import { OpenCodeErrorEvent } from "../src/harness/opencode.js";
+import { setSandboxHandleResolver } from "../src/sandbox/lifecycle.js";
 
 const mocks = vi.hoisted(() => ({ destroy: vi.fn(), execute: vi.fn(), grade: vi.fn(async () => null) }));
 vi.mock("../src/result-quality.js", () => ({ evaluateResultQuality: mocks.grade }));
@@ -14,7 +15,10 @@ vi.mock("@cloudflare/think", () => ({ Think: class {
 } }));
 vi.mock("agents/agent-tools", () => ({ agentTool: () => ({ execute: mocks.execute }) }));
 vi.mock("../src/agents/opencode-agent.js", () => ({ OpenCodeAgent: class {} }));
-vi.mock("@cloudflare/sandbox", () => ({ getSandbox: () => ({ destroy: mocks.destroy }) }));
+// Resolver seam, not vi.mock: detached continuations (an aborted child's
+// finally) can bypass vi.mock's dynamic-import interception and load the
+// real SDK.
+setSandboxHandleResolver(() => ({ destroy: mocks.destroy }));
 
 function agent() {
   const instance = Object.assign(Object.create(CodingOrchestrator.prototype) as CodingOrchestrator, {

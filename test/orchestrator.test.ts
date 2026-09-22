@@ -3,6 +3,11 @@ import { CodingOrchestrator } from "../src/agents/orchestrator.js";
 import type { OrchestratorState } from "../src/agents/orchestrator.js";
 import { createRun, RUN_DEADLINE_MS, type DelegatedRun } from "../src/runs.js";
 import { parseAgentToolInput } from "../src/opencode-input.js";
+import {
+  destroyManagedContainer,
+  leakedContainers,
+  setSandboxHandleResolver,
+} from "../src/sandbox/lifecycle.js";
 
 const mocks = vi.hoisted(() => ({ destroy: vi.fn(), execute: vi.fn() }));
 vi.mock("@cloudflare/think", () => ({ Think: class {
@@ -12,7 +17,10 @@ vi.mock("@cloudflare/think", () => ({ Think: class {
 } }));
 vi.mock("agents/agent-tools", () => ({ agentTool: () => ({ execute: mocks.execute }) }));
 vi.mock("../src/agents/opencode-agent.js", () => ({ OpenCodeAgent: class {} }));
-vi.mock("@cloudflare/sandbox", () => ({ getSandbox: () => ({ destroy: mocks.destroy }) }));
+// Resolver seam, not vi.mock: detached continuations (an aborted child's
+// finally) can bypass vi.mock's dynamic-import interception and load the
+// real SDK.
+setSandboxHandleResolver(() => ({ destroy: mocks.destroy }));
 
 function agent() {
   const instance = Object.assign(Object.create(CodingOrchestrator.prototype) as CodingOrchestrator, {
@@ -167,6 +175,19 @@ describe("orchestrator run routes", () => {
     expect(signals[0]?.aborted).toBe(true);
     expect((instance.state.runs as DelegatedRun[])[0]?.status).toBe("unknown");
     expect(mocks.destroy).toHaveBeenCalledOnce();
+  });
+
+  it("retries a leaked container's destroy during reclaim", async () => {
+    const instance = agent();
+    // Seed the leak registry: a failed destroy records the sandbox for retry.
+    mocks.destroy.mockRejectedValueOnce(new Error("destroy failed"));
+    await destroyManagedContainer(instance.env, "leaked-sbx");
+    expect(leakedContainers().map((leak) => leak.sandboxId)).toEqual(["leaked-sbx"]);
+    const response = await instance.onRequest(new Request("https://internal/api/runs"));
+    expect(response.status).toBe(200);
+    // The reclaim pass re-destroyed the leaked sandbox and cleared its entry.
+    expect(mocks.destroy).toHaveBeenCalledTimes(2);
+    expect(leakedContainers()).toHaveLength(0);
   });
 
   it("approve at the concurrency cap stays pending and returns 409, no execution", async () => {
