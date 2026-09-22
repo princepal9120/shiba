@@ -27,6 +27,7 @@ import {
   type ProgressEvent,
   type SandboxOps,
 } from "../runtime.js";
+import { HARNESS_RETRY, withRetry } from "../harness/retry.js";
 import { boundTail, parseGitHubRepoUrl, redactSecrets } from "../security.js";
 import { messageText, renderRunTranscript } from "../transcript.js";
 
@@ -50,9 +51,12 @@ export function createSandboxOps(env: Env, sandboxId: string, egressHosts?: stri
     async gitCheckout(repoUrl, opts) {
       // The clone runs before anything else, so it is where this run's egress
       // is pinned down: the selected harness's hosts only (T22), and the
-      // GitHub credential scoped to this one repo (B6).
-      await pinSandboxEgress(env, sandboxId, repoUrl, egressHosts);
-      await sandbox.gitCheckout(repoUrl, { branch: opts.branch, targetDir: opts.targetDir });
+      // GitHub credential scoped to this one repo (B6). The pin + clone pair
+      // is one retried unit — a half-pinned sandbox must not be reused.
+      await withRetry(HARNESS_RETRY, async () => {
+        await pinSandboxEgress(env, sandboxId, repoUrl, egressHosts);
+        await sandbox.gitCheckout(repoUrl, { branch: opts.branch, targetDir: opts.targetDir });
+      });
     },
     async writeFile(path, content) {
       await sandbox.writeFile(path, content);
