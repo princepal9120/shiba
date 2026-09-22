@@ -12,13 +12,21 @@ import { AUTOMATIONS_DO_NAME } from "./automation-runner.js";
 import { Automations } from "./automations-do.js";
 import { parseAutomationWebhookPath } from "./automations.js";
 import { assertLiveCodingModel } from "./coding-model.js";
+import { queueEmailApproval } from "./email-approvals.js";
 import { handleInboundEmail } from "./email-handler.js";
 import type { Env } from "./env.js";
 import { agentCliCatalog } from "./harness/catalog.js";
-import { Mailbox } from "./mailbox-do.js";
+import { Mailbox, mailboxDirectoryStub, mailboxStub } from "./mailbox-do.js";
+import type {
+  DraftRecord,
+  MailboxRecord,
+  StoredAttachment,
+  StoredEmail,
+  ThreadView,
+} from "./mailbox-store.js";
 import { encodePrincipal, McpGateway, MCP_PRINCIPAL_HEADER } from "./mcp-gateway.js";
 import { Sandbox } from "./sandbox.js";
-import { redactSecrets, verifyGitHubWebhookSignature } from "./security.js";
+import { InputError, redactSecrets, verifyGitHubWebhookSignature } from "./security.js";
 import { handleSlackInteract } from "./slack-approval.js";
 import { handleSlackEvents } from "./slack-events.js";
 import { handleSlackEvent } from "./slack-mention.js";
@@ -84,6 +92,400 @@ async function handleRuns(request: Request, env: Env): Promise<Response | null> 
   const stub = await getAgentByName(env.CodingOrchestrator, userId);
   const rewritten = new Request(new URL(url.pathname + url.search, request.url), request);
   return stub.fetch(rewritten);
+}
+
+// ---------- Dashboard inbox + memory API (megaplan T11) ----------
+//
+// Read routes proxy the Mailbox DO namespace (T2 contract): the `__directory__`
+// stub lists registered mailboxes, each address stub serves JSON under
+// `/internal/mailbox/*`. Bare ids (email, thread, draft) resolve by probing
+// the registered mailboxes — the same strategy mcp-email-tools.ts uses.
+// Memory routes target the shared "global" Memory DO stub (T8 contract: a
+// JSON fetch API mirroring mailbox) and answer 503 until that binding ships.
+
+const MAILBOX_DO_BASE = "https://internal/internal/mailbox";
+const MEMORY_DO_BASE = "https://internal/internal/memory";
+const INBOX_LIST_LIMIT = 50;
+const MAX_LIST_LIMIT = 200;
+
+async function mailboxDoJson<T>(
+  stub: DurableObjectStub,
+  path: string,
+  init?: RequestInit,
+): Promise<T> {
+  const response = await stub.fetch(`${MAILBOX_DO_BASE}${path}`, init);
+  if (!response.ok) {
+    const text = (await response.text()).trim();
+    const message =
+      text === "" ? `Mailbox request failed (HTTP ${response.status})` : text;
+    if (response.status === 400 || response.status === 404) {
+      throw new InputError(message);
+    }
+    throw new Error(message);
+  }
+  return (await response.json()) as T;
+}
+
+async function mailboxDoJsonOrNull<T>(
+  stub: DurableObjectStub,
+  path: string,
+  init?: RequestInit,
+): Promise<T | null> {
+  try {
+    return await mailboxDoJson<T>(stub, path, init);
+  } catch (error) {
+    if (error instanceof InputError) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+async function registeredMailboxes(env: Env): Promise<MailboxRecord[]> {
+  const body = await mailboxDoJson<{ mailboxes?: MailboxRecord[] }>(
+    mailboxDirectoryStub(env),
+    "/mailboxes",
+  );
+  return body.mailboxes ?? [];
+}
+
+/** First non-null probe result across registered mailboxes, like findDraft's. */
+async function probeMailboxes<T>(
+  env: Env,
+  probe: (stub: DurableObjectStub) => Promise<T | null>,
+): Promise<{ mailbox: string; value: T } | null> {
+  for (const record of await registeredMailboxes(env)) {
+    const value = await probe(mailboxStub(env, record.address));
+    if (value !== null) {
+      return { mailbox: record.address, value };
+    }
+  }
+  return null;
+}
+
+/** Merge rows from every registered mailbox, tagging each with its address. */
+async function collectMailboxRows<T extends object>(
+  env: Env,
+  collect: (stub: DurableObjectStub) => Promise<T[]>,
+): Promise<Array<T & { mailbox: string }>> {
+  const rows: Array<T & { mailbox: string }> = [];
+  for (const record of await registeredMailboxes(env)) {
+    for (const row of await collect(mailboxStub(env, record.address))) {
+      rows.push({ ...row, mailbox: record.address });
+    }
+  }
+  return rows;
+}
+
+function methodNotAllowed(): Response {
+  return Response.json({ error: "Method not allowed." }, { status: 405 });
+}
+
+function clampedLimit(raw: string | null, fallback: number): number {
+  const parsed = raw === null ? NaN : Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, MAX_LIST_LIMIT) : fallback;
+}
+
+/** Cross-mailbox draft lookup — a draft id alone does not name its mailbox. */
+async function findInboxDraft(
+  env: Env,
+  draftId: string,
+): Promise<{ mailbox: string; draft: DraftRecord } | null> {
+  const located = await probeMailboxes(env, async (stub) =>
+    mailboxDoJsonOrNull<{ draft: DraftRecord }>(
+      stub,
+      `/drafts/${encodeURIComponent(draftId)}`,
+    ),
+  );
+  return located === null ? null : { mailbox: located.mailbox, draft: located.value.draft };
+}
+
+/**
+ * POST /api/drafts/:id/send — the dashboard's entry into the same approval
+ * gate `send_email` uses: freeze the payload, queue an email_send approval,
+ * then lock the draft row behind it. Nothing here transmits mail.
+ */
+async function queueDraftSend(env: Env, draftId: string): Promise<Response> {
+  const located = await findInboxDraft(env, draftId);
+  if (located === null) {
+    return Response.json(
+      { error: `Draft "${draftId}" was not found in any registered mailbox.` },
+      { status: 404 },
+    );
+  }
+  const { mailbox, draft } = located;
+  if (draft.status !== "draft") {
+    return Response.json(
+      { error: `Draft "${draftId}" is "${draft.status}" — only drafts in "draft" can be queued for approval.` },
+      { status: 409 },
+    );
+  }
+  const approval = await queueEmailApproval(env, {
+    kind: "email_send",
+    mailbox,
+    payload: {
+      to_addr: draft.to_addr,
+      subject: draft.subject,
+      body_text: draft.body_text,
+      ...(draft.thread_id !== null ? { thread_id: draft.thread_id } : {}),
+      draft_id: draft.id,
+    },
+  });
+  const { draft: queued } = await mailboxDoJson<{ draft: DraftRecord }>(
+    mailboxStub(env, mailbox),
+    `/drafts/${encodeURIComponent(draftId)}/queue`,
+    { method: "POST" },
+  );
+  return Response.json({
+    status: "pending_approval",
+    kind: "email_send",
+    mailbox,
+    approval_id: approval.approval_id,
+    draft: queued,
+  });
+}
+
+async function handleInbox(request: Request, env: Env): Promise<Response | null> {
+  const url = new URL(request.url);
+  const { pathname } = url;
+  const emailId = /^\/api\/emails\/([^/]+)$/.exec(pathname)?.[1];
+  const emailReadId = /^\/api\/emails\/([^/]+)\/read$/.exec(pathname)?.[1];
+  const threadId = /^\/api\/threads\/([^/]+)$/.exec(pathname)?.[1];
+  const draftSendId = /^\/api\/drafts\/([^/]+)\/send$/.exec(pathname)?.[1];
+  if (
+    pathname !== "/api/mailboxes" &&
+    pathname !== "/api/emails" &&
+    pathname !== "/api/emails-search" &&
+    pathname !== "/api/drafts" &&
+    emailId === undefined &&
+    emailReadId === undefined &&
+    threadId === undefined &&
+    draftSendId === undefined
+  ) {
+    return null;
+  }
+  if (!isAuthenticated(request, env)) {
+    return Response.json({ error: "Authentication required." }, { status: 401 });
+  }
+  if (env.Mailbox === undefined) {
+    return Response.json({ error: "Mailboxes are not provisioned yet." }, { status: 503 });
+  }
+  try {
+    if (pathname === "/api/mailboxes") {
+      if (request.method !== "GET") return methodNotAllowed();
+      return Response.json({ mailboxes: await registeredMailboxes(env) });
+    }
+    if (pathname === "/api/emails" || pathname === "/api/emails-search") {
+      if (request.method !== "GET") return methodNotAllowed();
+      const limit = clampedLimit(url.searchParams.get("limit"), INBOX_LIST_LIMIT);
+      const query = new URLSearchParams();
+      const status = url.searchParams.get("status");
+      if (status !== null && status !== "") {
+        query.set("status", status);
+      }
+      query.set("limit", String(limit));
+      let path = "/emails";
+      if (pathname === "/api/emails-search") {
+        const q = url.searchParams.get("q")?.trim() ?? "";
+        if (q === "") {
+          return Response.json({ error: "Provide a q query parameter." }, { status: 400 });
+        }
+        query.set("q", q);
+        path = "/emails/search";
+      }
+      const mailbox = url.searchParams.get("mailbox");
+      if (mailbox !== null && mailbox !== "") {
+        const body = await mailboxDoJson<{ emails?: StoredEmail[] }>(
+          mailboxStub(env, mailbox),
+          `${path}?${query.toString()}`,
+        );
+        return Response.json({ mailbox, emails: body.emails ?? [] });
+      }
+      const emails = await collectMailboxRows<StoredEmail>(env, async (stub) => {
+        const body = await mailboxDoJson<{ emails?: StoredEmail[] }>(
+          stub,
+          `${path}?${query.toString()}`,
+        );
+        return body.emails ?? [];
+      });
+      emails.sort((a, b) => b.created_at - a.created_at);
+      return Response.json({ emails: emails.slice(0, limit) });
+    }
+    if (emailId !== undefined) {
+      if (request.method !== "GET") return methodNotAllowed();
+      const located = await probeMailboxes(env, (stub) =>
+        mailboxDoJsonOrNull<{ email: StoredEmail; attachments?: StoredAttachment[] }>(
+          stub,
+          `/emails/${encodeURIComponent(emailId)}`,
+        ),
+      );
+      if (located === null) {
+        return Response.json(
+          { error: `Email "${emailId}" was not found in any registered mailbox.` },
+          { status: 404 },
+        );
+      }
+      return Response.json({
+        mailbox: located.mailbox,
+        email: located.value.email,
+        attachments: located.value.attachments ?? [],
+      });
+    }
+    if (emailReadId !== undefined) {
+      if (request.method !== "POST") return methodNotAllowed();
+      // The DO's /read route itself 404s on a missing email — one probe each.
+      const located = await probeMailboxes(env, (stub) =>
+        mailboxDoJsonOrNull<{ email: StoredEmail; changed: boolean }>(
+          stub,
+          `/emails/${encodeURIComponent(emailReadId)}/read`,
+          { method: "POST" },
+        ),
+      );
+      if (located === null) {
+        return Response.json(
+          { error: `Email "${emailReadId}" was not found in any registered mailbox.` },
+          { status: 404 },
+        );
+      }
+      return Response.json({ mailbox: located.mailbox, ...located.value });
+    }
+    if (threadId !== undefined) {
+      if (request.method !== "GET") return methodNotAllowed();
+      const located = await probeMailboxes(env, (stub) =>
+        mailboxDoJsonOrNull<{ thread: ThreadView }>(
+          stub,
+          `/threads/${encodeURIComponent(threadId)}`,
+        ),
+      );
+      if (located === null) {
+        return Response.json(
+          { error: `Thread "${threadId}" was not found in any registered mailbox.` },
+          { status: 404 },
+        );
+      }
+      return Response.json({ mailbox: located.mailbox, thread: located.value.thread });
+    }
+    if (pathname === "/api/drafts") {
+      if (request.method === "GET") {
+        const limit = clampedLimit(url.searchParams.get("limit"), INBOX_LIST_LIMIT);
+        const query = new URLSearchParams();
+        const status = url.searchParams.get("status");
+        if (status !== null && status !== "") {
+          query.set("status", status);
+        }
+        query.set("limit", String(limit));
+        const mailbox = url.searchParams.get("mailbox");
+        if (mailbox !== null && mailbox !== "") {
+          const body = await mailboxDoJson<{ drafts?: DraftRecord[] }>(
+            mailboxStub(env, mailbox),
+            `/drafts?${query.toString()}`,
+          );
+          return Response.json({ mailbox, drafts: body.drafts ?? [] });
+        }
+        const drafts = await collectMailboxRows<DraftRecord>(env, async (stub) => {
+          const body = await mailboxDoJson<{ drafts?: DraftRecord[] }>(
+            stub,
+            `/drafts?${query.toString()}`,
+          );
+          return body.drafts ?? [];
+        });
+        drafts.sort((a, b) => b.updated_at - a.updated_at);
+        return Response.json({ drafts: drafts.slice(0, limit) });
+      }
+      if (request.method === "POST") {
+        const body = (await request.json()) as Record<string, unknown>;
+        const mailbox = typeof body.mailbox === "string" ? body.mailbox.trim() : "";
+        if (mailbox === "") {
+          return Response.json({ error: "Provide a mailbox address." }, { status: 400 });
+        }
+        const known = await registeredMailboxes(env);
+        if (!known.some((record) => record.address === mailbox.toLowerCase())) {
+          return Response.json(
+            { error: `"${mailbox}" is not a registered mailbox.` },
+            { status: 400 },
+          );
+        }
+        const created = await mailboxDoJson<{ draft: DraftRecord }>(
+          mailboxStub(env, mailbox),
+          "/drafts",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              to_addr: body.to_addr,
+              subject: body.subject,
+              body_text: body.body_text,
+              ...(typeof body.thread_id === "string" ? { thread_id: body.thread_id } : {}),
+            }),
+          },
+        );
+        return Response.json({ mailbox, draft: created.draft }, { status: 201 });
+      }
+      return methodNotAllowed();
+    }
+    if (draftSendId !== undefined) {
+      if (request.method !== "POST") return methodNotAllowed();
+      return await queueDraftSend(env, draftSendId);
+    }
+    return Response.json({ error: "Not found." }, { status: 404 });
+  } catch (error) {
+    if (error instanceof InputError) {
+      return Response.json({ error: error.message }, { status: 400 });
+    }
+    throw error;
+  }
+}
+
+/** Shared registry stub — cross-agent reads all route through "global" (T8). */
+function memoryRegistryStub(env: Env): DurableObjectStub | null {
+  if (env.Memory === undefined) {
+    return null;
+  }
+  return env.Memory.get(env.Memory.idFromName("global"));
+}
+
+async function handleMemory(request: Request, env: Env): Promise<Response | null> {
+  const url = new URL(request.url);
+  const { pathname } = url;
+  const factId = /^\/api\/memory\/facts\/([^/]+)$/.exec(pathname)?.[1];
+  if (pathname !== "/api/memory/facts" && pathname !== "/api/memory/sessions" && factId === undefined) {
+    return null;
+  }
+  if (!isAuthenticated(request, env)) {
+    return Response.json({ error: "Authentication required." }, { status: 401 });
+  }
+  const stub = memoryRegistryStub(env);
+  if (stub === null) {
+    return Response.json(
+      { error: "Memory is not provisioned yet." },
+      { status: 503 },
+    );
+  }
+  if (factId !== undefined) {
+    if (request.method !== "DELETE") return methodNotAllowed();
+    return stub.fetch(`${MEMORY_DO_BASE}/facts/${encodeURIComponent(factId)}`, {
+      method: "DELETE",
+    });
+  }
+  if (request.method !== "GET") return methodNotAllowed();
+  const query = new URLSearchParams();
+  for (const key of ["agent", "limit"] as const) {
+    const value = url.searchParams.get(key);
+    if (value !== null && value !== "") {
+      query.set(key, value);
+    }
+  }
+  if (pathname === "/api/memory/sessions") {
+    return stub.fetch(`${MEMORY_DO_BASE}/sessions?${query.toString()}`);
+  }
+  // ?q= switches the route from a plain fact listing to recall (T9 contract:
+  // hits ranked by score); the Memory DO mirrors mailbox's /emails/search.
+  const q = url.searchParams.get("q")?.trim() ?? "";
+  const path = q === "" ? `${MEMORY_DO_BASE}/facts` : `${MEMORY_DO_BASE}/facts/search`;
+  if (q !== "") {
+    query.set("q", q);
+  }
+  return stub.fetch(`${path}?${query.toString()}`);
 }
 
 function bearerToken(request: Request): string | null {
@@ -304,6 +706,14 @@ export default {
       const runsResponse = await handleRuns(request, env);
       if (runsResponse) {
         return runsResponse;
+      }
+      const inboxResponse = await handleInbox(request, env);
+      if (inboxResponse) {
+        return inboxResponse;
+      }
+      const memoryResponse = await handleMemory(request, env);
+      if (memoryResponse) {
+        return memoryResponse;
       }
       const sandboxRouteResponse = await handleSandboxRoutes(request, env);
       if (sandboxRouteResponse) {

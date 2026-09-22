@@ -26,6 +26,13 @@ export interface Env {
    */
   McpGateway: DurableObjectNamespace;
   /**
+   * Bound to the Memory Durable Object class in wrangler.jsonc — one stub
+   * per agent name plus the shared "global" registry that indexes fact ids
+   * across agents (megaplan T8). Optional until that lane lands the class
+   * and the binding; dashboard routes treat its absence as 503.
+   */
+  Memory?: DurableObjectNamespace;
+  /**
    * R2 bucket holding every inbound attachment body (keyed `emailId/partId`)
    * plus raw-source dumps of unparseable mail (`emailId/raw-source`). The
    * `email_attachments` manifest records which keys exist. Bucket name:

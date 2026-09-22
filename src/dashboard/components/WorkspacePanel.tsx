@@ -8,6 +8,8 @@ import { useMemo, useState, type JSX } from "react";
 import { DiffViewer } from "./DiffViewer";
 import { VMInspector, type VMRun } from "./VMInspector";
 import { ApprovalCard } from "./ApprovalCard";
+import { InboxTab } from "./InboxTab";
+import { MemoryTab } from "./MemoryTab";
 import {
   formatTimeAgo,
   parseRepoName,
@@ -18,7 +20,7 @@ import {
 } from "../ui-helpers";
 import type { RetainedRun, ToolRunRecord } from "../types";
 
-export type WorkspaceTab = "runs" | "vm" | "diff" | "approvals";
+export type WorkspaceTab = "runs" | "inbox" | "memory" | "vm" | "diff" | "approvals";
 
 export interface WorkspacePanelProps {
   toolRuns: ToolRunRecord[];
@@ -68,6 +70,8 @@ function isActiveStatus(status: string): boolean {
 
 const TABS: { id: WorkspaceTab; label: string }[] = [
   { id: "runs", label: "Runs" },
+  { id: "inbox", label: "Inbox" },
+  { id: "memory", label: "Memory" },
   { id: "vm", label: "VM" },
   { id: "diff", label: "Diff" },
   { id: "approvals", label: "Approvals" },
@@ -127,6 +131,8 @@ export function WorkspacePanel({
 
   const badgeCounts: Record<WorkspaceTab, number | null> = {
     runs: toolRuns.length + retainedRuns.length,
+    inbox: null,
+    memory: null,
     vm: null,
     diff: null,
     approvals: pendingApprovals.length,
@@ -413,6 +419,10 @@ export function WorkspacePanel({
             ) : null}
           </div>
         ) : null}
+
+        {tab === "inbox" ? <InboxTab onOpenApprovals={() => setTab("approvals")} /> : null}
+
+        {tab === "memory" ? <MemoryTab /> : null}
 
         {tab === "vm" ? (
           <VMInspector runs={vmRuns} selectedRunId={selectedRunId} onSelectRun={onSelectRun} />
