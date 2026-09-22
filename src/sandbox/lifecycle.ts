@@ -1,19 +1,29 @@
 /**
  * Scoped container lifecycle — Effect's acquire → use → release pattern
- * ported onto the sandbox container seam.
+ * on the sandbox container seam (spec B4: Scope-native).
  *
- * `runWithContainer` guarantees release runs exactly once no matter how the
- * task ends (return, throw, or parent abort). Released containers are fenced
- * by a generation bump — the same token pattern as DelegatedRun.generation in
- * src/runs.ts — so post-release ops reject with ContainerReleasedError instead
- * of silently reaching a dead container. A failed release marks the container
- * leaked and records it in a module-level registry so reclaim/onStart paths
- * can find and retry containers that could not be destroyed.
+ * `acquireContainer` is an `Effect.acquireRelease`: the returned
+ * ManagedContainer carries a scope finalizer that releases it exactly once
+ * on success, failure, or interruption. `runWithContainer` keeps the
+ * promise-returning wrapper for plain-async callers — inside it is an
+ * `Effect.scoped(Effect.gen(...))` run through `runWorkerEffect`, so
+ * outcomes cross the boundary as classified RunFailures.
+ *
+ * Released containers are fenced by a generation bump — the same token
+ * pattern as DelegatedRun.generation in src/runs.ts — so post-release ops
+ * reject with ContainerReleasedError instead of silently reaching a dead
+ * container. A failed release marks the container leaked and records it in
+ * a module-level registry so reclaim/onStart paths can find and retry
+ * containers that could not be destroyed.
  *
  * Testability is structural: acquire/release are injected, so this module is
  * exercised without @cloudflare/sandbox. The production helpers below defer
  * their SDK imports the same way the orchestrator's destroySandbox did.
  */
+import { Cause, Effect, Exit, Fiber } from "effect";
+import type { Scope } from "effect";
+
+import { effectWithSignal, runWorkerEffect } from "../effect/runtime.js";
 import type { Env } from "../env.js";
 import type { SandboxOps } from "../runtime.js";
 import { redactSecrets } from "../security.js";
@@ -46,12 +56,16 @@ class ManagedContainerImpl implements ManagedContainer {
   constructor(
     readonly sandboxId: string,
     private readonly inner: SandboxOps,
+    /** Ops adopt this signal when a call doesn't carry its own — the scope wires the one interruption forwards to. */
+    private readonly fallbackSignal?: AbortSignal,
   ) {
     this.ops = {
       gitCheckout: (repoUrl, opts) => this.call(() => inner.gitCheckout(repoUrl, opts)),
       writeFile: (path, content) => this.call(() => inner.writeFile(path, content)),
-      exec: (command, opts) => this.call(() => inner.exec(command, opts)),
-      readFile: (path, opts) => this.call(() => inner.readFile(path, opts)),
+      exec: (command, opts) =>
+        this.call(() => inner.exec(command, { ...opts, signal: opts?.signal ?? this.fallbackSignal })),
+      readFile: (path, opts) =>
+        this.call(() => inner.readFile(path, { ...opts, signal: opts?.signal ?? this.fallbackSignal })),
     };
   }
 
@@ -120,19 +134,60 @@ function recordLeak(sandboxId: string, error: unknown): void {
 }
 
 /**
- * Acquire a container, run `task` with it, and release it exactly once in a
- * finally — release runs whether the task returns, throws, or the parent
- * AbortSignal fires mid-task.
+ * Effect-native acquire: wraps `opts.acquire`'s ops in a managed container
+ * and registers release as a Scope finalizer, so it runs exactly once on
+ * success, failure, or interruption — no finally bookkeeping.
  *
- * `signal` is checked once, after acquire and before the task starts: a
- * pre-aborted signal skips the task but still releases the acquired
- * container. The scope does not forward the signal into the container's ops —
- * the task threads it through per-call opts (`SandboxOps.exec`/`readFile`
- * already take `signal`), the same as today.
+ * `opts.signal` is the fallback ops signal: `SandboxOps.exec`/`readFile`
+ * calls that don't carry their own adopt it, so interrupting the fiber
+ * aborts in-flight ops (`runWithContainer` forwards interruption to it via
+ * `effectWithSignal`). A signal passed per-call always wins.
  *
- * Release failure marks the container leaked, records it for reclaim, and is
- * logged with the sandboxId only; a task error always wins over a release
- * error so the recorded outcome is never masked.
+ * Release failure marks the container leaked, records it for reclaim, logs
+ * the sandboxId only, and re-raises — a task error always wins over a
+ * release error (defects order first in the close cause), so the recorded
+ * outcome is never masked.
+ */
+export const acquireContainer = (opts: {
+  acquire: () => Promise<SandboxOps>;
+  release: (sandboxId: string) => Promise<void>;
+  sandboxId: string;
+  signal?: AbortSignal;
+}): Effect.Effect<ManagedContainer, never, Scope.Scope> =>
+  Effect.acquireRelease(
+    Effect.promise(
+      async () => new ManagedContainerImpl(opts.sandboxId, await opts.acquire(), opts.signal),
+    ),
+    (container) =>
+      Effect.gen(function* () {
+        const exit = yield* Effect.exit(Effect.promise(() => opts.release(opts.sandboxId)));
+        if (Exit.isSuccess(exit)) {
+          container.markReleased();
+          return;
+        }
+        container.markLeaked();
+        recordLeak(opts.sandboxId, Cause.squash(exit.cause));
+        console.error(`Failed to release sandbox container ${opts.sandboxId}`);
+        yield* Effect.failCause(exit.cause);
+      }),
+  );
+
+/**
+ * Acquire a container, run `task` with it, and release it exactly once —
+ * release runs whether the task returns, throws, or the fiber is
+ * interrupted. Internally `Effect.scoped(Effect.gen(...))`; the wrapper
+ * stays promise-returning so plain-async callers are unchanged.
+ *
+ * `signal` is checked after acquire and watched during the task: aborting
+ * it interrupts the program's fiber (`Fiber.interrupt` from the abort
+ * listener), so release still runs even for a task that never settles.
+ * Interrupting also aborts the scope controller via `effectWithSignal`,
+ * and ops that didn't carry their own signal (`SandboxOps.exec`/`readFile`
+ * adopt it as a fallback) see that abort — a per-call signal always wins.
+ *
+ * Task, release, and abort outcomes cross the boundary as classified
+ * `RunFailure`s via `runWorkerEffect` — a task error always wins over a
+ * release error so the recorded outcome is never masked.
  */
 export async function runWithContainer<T>(
   opts: {
@@ -143,27 +198,25 @@ export async function runWithContainer<T>(
   },
   task: (container: ManagedContainer) => T | Promise<T>,
 ): Promise<T> {
-  const container = new ManagedContainerImpl(opts.sandboxId, await opts.acquire());
-  let outcome: { value: T } | { error: unknown };
+  const program = Effect.scoped(
+    effectWithSignal((scopeSignal) =>
+      Effect.gen(function* () {
+        const container = yield* acquireContainer({ ...opts, signal: scopeSignal });
+        yield* Effect.sync(() => opts.signal?.throwIfAborted());
+        return yield* Effect.promise(() => Promise.resolve(task(container)));
+      }),
+    ),
+  );
+  // The caller's signal bridges to a real fiber interrupt: the program's
+  // fiber is only ever awaited through runWorkerEffect — the single edge.
+  const fiber = Effect.runFork(program);
+  const onAbort = () => Effect.runFork(Fiber.interrupt(fiber));
+  opts.signal?.addEventListener("abort", onAbort, { once: true });
   try {
-    opts.signal?.throwIfAborted();
-    outcome = { value: await task(container) };
-  } catch (error) {
-    outcome = { error };
+    return await runWorkerEffect(Fiber.join(fiber));
+  } finally {
+    opts.signal?.removeEventListener("abort", onAbort);
   }
-  let releaseError: unknown;
-  try {
-    await opts.release(opts.sandboxId);
-    container.markReleased();
-  } catch (error) {
-    releaseError = error;
-    container.markLeaked();
-    recordLeak(opts.sandboxId, error);
-    console.error(`Failed to release sandbox container ${opts.sandboxId}`);
-  }
-  if ("error" in outcome) throw outcome.error;
-  if (releaseError !== undefined) throw releaseError;
-  return outcome.value;
 }
 
 /** Container handle returned by the SDK's getSandbox, narrowed to release. */

@@ -1,5 +1,7 @@
+import { Effect, Fiber } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  acquireContainer,
   acquireSandboxOps,
   ContainerReleasedError,
   destroyManagedContainer,
@@ -13,6 +15,8 @@ import {
 } from "../src/sandbox/lifecycle.js";
 import type { Env } from "../src/env.js";
 import type { ExecResult, SandboxOps } from "../src/runtime.js";
+
+const tick = () => new Promise((resolve) => setTimeout(resolve, 10));
 
 const mocks = vi.hoisted(() => ({
   destroy: vi.fn(),
@@ -279,6 +283,91 @@ describe("runWithContainer", () => {
     expect(leakedContainers().some((entry) => entry.sandboxId === "sbx-retry")).toBe(true);
     forgetLeaked("sbx-retry");
     expect(leakedContainers().some((entry) => entry.sandboxId === "sbx-retry")).toBe(false);
+  });
+});
+
+describe("interruption-safe release", () => {
+  it("rejects and releases when the caller's signal aborts an in-flight task that never settles", async () => {
+    const controller = new AbortController();
+    const release = vi.fn(async (_sandboxId: string) => {});
+    let container: ManagedContainer | undefined;
+    const run = runWithContainer(
+      {
+        acquire: async () => fakeOps(),
+        release,
+        sandboxId: "sbx-stuck",
+        signal: controller.signal,
+      },
+      async (managed) => {
+        container = managed;
+        // An in-flight operation that ignores the signal entirely — only a
+        // real interruption can unwind the task, and release must still run.
+        await new Promise<never>(() => {});
+      },
+    );
+    await tick();
+    controller.abort();
+    await expect(run).rejects.toMatchObject({ code: "cancelled" });
+    expect(release).toHaveBeenCalledOnce();
+    expect(release).toHaveBeenCalledWith("sbx-stuck");
+    expect(container!.released).toBe(true);
+  }, 10_000);
+
+  it("aborts an in-flight op through the scope signal when the task did not pass one", async () => {
+    const controller = new AbortController();
+    const ops = fakeOps();
+    let seenSignal: AbortSignal | undefined;
+    ops.exec.mockImplementationOnce((_command, opts) => {
+      seenSignal = opts?.signal;
+      return new Promise<never>((_resolve, reject) => {
+        opts?.signal?.addEventListener(
+          "abort",
+          () => reject(new DOMException("The operation was aborted.", "AbortError")),
+          { once: true },
+        );
+      });
+    });
+    const release = vi.fn(async (_sandboxId: string) => {});
+    const run = runWithContainer(
+      {
+        acquire: async () => ops,
+        release,
+        sandboxId: "sbx-ops-signal",
+        signal: controller.signal,
+      },
+      // The op is called WITHOUT a signal: the scope supplies a fallback
+      // that fires when the fiber is interrupted, so ops still abort.
+      (container) => container.ops.exec("sleep 60"),
+    );
+    await tick();
+    controller.abort();
+    await expect(run).rejects.toMatchObject({ code: "cancelled" });
+    expect(release).toHaveBeenCalledOnce();
+    expect(seenSignal).toBeDefined();
+    expect(seenSignal?.aborted).toBe(true);
+  });
+
+  it("runs the release finalizer when the fiber is interrupted mid-task", async () => {
+    const release = vi.fn(async (_sandboxId: string) => {});
+    let container: ManagedContainer | undefined;
+    const fiber = Effect.runFork(
+      Effect.scoped(
+        Effect.gen(function* () {
+          container = yield* acquireContainer({
+            acquire: async () => fakeOps(),
+            release,
+            sandboxId: "sbx-fiber",
+          });
+          yield* Effect.never;
+        }),
+      ),
+    );
+    await tick();
+    await Effect.runPromise(Fiber.interrupt(fiber));
+    expect(release).toHaveBeenCalledOnce();
+    expect(release).toHaveBeenCalledWith("sbx-fiber");
+    expect(container!.released).toBe(true);
+    expect(container!.generation).toBe(1);
   });
 });
 
