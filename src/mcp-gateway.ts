@@ -16,6 +16,11 @@
  * the SHA-256 of the canonical (sorted-key) JSON args — a hash of the args,
  * never the args themselves, so an audit reader can compare calls without
  * learning what they contained.
+ *
+ * Note: `McpAgent` is `@deprecated` upstream since agents@0.23.0 (the SDK
+ * now recommends `createMcpHandler`); the megaplan Interfaces section
+ * mandates it, and the registry seam T6/T9 tools register against is
+ * independent of that base class.
  */
 import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -45,6 +50,21 @@ import { redactSecrets } from "./security.js";
  * "verified upstream" — never a client claim.
  */
 export const MCP_PRINCIPAL_HEADER = "x-shiba-principal";
+
+/**
+ * ByteString-safe JSON for the principal header: `Headers.set` rejects
+ * values containing chars above Latin-1, so an unescaped non-ASCII
+ * principal name (emoji, CJK) would throw at injection time and 500 every
+ * `/mcp` call for that token. Escaping each such code unit as `\uXXXX`
+ * keeps the header a plain JSON document {@link parsePrincipal} decodes
+ * unchanged.
+ */
+export function encodePrincipal(record: TokenRecord): string {
+  return JSON.stringify(record).replace(
+    /[\u0100-\uFFFF]/g,
+    (ch) => `\\u${ch.charCodeAt(0).toString(16).padStart(4, "0")}`,
+  );
+}
 
 /** Narrow env surface — the registry audits against the D1 binding. */
 export type McpGatewayEnv = Env;
@@ -161,8 +181,8 @@ export function principalFor(request: Request): TokenRecord | null {
   return parsePrincipal(request.headers.get(MCP_PRINCIPAL_HEADER));
 }
 
-/** Same lookup against a tool call's `requestInfo` header bag. */
-function principalFromInfo(info: RequestInfo | undefined): TokenRecord | null {
+/** Same lookup against a tool call's `requestInfo` header bag. Exported for tests. */
+export function principalFromInfo(info: RequestInfo | undefined): TokenRecord | null {
   const raw = info?.headers?.[MCP_PRINCIPAL_HEADER];
   return parsePrincipal(
     typeof raw === "string" ? raw : Array.isArray(raw) ? (raw[0] ?? null) : null,
@@ -183,28 +203,41 @@ export function createToolRegistry(env: McpGatewayEnv): ToolRegistry {
       return [...tools.values()];
     },
     async invoke(name, args, principal) {
+      const caller = principal?.principal ?? "<unknown>";
+      // args_hash is required on every audit row; args that cannot be
+      // serialized (BigInt, circular refs) fail the call before a handler
+      // or scope check ever runs, still under an `error` row.
+      let argsHash: string;
+      try {
+        argsHash = await hashToolArgs(args);
+      } catch (error) {
+        const detail = redactSecrets(
+          error instanceof Error ? error.message : String(error),
+        );
+        await audit(env, {
+          principal: caller,
+          tool: name,
+          argsHash: "<unhashable>",
+          outcome: "error",
+          detail,
+        });
+        return errorResult(`Tool "${name}" failed: ${detail}`);
+      }
       const tool = tools.get(name);
       if (!tool) {
+        // An unknown name is still a tool call: audit it so an
+        // authenticated principal probing the registry leaves a row.
+        await audit(env, {
+          principal: caller,
+          tool: name,
+          argsHash,
+          outcome: "error",
+          detail: "unknown tool",
+        });
         return errorResult(`Unknown tool "${name}".`);
       }
-      const argsHash = await hashToolArgs(args);
-      const caller = principal?.principal ?? "<unknown>";
       try {
         requireScope(principal, tool.scope);
-      } catch (error) {
-        if (error instanceof ScopeError) {
-          await audit(env, {
-            principal: caller,
-            tool: name,
-            argsHash,
-            outcome: "denied",
-            detail: `missing scope: ${tool.scope}`,
-          });
-          return errorResult(`Forbidden: missing scope "${tool.scope}".`);
-        }
-        throw error;
-      }
-      try {
         const result = await tool.handler(
           (args ?? {}) as Record<string, unknown>,
           { env, principal: principal as TokenRecord },
@@ -217,6 +250,16 @@ export function createToolRegistry(env: McpGatewayEnv): ToolRegistry {
         });
         return result;
       } catch (error) {
+        if (error instanceof ScopeError) {
+          await audit(env, {
+            principal: caller,
+            tool: name,
+            argsHash,
+            outcome: "denied",
+            detail: `missing scope: ${tool.scope}`,
+          });
+          return errorResult(`Forbidden: missing scope "${tool.scope}".`);
+        }
         const detail = redactSecrets(
           error instanceof Error ? error.message : String(error),
         );

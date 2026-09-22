@@ -16,7 +16,7 @@ import { handleInboundEmail } from "./email-handler.js";
 import type { Env } from "./env.js";
 import { agentCliCatalog } from "./harness/catalog.js";
 import { Mailbox } from "./mailbox-do.js";
-import { McpGateway, MCP_PRINCIPAL_HEADER } from "./mcp-gateway.js";
+import { encodePrincipal, McpGateway, MCP_PRINCIPAL_HEADER } from "./mcp-gateway.js";
 import { Sandbox } from "./sandbox.js";
 import { redactSecrets, verifyGitHubWebhookSignature } from "./security.js";
 import { handleSlackInteract } from "./slack-approval.js";
@@ -119,7 +119,10 @@ async function handleMcp(request: Request, env: Env, ctx: ExecutionContext): Pro
   // record may reach the DO under this name.
   const headers = new Headers(request.headers);
   headers.delete(MCP_PRINCIPAL_HEADER);
-  headers.set(MCP_PRINCIPAL_HEADER, JSON.stringify(record));
+  // encodePrincipal keeps the JSON ByteString-safe — a non-ASCII
+  // principal name would otherwise make Headers.set throw and 500 every
+  // call for that token.
+  headers.set(MCP_PRINCIPAL_HEADER, encodePrincipal(record));
   return McpGateway.serve("/mcp", { binding: "McpGateway" }).fetch(
     new Request(request, { headers }),
     env,

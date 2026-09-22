@@ -47,9 +47,11 @@ import {
 } from "../src/agent-tokens.js";
 import {
   createToolRegistry,
+  encodePrincipal,
   hashToolArgs,
   MCP_PRINCIPAL_HEADER,
   principalFor,
+  principalFromInfo,
 } from "../src/mcp-gateway.js";
 
 /** In-memory KV, same fake as the token-store suite. */
@@ -142,6 +144,56 @@ describe("/mcp route auth", () => {
     expect(served.requests).toHaveLength(0);
   });
 
+  it("requires bearer auth on /mcp/* subpaths too", async () => {
+    const { env } = makeEnv();
+    served.requests.length = 0;
+    const denied = await worker.fetch(
+      new Request("https://worker/mcp/sse", { method: "GET" }),
+      env,
+      ctx,
+    );
+    expect(denied.status).toBe(401);
+    expect(served.requests).toHaveLength(0);
+    const { token } = await createToken(
+      env as unknown as AgentTokensEnv,
+      "scout",
+      ["email:read"],
+    );
+    const ok = await worker.fetch(
+      new Request("https://worker/mcp/sse", {
+        method: "GET",
+        headers: { authorization: `Bearer ${token}` },
+      }),
+      env,
+      ctx,
+    );
+    expect(ok.status).toBe(200);
+    expect(served.requests).toHaveLength(1);
+  });
+
+  it("forwards non-ASCII principal names as escaped JSON the registry decodes", async () => {
+    const { env } = makeEnv();
+    const { token, record } = await createToken(
+      env as unknown as AgentTokensEnv,
+      "エージェント🤖",
+      ["email:read"],
+    );
+    served.requests.length = 0;
+    const response = await worker.fetch(
+      mcpRequest({ authorization: `Bearer ${token}` }),
+      env,
+      ctx,
+    );
+    expect(response.status).toBe(200);
+    expect(served.requests).toHaveLength(1);
+    const forwarded = served.requests[0]!;
+    // The header stays ByteString-safe even though the name is not.
+    const raw = forwarded.headers.get(MCP_PRINCIPAL_HEADER)!;
+    expect(raw).not.toContain("🤖");
+    expect(principalFor(forwarded)).toEqual(record);
+    expect(principalFor(forwarded)?.principal).toBe("エージェント🤖");
+  });
+
   it("forwards verified principals as an injected header the client cannot spoof", async () => {
     const { env } = makeEnv();
     const { token, record } = await createToken(
@@ -196,6 +248,47 @@ describe("principalFor", () => {
           [MCP_PRINCIPAL_HEADER]: JSON.stringify({ principal: 7, scopes: "x" }),
         }),
       ),
+    ).toBeNull();
+  });
+});
+
+describe("principalFromInfo", () => {
+  const record: TokenRecord = {
+    principal: "engage",
+    scopes: ["memory:read"],
+    created: 1_000,
+    revoked: false,
+  };
+
+  it("reads the injected record from requestInfo headers — string or array", () => {
+    const json = encodePrincipal(record);
+    expect(
+      principalFromInfo({ headers: { [MCP_PRINCIPAL_HEADER]: json } }),
+    ).toEqual(record);
+    expect(
+      principalFromInfo({ headers: { [MCP_PRINCIPAL_HEADER]: [json] } }),
+    ).toEqual(record);
+  });
+
+  it("decodes a ByteString-escaped non-ASCII principal", () => {
+    const unicode: TokenRecord = { ...record, principal: "エージェント🤖" };
+    expect(
+      principalFromInfo({
+        headers: { [MCP_PRINCIPAL_HEADER]: encodePrincipal(unicode) },
+      }),
+    ).toEqual(unicode);
+  });
+
+  it("returns null when absent or malformed", () => {
+    expect(principalFromInfo(undefined)).toBeNull();
+    expect(principalFromInfo({ headers: {} })).toBeNull();
+    expect(
+      principalFromInfo({ headers: { [MCP_PRINCIPAL_HEADER]: "{not json" } }),
+    ).toBeNull();
+    expect(
+      principalFromInfo({
+        headers: { [MCP_PRINCIPAL_HEADER]: JSON.stringify({ principal: 7 }) },
+      }),
     ).toBeNull();
   });
 });
@@ -257,6 +350,7 @@ describe("tool registry", () => {
     const insert = d1.calls.find((c) => c.sql.startsWith("INSERT"))!;
     expect(insert.params[5]).toBe("denied");
     expect(insert.params[2]).toBe("scout");
+    expect(insert.params[6]).toBe("missing scope: email:send");
   });
 
   it("denies identically when the principal is absent", async () => {
@@ -280,12 +374,36 @@ describe("tool registry", () => {
     expect(String(insert.params[6])).toContain("store unreachable");
   });
 
-  it("answers isError for an unregistered tool", async () => {
+  it("answers isError for an unregistered tool — and still audits it", async () => {
     const { env, d1 } = makeEnv();
     const registry = createToolRegistry(env);
     const result = await registry.invoke("nope", {}, principal);
     expect(result.isError).toBe(true);
-    // Nothing reached a handler, so nothing is audited.
-    expect(d1.calls.filter((c) => c.sql.startsWith("INSERT"))).toHaveLength(0);
+    // Every tool call leaves an audit row, even one no handler served.
+    const insert = d1.calls.find((c) => c.sql.startsWith("INSERT"))!;
+    expect(insert.params[2]).toBe("scout");
+    expect(insert.params[3]).toBe("nope");
+    expect(insert.params[5]).toBe("error");
+    expect(insert.params[6]).toBe("unknown tool");
+  });
+
+  it("audits unhashable args as error instead of throwing out of invoke", async () => {
+    const { env, d1 } = makeEnv();
+    const registry = createToolRegistry(env);
+    const handler = vi.fn(async () => okResult);
+    registry.registerTool("search_emails", "email:read", handler);
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+    for (const args of [circular, { n: 1n }]) {
+      d1.calls.length = 0;
+      const result = await registry.invoke("search_emails", args, principal);
+      expect(result.isError).toBe(true);
+      expect(handler).not.toHaveBeenCalled();
+      const insert = d1.calls.find((c) => c.sql.startsWith("INSERT"))!;
+      expect(insert.params[2]).toBe("scout");
+      expect(insert.params[3]).toBe("search_emails");
+      expect(insert.params[4]).toBe("<unhashable>");
+      expect(insert.params[5]).toBe("error");
+    }
   });
 });
