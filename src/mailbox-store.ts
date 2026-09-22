@@ -275,11 +275,16 @@ function requireAddress(value: string, field: string): string {
  * (Slavic), `R:`/`Rif:`/`Tr:` (Italian/French), `Res:`/`Rv:`/`Enc:`
  * (Iberian), `Ynt:`/`Cev:` (Turkish), `Atb:`/`Ats:` (Baltic),
  * `Doorst:` (Dutch), `Oт:` (Russian), `Απ:`/`Σε:`/`Πρθ:` (Greek), and the
- * common CJK markers — followed by an optional numbered counter
- * (`Re[2]:`, `RE(2):`, `Re^2:`). `i`-cased so `SV:`/`VS:` match too.
+ * common CJK markers — `答复:`/`回复:`/`返信:`/`답장:` (reply), `轉發:`/`転送:`/`전달:` (forward) — followed by an optional numbered
+ * counter (`Re[2]:`, `RE(2):`, `Re^2:`) and an ASCII or fullwidth colon.
+ * `i`-cased so `SV:`/`VS:` match too. Every alternative must be a real
+ * marker word — an empty alternative would let a bare `:`-led subject
+ * be eaten as a prefix.
  */
 const REPLY_PREFIX_RE =
-  /^(?:re|r|aw|antw|sv|vs|odp|res|rif|ynt|cev|atb|ats|vl|rv|wg|tr|enc|pd|vb|doorst|ilt|от|απ|σε|πρθ|fwd?||||||||||답장|전달)\s*(?:\[\s*\d+\s*\]|\(\s*\d+\s*\)|\^\s*\d+)?\s*:\s*/i;
+  /^(?:re|r|aw|antw|sv|vs|odp|res|rif|ynt|cev|atb|ats|vl|rv|wg|tr|enc|pd|vb|doorst|ilt|\u043e\u0442|\u03b1\u03c0|\u03c3\u03b5|\u03c0\u03c1\u03b8|fwd?|答复|回复|返信|답장|轉發|転送|전달)\s*(?:\[\s*\d+\s*\]|\(\s*\d+\s*\)|\^\s*\d+)?\s*[:\uff1a]\s*/i;
+
+
 
 /**
  * Reply threading normalization: drops leading reply/forward prefixes (any

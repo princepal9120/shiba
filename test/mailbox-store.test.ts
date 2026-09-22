@@ -429,6 +429,24 @@ describe("threading", () => {
     expect(normalizeSubject("Restart: Deploy report")).toBe("restart: deploy report");
   });
 
+  it("strips CJK reply/forward markers and never eats a bare leading colon", () => {
+    for (const subject of [
+      "答复: Deploy report",
+      "回复：Deploy report", // fullwidth colon
+      "返信: Deploy report",
+      "답장: Deploy report",
+      "轉發: Deploy report",
+      "転送：Deploy report",
+      "전달: Deploy report",
+    ]) {
+      expect(normalizeSubject(subject)).toBe("deploy report");
+    }
+    // A bare `:`-led subject is not a reply marker — the prefix group must
+    // always consume a real marker word before the colon.
+    expect(normalizeSubject(": Deploy report")).toBe(": deploy report");
+    expect(normalizeSubject("(3): Deploy report")).toBe("(3): deploy report");
+  });
+
   it("threads on any msg-id in a multi-id In-Reply-To header", () => {
     const store = makeStore();
     const first = inbound(store, { message_id: "<m1@example.com>", created_at: 1 });
