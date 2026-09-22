@@ -21,13 +21,13 @@ approval-gated destructive ops, delivered as one PR. Deploy-time provisioning
 
 ## In progress
 
-SETUP — plan + branch + workflow scaffolding
+P1: T2 MailboxDO + T3 email handler (T1 done; checks verified locally: typecheck/lint/519 tests green)
 
 ## Phases (SDD task → review → fix loop)
 
 | Task | Phase | Status |
 |---|---|---|
-| T1 mailbox-store core | 1 | pending |
+| T1 mailbox-store core | 1 | DONE (5 fix rounds + controller fix @ 6d531cf) |
 | T2 MailboxDO + bindings | 1 | pending |
 | T3 email() handler + MIME | 1 | pending |
 | T4 tokens + audit writer | 2 | pending |
