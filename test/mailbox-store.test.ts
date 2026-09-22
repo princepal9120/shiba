@@ -1,0 +1,314 @@
+import { DatabaseSync } from "node:sqlite";
+import { describe, expect, it } from "vitest";
+import {
+  flagLinks,
+  ftsQuery,
+  MailboxStore,
+  normalizeSubject,
+  UNTRUSTED_SECURITY_NOTICE,
+  wrapUntrusted,
+  type SqlExec,
+  type SqlRow,
+} from "../src/mailbox-store.js";
+
+/**
+ * `node:sqlite` adapter for the store's one-statement-per-call exec contract —
+ * the same shape the MailboxDO adapter wraps around `ctx.storage.sql.exec`.
+ * `.all()` runs every statement kind (DDL, writes, RETURNING) and yields rows.
+ */
+function makeStore(): MailboxStore {
+  const db = new DatabaseSync(":memory:");
+  const exec: SqlExec = (sql, ...params) => db.prepare(sql).all(...params) as SqlRow[];
+  const store = new MailboxStore(exec);
+  store.init();
+  return store;
+}
+
+function seedMailbox(store: MailboxStore, address = "agent@shiba.dev"): void {
+  store.registerMailbox({ address, label: "Agent", agent: "intern", nowMs: 1_000 });
+}
+
+function inbound(store: MailboxStore, over: Record<string, unknown> = {}) {
+  return store.addEmail({
+    direction: "inbound",
+    from_addr: "sender@example.com",
+    to_addr: "agent@shiba.dev",
+    subject: "Deploy report",
+    body_text: "the deploy finished at noon",
+    ...over,
+  });
+}
+
+describe("schema", () => {
+  it("executes MAILBOX_SCHEMA statements and serves CRUD round-trips", () => {
+    const store = makeStore();
+    seedMailbox(store);
+    const email = inbound(store);
+    expect(store.getEmail(email.id)?.subject).toBe("Deploy report");
+    // init() is idempotent — a second run must not fail or drop data.
+    store.init();
+    expect(store.getEmail(email.id)?.id).toBe(email.id);
+  });
+});
+
+describe("emails CRUD", () => {
+  it("adds emails with defaults and reads them back", () => {
+    const store = makeStore();
+    const email = inbound(store);
+    expect(email.status).toBe("unread");
+    expect(email.direction).toBe("inbound");
+    expect(email.body_html).toBeNull();
+    expect(store.getEmail(email.id)?.thread_id).toBe(email.thread_id);
+    expect(store.getEmail("eml-nope")).toBeNull();
+  });
+
+  it("outbound emails default to sent", () => {
+    const store = makeStore();
+    const email = store.addEmail({
+      direction: "outbound",
+      from_addr: "agent@shiba.dev",
+      to_addr: "boss@example.com",
+      subject: "done",
+      body_text: "shipped",
+    });
+    expect(email.status).toBe("sent");
+  });
+
+  it("rejects malformed addresses", () => {
+    const store = makeStore();
+    expect(() =>
+      store.addEmail({
+        direction: "inbound",
+        from_addr: "not-an-address",
+        to_addr: "agent@shiba.dev",
+        subject: "x",
+      }),
+    ).toThrow(/from_addr/);
+  });
+
+  it("filters by status and mailbox", () => {
+    const store = makeStore();
+    const a = inbound(store, { created_at: 1 });
+    const b = inbound(store, { created_at: 2, subject: "Other", from_addr: "two@example.com" });
+    const c = store.addEmail({
+      direction: "outbound",
+      from_addr: "agent@shiba.dev",
+      to_addr: "other@example.com",
+      subject: "out",
+      created_at: 3,
+    });
+    expect(store.listEmails({ mailbox: "agent@shiba.dev" }).map((e) => e.id)).toEqual([
+      c.id,
+      b.id,
+      a.id,
+    ]);
+    store.markRead(a.id);
+    // c is outbound → "sent", so only b remains unread.
+    expect(store.listEmails({ status: "unread" }).map((e) => e.id)).toEqual([b.id]);
+    // A different mailbox sees only its own traffic.
+    expect(store.listEmails({ mailbox: "other@example.com" }).map((e) => e.id)).toEqual([c.id]);
+    expect(store.listEmails({ mailbox: "nobody@example.com" })).toEqual([]);
+  });
+
+  it("markRead flips unread to read exactly once", () => {
+    const store = makeStore();
+    const email = inbound(store);
+    expect(store.markRead(email.id)).toBe(true);
+    expect(store.getEmail(email.id)?.status).toBe("read");
+    expect(store.markRead(email.id)).toBe(false);
+    expect(store.markRead("eml-nope")).toBe(false);
+  });
+
+  it("moveStatus validates and returns the updated row", () => {
+    const store = makeStore();
+    const email = inbound(store);
+    const moved = store.moveStatus(email.id, "archived");
+    expect(moved?.status).toBe("archived");
+    expect(store.moveStatus("eml-nope", "read")).toBeNull();
+    expect(() => store.moveStatus(email.id, "bogus" as never)).toThrow(/status/);
+  });
+
+  it("deleteEmail removes the row and its FTS entry", () => {
+    const store = makeStore();
+    const email = inbound(store);
+    expect(store.deleteEmail(email.id)).toBe(true);
+    expect(store.getEmail(email.id)).toBeNull();
+    expect(store.searchEmails("deploy")).toEqual([]);
+    expect(store.deleteEmail(email.id)).toBe(false);
+  });
+});
+
+describe("drafts", () => {
+  it("creates, updates, and lists drafts", () => {
+    const store = makeStore();
+    const email = inbound(store);
+    const draft = store.createDraft({
+      to_addr: "sender@example.com",
+      subject: "Re: Deploy report",
+      body_text: "thanks",
+      thread_id: email.thread_id,
+      nowMs: 10,
+    });
+    expect(draft.status).toBe("draft");
+    expect(draft.thread_id).toBe(email.thread_id);
+
+    const updated = store.updateDraft(draft.id, { body_text: "thanks — queued", nowMs: 20 });
+    expect(updated?.body_text).toBe("thanks — queued");
+    expect(updated?.updated_at).toBe(20);
+    expect(updated?.created_at).toBe(10);
+
+    expect(store.listDrafts().map((d) => d.id)).toEqual([draft.id]);
+    store.updateDraft(draft.id, { status: "queued" });
+    expect(store.listDrafts({ status: "draft" })).toEqual([]);
+    expect(store.listDrafts({ status: "queued" })).toHaveLength(1);
+    expect(store.updateDraft("drf-nope", { subject: "x" })).toBeNull();
+    expect(() => store.updateDraft(draft.id, { to_addr: "nope" })).toThrow(/to_addr/);
+  });
+});
+
+describe("mailboxes", () => {
+  it("registers, lists, and checks addresses case-insensitively", () => {
+    const store = makeStore();
+    seedMailbox(store, "Agent@Shiba.dev");
+    expect(store.isRegistered("agent@shiba.dev")).toBe(true);
+    expect(store.isRegistered("AGENT@SHIBA.DEV")).toBe(true);
+    expect(store.isRegistered("nobody@shiba.dev")).toBe(false);
+    expect(store.listMailboxes()).toHaveLength(1);
+    expect(store.listMailboxes()[0]?.address).toBe("agent@shiba.dev");
+    // Re-register updates label/agent without duplicating the row.
+    store.registerMailbox({ address: "agent@shiba.dev", agent: "intern2" });
+    const rows = store.listMailboxes();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.agent).toBe("intern2");
+    expect(rows[0]?.label).toBe("Agent");
+  });
+});
+
+describe("searchEmails", () => {
+  it("finds emails by subject/body/address terms", () => {
+    const store = makeStore();
+    inbound(store, { created_at: 1 });
+    inbound(store, { subject: "Invoice overdue", body_text: "please pay", created_at: 2 });
+    expect(store.searchEmails("deploy")).toHaveLength(1);
+    expect(store.searchEmails("deploy noon")).toHaveLength(1);
+    expect(store.searchEmails("invoice")).toHaveLength(1);
+    expect(store.searchEmails("deploy", { mailbox: "agent@shiba.dev" })).toHaveLength(1);
+    expect(store.searchEmails("deploy", { mailbox: "other@shiba.dev" })).toEqual([]);
+    expect(store.searchEmails("nonexistent")).toEqual([]);
+  });
+
+  it("treats FTS operators and quotes as literals, never as syntax", () => {
+    const store = makeStore();
+    inbound(store);
+    // Unescaped, these would be FTS5 syntax; quoted they are literal terms.
+    expect(() => ftsQuery('a OR b "c d" * NEAR(x, y)')).not.toThrow();
+    for (const q of ['"deploy"', "deploy OR invoice", "deploy*", "AND OR NOT", '"', "a\"b"]) {
+      expect(() => store.searchEmails(q)).not.toThrow();
+    }
+    // Literal-quoted "OR" matches nothing — it is not an operator here.
+    expect(store.searchEmails("deploy OR invoice")).toEqual([]);
+    // Query with no searchable tokens returns no rows instead of erroring.
+    expect(store.searchEmails("!!! \"...\"")).toEqual([]);
+    expect(store.searchEmails("")).toEqual([]);
+  });
+});
+
+describe("threading", () => {
+  it("links replies by In-Reply-To and References headers", () => {
+    const store = makeStore();
+    const first = inbound(store, { message_id: "<m1@example.com>", created_at: 1 });
+    const reply = inbound(store, {
+      message_id: "<m2@example.com>",
+      in_reply_to: "<m1@example.com>",
+      subject: "Re: Deploy report",
+      created_at: 2,
+    });
+    expect(reply.thread_id).toBe(first.thread_id);
+    // References picks up the nearest known ancestor even under a new subject.
+    const second = inbound(store, {
+      message_id: "<m3@example.com>",
+      references: ["<m0@example.com>", "<m2@example.com>"],
+      subject: "renamed topic",
+      created_at: 3,
+    });
+    expect(second.thread_id).toBe(first.thread_id);
+
+    const thread = store.getThread(first.thread_id);
+    expect(thread?.emails.map((e) => e.id)).toEqual([first.id, reply.id, second.id]);
+    expect(thread?.last_message_at).toBe(3);
+    expect(store.getThread("thr-nope")).toBeNull();
+  });
+
+  it("falls back to normalized-subject matching", () => {
+    const store = makeStore();
+    const first = inbound(store, { created_at: 1 });
+    const reply = inbound(store, { subject: "RE:  Deploy report", created_at: 2 });
+    expect(normalizeSubject("RE:  Deploy report")).toBe("deploy report");
+    expect(normalizeSubject("Fwd: Re: [alerts] Deploy report")).toBe("deploy report");
+    expect(reply.thread_id).toBe(first.thread_id);
+    const other = inbound(store, { subject: "Totally different", created_at: 3 });
+    expect(other.thread_id).not.toBe(first.thread_id);
+  });
+});
+
+describe("flagLinks", () => {
+  it("flags non-https and private hosts, leaves clean https alone", () => {
+    const links = flagLinks(
+      'see <a href="https://ok.example.com">safe</a> and http://insecure.example.com ' +
+        'and <a href="http://192.168.1.1/x">router</a> and https://10.0.0.5/internal ' +
+        "and http://169.254.169.254/meta and http://localhost:8080/x",
+    );
+    const byUrl = new Map(links.map((l) => [l.url, l.flags]));
+    expect(byUrl.get("https://ok.example.com")).toEqual([]);
+    expect(byUrl.get("http://insecure.example.com")).toEqual(["non_https"]);
+    expect(byUrl.get("http://192.168.1.1/x")).toEqual(
+      expect.arrayContaining(["non_https", "private_ip"]),
+    );
+    expect(byUrl.get("https://10.0.0.5/internal")).toEqual(["private_ip"]);
+    expect(byUrl.get("http://169.254.169.254/meta")).toEqual(
+      expect.arrayContaining(["non_https", "private_ip"]),
+    );
+    expect(byUrl.get("http://localhost:8080/x")).toEqual(
+      expect.arrayContaining(["non_https", "private_ip"]),
+    );
+  });
+
+  it("flags sender_mismatch when anchor text shows a different domain", () => {
+    const links = flagLinks(
+      '<a href="http://evil.example.com">https://paypal.com/login</a> ' +
+        '<a href="https://real.example.com">real.example.com</a>',
+    );
+    expect(links[0]?.flags).toEqual(expect.arrayContaining(["sender_mismatch", "non_https"]));
+    expect(links[1]?.flags).toEqual([]);
+  });
+
+  it("does not flag mailto: links as non-https", () => {
+    const links = flagLinks('<a href="mailto:sender@example.com">sender@example.com</a>');
+    // example.com anchor text vs empty mailto host → sender_mismatch is fine;
+    // the contract under test is only that non_https is absent.
+    expect(links[0]?.flags).not.toContain("non_https");
+  });
+});
+
+describe("wrapUntrusted", () => {
+  it("wraps the body verbatim with notice and per-link flags", () => {
+    const body = '<p>hi</p> <a href="http://bad.example">click</a>';
+    const wrapped = wrapUntrusted(body, {
+      from_addr: "sender@example.com",
+      subject: "hello",
+    });
+    expect(wrapped.untrusted).toBe(body);
+    expect(wrapped.security_notice).toContain(UNTRUSTED_SECURITY_NOTICE);
+    expect(wrapped.security_notice).toContain("sender@example.com");
+    expect(wrapped.security_notice).toContain("hello");
+    expect(wrapped.link_flags).toEqual([
+      { url: "http://bad.example", flags: ["non_https"] },
+    ]);
+  });
+
+  it("works without meta", () => {
+    const wrapped = wrapUntrusted("plain text, no links");
+    expect(wrapped.security_notice).toBe(UNTRUSTED_SECURITY_NOTICE);
+    expect(wrapped.link_flags).toEqual([]);
+  });
+});
