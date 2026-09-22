@@ -35,6 +35,7 @@ import {
   type ResolveResult,
 } from "../pending-approvals.js";
 import { makeSandboxId, parseGitHubRepoUrl, redactSecrets } from "../security.js";
+import { destroyManagedContainer } from "../sandbox/lifecycle.js";
 import { classifyExecutorError, classifyRunError, runErrorWire, type RunErrorCode, type RunErrorWire } from "../run-errors.js";
 import { parseSlackThreadName } from "../slack-thread.js";
 import { evaluateResultQuality } from "../result-quality.js";
@@ -481,13 +482,9 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
   }
 
   private async destroySandbox(sandboxId: string): Promise<void> {
-    try {
-      const { getSandbox } = await import("@cloudflare/sandbox");
-      await getSandbox(this.env.Sandbox, sandboxId).destroy();
-    } catch (error) {
-      // Cleanup failure must not overwrite the recorded outcome.
-      console.warn(`Failed to destroy sandbox ${sandboxId}: ${redactSecrets(String(error))}`);
-    }
+    // Release goes through the scoped lifecycle: failures are tracked as
+    // leaked containers (warn + registry) instead of only logged.
+    await destroyManagedContainer(this.env, sandboxId);
   }
 
   private async reclaimRuns(): Promise<void> {
