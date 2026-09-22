@@ -251,11 +251,29 @@ describe("drafts", () => {
     expect(updated?.created_at).toBe(10);
 
     expect(store.listDrafts().map((d) => d.id)).toEqual([draft.id]);
-    store.updateDraft(draft.id, { status: "queued" });
+    store.updateDraft(draft.id, { status: "discarded" });
     expect(store.listDrafts({ status: "draft" })).toEqual([]);
-    expect(store.listDrafts({ status: "queued" })).toHaveLength(1);
+    expect(store.listDrafts({ status: "discarded" })).toHaveLength(1);
     expect(store.updateDraft("drf-nope", { subject: "x" })).toBeNull();
     expect(() => store.updateDraft(draft.id, { to_addr: "nope" })).toThrow(/to_addr/);
+  });
+
+  it("rejects queued/sent status writes — those belong to the gated send path", () => {
+    const store = makeStore();
+    const draft = store.createDraft({
+      to_addr: "sender@example.com",
+      subject: "x",
+      body_text: "y",
+    });
+    // A draft-write caller must not mint evidence of a send; only
+    // draft/discarded are settable through updateDraft.
+    expect(() => store.updateDraft(draft.id, { status: "queued" as never })).toThrow(
+      InputError,
+    );
+    expect(() => store.updateDraft(draft.id, { status: "sent" as never })).toThrow(
+      /status/,
+    );
+    expect(store.listDrafts({ status: "draft" })).toHaveLength(1);
   });
 });
 
@@ -288,6 +306,19 @@ describe("searchEmails", () => {
     expect(store.searchEmails("deploy", { mailbox: "agent@shiba.dev" })).toHaveLength(1);
     expect(store.searchEmails("deploy", { mailbox: "other@shiba.dev" })).toEqual([]);
     expect(store.searchEmails("nonexistent")).toEqual([]);
+  });
+
+  it("finds HTML-only emails whose body_text is null", () => {
+    const store = makeStore();
+    // Marketing mail often ships only an HTML part — body_html is indexed
+    // so these emails stay visible to search.
+    inbound(store, {
+      subject: "Weekly digest",
+      body_text: null,
+      body_html: '<html><body><p style="margin:0">quarterly numbers inside</p></body></html>',
+    });
+    expect(store.searchEmails("quarterly")).toHaveLength(1);
+    expect(store.searchEmails("digest")).toHaveLength(1);
   });
 
   it("treats FTS operators and quotes as literals, never as syntax", () => {
@@ -430,6 +461,21 @@ describe("flagLinks", () => {
       "http://first.example.com",
       "https://second.example.com",
     ]);
+  });
+
+  it("flags an href whose tag is cut off at end of input, in linear time", () => {
+    // HTML5 emits a tag truncated by EOF — the href must still surface.
+    expect(flagLinks('<a href=http://evil.example.com')).toEqual([
+      { url: "http://evil.example.com", flags: ["non_https"] },
+    ]);
+    // Regression guard: `<a href=` + a long `>`-less tail used to retry
+    // every value/attribute suffix split (O(n²), ~40s at 160KB). At this
+    // size the unfixed regex blows the default test timeout.
+    const tail = "x".repeat(200_000);
+    const links = flagLinks(`<a href=${tail}`);
+    expect(links).toEqual([{ url: tail, flags: ["non_https"] }]);
+    // A wall of `<a` prefixes likewise used to rescan the tail per start.
+    expect(flagLinks("<a ".repeat(50_000))).toEqual([]);
   });
 
   it("flags anchors whose href follows `/` instead of whitespace", () => {

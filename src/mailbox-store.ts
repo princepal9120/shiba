@@ -27,7 +27,10 @@ export type SqlExec = (sql: string, ...params: SqlScalar[]) => SqlRow[];
  * DDL executed statement-by-statement by {@link MailboxStore.init}.
  * `emails_fts` is external-content FTS5 over `emails`, kept in sync by the
  * three triggers; `email_ids` maps RFC822 Message-IDs to stored emails so
- * reply threading works even when the subject changes.
+ * reply threading works even when the subject changes. `body_html` is
+ * indexed raw — tag/attribute names become searchable tokens, but that
+ * noise is the price of keeping HTML-only mail (common for marketing
+ * senders with no text part) visible to `searchEmails`.
  */
 export const MAILBOX_STATEMENTS: readonly string[] = [
   `CREATE TABLE IF NOT EXISTS threads (
@@ -63,6 +66,7 @@ export const MAILBOX_STATEMENTS: readonly string[] = [
      updated_at INTEGER NOT NULL
    )`,
   `CREATE INDEX IF NOT EXISTS drafts_status ON drafts(status)`,
+  `CREATE INDEX IF NOT EXISTS drafts_thread ON drafts(thread_id)`,
   `CREATE TABLE IF NOT EXISTS mailboxes (
      address TEXT PRIMARY KEY,
      label TEXT,
@@ -73,23 +77,24 @@ export const MAILBOX_STATEMENTS: readonly string[] = [
      message_id TEXT PRIMARY KEY,
      email_id TEXT NOT NULL
    )`,
+  `CREATE INDEX IF NOT EXISTS email_ids_email ON email_ids(email_id)`,
   `CREATE VIRTUAL TABLE IF NOT EXISTS emails_fts USING fts5(
-     subject, from_addr, to_addr, body_text,
+     subject, from_addr, to_addr, body_text, body_html,
      content='emails', content_rowid='rowid'
    )`,
   `CREATE TRIGGER IF NOT EXISTS emails_fts_ai AFTER INSERT ON emails BEGIN
-     INSERT INTO emails_fts(rowid, subject, from_addr, to_addr, body_text)
-     VALUES (new.rowid, new.subject, new.from_addr, new.to_addr, new.body_text);
+     INSERT INTO emails_fts(rowid, subject, from_addr, to_addr, body_text, body_html)
+     VALUES (new.rowid, new.subject, new.from_addr, new.to_addr, new.body_text, new.body_html);
    END`,
   `CREATE TRIGGER IF NOT EXISTS emails_fts_ad AFTER DELETE ON emails BEGIN
-     INSERT INTO emails_fts(emails_fts, rowid, subject, from_addr, to_addr, body_text)
-     VALUES('delete', old.rowid, old.subject, old.from_addr, old.to_addr, old.body_text);
+     INSERT INTO emails_fts(emails_fts, rowid, subject, from_addr, to_addr, body_text, body_html)
+     VALUES('delete', old.rowid, old.subject, old.from_addr, old.to_addr, old.body_text, old.body_html);
    END`,
   `CREATE TRIGGER IF NOT EXISTS emails_fts_au AFTER UPDATE ON emails BEGIN
-     INSERT INTO emails_fts(emails_fts, rowid, subject, from_addr, to_addr, body_text)
-     VALUES('delete', old.rowid, old.subject, old.from_addr, old.to_addr, old.body_text);
-     INSERT INTO emails_fts(rowid, subject, from_addr, to_addr, body_text)
-     VALUES (new.rowid, new.subject, new.from_addr, new.to_addr, new.body_text);
+     INSERT INTO emails_fts(emails_fts, rowid, subject, from_addr, to_addr, body_text, body_html)
+     VALUES('delete', old.rowid, old.subject, old.from_addr, old.to_addr, old.body_text, old.body_html);
+     INSERT INTO emails_fts(rowid, subject, from_addr, to_addr, body_text, body_html)
+     VALUES (new.rowid, new.subject, new.from_addr, new.to_addr, new.body_text, new.body_html);
    END`,
 ];
 
@@ -125,6 +130,16 @@ export type EmailDirection = (typeof EMAIL_DIRECTIONS)[number];
 
 export const DRAFT_STATUSES = ["draft", "queued", "sent", "discarded"] as const;
 export type DraftStatus = (typeof DRAFT_STATUSES)[number];
+
+/**
+ * Statuses a caller may set through {@link MailboxStore.updateDraft}:
+ * edits keep a draft alive (`"draft"`) or abandon it (`"discarded"`).
+ * `"queued"`/`"sent"` exist only as outcomes of the approval-gated send
+ * path — accepting them here would let any draft-write caller mint fake
+ * evidence of a send for tools/UI that read `drafts.status`.
+ */
+export const DRAFT_UPDATE_STATUSES = ["draft", "discarded"] as const;
+export type DraftUpdateStatus = (typeof DRAFT_UPDATE_STATUSES)[number];
 
 export interface StoredEmail {
   id: string;
@@ -224,7 +239,8 @@ export interface UpdateDraftInput {
   to_addr?: string;
   subject?: string;
   body_text?: string;
-  status?: DraftStatus;
+  /** Ordinary edits only — see {@link DRAFT_UPDATE_STATUSES}. */
+  status?: DraftUpdateStatus;
   nowMs?: number;
 }
 
@@ -689,6 +705,12 @@ export class MailboxStore {
     return rowToDraft(row);
   }
 
+  /**
+   * Ordinary edits only: `status` is restricted to
+   * {@link DRAFT_UPDATE_STATUSES}. `queued`/`sent` are reserved for the
+   * approval-gated send path, which must transition them through its own
+   * seam — `drafts.status` alone is never evidence that a send happened.
+   */
   updateDraft(id: string, fields: UpdateDraftInput): DraftRecord | null {
     const sets: string[] = [];
     const params: SqlScalar[] = [];
@@ -705,8 +727,10 @@ export class MailboxStore {
       params.push(fields.body_text);
     }
     if (fields.status !== undefined) {
-      if (!DRAFT_STATUSES.includes(fields.status)) {
-        throw new InputError(`status must be one of ${DRAFT_STATUSES.join(", ")}.`);
+      if (!DRAFT_UPDATE_STATUSES.includes(fields.status)) {
+        throw new InputError(
+          `status must be one of ${DRAFT_UPDATE_STATUSES.join(", ")}.`,
+        );
       }
       sets.push(`status = ?`);
       params.push(fields.status);
@@ -914,13 +938,26 @@ function flagsForUrl(raw: string, anchorText?: string): LinkFlag[] {
  * the tag and hide the URL from flagLinks. Requiring a `</a>` pair would
  * likewise let `href` attributes survive until TAG_RE strips the whole
  * tag, hiding the URL from the bare-URL pass, so anchor text is optional:
- * it ends at `</a>`, the next `<a`, or end of input. Groups: 1 =
- * double-quoted href, 2 = single-quoted href, 3 = unquoted href, 4 =
- * anchor text.
+ * it ends at `</a>`, the next `<a`, or end of input.
+ *
+ * Backtracking bounds — the input is attacker-controlled mail, so no
+ * scan may cost more than O(distance to the next delimiter): the
+ * pre-href attribute run may not cross another `<a`, which keeps a
+ * flood of `<a` prefixes linear (each failed start dies at the next
+ * `<a`, not at end of input); and the post-href attribute run ends at
+ * `>` *or* end of input — HTML5 emits a tag cut off by EOF, so an
+ * unterminated `<a href=…` still yields its href. Requiring `>` there
+ * would make such a body retry every value/attribute suffix split,
+ * which is O(n²) on crafted input. Groups: 1 = double-quoted href,
+ * 2 = single-quoted href, 3 = unquoted href, 4 = anchor text.
  */
 const ANCHOR_RE =
-  /<a\b(?:[^>"']|"[^"]*"|'[^']*')*?(?:[\s/]|(?<=["']))href\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))(?:[^>"']|"[^"]*"|'[^']*')*>([\s\S]*?)(?:<\/a\s*>|(?=<a\b)|$)/gi;
-const TAG_RE = /<[^>]*>/g;
+  /<a\b(?:(?!<a\b)[^>"']|"[^"]*"|'[^']*')*?(?:[\s/]|(?<=["']))href\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))(?:[^>"']|"[^"]*"|'[^']*')*(?:>|$)([\s\S]*?)(?:<\/a\s*>|(?=<a\b)|$)/gi;
+// `[^<>]` rather than `[^>]`: a `<` before the next `>` means the earlier
+// `<` was never a tag opener, so each position bails in O(distance to the
+// next `<`) — a `<<<`/`<<a ` flood without any `>` would otherwise rescan
+// the whole tail per start (O(n²)).
+const TAG_RE = /<[^<>]*>/g;
 const BARE_URL_RE = /\bhttps?:\/\/[^\s<>"')]+/gi;
 
 /**
