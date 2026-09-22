@@ -20,6 +20,12 @@ export interface Env {
    */
   Mailbox: DurableObjectNamespace;
   /**
+   * Bound to the McpGateway Durable Object class in wrangler.jsonc — the
+   * `/mcp` tool surface for external agents (megaplan T5, see
+   * `mcp-gateway.ts`). One instance per MCP session id.
+   */
+  McpGateway: DurableObjectNamespace;
+  /**
    * R2 bucket holding every inbound attachment body (keyed `emailId/partId`)
    * plus raw-source dumps of unparseable mail (`emailId/raw-source`). The
    * `email_attachments` manifest records which keys exist. Bucket name:

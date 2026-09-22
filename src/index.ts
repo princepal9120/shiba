@@ -5,6 +5,7 @@
  */
 import { ContainerProxy, proxyToSandbox, type Sandbox as SandboxBinding } from "@cloudflare/sandbox";
 import { getAgentByName, routeAgentRequest } from "agents/routing";
+import { verifyToken } from "./agent-tokens.js";
 import { OpenCodeAgent } from "./agents/opencode-agent.js";
 import { CodingOrchestrator } from "./agents/orchestrator.js";
 import { AUTOMATIONS_DO_NAME } from "./automation-runner.js";
@@ -15,6 +16,7 @@ import { handleInboundEmail } from "./email-handler.js";
 import type { Env } from "./env.js";
 import { agentCliCatalog } from "./harness/catalog.js";
 import { Mailbox } from "./mailbox-do.js";
+import { McpGateway, MCP_PRINCIPAL_HEADER } from "./mcp-gateway.js";
 import { Sandbox } from "./sandbox.js";
 import { redactSecrets, verifyGitHubWebhookSignature } from "./security.js";
 import { handleSlackInteract } from "./slack-approval.js";
@@ -24,7 +26,7 @@ import { ORCHESTRATOR_NAME, handleSlackCommand } from "./slack-routes.js";
 import { handleSandboxRoutes } from "./sandbox-routes.js";
 import { readSetupStatus } from "./setup-status.js";
 
-export { Automations, CodingOrchestrator, Mailbox, OpenCodeAgent, Sandbox, ContainerProxy };
+export { Automations, CodingOrchestrator, Mailbox, McpGateway, OpenCodeAgent, Sandbox, ContainerProxy };
 export { assertLiveCodingModel } from "./coding-model.js";
 
 export function getUserId(request: Request): string | null {
@@ -47,12 +49,17 @@ function isAutomationWebhookPath(pathname: string): boolean {
   return parseAutomationWebhookPath(pathname) !== null;
 }
 
-
+function isMcpPath(pathname: string): boolean {
+  return pathname === "/mcp" || pathname.startsWith("/mcp/");
+}
 
 export function isAuthenticated(request: Request, env: Env): boolean {
   const { pathname } = new URL(request.url);
   if (SIGNATURE_AUTHENTICATED.includes(pathname)) return true;
   if (isAutomationWebhookPath(pathname)) return true;
+  // `/mcp` runs on bearer tokens, not Access identity — the handler itself
+  // verifies before any MCP traffic is served.
+  if (isMcpPath(pathname)) return true;
   if (!env.REQUIRE_ACCESS) return true; // opt-out for `wrangler dev`
   return getUserId(request) !== null;
 }
@@ -77,6 +84,47 @@ async function handleRuns(request: Request, env: Env): Promise<Response | null> 
   const stub = await getAgentByName(env.CodingOrchestrator, userId);
   const rewritten = new Request(new URL(url.pathname + url.search, request.url), request);
   return stub.fetch(rewritten);
+}
+
+function bearerToken(request: Request): string | null {
+  const auth = request.headers.get("authorization");
+  if (auth === null) {
+    return null;
+  }
+  const [scheme, ...rest] = auth.trim().split(/\s+/);
+  if (scheme?.toLowerCase() !== "bearer" || rest.length === 0) {
+    return null;
+  }
+  return rest.join(" ");
+}
+
+/**
+ * `/mcp` (and `/mcp/*`) → bearer auth before any MCP handling: a missing
+ * or invalid token is a plain 401 JSON, never an MCP protocol error — the
+ * request never reaches the transport. On success the verified principal
+ * rides into the DO as the `x-shiba-principal` header, which the tool
+ * registry reads per call.
+ */
+async function handleMcp(request: Request, env: Env, ctx: ExecutionContext): Promise<Response | null> {
+  const url = new URL(request.url);
+  if (!isMcpPath(url.pathname)) {
+    return null;
+  }
+  const token = bearerToken(request);
+  const record = token === null ? null : await verifyToken(env, token);
+  if (!record) {
+    return Response.json({ error: "Authentication required." }, { status: 401 });
+  }
+  // Any client-supplied copy must go first — only the worker-verified
+  // record may reach the DO under this name.
+  const headers = new Headers(request.headers);
+  headers.delete(MCP_PRINCIPAL_HEADER);
+  headers.set(MCP_PRINCIPAL_HEADER, JSON.stringify(record));
+  return McpGateway.serve("/mcp", { binding: "McpGateway" }).fetch(
+    new Request(request, { headers }),
+    env,
+    ctx,
+  );
 }
 
 async function handleGitHubWebhook(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response | null> {
@@ -226,6 +274,14 @@ export default {
           { agents: agentCliCatalog(env) },
           { headers: { "Cache-Control": "no-store" } },
         );
+      }
+      const mcpResponse = await handleMcp(
+        request,
+        env,
+        ctx ?? ({ waitUntil: () => {} } as unknown as ExecutionContext),
+      );
+      if (mcpResponse) {
+        return mcpResponse;
       }
       // `/internal/*` paths exist only inside DO stub fetches (Automations
       // tick/dedupe, the Mailbox JSON API under `/internal/mailbox/`) — the
