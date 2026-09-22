@@ -39,6 +39,16 @@
   "r2_buckets": [
     { "binding": "ATTACHMENTS", "bucket_name": "shiba-attachments" },
   ],
+  // Megaplan T4: agent bearer tokens, records keyed `tok_<sha256(raw)>`.
+  // Provision: `wrangler kv namespace create AGENT_TOKENS` then paste the id.
+  "kv_namespaces": [
+    { "binding": "AGENT_TOKENS", "id": "__PENDING__" },
+  ],
+  // Megaplan T4: MCP tool-call audit log. Provision:
+  // `wrangler d1 create shiba-audit` then paste the database_id.
+  "d1_databases": [
+    { "binding": "AGENT_AUDIT", "database_name": "shiba-audit", "database_id": "__PENDING__" },
+  ],
   "containers": [
     {
       "class_name": "Sandbox",

@@ -27,6 +27,19 @@ export interface Env {
    * (`wrangler r2 bucket create`).
    */
   ATTACHMENTS: R2Bucket;
+  /**
+   * KV namespace of agent bearer-token records keyed `tok_<sha256(raw)>` —
+   * the raw token is never stored (megaplan T4, see `agent-tokens.ts`).
+   * Namespace id is a wrangler.jsonc placeholder until
+   * `wrangler kv namespace create AGENT_TOKENS` runs.
+   */
+  AGENT_TOKENS: KVNamespace;
+  /**
+   * D1 audit log for MCP tool calls — one row per call with a hashed args
+   * fingerprint, never the args (megaplan T4, see `audit.ts`). Placeholder
+   * database_id until `wrangler d1 create shiba-audit` runs.
+   */
+  AGENT_AUDIT: D1Database;
   ASSETS: Fetcher;
   /** AI Gateway id. Default "default". */
   GATEWAY_ID: string;
