@@ -874,6 +874,11 @@ export class MailboxStore {
     return rowToDraft(row);
   }
 
+  getDraft(id: string): DraftRecord | null {
+    const row = this.exec(`SELECT * FROM drafts WHERE id = ?`, id)[0];
+    return row ? rowToDraft(row) : null;
+  }
+
   /**
    * Ordinary edits only: `status` is restricted to
    * {@link DRAFT_UPDATE_STATUSES}, and the row itself must still be

@@ -374,10 +374,14 @@ export class Mailbox {
       return json({ error: "Method not allowed." }, { status: 405 });
     }
     if (seg.length === 2) {
+      const id = pathParam(seg[1]);
+      if (request.method === "GET") {
+        const draft = this.store.getDraft(id);
+        return draft ? json({ draft }) : notFound("Draft not found.");
+      }
       if (request.method !== "PATCH") {
         return json({ error: "Method not allowed." }, { status: 405 });
       }
-      const id = pathParam(seg[1]);
       const body = await this.jsonBody(request);
       const input: UpdateDraftInput = {
         to_addr: optString(body.to_addr),

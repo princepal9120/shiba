@@ -13,6 +13,21 @@ vi.mock("agents/mcp", () => ({
   },
 }));
 
+// Record queueEmailApproval calls so tests can assert the frozen payload —
+// the T6 stub only surfaces an approval_id, which this mock preserves.
+const queueCalls = vi.hoisted(
+  () => [] as Array<{ kind: string; mailbox: string; payload: Record<string, unknown> }>,
+);
+vi.mock("../src/email-approvals.js", () => ({
+  queueEmailApproval: async (
+    _env: unknown,
+    request: { kind: string; mailbox: string; payload: Record<string, unknown> },
+  ) => {
+    queueCalls.push(request);
+    return { approval_id: `apv-mock-${queueCalls.length}` };
+  },
+}));
+
 import { registerEmailTools } from "../src/mcp-email-tools.js";
 import { createToolRegistry } from "../src/mcp-gateway.js";
 import type { Env } from "../src/env.js";
@@ -156,7 +171,7 @@ describe("registerEmailTools — scope map", () => {
       get_thread: "email:read",
       search_emails: "email:read",
       mark_email_read: "email:read",
-      move_email: "email:read",
+      move_email: "email:draft",
       create_draft: "email:draft",
       update_draft: "email:draft",
       draft_reply: "email:draft",
@@ -186,6 +201,10 @@ describe("registerEmailTools — validation", () => {
       ["update_draft", { draft_id: "drf-1", fields: {} }], // empty fields
       ["send_email", {}], // neither draft_id nor composed fields
       ["send_email", { mailbox: REGISTERED, to: "x@y.z" }], // partial compose
+      // draft_id mixed with compose fields is ambiguous — rejected, not
+      // silently resolved to the draft path.
+      ["send_email", { draft_id: "drf-1", mailbox: REGISTERED, to: "x@y.z", subject: "s", body: "b" }],
+      ["send_email", { draft_id: "drf-1", subject: "s" }],
     ];
     for (const [tool, args] of cases) {
       const result = await registry.invoke(tool, args, reader);
@@ -378,6 +397,18 @@ describe("registerEmailTools — approval-gated tools", () => {
     expect(sent.kind).toBe("email_send");
     expect(sent.approval_id).toMatch(/^apv-/);
 
+    // The approval froze the draft's full content — the approver sees
+    // what ships and the executor never re-reads the drafts row.
+    const draftQueue = queueCalls.at(-1)!;
+    expect(draftQueue.kind).toBe("email_send");
+    expect(draftQueue.mailbox).toBe(REGISTERED);
+    expect(draftQueue.payload).toEqual({
+      to_addr: "client@example.com",
+      subject: "Hi",
+      body_text: "Body.",
+      draft_id: draftId,
+    });
+
     // The draft was NOT sent — still sitting as a draft in the store.
     const draftsRes = await (env.Mailbox.get(env.Mailbox.idFromName(REGISTERED)) as unknown as FakeStub)
       .fetch(new Request("https://internal/internal/mailbox/drafts"));
@@ -407,11 +438,23 @@ describe("registerEmailTools — approval-gated tools", () => {
     expect(reply.status).toBe("pending_approval");
     expect(reply.approval_id).toMatch(/^apv-/);
     expect(reply.in_reply_to).toBe(email.id);
+    expect(queueCalls.at(-1)!.payload).toEqual({
+      to_addr: "client@example.com",
+      subject: "Re: Quarterly report",
+      body_text: "Ack.",
+      thread_id: email.thread_id,
+      in_reply_to_email_id: email.id,
+    });
 
     const del = resultData(await registry.invoke("delete_email", { id: email.id }, reader));
     expect(del.status).toBe("pending_approval");
     expect(del.kind).toBe("email_delete");
     expect(del.email_id).toBe(email.id);
+    expect(queueCalls.at(-1)!.payload).toEqual({
+      email_id: email.id,
+      subject: "Quarterly report",
+      from_addr: "client@example.com",
+    });
 
     // The record survives: the queue, not the tool, owns the action.
     const still = await findEmailDirect(env, email.id);

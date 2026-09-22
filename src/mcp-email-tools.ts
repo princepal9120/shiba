@@ -20,10 +20,11 @@
  *   and answer `pending_approval`. The T7 executor releases the frozen
  *   payload verbatim; callers can't rewrite it at release time.
  *
- * `move_email` maps to `email:read`, not `email:send`: like
- * `mark_email_read` it only flips `emails.status` inside the owning
- * store (the brief groups it with neither drafts nor deletes), while
- * `delete_email` remains the approval-gated hard delete.
+ * `move_email` maps to `email:draft`, the mailbox write scope: it
+ * mutates `emails.status` inside the owning store — including the
+ * `deleted` trash marker and a forgeable `sent` — so a read-only
+ * principal must not hold it, while `delete_email` remains the
+ * approval-gated hard delete.
  */
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
@@ -183,18 +184,20 @@ function findThread(env: Env, id: string) {
   );
 }
 
-/** No single-draft GET exists — locate via each stub's draft list. */
+/** Probe each stub's per-id GET — one lookup per mailbox, no paging. */
 async function findDraft(
   env: Env,
   id: string,
 ): Promise<{ mailbox: string; draft: DraftRecord } | null> {
   const hit = await probeMailboxes<DraftRecord>(env, async (mailbox) => {
-    const body = await stubJson<{ drafts: DraftRecord[] }>(
+    const body = await stubJson<{ draft: DraftRecord }>(
       env,
       perMailbox(mailbox),
-      `/drafts?limit=${MAX_LIMIT}`,
+      `/drafts/${encodeURIComponent(id)}`,
+      undefined,
+      true,
     );
-    return body?.drafts.find((draft) => draft.id === id) ?? null;
+    return body?.draft ?? null;
   });
   return hit === null ? null : { mailbox: hit.mailbox, draft: hit.value };
 }
@@ -577,7 +580,19 @@ export function registerEmailTools(registry: ToolRegistry, env: Env): void {
     async (args) => {
       const input = parseArgs(sendEmailSchema, args);
       // Exactly one form: send an existing draft, or send a fresh compose.
+      // A mixed payload (draft_id beside compose fields) is ambiguous —
+      // refuse it rather than silently discarding the composed content.
       if (input.draft_id !== undefined) {
+        if (
+          input.mailbox !== undefined ||
+          input.to !== undefined ||
+          input.subject !== undefined ||
+          input.body !== undefined
+        ) {
+          throw new InputError(
+            "send_email takes draft_id OR mailbox+to+subject+body — not both.",
+          );
+        }
         const located = await findDraft(env, input.draft_id);
         if (located === null) {
           throw new InputError(`Draft not found: ${input.draft_id}`);
@@ -588,10 +603,19 @@ export function registerEmailTools(registry: ToolRegistry, env: Env): void {
             `Draft ${draft.id} is not editable (status: ${draft.status}).`,
           );
         }
+        // Freeze the draft's content into the approval: the approver sees
+        // exactly what ships, and the executor never re-reads the mutable
+        // drafts row at send time.
         const approval = await queueEmailApproval(env, {
           kind: "email_send",
           mailbox: located.mailbox,
-          payload: { draft_id: draft.id },
+          payload: {
+            to_addr: draft.to_addr,
+            subject: draft.subject,
+            body_text: draft.body_text,
+            ...(draft.thread_id !== null ? { thread_id: draft.thread_id } : {}),
+            draft_id: draft.id,
+          },
         });
         return jsonResult({
           status: "pending_approval",
@@ -718,7 +742,7 @@ export function registerEmailTools(registry: ToolRegistry, env: Env): void {
   const moveEmailSchema = z.object({ id: idField, status: emailStatusField });
   registry.registerTool(
     "move_email",
-    READ,
+    DRAFT,
     async (args) => {
       const { id, status } = parseArgs(moveEmailSchema, args);
       const hit = await probeMailboxes<{ email: StoredEmail }>(env, (mailbox) =>

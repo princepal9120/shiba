@@ -346,6 +346,11 @@ describe("draft routes", () => {
     const { draft } = await asJson(created);
     expect(draft.thread_id).toBe(email.thread_id);
 
+    const fetched = await asJson(await get(stub, `/drafts/${draft.id}`));
+    expect(fetched.draft.id).toBe(draft.id);
+    expect(fetched.draft.to_addr).toBe("sender@example.com");
+    expect((await get(stub, "/drafts/drf-nope")).status).toBe(404);
+
     const patched = await asJson(await send(stub, "PATCH", `/drafts/${draft.id}`, {
       body_text: "thanks — revised",
     }));
@@ -421,7 +426,8 @@ describe("route hygiene", () => {
     );
     expect((await get(stub, "/emails/eml-x/read")).status).toBe(405);
     expect((await get(stub, "/emails/eml-x/move")).status).toBe(405);
-    expect((await get(stub, "/drafts/drf-x")).status).toBe(405);
+    expect((await get(stub, "/drafts/drf-x")).status).toBe(404);
+    expect((await send(stub, "PUT", "/drafts/drf-x", {})).status).toBe(405);
     expect((await send(stub, "POST", "/threads/thr-x")).status).toBe(405);
     expect((await send(stub, "POST", "/mailbox")).status).toBe(405);
     expect((await get(stub, "/emails/eml-x/nope")).status).toBe(404);
