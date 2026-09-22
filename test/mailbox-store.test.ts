@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   flagLinks,
   ftsQuery,
+  MAILBOX_SCHEMA,
+  MAILBOX_STATEMENTS,
   MailboxStore,
   normalizeSubject,
   UNTRUSTED_SECURITY_NOTICE,
@@ -49,6 +51,25 @@ describe("schema", () => {
     // init() is idempotent — a second run must not fail or drop data.
     store.init();
     expect(store.getEmail(email.id)?.id).toBe(email.id);
+  });
+
+  it("exports MAILBOX_SCHEMA as a bundle, not an exec'able blob", () => {
+    // The joined ddl contains `;` inside trigger bodies, so a
+    // prepare-per-call adapter would silently apply only the first
+    // statement — the export is a descriptor, not a statement string.
+    const db = new DatabaseSync(":memory:");
+    const exec: SqlExec = (sql, ...params) => db.prepare(sql).all(...params) as SqlRow[];
+    expect(() => exec(MAILBOX_SCHEMA as never)).toThrow();
+    expect(MAILBOX_SCHEMA.statements).toBe(MAILBOX_STATEMENTS);
+    expect(MAILBOX_SCHEMA.ddl).toContain("CREATE TABLE");
+    // The intended path — each statement on its own call — builds a working db.
+    for (const statement of MAILBOX_SCHEMA.statements) {
+      exec(statement);
+    }
+    const tables = db
+      .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name`)
+      .all() as SqlRow[];
+    expect(tables.map((t) => t.name)).toContain("emails");
   });
 });
 
@@ -169,6 +190,26 @@ describe("emails CRUD", () => {
     expect(store.deleteEmail(email.id)).toBe(false);
   });
 
+  it("deleteEmail drops the thread row once nothing references it", () => {
+    const store = makeStore();
+    const email = inbound(store);
+    // Deleting the thread's last email removes the thread itself —
+    // getThread must not surface a stale empty conversation.
+    store.deleteEmail(email.id);
+    expect(store.getThread(email.thread_id)).toBeNull();
+    // …unless a draft still points at the thread.
+    const pinned = inbound(store, { subject: "other topic" });
+    store.createDraft({
+      to_addr: "sender@example.com",
+      subject: "Re: other topic",
+      body_text: "wip",
+      thread_id: pinned.thread_id,
+    });
+    store.deleteEmail(pinned.id);
+    expect(store.getThread(pinned.thread_id)).not.toBeNull();
+    expect(store.getThread(pinned.thread_id)?.emails).toEqual([]);
+  });
+
   it("returns no rows for limit 0", () => {
     const store = makeStore();
     inbound(store);
@@ -176,6 +217,17 @@ describe("emails CRUD", () => {
     expect(store.listEmails({ limit: 0 })).toEqual([]);
     expect(store.listDrafts({ limit: 0 })).toEqual([]);
     expect(store.searchEmails("deploy", { limit: 0 })).toEqual([]);
+  });
+
+  it("treats non-finite limits as the default page, never a bind error", () => {
+    const store = makeStore();
+    inbound(store);
+    // NaN/±Infinity would propagate into `LIMIT ?` and throw a SQLite
+    // datatype mismatch — they clamp to the default instead.
+    expect(store.listEmails({ limit: Number.NaN })).toHaveLength(1);
+    expect(store.listEmails({ limit: Number.POSITIVE_INFINITY })).toHaveLength(1);
+    expect(store.listDrafts({ limit: Number.NaN })).toEqual([]);
+    expect(store.searchEmails("deploy", { limit: Number.NaN })).toHaveLength(1);
   });
 });
 
@@ -306,6 +358,21 @@ describe("threading", () => {
     );
     expect(store.threadFor({ subject: "RE: Deploy report" })).toBe(first.thread_id);
   });
+
+  it("never merges unrelated emails on an empty normalized subject", () => {
+    const store = makeStore();
+    // `Re:`/`Fwd:`-only subjects normalize to "" — the subject fallback
+    // must skip the empty key or every such email would share one thread.
+    const a = inbound(store, { subject: "Re:", created_at: 1 });
+    const b = inbound(store, { subject: "Fwd: ", created_at: 2 });
+    expect(normalizeSubject("Re:")).toBe("");
+    expect(a.thread_id).not.toBe(b.thread_id);
+    expect(store.threadFor({ subject: "re: fwd:" })).toBeNull();
+    // A non-empty normalized subject still threads by fallback.
+    const real = inbound(store, { subject: "Deploy report", created_at: 3 });
+    const reply = inbound(store, { subject: "Re: Deploy report", created_at: 4 });
+    expect(reply.thread_id).toBe(real.thread_id);
+  });
 });
 
 describe("flagLinks", () => {
@@ -384,6 +451,54 @@ describe("flagLinks", () => {
     expect(flagsFor("https://[::ffff:a00:1]/")).toEqual(["private_ip"]);
     // A mapped public address is not private.
     expect(flagsFor("https://[::ffff:808:808]/")).toEqual([]);
+  });
+
+  it("flags embedded-IPv4 IPv6 forms beyond ::ffff:", () => {
+    const flagsFor = (url: string) => flagLinks(url)[0]?.flags;
+    // IPv4-translated ::ffff:0:/96, NAT64 64:ff9b::/96, and the unspecified
+    // :: all embed (or equal) a private IPv4 in the last 32 bits.
+    expect(flagsFor("https://[::ffff:0:a9fe:a9fe]/")).toEqual(["private_ip"]);
+    expect(flagsFor("https://[64:ff9b::a9fe:a9fe]/")).toEqual(["private_ip"]);
+    expect(flagsFor("https://[::]/")).toEqual(["private_ip"]);
+    // ::1 and the deprecated compatible form ::/96 route the same check.
+    expect(flagsFor("https://[::1]/")).toEqual(["private_ip"]);
+    expect(flagsFor("https://[::a9fe:a9fe]/")).toEqual(["private_ip"]);
+    // Embedded public IPv4 stays unflagged.
+    expect(flagsFor("https://[64:ff9b::808:808]/")).toEqual([]);
+    expect(flagsFor("https://[::ffff:0:808:808]/")).toEqual([]);
+    expect(flagsFor("https://[::808:808]/")).toEqual([]);
+  });
+
+  it("flags FQDN trailing-dot localhost names that still resolve to loopback", () => {
+    const flagsFor = (url: string) => flagLinks(url)[0]?.flags;
+    // WHATWG keeps the trailing dot (`localhost.` parses to `localhost.`)
+    // but the name still resolves to loopback.
+    expect(flagsFor("https://localhost./")).toEqual(["private_ip"]);
+    expect(flagsFor("https://foo.localhost./")).toEqual(["private_ip"]);
+    expect(flagsFor("http://localhost.:8080/x")).toEqual(
+      expect.arrayContaining(["private_ip", "non_https"]),
+    );
+    expect(flagsFor("https://127.0.0.1./")).toEqual(["private_ip"]);
+    // Trailing dots on ordinary names stay clean.
+    expect(flagsFor("https://example.com./")).toEqual([]);
+  });
+
+  it("flags an href abutting a quoted attribute value", () => {
+    // HTML5 reconsumes the char after a closing quote into
+    // before-attribute-name, so `<a x="1"href=…>` is a real anchor —
+    // missing it lets TAG_RE strip the tag and hide the URL entirely.
+    expect(flagLinks('<a x="1"href="http://169.254.169.254/m">click</a>')).toEqual([
+      { url: "http://169.254.169.254/m", flags: ["non_https", "private_ip"] },
+    ]);
+    expect(flagLinks("<a x='1'href=\"https://10.0.0.9/\">click</a>")).toEqual([
+      { url: "https://10.0.0.9/", flags: ["private_ip"] },
+    ]);
+    expect(flagLinks('<a x="1"href="https://ok.example.com">click</a>')).toEqual([
+      { url: "https://ok.example.com", flags: [] },
+    ]);
+    // A quote that opens an attribute name is not a boundary: `"href` is a
+    // single attribute name in HTML5, so no link may be reported.
+    expect(flagLinks('<a "href=https://evil.example.com>x</a>')).toEqual([]);
   });
 
   it("flags sender_mismatch for IDN anchor text, punycode-normalized", () => {
