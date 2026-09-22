@@ -227,6 +227,17 @@ describe("classifyRunError", () => {
   ])("does not over-match unrelated deadline/timeout text: %s", (message) => {
     expect(classifyRunError(new Error(message)).code).toBe("internal_error");
   });
+
+  it("honors a tagged RunError's code but not a foreign .code field", () => {
+    expect(classifyRunError(toTaggedError("cancelled", "aborted")).code).toBe("cancelled");
+    // Duck-typed `.code` strings are not authoritative — a foreign error
+    // carrying a vocabulary word (or a prototype member like "constructor")
+    // still classifies from its name/message.
+    for (const code of ["rate_limit_exceeded", "cancelled", "constructor"] as const) {
+      const foreign = Object.assign(new Error("plain failure"), { code });
+      expect(classifyRunError(foreign).code, code).toBe("internal_error");
+    }
+  });
 });
 
 describe("classifyExecutorError", () => {
@@ -259,6 +270,7 @@ describe("classifyExecutorError", () => {
       "credential_expired",
     );
   });
+
 });
 
 describe("RUN_ERROR_DEFS", () => {

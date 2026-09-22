@@ -21,14 +21,12 @@ import {
 } from "../run-errors.js";
 
 /** The rejection a classified Effect failure crosses the boundary as. */
-export class RunFailure extends Error {
-  readonly code: RunErrorCode;
+export class RunFailure extends RunError {
   readonly wire: RunErrorWire;
 
   constructor(code: RunErrorCode, message: string) {
-    super(message);
+    super({ code, message });
     this.name = "RunFailure";
-    this.code = code;
     this.wire = runErrorWire(code);
   }
 }
