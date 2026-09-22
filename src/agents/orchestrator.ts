@@ -49,7 +49,13 @@ export interface OrchestratorState {
 
 /** A classified error lands as its matching terminal status. */
 function terminalStatusFor(code: RunErrorCode): RunStatus {
-  return code === "cancelled" ? "cancelled" : code === "outcome_unknown" ? "unknown" : "error";
+  // Indeterminate family: the run ended but its side effects are unverified —
+  // the record is "unknown" so the wire projection and the dashboard agree.
+  return code === "cancelled"
+    ? "cancelled"
+    : code === "outcome_unknown" || code === "container_lost"
+      ? "unknown"
+      : "error";
 }
 
 const delegateInputSchema = z.object({

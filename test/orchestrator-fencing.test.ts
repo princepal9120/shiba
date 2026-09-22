@@ -102,6 +102,16 @@ describe("orchestrator generation fencing", () => {
     expect(run.errorCode).toBe("rate_limit_exceeded");
   });
 
+  it("lands container_lost as the indeterminate unknown terminal status", async () => {
+    const instance = agent();
+    mocks.execute.mockRejectedValueOnce(new Error("container was OOMKilled"));
+    const execution = delegate(instance).execute(INPUT, { toolCallId: "tc-oom" });
+    await expect(execution).rejects.toThrow(/OOMKilled/);
+    const run = (instance.state.runs as DelegatedRun[])[0]!;
+    expect(run.status).toBe("unknown");
+    expect(run.errorCode).toBe("container_lost");
+  });
+
   it("classifies a structured failure envelope as executor_failed, not internal_error", async () => {
     const instance = agent();
     mocks.execute.mockResolvedValueOnce(formatAgentResult({
