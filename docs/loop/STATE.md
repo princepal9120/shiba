@@ -21,15 +21,15 @@ approval-gated destructive ops, delivered as one PR. Deploy-time provisioning
 
 ## In progress
 
-P1: T2 MailboxDO + T3 email handler (T1 done; checks verified locally: typecheck/lint/519 tests green)
+P2: T4 tokens+audit + T5 McpGateway. P1 VERIFIED locally: typecheck/lint/555 tests green.
 
 ## Phases (SDD task → review → fix loop)
 
 | Task | Phase | Status |
 |---|---|---|
 | T1 mailbox-store core | 1 | DONE (5 fix rounds + controller fix @ 6d531cf) |
-| T2 MailboxDO + bindings | 1 | pending |
-| T3 email() handler + MIME | 1 | pending |
+| T2 MailboxDO + bindings | 1 | DONE (1 fix round) |
+| T3 email() handler + MIME | 1 | DONE (3 fix rounds) |
 | T4 tokens + audit writer | 2 | pending |
 | T5 McpGateway + /mcp route | 2 | pending |
 | T6 email MCP tools (13) | 3 | pending |
