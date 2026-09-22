@@ -23,6 +23,7 @@ import {
   reclaimStaleRuns,
   recordReceipt,
   type DelegatedRun,
+  type RunPatch,
   type RunStatus,
 } from "../runs.js";
 import { makeReceipt } from "../receipts.js";
@@ -34,6 +35,7 @@ import {
   type ResolveResult,
 } from "../pending-approvals.js";
 import { makeSandboxId, parseGitHubRepoUrl, redactSecrets } from "../security.js";
+import { classifyExecutorError, classifyRunError, runErrorWire, type RunErrorCode, type RunErrorWire } from "../run-errors.js";
 import { parseSlackThreadName } from "../slack-thread.js";
 import { evaluateResultQuality } from "../result-quality.js";
 import { HARNESS_DEFAULT_MODELS, allowedHostsFor, resolveHarness } from "../harness/index.js";
@@ -42,6 +44,11 @@ import { OpenCodeAgent } from "./opencode-agent.js";
 export interface OrchestratorState {
   runs: DelegatedRun[];
   pendingApprovals?: PendingApproval[];
+}
+
+/** A classified error lands as its matching terminal status. */
+function terminalStatusFor(code: RunErrorCode): RunStatus {
+  return code === "cancelled" ? "cancelled" : code === "outcome_unknown" ? "unknown" : "error";
 }
 
 const delegateInputSchema = z.object({
@@ -112,8 +119,9 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       .filter((run): run is DelegatedRun => run !== null && isActiveStatus(run.status));
     // Do not retry potentially published work after losing the execution context.
     for (const run of interrupted) {
-      this.store.transition(run.runId, "error", {
+      this.store.transition(run.runId, "unknown", {
         error: "Execution interrupted by orchestrator restart. Inspect repository state before retrying.",
+        errorCode: "outcome_unknown",
       });
     }
     await Promise.all(interrupted.map((run) => this.destroySandbox(run.sandboxId)));
@@ -238,17 +246,28 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         publishPullRequest: fullInput.publishPullRequest,
       }),
     );
-    const finish = (status: RunStatus, patch?: { summary?: string; error?: string; diff?: string }) => {
-      this.store.transition(runId, status, patch);
+    const finish = (status: RunStatus, patch?: RunPatch): DelegatedRun | null => {
+      // Fenced write: a stale generation (cancel/reclaim landed while the
+      // child was running) drops the transition AND every side effect.
+      const updated = this.store.transition(runId, status, patch, generation);
+      if (updated === null) return null;
       // Slack-originated runs get the outcome back in the thread; the
       // summary carries the PR link when one was published.
       if (status === "completed") {
         this.postToSlackThread(`Run completed for ${fullInput.repoUrl}\n${patch?.summary?.slice(0, 1500) ?? ""}`.trim());
-      } else if (status === "error") {
-        this.postToSlackThread(`Run failed for ${fullInput.repoUrl}\n${patch?.error?.slice(0, 1000) ?? ""}`.trim());
+      } else if (status === "error" || status === "unknown") {
+        const wire = runErrorWire(patch?.errorCode ?? "internal_error");
+        this.postToSlackThread(
+          `${status === "unknown" ? "Run outcome unknown" : "Run failed"} for ${fullInput.repoUrl}\n${wire.userMessage}\n${patch?.error?.slice(0, 1000) ?? ""}`.trim(),
+        );
       }
+      return updated;
     };
-    this.store.transition(runId, "running");
+    const running = this.store.transition(runId, "running", undefined, this.store.get(runId)?.generation);
+    if (running === null || running.status !== "running") {
+      return `Run ${runId} did not start — it is already ${this.store.get(runId)?.status ?? "missing"}.`;
+    }
+    const generation = running.generation;
     this.postToSlackThread(`Run started for ${fullInput.repoUrl} (${fullInput.baseBranch ?? "main"}).`);
     const controller = new AbortController();
     this.runControllers.set(runId, controller);
@@ -261,17 +280,19 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         // type instead would mark failed runs "completed".
         const parsed = parseAgentResult(output);
         if (parsed?.status === "completed") {
-          finish("completed", { summary: output.slice(0, 4000), diff: parsed?.diff ? parsed.diff.slice(0, 20000) : undefined });
+          const finished = finish("completed", { summary: output.slice(0, 4000), diff: parsed?.diff ? parsed.diff.slice(0, 20000) : undefined });
           // TypeSafe Score: grade the run quality (fail-open — never blocks completion).
           // Terminal runs are immutable (transitionRun refuses them), so the
           // grade lands as a "grade" receipt on the finished record — never
           // as a second transition, which would be silently discarded.
+          // A dropped finish means the run went terminal mid-flight — do not
+          // grade stale output onto a cancelled/reclaimed record.
           const tsKey = this.env.TYPESAFE_API_KEY?.trim() ?? "";
-          if (tsKey) {
+          if (finished !== null && tsKey) {
             evaluateResultQuality(tsKey, output.slice(0, 2000)).then((quality) => {
               if (!quality) return;
               const run = this.store.get(runId);
-              if (run) {
+              if (run && run.status === "completed") {
                 this.store.replace(
                   runId,
                   recordReceipt(run, makeReceipt("grade", `Result quality: ${quality.level} (score ${quality.score.toFixed(2)}, confidence ${quality.confidence.toFixed(2)}).`)),
@@ -281,18 +302,24 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
           }
           return output;
         }
-        finish("error", {
+        const failure = classifyExecutorError(new Error(parsed?.summary ?? output.slice(0, 4000)));
+        finish(terminalStatusFor(failure.code), {
           summary: output.slice(0, 4000),
           error: redactSecrets(parsed?.summary ?? output.slice(0, 4000)).slice(0, 4000),
+          errorCode: failure.code,
         });
         return output;
       }
       const message = `Coding run failed: ${JSON.stringify(output).slice(0, 2000)}`;
-      finish("error", { error: redactSecrets(message) });
+      const failure = classifyRunError(new Error(message));
+      finish(terminalStatusFor(failure.code), { error: redactSecrets(message), errorCode: failure.code });
       throw new Error(message);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      finish("error", { error: redactSecrets(message).slice(0, 4000) });
+      const failure = classifyRunError(error);
+      finish(terminalStatusFor(failure.code), {
+        error: redactSecrets(failure.message).slice(0, 4000),
+        errorCode: failure.code,
+      });
       throw error;
     } finally {
       this.runControllers.delete(runId);
@@ -401,8 +428,10 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
             publishPullRequest: run.publishPullRequest,
           }, { toolCallId: approvalId });
         } catch (error) {
-          this.store.transition(run.runId, "error", {
-            error: redactSecrets(error instanceof Error ? error.message : String(error)).slice(0, 4000),
+          const failure = classifyRunError(error);
+          this.store.transition(run.runId, terminalStatusFor(failure.code), {
+            error: redactSecrets(failure.message).slice(0, 4000),
+            errorCode: failure.code,
           });
         }
       };
@@ -416,9 +445,10 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     const run = this.store.get(runId);
     if (!run) return null;
     if (!isActiveStatus(run.status)) return run;
-    const updated = this.store.transition(runId, "cancelled");
+    // Cancellation is deliberately unfenced: it is allowed to win races.
+    const updated = this.store.transition(runId, "cancelled", { errorCode: "cancelled" });
     this.runControllers.get(runId)?.abort();
-    this.postToSlackThread(`Run cancelled for ${run.repoUrl}.`);
+    this.postToSlackThread(`Run cancelled for ${run.repoUrl}. If a publish was in flight it may still land — check the repository before retrying.`);
     await this.destroySandbox(run.sandboxId);
     return updated;
   }
@@ -443,6 +473,11 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         })
         .catch(() => { /* best-effort */ }),
     );
+  }
+
+  /** Wire projection for API responses: errorCode -> {status, code, userMessage}. */
+  private serializeRun(run: DelegatedRun): DelegatedRun & { errorWire?: RunErrorWire } {
+    return run.errorCode ? { ...run, errorWire: runErrorWire(run.errorCode) } : run;
   }
 
   private async destroySandbox(sandboxId: string): Promise<void> {
@@ -517,7 +552,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     }
     await this.reclaimRuns();
     if (request.method === "GET" && id === null) {
-      return Response.json({ runs: this.store.list() });
+      return Response.json({ runs: this.store.list().map((run) => this.serializeRun(run)) });
     }
     if (request.method === "DELETE" && id === null) {
       await this.clearRuns();
@@ -525,11 +560,15 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     }
     if (id !== null && request.method === "GET") {
       const run = this.store.get(id);
-      return run ? Response.json({ run }) : Response.json({ error: "Run not found." }, { status: 404 });
+      return run
+        ? Response.json({ run: this.serializeRun(run) })
+        : Response.json({ error: "Run not found." }, { status: 404 });
     }
     if (id !== null && request.method === "DELETE") {
       const run = await this.cancelRun(id);
-      return run ? Response.json({ run }) : Response.json({ error: "Run not found." }, { status: 404 });
+      return run
+        ? Response.json({ run: this.serializeRun(run) })
+        : Response.json({ error: "Run not found." }, { status: 404 });
     }
     return Response.json({ error: "Method not allowed." }, { status: 405 });
   }

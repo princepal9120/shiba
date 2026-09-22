@@ -173,12 +173,17 @@ export class OpenCodeAgent extends AIChatAgent<Env> {
           const ops = createSandboxOps(this.env, input.sandboxId, hosts);
           const result = await adapter.runCodingTask(ops, input, emit, { signal });
           checkCancelled();
+          // UNINTERRUPTIBLE: publish + result commit. Once the remote PR write
+          // starts, an abort must not lose the outcome — a fake-failed real PR
+          // is worse than a late commit. The only abort check inside
+          // publishResult sits before the first remote write.
           let pullUrl: string | undefined;
           if (result.status === "completed" && input.publishPullRequest) {
             pullUrl = await this.publishResult(input, result, signal);
-            checkCancelled();
           }
           const safeResult = this.uiResult(result);
+          // The transcript commit below is part of the same UNINTERRUPTIBLE
+          // span: no abort checks between publish and these writes.
           const safeInput = {
             ...input,
             task: this.safeText(input.task, 4000),

@@ -1,6 +1,6 @@
 import { useState, useMemo, type JSX } from "react";
 import { DiffViewer } from "./DiffViewer";
-import { formatTimeAgo, parseRepoName, statusLabel } from "../ui-helpers";
+import { ERROR_FAMILY_STATUSES, formatTimeAgo, parseRepoName, statusLabel } from "../ui-helpers";
 import type { RetainedRun } from "../types";
 
 export type { RetainedRun };
@@ -33,13 +33,14 @@ export function RunRegistryView({
     error: "text-[#f06666] border-[#f06666]/30 bg-[#f06666]/10",
     aborted: "text-[#f06666] border-[#f06666]/30 bg-[#f06666]/10",
     cancelled: "text-[#f06666] border-[#f06666]/30 bg-[#f06666]/10",
+    unknown: "text-[#d97706] border-[#d97706]/30 bg-[#d97706]/10",
   };
 
   const filteredRuns = useMemo(() => {
     return runs.filter((run) => {
       if (filter === "active" && run.status !== "running" && run.status !== "pending") return false;
       if (filter === "completed" && run.status !== "completed") return false;
-      if (filter === "error" && run.status !== "error" && run.status !== "aborted" && run.status !== "cancelled") return false;
+      if (filter === "error" && !ERROR_FAMILY_STATUSES.has(run.status)) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         return (
@@ -58,7 +59,7 @@ export function RunRegistryView({
     const active = runs.filter((r) => r.status === "running" || r.status === "pending").length;
     const completedRuns = runs.filter((r) => r.status === "completed");
     const completed = completedRuns.length;
-    const error = runs.filter((r) => r.status === "error" || r.status === "aborted" || r.status === "cancelled").length;
+    const error = runs.filter((r) => ERROR_FAMILY_STATUSES.has(r.status)).length;
     // Outcome metrics (Factory-style): success rate on terminal runs, median
     // wall-clock for completed runs, and how many asked for a PR.
     const terminal = completed + error;

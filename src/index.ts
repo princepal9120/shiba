@@ -101,6 +101,36 @@ async function handleGitHubWebhook(request: Request, env: Env, ctx?: ExecutionCo
   } catch {
     return Response.json({ error: "Webhook payload is not valid JSON." }, { status: 400 });
   }
+  // Delivery dedupe sits after HMAC verification (an unauthenticated request
+  // must never write dedupe keys) and before fan-out. Residual window, stated
+  // honestly: if the dedupe key lands but the async fan-out then fails, the
+  // event is lost — dedupe narrows duplicates, it does not guarantee zero drops.
+  // Fail-open on endpoint errors: a duplicate automation run is recoverable,
+  // a dropped webhook is silent loss.
+  const deliveryId = request.headers.get("x-github-delivery");
+  if (deliveryId) {
+    try {
+      const dedupeResponse = await automationsStub(env).fetch(
+        new Request("https://internal/internal/dedupe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key: `gh-delivery:${deliveryId}` }),
+        }),
+      );
+      if (!dedupeResponse.ok) {
+        console.error(`github delivery dedupe failed: ${dedupeResponse.status}`);
+      } else {
+        const body = (await dedupeResponse.json().catch(() => ({}))) as { seen?: boolean };
+        if (body.seen === true) {
+          return Response.json({ ok: true, deduped: true });
+        }
+      }
+    } catch (error: unknown) {
+      console.error(
+        `github delivery dedupe failed: ${redactSecrets(error instanceof Error ? error.message : String(error))}`,
+      );
+    }
+  }
   const githubEvent = request.headers.get("x-github-event") ?? "unknown";
   const action = typeof event === "object" && event !== null
     ? (event as { action?: unknown }).action

@@ -31,7 +31,7 @@ export interface SessionsSidebarProps {
   isMobileDrawer?: boolean;
 }
 
-function statusDotClass(session: SessionItem): string {
+export function statusDotClass(session: SessionItem): string {
   if (session.live || session.status === "live" || session.status === "running") {
     return "bg-[#0B9F95] animate-pulse-subtle";
   }
@@ -40,6 +40,10 @@ function statusDotClass(session: SessionItem): string {
   }
   if (session.status === "completed") {
     return "bg-[#4cc38a]";
+  }
+  // Amber, not red: an ambiguous outcome is not a known failure.
+  if (session.status === "unknown") {
+    return "bg-[#d97706]";
   }
   if (
     session.status === "error" ||

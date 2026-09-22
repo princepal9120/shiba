@@ -34,7 +34,9 @@ describe("orchestrator run routes", () => {
     const instance = agent();
     instance.setState({ runs: [retained()] });
     const response = await instance.onRequest(new Request("https://internal/api/runs"));
-    expect((await response.json() as { runs: { status: string }[] }).runs[0]?.status).toBe("error");
+    const body = (await response.json()) as { runs: { status: string; errorCode?: string }[] };
+    expect(body.runs[0]?.status).toBe("unknown");
+    expect(body.runs[0]?.errorCode).toBe("outcome_unknown");
     expect(mocks.destroy).toHaveBeenCalledOnce();
   });
 
@@ -163,7 +165,7 @@ describe("orchestrator run routes", () => {
     instance.setState({ ...instance.state, runs: [stale] });
     await instance.onRequest(new Request("https://internal/api/runs"));
     expect(signals[0]?.aborted).toBe(true);
-    expect((instance.state.runs as DelegatedRun[])[0]?.status).toBe("error");
+    expect((instance.state.runs as DelegatedRun[])[0]?.status).toBe("unknown");
     expect(mocks.destroy).toHaveBeenCalledOnce();
   });
 
@@ -326,7 +328,8 @@ describe("approval handoff recovery", () => {
     const restarted = agent();
     restarted.setState(JSON.parse(JSON.stringify(crashState)) as OrchestratorState);
     await restarted.onStart();
-    expect(restarted.state.runs[0]?.status).toBe("error");
+    expect(restarted.state.runs[0]?.status).toBe("unknown");
+    expect(restarted.state.runs[0]?.errorCode).toBe("outcome_unknown");
     expect(restarted.state.runs[0]?.error).toContain("orchestrator restart");
     expect(restarted.state.pendingApprovals?.[0]?.status).toBe("approved");
     expect(mocks.destroy).toHaveBeenCalledOnce();

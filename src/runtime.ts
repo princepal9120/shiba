@@ -145,6 +145,8 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
     }
 
     await emit({ phase: "collect", message: "Collecting changed files and diff.", fraction: 0.85 });
+    // Abort stays allowed here: collection is read-side only — no external
+    // write exists between the harness exec and the returned result.
     throwIfAborted(opts?.signal);
     try {
       const collection = await collectChanges(ops, workdir, opts?.signal);
