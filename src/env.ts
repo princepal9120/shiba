@@ -14,6 +14,17 @@ export interface Env {
   Sandbox: DurableObjectNamespace<Sandbox>;
   /** Bound to the Automations Durable Object class in wrangler.jsonc. */
   Automations: DurableObjectNamespace;
+  /**
+   * Bound to the Mailbox Durable Object class in wrangler.jsonc — one stub
+   * per mailbox address, plus the shared `__directory__` registry stub.
+   */
+  Mailbox: DurableObjectNamespace;
+  /**
+   * R2 bucket for email attachment bodies >256KB (keyed `emailId/partId`).
+   * Bucket name: `shiba-attachments`; the bucket itself is provisioned
+   * outside code (`wrangler r2 bucket create`).
+   */
+  ATTACHMENTS: R2Bucket;
   ASSETS: Fetcher;
   /** AI Gateway id. Default "default". */
   GATEWAY_ID: string;

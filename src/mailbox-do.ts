@@ -1,0 +1,353 @@
+/**
+ * Mailbox Durable Object (megaplan task 2): thin JSON-over-fetch surface
+ * over {@link MailboxStore} on `ctx.storage.sql`.
+ *
+ * Instance model: one stub per mailbox address
+ * (`env.Mailbox.idFromName(address)`) owns that mailbox's emails, threads,
+ * and drafts. A reserved directory instance
+ * (`idFromName(MAILBOX_DIRECTORY_NAME)` — not an email address, so it can
+ * never collide with a real stub) holds the global `mailboxes` registry:
+ * the single source of truth for which addresses exist, which is what makes
+ * `listMailboxes` / `isRegistered` answerable across per-address instances.
+ * Registry routes are served only by the directory; `GET
+ * /internal/mailbox/mailbox` on an address stub delegates its registration
+ * lookup to the directory so the meta answer is always consistent.
+ *
+ * All routes live under `/internal/mailbox/*` and are reachable only through
+ * `stub.fetch` calls inside the worker — index.ts returns 404 for external
+ * `/internal/*` paths, so none of this is a public surface.
+ */
+import type { Env } from "./env.js";
+import {
+  DRAFT_STATUSES,
+  EMAIL_STATUSES,
+  MailboxStore,
+  type AddEmailInput,
+  type CreateDraftInput,
+  type EmailStatus,
+  type MailboxRecord,
+  type SqlExec,
+  type SqlRow,
+  type UpdateDraftInput,
+} from "./mailbox-store.js";
+import { InputError } from "./security.js";
+
+/**
+ * Reserved DO name for the shared mailbox registry. Chosen to fail the
+ * store's email-address validation, so no real mailbox can claim it.
+ */
+export const MAILBOX_DIRECTORY_NAME = "__directory__";
+
+const ROUTE_PREFIX = "/internal/mailbox";
+
+/** Per-address stub — the unit every mailbox-scoped call goes through. */
+export function mailboxStub(env: Env, address: string): DurableObjectStub {
+  return env.Mailbox.get(env.Mailbox.idFromName(address));
+}
+
+/** Shared registry stub — registration, enumeration, and `isRegistered`. */
+export function mailboxDirectoryStub(env: Env): DurableObjectStub {
+  return mailboxStub(env, MAILBOX_DIRECTORY_NAME);
+}
+
+function json(body: unknown, init?: ResponseInit): Response {
+  return Response.json(body, init);
+}
+
+function notFound(what = "Not found."): Response {
+  return json({ error: what }, { status: 404 });
+}
+
+function badRequest(message: string): Response {
+  return json({ error: message }, { status: 400 });
+}
+
+function requiredString(value: unknown, field: string): string {
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new InputError(`${field} must be a non-empty string.`);
+  }
+  return value;
+}
+
+function optString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+function optNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function optStringList(value: unknown): string[] | undefined {
+  return Array.isArray(value) && value.every((v) => typeof v === "string")
+    ? (value as string[])
+    : undefined;
+}
+
+function enumParam<T extends string>(
+  raw: string | null,
+  allowed: readonly T[],
+  field: string,
+): T | undefined {
+  if (raw === null) {
+    return undefined;
+  }
+  if (!(allowed as readonly string[]).includes(raw)) {
+    throw new InputError(`${field} must be one of ${allowed.join(", ")}.`);
+  }
+  return raw as T;
+}
+
+function limitParam(raw: string | null): number | undefined {
+  if (raw === null) {
+    return undefined;
+  }
+  // Non-numeric limits parse to NaN, which the store clamps to its default
+  // page — matching the list APIs' non-finite behavior.
+  return Number(raw);
+}
+
+/** Path segment decode — a malformed %escape is a 400, not a 500. */
+function pathParam(raw: string | undefined): string {
+  try {
+    return decodeURIComponent(raw ?? "");
+  } catch {
+    throw new InputError("Path parameter is not valid percent-encoding.");
+  }
+}
+
+export class Mailbox {
+  private readonly store: MailboxStore;
+
+  constructor(
+    private readonly ctx: DurableObjectState,
+    private readonly env: Env,
+  ) {
+    const exec: SqlExec = (sql, ...params) =>
+      ctx.storage.sql.exec(sql, ...params).toArray() as unknown as SqlRow[];
+    this.store = new MailboxStore(exec);
+    ctx.blockConcurrencyWhile(async () => {
+      this.store.init();
+    });
+  }
+
+  /** The `idFromName` input this stub was created with ("" for unique ids). */
+  private get address(): string {
+    return this.ctx.id.name ?? "";
+  }
+
+  private get isDirectory(): boolean {
+    return this.address === MAILBOX_DIRECTORY_NAME;
+  }
+
+  private async jsonBody(request: Request): Promise<Record<string, unknown>> {
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      throw new InputError("Request body is not valid JSON.");
+    }
+    if (typeof body !== "object" || body === null || Array.isArray(body)) {
+      throw new InputError("Request body must be a JSON object.");
+    }
+    return body as Record<string, unknown>;
+  }
+
+  /**
+   * This mailbox's registry row, resolved through the directory instance so
+   * `registered`/`mailbox` in meta are authoritative regardless of which
+   * stub answers. Address stubs keep no local `mailboxes` row at all —
+   * a second copy would only ever disagree with the registry.
+   */
+  private async registrationRecord(): Promise<MailboxRecord | null> {
+    if (this.isDirectory || this.address === "") {
+      return null;
+    }
+    const res = await mailboxDirectoryStub(this.env).fetch(
+      new Request(
+        `https://internal${ROUTE_PREFIX}/mailboxes/${encodeURIComponent(this.address)}`,
+      ),
+    );
+    if (!res.ok) {
+      throw new Error(`Mailbox directory lookup failed (${res.status}).`);
+    }
+    const body = (await res.json()) as { mailbox?: MailboxRecord | null };
+    return body.mailbox ?? null;
+  }
+
+  private async mailboxMeta(): Promise<Response> {
+    const registration = await this.registrationRecord();
+    return json({
+      address: this.address,
+      registered: registration !== null,
+      mailbox: registration,
+      stats: this.store.mailboxStats(),
+      // The directory instance is the registry — surface its full listing
+      // on the same meta shape so callers need one route, not two.
+      ...(this.isDirectory ? { mailboxes: this.store.listMailboxes() } : {}),
+    });
+  }
+
+  private async registry(request: Request, seg: string[]): Promise<Response> {
+    if (!this.isDirectory) {
+      return badRequest(
+        `Mailbox registry is served by the ${MAILBOX_DIRECTORY_NAME} instance.`,
+      );
+    }
+    if (seg.length === 1) {
+      if (request.method === "GET") {
+        return json({ mailboxes: this.store.listMailboxes() });
+      }
+      if (request.method === "POST") {
+        const body = await this.jsonBody(request);
+        const mailbox = this.store.registerMailbox({
+          address: requiredString(body.address, "address"),
+          label: optString(body.label),
+          agent: optString(body.agent),
+        });
+        return json({ mailbox }, { status: 201 });
+      }
+      return json({ error: "Method not allowed." }, { status: 405 });
+    }
+    if (seg.length === 2 && request.method === "GET") {
+      const address = pathParam(seg[1]);
+      const mailbox = this.store.getMailbox(address);
+      return json({ mailbox, registered: mailbox !== null });
+    }
+    return notFound();
+  }
+
+  private async emails(request: Request, url: URL, seg: string[]): Promise<Response> {
+    if (seg.length === 1) {
+      if (request.method === "GET") {
+        const status = enumParam(url.searchParams.get("status"), EMAIL_STATUSES, "status");
+        const mailbox = url.searchParams.get("mailbox") ?? undefined;
+        const limit = limitParam(url.searchParams.get("limit"));
+        return json({ emails: this.store.listEmails({ status, mailbox, limit }) });
+      }
+      if (request.method === "POST") {
+        const body = await this.jsonBody(request);
+        const input: AddEmailInput = {
+          direction: requiredString(body.direction, "direction") as AddEmailInput["direction"],
+          from_addr: requiredString(body.from_addr, "from_addr"),
+          to_addr: requiredString(body.to_addr, "to_addr"),
+          subject: requiredString(body.subject, "subject"),
+          body_text: optString(body.body_text) ?? null,
+          body_html: optString(body.body_html) ?? null,
+          status: optString(body.status) as EmailStatus | undefined,
+          created_at: optNumber(body.created_at),
+          message_id: optString(body.message_id),
+          in_reply_to: optString(body.in_reply_to),
+          references: optStringList(body.references),
+          thread_id: optString(body.thread_id),
+          id: optString(body.id),
+        };
+        return json({ email: this.store.addEmail(input) }, { status: 201 });
+      }
+      return json({ error: "Method not allowed." }, { status: 405 });
+    }
+    if (seg.length === 2 && seg[1] === "search") {
+      if (request.method !== "GET") {
+        return json({ error: "Method not allowed." }, { status: 405 });
+      }
+      const query = url.searchParams.get("q") ?? "";
+      const mailbox = url.searchParams.get("mailbox") ?? undefined;
+      const limit = limitParam(url.searchParams.get("limit"));
+      return json({ emails: this.store.searchEmails(query, { mailbox, limit }) });
+    }
+    const id = pathParam(seg[1]);
+    if (seg.length === 2) {
+      if (request.method === "GET") {
+        const email = this.store.getEmail(id);
+        return email ? json({ email }) : notFound("Email not found.");
+      }
+      if (request.method === "DELETE") {
+        return this.store.deleteEmail(id)
+          ? json({ ok: true, id })
+          : notFound("Email not found.");
+      }
+      return json({ error: "Method not allowed." }, { status: 405 });
+    }
+    if (seg.length === 3 && request.method === "POST" && seg[2] === "read") {
+      const changed = this.store.markRead(id);
+      const email = this.store.getEmail(id);
+      // `changed` is reported rather than treated as an error: a re-read of
+      // an already-read email is idempotent, not a failure.
+      return email ? json({ email, changed }) : notFound("Email not found.");
+    }
+    if (seg.length === 3 && request.method === "POST" && seg[2] === "move") {
+      const body = await this.jsonBody(request);
+      const email = this.store.moveStatus(id, requiredString(body.status, "status") as EmailStatus);
+      return email ? json({ email }) : notFound("Email not found.");
+    }
+    return notFound();
+  }
+
+  private async drafts(request: Request, url: URL, seg: string[]): Promise<Response> {
+    if (seg.length === 1) {
+      if (request.method === "GET") {
+        const status = enumParam(url.searchParams.get("status"), DRAFT_STATUSES, "status");
+        const limit = limitParam(url.searchParams.get("limit"));
+        return json({ drafts: this.store.listDrafts({ status, limit }) });
+      }
+      if (request.method === "POST") {
+        const body = await this.jsonBody(request);
+        const input: CreateDraftInput = {
+          to_addr: requiredString(body.to_addr, "to_addr"),
+          subject: requiredString(body.subject, "subject"),
+          body_text: requiredString(body.body_text, "body_text"),
+          thread_id: optString(body.thread_id),
+        };
+        return json({ draft: this.store.createDraft(input) }, { status: 201 });
+      }
+      return json({ error: "Method not allowed." }, { status: 405 });
+    }
+    if (seg.length === 2 && request.method === "PATCH") {
+      const id = pathParam(seg[1]);
+      const body = await this.jsonBody(request);
+      const input: UpdateDraftInput = {
+        to_addr: optString(body.to_addr),
+        subject: optString(body.subject),
+        body_text: optString(body.body_text),
+        status: optString(body.status) as UpdateDraftInput["status"],
+      };
+      const draft = this.store.updateDraft(id, input);
+      return draft ? json({ draft }) : notFound("Draft not found.");
+    }
+    return notFound();
+  }
+
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    if (url.pathname !== ROUTE_PREFIX && !url.pathname.startsWith(`${ROUTE_PREFIX}/`)) {
+      return notFound();
+    }
+    const seg = url.pathname
+      .slice(ROUTE_PREFIX.length)
+      .split("/")
+      .filter((s) => s !== "");
+    try {
+      if (seg[0] === "emails") {
+        return await this.emails(request, url, seg);
+      }
+      if (seg[0] === "threads" && seg.length === 2 && request.method === "GET") {
+        const thread = this.store.getThread(pathParam(seg[1]));
+        return thread ? json({ thread }) : notFound("Thread not found.");
+      }
+      if (seg[0] === "drafts") {
+        return await this.drafts(request, url, seg);
+      }
+      if (seg[0] === "mailbox" && seg.length === 1 && request.method === "GET") {
+        return await this.mailboxMeta();
+      }
+      if (seg[0] === "mailboxes") {
+        return await this.registry(request, seg);
+      }
+      return notFound();
+    } catch (error) {
+      if (error instanceof InputError) {
+        return badRequest(error.message);
+      }
+      throw error;
+    }
+  }
+}

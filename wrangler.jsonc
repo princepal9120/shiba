@@ -31,8 +31,14 @@
       { "name": "OpenCodeAgent", "class_name": "OpenCodeAgent" },
       { "name": "Sandbox", "class_name": "Sandbox" },
       { "name": "Automations", "class_name": "Automations" },
+      { "name": "Mailbox", "class_name": "Mailbox" },
     ],
   },
+  // Email attachment bodies >256KB go here, keyed `emailId/partId`
+  // (megaplan T3). Bucket must exist: `wrangler r2 bucket create shiba-attachments`.
+  "r2_buckets": [
+    { "binding": "ATTACHMENTS", "bucket_name": "shiba-attachments" },
+  ],
   "containers": [
     {
       "class_name": "Sandbox",
@@ -45,5 +51,6 @@
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["CodingOrchestrator", "OpenCodeAgent", "Sandbox"] },
     { "tag": "v2", "new_sqlite_classes": ["Automations"] },
+    { "tag": "v3", "new_sqlite_classes": ["Mailbox"] },
   ],
 }

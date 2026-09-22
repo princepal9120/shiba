@@ -13,6 +13,7 @@ import { parseAutomationWebhookPath } from "./automations.js";
 import { assertLiveCodingModel } from "./coding-model.js";
 import type { Env } from "./env.js";
 import { agentCliCatalog } from "./harness/catalog.js";
+import { Mailbox } from "./mailbox-do.js";
 import { Sandbox } from "./sandbox.js";
 import { redactSecrets, verifyGitHubWebhookSignature } from "./security.js";
 import { handleSlackInteract } from "./slack-approval.js";
@@ -22,7 +23,7 @@ import { ORCHESTRATOR_NAME, handleSlackCommand } from "./slack-routes.js";
 import { handleSandboxRoutes } from "./sandbox-routes.js";
 import { readSetupStatus } from "./setup-status.js";
 
-export { Automations, CodingOrchestrator, OpenCodeAgent, Sandbox, ContainerProxy };
+export { Automations, CodingOrchestrator, Mailbox, OpenCodeAgent, Sandbox, ContainerProxy };
 export { assertLiveCodingModel } from "./coding-model.js";
 
 export function getUserId(request: Request): string | null {
@@ -221,6 +222,9 @@ export default {
           { headers: { "Cache-Control": "no-store" } },
         );
       }
+      // `/internal/*` paths exist only inside DO stub fetches (Automations
+      // tick/dedupe, the Mailbox JSON API under `/internal/mailbox/`) — the
+      // worker never serves them to the outside.
       if (url.pathname === "/api/approvals" || url.pathname.startsWith("/internal/")) {
         return Response.json({ error: "Not found." }, { status: 404 });
       }

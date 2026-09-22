@@ -429,6 +429,29 @@ export class MailboxStore {
     );
   }
 
+  /** Single registry row by address (normalized like `isRegistered`). */
+  getMailbox(address: string): MailboxRecord | null {
+    const row = this.exec(
+      `SELECT * FROM mailboxes WHERE address = ?`,
+      address.trim().toLowerCase(),
+    )[0];
+    return row ? rowToMailbox(row) : null;
+  }
+
+  /**
+   * Aggregate row counts for `GET /mailbox` meta — COUNT(*) queries, not
+   * list scans, so the meta route stays O(1)-ish even on a full mailbox.
+   * `drafts` counts live drafts (status 'draft') only.
+   */
+  mailboxStats(): { emails: number; unread: number; drafts: number } {
+    const count = (sql: string): number => Number(this.exec(sql)[0]?.n ?? 0);
+    return {
+      emails: count(`SELECT COUNT(*) AS n FROM emails`),
+      unread: count(`SELECT COUNT(*) AS n FROM emails WHERE status = 'unread'`),
+      drafts: count(`SELECT COUNT(*) AS n FROM drafts WHERE status = 'draft'`),
+    };
+  }
+
   // -- threading -----------------------------------------------------------
 
   /** Existing thread id for an incoming message, or null when none matches. */
