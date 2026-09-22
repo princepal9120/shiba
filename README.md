@@ -50,22 +50,23 @@ After implementing and validating the missing security boundaries, the self-host
 # One-time: credentials + remote state
 npx alchemy provider cloudflare token      # mint an API token into the default profile
 #   or: export CLOUDFLARE_API_TOKEN=... CLOUDFLARE_ACCOUNT_ID=...
-npx alchemy provider cloudflare bootstrap  # create the remote state store
+# Optional — only for the remote state store (local filesystem state is the default):
+npx alchemy provider cloudflare bootstrap  # needs Secrets Store scope on the token
 
 # Secrets — bound only when set in the deploy environment (see alchemy.run.ts)
 export GITHUB_TOKEN=...
 export GITHUB_WEBHOOK_SECRET=...
 
 pnpm build
-pnpm deploy            # alchemy deploy — first run needs `--adopt` to take over
-                       # the wrangler-managed worker/resources
+pnpm deploy            # alchemy deploy — the live stage adopts the
+                       # wrangler-managed worker/resources in place automatically
 pnpm deploy:preview    # alchemy plan (dry-run)
 pnpm deploy:destroy    # alchemy destroy
 ~~~
 
 Rollback to wrangler (same bindings, unchanged): `npx wrangler login`, preview via `pnpm deploy:preview:wrangler`, ship via `npx wrangler deploy`.
 
-Note: `alchemy@2.0.0-beta.79` declares `effect >= 4.0.0-rc.115` as a peer while this repo pins `effect@3.22.2`, so the alchemy CLI cannot run under the declared deps until the effect 4 port lands — `alchemy.run.ts` already typechecks against it and the commands above are correct for that point.
+Stage selection goes through `$ALCHEMY_STAGE` only (e.g. `ALCHEMY_STAGE=test-x pnpm deploy` gives the worker/container a `-test-x` suffix); do not pass `--stage` — resource names are derived from the env var and a diverging flag fails loudly instead of colliding with live. Local deploys use the filesystem state store by default; `ALCHEMY_STATE_BACKEND=cloudflare` opts into the remote State Store after the one-time `bootstrap` above (needs a token with the Secrets Store scope).
 
 These commands change the operator's account. They are separate from the Pages-only command above. `pnpm deploy` does not automatically build the static assets first.
 

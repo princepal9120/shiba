@@ -72,6 +72,11 @@ const stage = process.env.ALCHEMY_STAGE;
 const isLiveStage = stage === undefined || LIVE_STAGE.test(stage);
 const workerName = isLiveStage ? "ai-intern" : `ai-intern-${stage}`;
 const containerName = isLiveStage ? "ai-intern-sandbox" : `ai-intern-sandbox-${stage}`;
+// Stage segments must still form valid Worker names (lowercase, digits,
+// dashes, start with a letter) — the CLI's own stage pattern allows `_`.
+if (!/^[a-z][a-z0-9-]{0,62}$/.test(workerName) || !/^[a-z][a-z0-9-]{0,62}$/.test(containerName)) {
+  throw new Error(`ALCHEMY_STAGE '${stage}' cannot form a valid Worker name`);
+}
 
 export const Worker = Cloudflare.Worker("Worker", {
   name: workerName,
