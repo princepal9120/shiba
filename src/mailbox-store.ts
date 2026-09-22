@@ -269,17 +269,30 @@ function requireAddress(value: string, field: string): string {
 }
 
 /**
- * Reply threading normalization: drops leading `Re:`/`Fwd:`/`Fw:`/`Aw:`
- * prefixes (any mix, any case), mailing-list `[tag]` blocks, then collapses
- * whitespace and lowercases. Two messages normalize equal iff a human mail
- * client would fold them into one conversation.
+ * Leading reply/forward markers across locales — `Re:`/`Fwd:`/`Fw:` plus
+ * regional forms clients actually emit: `Aw:`/`Antw:`/`Wg:` (German),
+ * `Sv:`/`Vb:` (Scandinavian), `Vs:`/`Vl:`/`Ilt:` (Finnish), `Odp:`/`Pd:`
+ * (Slavic), `R:`/`Rif:`/`Tr:` (Italian/French), `Res:`/`Rv:`/`Enc:`
+ * (Iberian), `Ynt:`/`Cev:` (Turkish), `Atb:`/`Ats:` (Baltic),
+ * `Doorst:` (Dutch), `Oт:` (Russian), `Απ:`/`Σε:`/`Πρθ:` (Greek), and the
+ * common CJK markers — followed by an optional numbered counter
+ * (`Re[2]:`, `RE(2):`, `Re^2:`). `i`-cased so `SV:`/`VS:` match too.
+ */
+const REPLY_PREFIX_RE =
+  /^(?:re|r|aw|antw|sv|vs|odp|res|rif|ynt|cev|atb|ats|vl|rv|wg|tr|enc|pd|vb|doorst|ilt|от|απ|σε|πρθ|fwd?||||||||||답장|전달)\s*(?:\[\s*\d+\s*\]|\(\s*\d+\s*\)|\^\s*\d+)?\s*:\s*/i;
+
+/**
+ * Reply threading normalization: drops leading reply/forward prefixes (any
+ * mix, any case — see {@link REPLY_PREFIX_RE}), mailing-list `[tag]` blocks,
+ * then collapses whitespace and lowercases. Two messages normalize equal iff
+ * a human mail client would fold them into one conversation.
  */
 export function normalizeSubject(subject: string): string {
   let out = subject.trim();
   for (;;) {
     const next = out
       .replace(/^\s*\[[^\]]*\]\s*/g, "")
-      .replace(/^(re|fwd?|aw)\s*:\s*/i, "");
+      .replace(REPLY_PREFIX_RE, "");
     if (next === out) {
       break;
     }
@@ -417,7 +430,11 @@ export class MailboxStore {
   private findThreadId(input: ThreadInput): string | null {
     const candidates: string[] = [];
     if (input.inReplyTo) {
-      candidates.push(input.inReplyTo);
+      // RFC822 permits a *list* of msg-ids in In-Reply-To and the header
+      // reaches us raw; try every bracketed id, falling back to the whole
+      // value for unbracketed forms.
+      const bracketed = input.inReplyTo.match(/<[^<>\s]+>/g);
+      candidates.push(...(bracketed ?? [input.inReplyTo]));
     }
     for (const ref of [...(input.references ?? [])].reverse()) {
       candidates.push(ref);
@@ -707,9 +724,15 @@ export class MailboxStore {
 
   /**
    * Ordinary edits only: `status` is restricted to
-   * {@link DRAFT_UPDATE_STATUSES}. `queued`/`sent` are reserved for the
-   * approval-gated send path, which must transition them through its own
-   * seam — `drafts.status` alone is never evidence that a send happened.
+   * {@link DRAFT_UPDATE_STATUSES}, and the row itself must still be
+   * `"draft"` — `queued`/`sent`/`discarded` rows are immutable (a
+   * `status: "draft"` write must not revive a discarded draft, and editing
+   * a queued draft would desync it from the payload the user approved).
+   * `queued`/`sent` are reserved for the approval-gated send path, which
+   * transitions them through its own seam — `drafts.status` alone is never
+   * evidence that a send happened. T7 contract: the send path MUST execute
+   * the frozen approval payload; it never re-reads the draft row at send
+   * time, since the row is frozen the moment it is queued.
    */
   updateDraft(id: string, fields: UpdateDraftInput): DraftRecord | null {
     const sets: string[] = [];
@@ -737,8 +760,17 @@ export class MailboxStore {
     }
     sets.push(`updated_at = ?`);
     params.push(fields.nowMs ?? Date.now(), id);
+    const current = this.exec(`SELECT status FROM drafts WHERE id = ?`, id)[0];
+    if (!current) {
+      return null;
+    }
+    if (current.status !== "draft") {
+      throw new InputError(
+        `draft is '${String(current.status)}' — only drafts still in 'draft' are editable.`,
+      );
+    }
     const row = this.exec(
-      `UPDATE drafts SET ${sets.join(", ")} WHERE id = ? RETURNING *`,
+      `UPDATE drafts SET ${sets.join(", ")} WHERE id = ? AND status = 'draft' RETURNING *`,
       ...params,
     )[0];
     return row ? rowToDraft(row) : null;
@@ -854,6 +886,14 @@ const V4_EMBED_PREFIXES: readonly (readonly number[])[] = [
   [0, 0, 0, 0, 0, 0],
 ];
 
+/**
+ * Static check on the literal host only — no DNS lookup runs here, so a
+ * public name that *resolves* to a private address
+ * (`169.254.169.254.nip.io`-style indirection, DNS rebinding) passes
+ * unflagged. `private_ip` is therefore a heuristic signal for the agent,
+ * not an authoritative egress control: T6+ must not treat an unflagged
+ * link as safe to fetch.
+ */
 function isPrivateHost(hostname: string): boolean {
   const host = hostname.toLowerCase();
   const bare = host.startsWith("[") && host.endsWith("]")
@@ -919,7 +959,18 @@ function flagsForUrl(raw: string, anchorText?: string): LinkFlag[] {
         // Not a parseable host — compare the raw capture.
       }
       const hrefDomain = url.hostname.toLowerCase().replace(/^www\./, "");
-      if (displayDomain !== hrefDomain) {
+      // Benign same-site subdomain links stay unflagged: display
+      // `login.paypal.com` ↔ href `paypal.com` is one DNS tree. The check
+      // is the parent/child relation itself — `paypal.com.evil.com` never
+      // suffix-matches `paypal.com` — so the phishing direction stays
+      // flagged. Siblings (`a.paypal.com` vs `b.paypal.com`) still flag:
+      // an eTLD+1 comparison would need the public-suffix list, and
+      // over-flagging is the safe direction for an injection defense.
+      const sameSite =
+        displayDomain === hrefDomain ||
+        displayDomain.endsWith(`.${hrefDomain}`) ||
+        hrefDomain.endsWith(`.${displayDomain}`);
+      if (!sameSite) {
         flags.add("sender_mismatch");
       }
     }
@@ -958,7 +1009,12 @@ const ANCHOR_RE =
 // next `<`) — a `<<<`/`<<a ` flood without any `>` would otherwise rescan
 // the whole tail per start (O(n²)).
 const TAG_RE = /<[^<>]*>/g;
-const BARE_URL_RE = /\bhttps?:\/\/[^\s<>"')]+/gi;
+// Any RFC3986 `scheme://authority` URI — not just http(s) — so a bare
+// `ftp:`/`file:`/`ws:` link in body text gets the same flags its `<a href>`
+// form would (non_https at minimum). Schemes without `//` (mailto:, tel:,
+// javascript:) stay unmatched, mirroring the href pass which only sees
+// attributes the anchor regex already captured.
+const BARE_URL_RE = /\b[a-z][a-z0-9+.-]*:\/\/[^\s<>"')]+/gi;
 
 /**
  * Extract every link from HTML or plain text and classify each with zero or

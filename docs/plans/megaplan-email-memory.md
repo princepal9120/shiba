@@ -192,7 +192,10 @@ already covered — document choice)
   (`queueOnOrchestrator`-style internal fetch) so Slack cards + dashboard both
   pick it up. On resolve(approved) the orchestrator executes the frozen payload
   via MailboxDO / SendEmail binding (`env.SEND_EMAIL` for outbound — binding in
-  wrangler, `type: "send_email"`, `destination_addresses` unset).
+  wrangler, `type: "send_email"`, `destination_addresses` unset). The frozen
+  payload is authoritative: once a draft is `queued` its row is immutable
+  (`updateDraft` refuses it), so the send path never re-reads `drafts` at send
+  time — a stale or tampered row cannot alter what the user approved.
 - Slack card text for email kind: "Agent X requests email send to Y: subject".
 - Tests: approval record shape, resolve executes payload once (replay-guarded),
   rejection leaves draft unsent.

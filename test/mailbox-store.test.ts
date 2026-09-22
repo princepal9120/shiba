@@ -275,6 +275,37 @@ describe("drafts", () => {
     );
     expect(store.listDrafts({ status: "draft" })).toHaveLength(1);
   });
+
+  it("freezes a discarded draft — status:'draft' cannot revive it", () => {
+    const store = makeStore();
+    const draft = store.createDraft({
+      to_addr: "sender@example.com",
+      subject: "x",
+      body_text: "y",
+    });
+    store.updateDraft(draft.id, { status: "discarded" });
+    expect(() => store.updateDraft(draft.id, { body_text: "revive" })).toThrow(InputError);
+    expect(() => store.updateDraft(draft.id, { status: "draft" })).toThrow(/'draft'/);
+    expect(store.listDrafts({ status: "draft" })).toEqual([]);
+  });
+
+  it("freezes a queued draft — send relies on the frozen approval payload", () => {
+    const db = new DatabaseSync(":memory:");
+    const exec: SqlExec = (sql, ...params) => db.prepare(sql).all(...params) as SqlRow[];
+    const store = new MailboxStore(exec);
+    store.init();
+    const draft = store.createDraft({
+      to_addr: "sender@example.com",
+      subject: "x",
+      body_text: "y",
+    });
+    // The gated send path (T7) marks the draft queued through its own seam.
+    db.prepare(`UPDATE drafts SET status = 'queued' WHERE id = ?`).run(draft.id);
+    expect(() => store.updateDraft(draft.id, { body_text: "mutated" })).toThrow(
+      InputError,
+    );
+    expect(store.listDrafts({ status: "queued" })[0]?.body_text).toBe("y");
+  });
 });
 
 describe("mailboxes", () => {
@@ -374,6 +405,43 @@ describe("threading", () => {
     expect(other.thread_id).not.toBe(first.thread_id);
   });
 
+  it("strips numbered counters and regional reply prefixes", () => {
+    for (const subject of [
+      "Re[2]: Deploy report",
+      "RE(2): Deploy report",
+      "Re^2: Deploy report",
+      "Antw: Deploy report",
+      "ANTW: Deploy report",
+      "SV: Deploy report",
+      "VS: Deploy report",
+      "Odp: Deploy report",
+      "Res: Deploy report",
+      "R: Deploy report",
+    ]) {
+      expect(normalizeSubject(subject)).toBe("deploy report");
+    }
+    // A numbered-prefixed reply folds onto the original thread.
+    const store = makeStore();
+    const first = inbound(store, { created_at: 1 });
+    const reply = inbound(store, { subject: "Re[2]: Deploy report", created_at: 2 });
+    expect(reply.thread_id).toBe(first.thread_id);
+    // Prefix-free subjects are untouched (no false strips).
+    expect(normalizeSubject("Restart: Deploy report")).toBe("restart: deploy report");
+  });
+
+  it("threads on any msg-id in a multi-id In-Reply-To header", () => {
+    const store = makeStore();
+    const first = inbound(store, { message_id: "<m1@example.com>", created_at: 1 });
+    // RFC822 permits a list of msg-ids; the raw header reaches the store
+    // as one string — every bracketed id is a threading candidate.
+    const reply = inbound(store, {
+      in_reply_to: "<unknown@example.com> <m1@example.com>",
+      subject: "renamed",
+      created_at: 2,
+    });
+    expect(reply.thread_id).toBe(first.thread_id);
+  });
+
   it("threadFor probes without ever creating a thread", () => {
     const db = new DatabaseSync(":memory:");
     const exec: SqlExec = (sql, ...params) => db.prepare(sql).all(...params) as SqlRow[];
@@ -435,6 +503,54 @@ describe("flagLinks", () => {
     );
     expect(links[0]?.flags).toEqual(expect.arrayContaining(["sender_mismatch", "non_https"]));
     expect(links[1]?.flags).toEqual([]);
+  });
+
+  it("flags bare non-http(s) scheme URLs like their href forms", () => {
+    // A bare ftp:/file:/ws: string used to produce no FlaggedLink at all,
+    // while the same scheme inside <a href> was flagged non_https.
+    expect(flagLinks("ftp://files.example/x")).toEqual([
+      { url: "ftp://files.example/x", flags: ["non_https"] },
+    ]);
+    expect(flagLinks("file:///etc/passwd")).toEqual([
+      { url: "file:///etc/passwd", flags: ["non_https"] },
+    ]);
+    expect(flagLinks("ws://socket.example/x")).toEqual([
+      { url: "ws://socket.example/x", flags: ["non_https"] },
+    ]);
+    // A bare private-ip URL on any scheme still sees private_ip.
+    expect(flagLinks("ftp://192.168.1.1/x")).toEqual([
+      { url: "ftp://192.168.1.1/x", flags: ["non_https", "private_ip"] },
+    ]);
+    // Scheme-less text and no-`//` schemes stay unmatched.
+    expect(flagLinks("mail me at mailto:a@b.c or visit example.com")).toEqual([]);
+  });
+
+  it("does not flag same-site subdomain links as sender_mismatch", () => {
+    // Parent ↔ child is one DNS tree — benign noise strict equality used
+    // to flag.
+    expect(flagLinks('<a href="https://paypal.com/x">login.paypal.com</a>')).toEqual([
+      { url: "https://paypal.com/x", flags: [] },
+    ]);
+    expect(flagLinks('<a href="https://login.paypal.com/x">paypal.com</a>')).toEqual([
+      { url: "https://login.paypal.com/x", flags: [] },
+    ]);
+    // The phishing direction stays flagged: paypal.com.evil.com lives in
+    // evil.com's tree, not paypal.com's.
+    expect(flagLinks('<a href="https://paypal.com.evil.com/x">paypal.com</a>')).toEqual([
+      { url: "https://paypal.com.evil.com/x", flags: ["sender_mismatch"] },
+    ]);
+    // Siblings still flag — over-flagging is the safe direction.
+    expect(flagLinks('<a href="https://b.paypal.com/x">a.paypal.com</a>')).toEqual([
+      { url: "https://b.paypal.com/x", flags: ["sender_mismatch"] },
+    ]);
+  });
+
+  it("documents that private_ip is a static, non-authoritative signal", () => {
+    // A public name resolving to a private IP is invisible to the literal
+    // host check — no DNS lookup runs, so flagging is heuristic only.
+    expect(flagLinks("https://169.254.169.254.nip.io/meta")).toEqual([
+      { url: "https://169.254.169.254.nip.io/meta", flags: [] },
+    ]);
   });
 
   it("does not flag mailto: links as non-https", () => {
