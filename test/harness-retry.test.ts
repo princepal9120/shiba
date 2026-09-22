@@ -4,12 +4,15 @@ const sandboxMock = vi.hoisted(() => ({ getSandbox: vi.fn() }));
 vi.mock("@cloudflare/sandbox", () => ({ getSandbox: sandboxMock.getSandbox, streamFile: vi.fn() }));
 vi.mock("@cloudflare/ai-chat", () => ({ AIChatAgent: class {} }));
 
+import { Duration, Effect, Schedule } from "effect";
+
 import { createSandboxOps } from "../src/agents/opencode-agent.js";
 import {
   HARNESS_RETRY,
   RetryExhaustedError,
   backoffDelayMs,
   classifyRetryable,
+  retrySchedule,
   withRetry,
   type RetryPolicy,
 } from "../src/harness/retry.js";
@@ -153,6 +156,61 @@ describe("withRetry", () => {
       }),
     ).rejects.toBe(terminal);
     expect(calls).toBe(2);
+  });
+
+  it("interrupts the backoff wait itself when the signal aborts mid-delay", async () => {
+    const controller = new AbortController();
+    let calls = 0;
+    const pending = withRetry(
+      { maxAttempts: 3, baseDelayMs: 60_000, maxDelayMs: 60_000, retryIf: () => true },
+      async () => {
+        calls += 1;
+        throw new Error("status 503: overloaded");
+      },
+      controller.signal,
+    );
+    // Let the first failure land and the long backoff begin before aborting,
+    // so the interrupt hits the wait — not the entry check or the catch path.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const started = Date.now();
+    controller.abort();
+    await expect(pending).rejects.toThrow(/cancelled/i);
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect(calls).toBe(1);
+  });
+
+  it("rejects with a message the envelope classifier still reads as exhaustion", async () => {
+    let calls = 0;
+    const error = await withRetry(FAST, async () => {
+      calls += 1;
+      throw new Error("status 503: overloaded");
+    }).then(
+      () => new Error("unreachable"),
+      (caught: unknown) => caught,
+    );
+    // The flattened-error contract: classifyExecutorError matches on the
+    // message text alone, so this regex is the envelope-matcher contract.
+    expect((error as Error).message).toMatch(/retry budget (was )?exhausted/i);
+    expect(error).toBeInstanceOf(RetryExhaustedError);
+    expect((error as RetryExhaustedError).attempts).toBe(calls);
+    expect(classifyRunError(error).code).toBe("supervision_exhausted");
+  });
+});
+
+describe("retrySchedule", () => {
+  it("caps each scheduled wait at maxDelayMs and stops after maxAttempts - 1 retries", async () => {
+    const policy: RetryPolicy = { maxAttempts: 5, baseDelayMs: 100, maxDelayMs: 250, retryIf: () => true };
+    const driver = await Effect.runPromise(Schedule.driver(Schedule.delays(retrySchedule(policy))));
+    const delays: number[] = [];
+    // Jitter pinned to its ceiling: each step reads exactly
+    // min(base * 2^(n-1), maxDelayMs), with no real time passing.
+    for (let i = 0; i < policy.maxAttempts - 1; i += 1) {
+      const delay = await Effect.runPromise(Effect.withRandomFixed(driver.next(new Error("x")), [1]));
+      delays.push(Duration.toMillis(delay));
+    }
+    expect(delays).toEqual([100, 200, 250, 250]);
+    // The budget is spent: the schedule refuses a fifth wait outright.
+    await expect(Effect.runPromise(driver.next(new Error("x")))).rejects.toThrow();
   });
 });
 
