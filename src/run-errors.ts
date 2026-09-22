@@ -45,21 +45,29 @@ const STATUS_CONTEXT_RE = /(?:status(?: code)?|HTTP)\s*[:=]?\s*([1-5]\d{2})\b/i;
 
 /**
  * Cloudflare quota code 10400 — like STATUS_CONTEXT_RE it requires an
- * explicit context word ("code", "error", "status"); a bare 10400 is a
- * count, not a quota failure.
+ * explicit context word ("code", "error", "errno", "status"); a bare 10400
+ * is a count, not a quota failure.
  */
-const QUOTA_CONTEXT_RE = /(?:status|code|error)\s*[:=]?\s*10400\b/i;
-
-/** The sandbox container died mid-run (SIGKILL, OOM); side effects unverified. */
-const CONTAINER_DEATH_RE = /\b(?:sigkill|oomkilled|oom)\b|out[\s-]of[\s-]memory/i;
+const QUOTA_CONTEXT_RE = /(?:status|code|error|errno)\s*[:=]?\s*10400\b/i;
 
 /**
- * Overall-run deadline language — "run timeout"/"timed out" or a deadline
- * that is reached or exceeded. A bare "deadline" with no timeout context
- * (scheduling, estimates) must not classify.
+ * Strong container-death signals always classify — a dead sandbox is the
+ * root cause even when a secondary HTTP status appears alongside. A bare
+ * "out of memory" is weak (JS heap, CUDA, V8): it only means container
+ * death next to a container-context word, otherwise normal flow continues.
+ */
+const CONTAINER_DEATH_STRONG_RE = /\bsigkill(?:ed)?\b|\boom[\s_-]?kill(?:ed)?\b|\boom\b/i;
+const CONTAINER_DEATH_WEAK_RE = /out[\s_-]of[\s_-]memory/i;
+const CONTAINER_CONTEXT_RE = /\b(?:sandbox|container|instance|pod)\b/i;
+
+/**
+ * Overall-run deadline language requires a run/sandbox/overall-qualified
+ * subject AND a failure verb or "timed out" form. Configuration ("the run
+ * timeout is 900s") and loose prose ("we missed the deadline") never
+ * classify — only the run's own deadline failing does.
  */
 const TIMEOUT_SCOPE_RE =
-  /\brun\s+(?:timeout|timed?\s*out|deadline)\b|\b(?:overall\s+)?deadline\s*(?:was\s+|is\s+)?(?:exceeded|reached|hit|expired|missed|passed|reclaimed)\b|\b(?:exceeded|reached|hit|expired|missed|passed|reclaimed)\s+(?:its|the|a)\s+(?:[\w-]+\s+){0,4}deadline\b/i;
+  /\b(?:run|sandbox)\s+timed[\s-]+out\b|\b(?:(?:run|sandbox)\s+|overall\s+(?:run\s+)?)(?:deadline|timeout)\s*(?:was\s+|is\s+)?(?:exceeded|reached|hit|expired|missed|passed|reclaimed)\b|\b(?:run|sandbox)\s+(?:exceeded|hit|reached|expired)\s+(?:its|the|a)\s+(?:[\w-]+\s+){0,4}(?:timeout|deadline)\b|\boverall\s+(?:run\s+)?timeout\b|\breclaimed\b[^.;]*\bdeadline\b/i;
 
 const HARNESS_ERROR_NAMES = new Set([
   "OpenCodeErrorEvent",
@@ -85,7 +93,12 @@ export function classifyRunError(error: unknown): { code: RunErrorCode; message:
     if (error instanceof Error && error.name === "RetryExhaustedError") {
       return { code: "supervision_exhausted", message };
     }
-    if (CONTAINER_DEATH_RE.test(message)) return { code: "container_lost", message };
+    if (
+      CONTAINER_DEATH_STRONG_RE.test(message) ||
+      (CONTAINER_DEATH_WEAK_RE.test(message) && CONTAINER_CONTEXT_RE.test(message))
+    ) {
+      return { code: "container_lost", message };
+    }
     if (QUOTA_CONTEXT_RE.test(message)) return { code: "quota_exhausted", message };
     if (TIMEOUT_SCOPE_RE.test(message)) return { code: "timeout_scope", message };
     const match = STATUS_CONTEXT_RE.exec(message);

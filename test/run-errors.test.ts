@@ -118,6 +118,7 @@ describe("classifyRunError", () => {
     "status 10400 quota exceeded",
     "error 10400: container limit",
     "code=10400",
+    "errno 10400",
   ])("maps Cloudflare quota code 10400 in context: %s", (message) => {
     expect(classifyRunError(new Error(message)).code).toBe("quota_exhausted");
   });
@@ -134,19 +135,29 @@ describe("classifyRunError", () => {
     "sandbox exited: SIGKILL",
     "process oomkilled",
     "OOMKilled by the kernel",
+    "OOM killed, status 500",
     "worker hit OOM limit",
     "out of memory in container",
-    "Out-of-memory condition",
+    "out of memory in the sandbox",
+    "container out-of-memory condition",
   ])("maps container death signals: %s", (message) => {
     expect(classifyRunError(new Error(message)).code).toBe("container_lost");
   });
 
-  it.each(["boom", "zoom meeting error"])(
-    "does not over-match container death substrings: %s",
-    (message) => {
-      expect(classifyRunError(new Error(message)).code).toBe("internal_error");
-    },
-  );
+  it.each([
+    "boom",
+    "zoom meeting error",
+    "JavaScript heap out of memory",
+    "CUDA out of memory",
+    "Out-of-memory condition",
+  ])("does not over-match container death substrings: %s", (message) => {
+    expect(classifyRunError(new Error(message)).code).toBe("internal_error");
+  });
+
+  it("lets a strong content signal beat the harness-name fallback", () => {
+    // The container-death signal is stronger than the envelope class.
+    expect(classifyRunError(new OpenCodeErrorEvent("OOMKilled")).code).toBe("container_lost");
+  });
 
   it("maps a RetryExhaustedError name to supervision_exhausted", () => {
     const err = new Error("gave up after 3 attempts");
@@ -162,20 +173,28 @@ describe("classifyRunError", () => {
 
   it.each([
     "Run exceeded its 45-minute deadline and was reclaimed; side effects are unverified",
-    "run timeout after 900s",
     "run timed out waiting for the executor",
+    "run timeout was exceeded",
+    "run deadline was missed",
+    "run exceeded the timeout limit",
+    "run hit the timeout",
+    "overall timeout for the run",
     "overall deadline hit for run abc123",
-    "deadline exceeded",
+    "run was reclaimed after its deadline passed",
   ])("maps overall-run timeout language: %s", (message) => {
     expect(classifyRunError(new Error(message)).code).toBe("timeout_scope");
   });
 
-  it.each(["deadline estimator crashed", "the deadline field was renamed"])(
-    "does not over-match unrelated deadline text: %s",
-    (message) => {
-      expect(classifyRunError(new Error(message)).code).toBe("internal_error");
-    },
-  );
+  it.each([
+    "deadline estimator crashed",
+    "the deadline field was renamed",
+    "the run deadline was extended",
+    "the run timeout is 900s",
+    "we missed the deadline",
+    "deadline exceeded",
+  ])("does not over-match unrelated deadline/timeout text: %s", (message) => {
+    expect(classifyRunError(new Error(message)).code).toBe("internal_error");
+  });
 });
 
 describe("classifyExecutorError", () => {
