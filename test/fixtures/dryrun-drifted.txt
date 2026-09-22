@@ -1,0 +1,12 @@
+⛅️ wrangler 4.118.0
+───────────────────
+Total Upload: 9154.99 KiB / gzip: 1835.32 KiB
+
+Your Worker has access to the following bindings:
+Binding                                                    Resource
+env.AI                                                     AI
+env.FOO ("x")                                              Environment Variable
+env.BAR ("y")                                              Environment Variable
+env.ROGUE_VAR ("z")                                        Environment Variable
+
+--dry-run: exiting now.
