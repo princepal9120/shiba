@@ -69,8 +69,9 @@ function makeHarness(): Harness {
     },
   } as unknown as Env;
   return {
-    stub: (address) => env.Mailbox.get(env.Mailbox.idFromName(address)) as unknown as FakeStub,
-    directory: env.Mailbox.get(env.Mailbox.idFromName(MAILBOX_DIRECTORY_NAME)) as unknown as FakeStub,
+    // Go through the real helpers so stub-name normalization is exercised.
+    stub: (address) => mailboxStub(env, address) as unknown as FakeStub,
+    directory: mailboxDirectoryStub(env) as unknown as FakeStub,
   };
 }
 
@@ -116,6 +117,10 @@ describe("stub helpers", () => {
     expect((mailboxStub(env, "agent@shiba.dev") as unknown as { name: string }).name).toBe(
       "agent@shiba.dev",
     );
+    // Case/whitespace variants of one address must resolve to one stub.
+    expect((mailboxStub(env, " Agent@Shiba.dev ") as unknown as { name: string }).name).toBe(
+      "agent@shiba.dev",
+    );
     expect((mailboxDirectoryStub(env) as unknown as { name: string }).name).toBe(
       MAILBOX_DIRECTORY_NAME,
     );
@@ -155,6 +160,25 @@ describe("mailbox registry (directory stub)", () => {
     expect((await send(address, "POST", "/mailboxes", { address: "x@y.z" })).status).toBe(400);
     expect((await get(address, "/mailboxes")).status).toBe(400);
     expect((await get(address, "/mailboxes/agent@shiba.dev")).status).toBe(400);
+  });
+
+  it("rejects mail writes on the directory stub", async () => {
+    const h = makeHarness();
+    expect((await seedEmail(h.directory)).status).toBe(400);
+    expect(
+      (
+        await send(h.directory, "POST", "/drafts", {
+          to_addr: "x@y.z",
+          subject: "s",
+          body_text: "b",
+        })
+      ).status,
+    ).toBe(400);
+    expect((await send(h.directory, "DELETE", "/emails/eml-x")).status).toBe(400);
+    expect((await send(h.directory, "POST", "/emails/eml-x/read")).status).toBe(400);
+    expect((await send(h.directory, "PATCH", "/drafts/drf-x", {})).status).toBe(400);
+    // Reads still answer (empty) — only writes are refused.
+    expect((await asJson(await get(h.directory, "/emails"))).emails).toHaveLength(0);
   });
 
   it("validates the address", async () => {
@@ -242,6 +266,24 @@ describe("email routes", () => {
     expect((await asJson(await get(a, "/emails"))).emails).toHaveLength(1);
     expect((await asJson(await get(b, "/emails"))).emails).toHaveLength(0);
   });
+
+  it("routes every case/whitespace spelling of an address to one stub", async () => {
+    const h = makeHarness();
+    await seedEmail(h.stub("Agent@Shiba.dev"));
+    const listed = await asJson(await get(h.stub(" agent@shiba.dev "), "/emails"));
+    expect(listed.emails).toHaveLength(1);
+  });
+
+  it("rejects a duplicate caller-supplied id as a 400, not a 500", async () => {
+    const h = makeHarness();
+    const stub = h.stub("agent@shiba.dev");
+    const { email } = await asJson(await seedEmail(stub));
+    const dup = await seedEmail(stub, { id: email.id, subject: "retry" });
+    expect(dup.status).toBe(400);
+    expect((await asJson(dup)).error).toContain("already exists");
+    // The failed insert left nothing behind.
+    expect((await asJson(await get(stub, "/emails"))).emails).toHaveLength(1);
+  });
 });
 
 describe("draft routes", () => {
@@ -324,5 +366,20 @@ describe("route hygiene", () => {
     expect((await stub.fetch(new Request(`${BASE}/emails`, { method: "PUT" }))).status).toBe(
       405,
     );
+  });
+
+  it("405s known paths with the wrong method, 404s unknown ones", async () => {
+    const h = makeHarness();
+    const stub = h.stub("agent@shiba.dev");
+    expect((await send(h.directory, "POST", "/mailboxes/agent@shiba.dev", {})).status).toBe(
+      405,
+    );
+    expect((await get(stub, "/emails/eml-x/read")).status).toBe(405);
+    expect((await get(stub, "/emails/eml-x/move")).status).toBe(405);
+    expect((await get(stub, "/drafts/drf-x")).status).toBe(405);
+    expect((await send(stub, "POST", "/threads/thr-x")).status).toBe(405);
+    expect((await send(stub, "POST", "/mailbox")).status).toBe(405);
+    expect((await get(stub, "/emails/eml-x/nope")).status).toBe(404);
+    expect((await get(stub, "/drafts/drf-x/extra")).status).toBe(404);
   });
 });

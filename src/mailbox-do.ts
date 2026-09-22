@@ -42,7 +42,10 @@ const ROUTE_PREFIX = "/internal/mailbox";
 
 /** Per-address stub — the unit every mailbox-scoped call goes through. */
 export function mailboxStub(env: Env, address: string): DurableObjectStub {
-  return env.Mailbox.get(env.Mailbox.idFromName(address));
+  // Normalize like the store's registry lookups so every spelling of an
+  // address resolves to the same DO instance (header-parsed recipients
+  // arrive with arbitrary case).
+  return env.Mailbox.get(env.Mailbox.idFromName(address.trim().toLowerCase()));
 }
 
 /** Shared registry stub — registration, enumeration, and `isRegistered`. */
@@ -208,7 +211,10 @@ export class Mailbox {
       }
       return json({ error: "Method not allowed." }, { status: 405 });
     }
-    if (seg.length === 2 && request.method === "GET") {
+    if (seg.length === 2) {
+      if (request.method !== "GET") {
+        return json({ error: "Method not allowed." }, { status: 405 });
+      }
       const address = pathParam(seg[1]);
       const mailbox = this.store.getMailbox(address);
       return json({ mailbox, registered: mailbox !== null });
@@ -267,14 +273,20 @@ export class Mailbox {
       }
       return json({ error: "Method not allowed." }, { status: 405 });
     }
-    if (seg.length === 3 && request.method === "POST" && seg[2] === "read") {
+    if (seg.length === 3 && seg[2] === "read") {
+      if (request.method !== "POST") {
+        return json({ error: "Method not allowed." }, { status: 405 });
+      }
       const changed = this.store.markRead(id);
       const email = this.store.getEmail(id);
       // `changed` is reported rather than treated as an error: a re-read of
       // an already-read email is idempotent, not a failure.
       return email ? json({ email, changed }) : notFound("Email not found.");
     }
-    if (seg.length === 3 && request.method === "POST" && seg[2] === "move") {
+    if (seg.length === 3 && seg[2] === "move") {
+      if (request.method !== "POST") {
+        return json({ error: "Method not allowed." }, { status: 405 });
+      }
       const body = await this.jsonBody(request);
       const email = this.store.moveStatus(id, requiredString(body.status, "status") as EmailStatus);
       return email ? json({ email }) : notFound("Email not found.");
@@ -301,7 +313,10 @@ export class Mailbox {
       }
       return json({ error: "Method not allowed." }, { status: 405 });
     }
-    if (seg.length === 2 && request.method === "PATCH") {
+    if (seg.length === 2) {
+      if (request.method !== "PATCH") {
+        return json({ error: "Method not allowed." }, { status: 405 });
+      }
       const id = pathParam(seg[1]);
       const body = await this.jsonBody(request);
       const input: UpdateDraftInput = {
@@ -326,17 +341,34 @@ export class Mailbox {
       .split("/")
       .filter((s) => s !== "");
     try {
+      // The directory instance holds only the registry — a mail write
+      // through it lands in a store no per-address stub ever reads.
+      if (
+        this.isDirectory &&
+        request.method !== "GET" &&
+        (seg[0] === "emails" || seg[0] === "drafts")
+      ) {
+        return badRequest(
+          `Mail data is served by the per-address instance, not ${MAILBOX_DIRECTORY_NAME}.`,
+        );
+      }
       if (seg[0] === "emails") {
         return await this.emails(request, url, seg);
       }
-      if (seg[0] === "threads" && seg.length === 2 && request.method === "GET") {
+      if (seg[0] === "threads" && seg.length === 2) {
+        if (request.method !== "GET") {
+          return json({ error: "Method not allowed." }, { status: 405 });
+        }
         const thread = this.store.getThread(pathParam(seg[1]));
         return thread ? json({ thread }) : notFound("Thread not found.");
       }
       if (seg[0] === "drafts") {
         return await this.drafts(request, url, seg);
       }
-      if (seg[0] === "mailbox" && seg.length === 1 && request.method === "GET") {
+      if (seg[0] === "mailbox" && seg.length === 1) {
+        if (request.method !== "GET") {
+          return json({ error: "Method not allowed." }, { status: 405 });
+        }
         return await this.mailboxMeta();
       }
       if (seg[0] === "mailboxes") {

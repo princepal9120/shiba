@@ -552,6 +552,12 @@ export class MailboxStore {
     }
     const now = input.created_at ?? Date.now();
     const id = input.id ?? `eml-${randomHex(8)}`;
+    // A caller-supplied id must be fresh: checked up front (before any
+    // thread row is created) so a PK collision surfaces as a 400 input
+    // error, not a raw SQLite constraint failure.
+    if (input.id !== undefined && this.getEmail(id) !== null) {
+      throw new InputError(`id already exists: ${id}.`);
+    }
     let threadId: string;
     let createdThread = false;
     if (input.thread_id !== undefined) {
