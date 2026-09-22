@@ -13,6 +13,7 @@ import type { CodingTaskInput, CodingTaskResult } from "./opencode-input.js";
 import { ClaudeCodeErrorEvent } from "./harness/claude-code.js";
 import { CodexErrorEvent } from "./harness/codex.js";
 import { OpenCodeErrorEvent as OpenCodeErrorEventImpl, opencodeHarness } from "./harness/opencode.js";
+import { HARNESS_RETRY, withRetry } from "./harness/retry.js";
 import type { AgentHarness } from "./harness/types.js";
 import { boundTail, redactSecrets, shellJoin, shellQuote } from "./security.js";
 
@@ -112,15 +113,20 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
     let run: ExecResult;
     const output = streamProgress(this.harness, emit, opts?.signal);
     try {
-      run = await ops.exec(shellJoin(argv), {
-        cwd: workdir,
-        timeoutMs: OPENCODE_TIMEOUT_MS,
-        signal: opts?.signal,
-        onOutput: output.onData,
-        // Provider keys here are always the dummy; the real credential is
-        // swapped in outside the container (src/egress.ts).
-        env: this.harness.env(input, config?.path ?? null),
-      });
+      // Only thrown errors are retry candidates: a returned nonzero
+      // exitCode is the harness's verdict, not a transient failure.
+      run = await withRetry(HARNESS_RETRY, () =>
+        ops.exec(shellJoin(argv), {
+          cwd: workdir,
+          timeoutMs: OPENCODE_TIMEOUT_MS,
+          signal: opts?.signal,
+          onOutput: output.onData,
+          // Provider keys here are always the dummy; the real credential is
+          // swapped in outside the container (src/egress.ts).
+          env: this.harness.env(input, config?.path ?? null),
+        }),
+        opts?.signal,
+      );
       await output.finish();
       throwIfAborted(opts?.signal);
     } catch (error) {
@@ -149,7 +155,11 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
     // write exists between the harness exec and the returned result.
     throwIfAborted(opts?.signal);
     try {
-      const collection = await collectChanges(ops, workdir, opts?.signal);
+      const collection = await withRetry(
+        HARNESS_RETRY,
+        () => collectChanges(ops, workdir, opts?.signal),
+        opts?.signal,
+      );
       await emit({ phase: "collect", message: `Done: ${collection.changedFiles.length} changed files.`, fraction: 1 });
       return {
         status: "completed",

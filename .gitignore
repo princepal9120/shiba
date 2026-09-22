@@ -4,6 +4,7 @@ public/
 !web/public/**
 dist/
 .wrangler/
+.wrangler-ephemeral-*.jsonc
 .dev.vars
 wrangler-devenv.json
 .omx/
@@ -18,3 +19,4 @@ ai-intern-docs/
 
 .playwright-mcp/
 .reticle/
+.alchemy/

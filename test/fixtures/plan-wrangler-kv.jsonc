@@ -1,0 +1,5 @@
+{
+  "name": "fixture-worker",
+  "vars": { "FOO": "x" },
+  "kv_namespaces": [{ "binding": "MY_KV", "id": "abc123" }],
+}
