@@ -69,6 +69,13 @@ const CONTAINER_CONTEXT_RE = /\b(?:sandbox|container|instance|pod)\b/i;
 const TIMEOUT_SCOPE_RE =
   /\b(?:run|sandbox)\s+timed[\s-]+out\b|\b(?:(?:run|sandbox)\s+|overall\s+(?:run\s+)?)(?:deadline|timeout)\s*(?:was\s+|is\s+)?(?:exceeded|reached|hit|expired|missed|passed|reclaimed)\b|\b(?:run|sandbox)\s+(?:exceeded|hit|reached|expired)\s+(?:its|the|a)\s+(?:[\w-]+\s+){0,4}(?:timeout|deadline)\b|\boverall\s+(?:run\s+)?timeout\b|\breclaimed\b[^.;]*\bdeadline\b/i;
 
+/**
+ * RetryExhaustedError survives flattening only as its message — the runtime
+ * boundary stringifies it into failureResult summaries, so the exhaustion
+ * phrase must classify too or "supervision_exhausted" is unreachable.
+ */
+const RETRY_EXHAUSTED_TEXT_RE = /\bretry budget (?:was\s+)?exhausted\b/i;
+
 const HARNESS_ERROR_NAMES = new Set([
   "OpenCodeErrorEvent",
   "ClaudeCodeErrorEvent",
@@ -90,7 +97,10 @@ export function classifyRunError(error: unknown): { code: RunErrorCode; message:
     const message = error instanceof Error ? error.message : String(error ?? "unknown");
     if (isAbortError(error)) return { code: "cancelled", message };
     // The retry budget being spent is the failure, whatever the attempts saw.
-    if (error instanceof Error && error.name === "RetryExhaustedError") {
+    if (
+      (error instanceof Error && error.name === "RetryExhaustedError") ||
+      RETRY_EXHAUSTED_TEXT_RE.test(message)
+    ) {
       return { code: "supervision_exhausted", message };
     }
     if (

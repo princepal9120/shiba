@@ -171,6 +171,36 @@ describe("classifyRunError", () => {
     expect(classifyRunError(err).code).toBe("supervision_exhausted");
   });
 
+  it("classifies flattened retry-exhaustion text as supervision_exhausted", () => {
+    // The runtime adapter flattens RetryExhaustedError into failureResult
+    // summary text; the phrase must still classify end-to-end.
+    expect(
+      classifyRunError(
+        new Error("OpenCode execution failed: Retry budget exhausted after 3 attempts."),
+      ).code,
+    ).toBe("supervision_exhausted");
+    expect(
+      classifyRunError(new Error("Clone failed: retry budget was exhausted")).code,
+    ).toBe("supervision_exhausted");
+  });
+
+  it("lets flattened exhaustion text win over an embedded status", () => {
+    expect(
+      classifyRunError(
+        new Error("OpenCode execution failed: status 503 then Retry budget exhausted after 3 attempts."),
+      ).code,
+    ).toBe("supervision_exhausted");
+  });
+
+  it.each([
+    "will retry in 5s",
+    "retry succeeded on attempt 2",
+    "retrying after backoff",
+    "budget review pending",
+  ])("does not classify retry mentions without exhaustion: %s", (message) => {
+    expect(classifyRunError(new Error(message)).code).toBe("internal_error");
+  });
+
   it.each([
     "Run exceeded its 45-minute deadline and was reclaimed; side effects are unverified",
     "run timed out waiting for the executor",
@@ -208,6 +238,14 @@ describe("classifyExecutorError", () => {
     const abort = new Error("aborted");
     abort.name = "AbortError";
     expect(classifyExecutorError(abort).code).toBe("cancelled");
+  });
+
+  it("maps flattened exhaustion text through the envelope path", () => {
+    expect(
+      classifyExecutorError(
+        new Error("Change collection failed: Retry budget exhausted after 3 attempts."),
+      ).code,
+    ).toBe("supervision_exhausted");
   });
 
   it("delegates the new codes through classifyRunError", () => {
