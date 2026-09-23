@@ -35,9 +35,9 @@ if (flag("help") || flag("h")) {
   console.log(`Usage: node scripts/validate-credentials.mjs [options]
 
 Options:
-  --wrangler=<path>   wrangler config (default: wrangler.jsonc)
-  --env=<path>        env types file (default: src/env.ts)
-  --dev-vars=<path>   .dev.vars path (default: .dev.vars; absent = ok)
+  --wrangler=<path>   wrangler config (default: backend/wrangler.jsonc)
+  --env=<path>        env types file (default: backend/src/env.ts)
+  --dev-vars=<path>   .dev.vars path (default: backend/.dev.vars; absent = ok)
   --src=<dir>         source dir for export-class checks (default: src)
   --offline           skip wrangler secret list (no network/auth)
   --help              show this text
@@ -48,9 +48,9 @@ external, not missing exports.`);
   process.exit(0);
 }
 
-const wranglerPath = resolve(root, arg("wrangler") ?? "wrangler.jsonc");
-const envPath = resolve(root, arg("env") ?? "src/env.ts");
-const devVarsPath = resolve(root, arg("dev-vars") ?? ".dev.vars");
+const wranglerPath = resolve(root, arg("wrangler") ?? "backend/wrangler.jsonc");
+const envPath = resolve(root, arg("env") ?? "backend/src/env.ts");
+const devVarsPath = resolve(root, arg("dev-vars") ?? "backend/.dev.vars");
 const srcDir = resolve(root, arg("src") ?? "src");
 const offline = flag("offline");
 
@@ -295,7 +295,7 @@ for (const [scope, section] of sections) {
   const suffix = scope ? ` [${scope}]` : "";
   for (const key of Object.keys(section.vars ?? {})) {
     if (envFields.has(key)) ok(`var ${key} has Env field${envFields.get(key) ? " (optional)" : ""}${suffix}`);
-    else fail(`var ${key} missing from Env interface${suffix}`, "add it to src/env.ts");
+    else fail(`var ${key} missing from Env interface${suffix}`, "add it to backend/src/env.ts");
   }
 }
 
@@ -310,7 +310,7 @@ if (!offline) remoteSecrets = listWranglerSecrets();
 
 results.push("secrets (optional Env fields — unset disables the feature):");
 if (!devVarsPresent) {
-  results.push(`  (no ${devVarsPath === resolve(root, ".dev.vars") ? ".dev.vars" : devVarsPath} file — checking wrangler only)`);
+  results.push(`  (no ${devVarsPath === resolve(root, "backend/.dev.vars") ? "backend/.dev.vars" : devVarsPath} file — checking wrangler only)`);
 }
 if (remoteSecrets === null) {
   results.push(

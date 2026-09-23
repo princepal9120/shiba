@@ -3,7 +3,7 @@ title: Configuration
 description: Current runtime variables, optional secrets, and model boundaries.
 ---
 
-Non-secret defaults live in wrangler.jsonc. Local overrides and secrets may be placed in the ignored .dev.vars file. Production secrets are set through Wrangler; .dev.vars is not uploaded as production configuration.
+Non-secret defaults live in backend/wrangler.jsonc. Local overrides and secrets may be placed in the ignored .dev.vars file. Production secrets are set through Wrangler; .dev.vars is not uploaded as production configuration.
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
@@ -31,7 +31,7 @@ Select a currently available model in your account. The checked-in default is no
 | GITHUB_WEBHOOK_SECRET | HMAC verification for acknowledgment-only webhooks |
 
 ~~~sh
-cp .dev.vars.example .dev.vars
+cp backend/.dev.vars.example backend/.dev.vars
 # Edit locally; never commit secrets.
 ~~~
 

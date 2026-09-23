@@ -22,7 +22,7 @@ pnpm lint
 pnpm test
 pnpm docs:check
 pnpm build
-npx wrangler deploy --dry-run
+npx wrangler deploy --dry-run --config backend/wrangler.jsonc
 ```
 
 The script definitions live in `package.json`. Tests using fakes do not
@@ -37,7 +37,7 @@ frontmatter, descriptive headings, and links using the `/docs/` base.
 Starlight supplies navigation and search; avoid duplicating its interface.
 Source: `web/astro.config.mjs`.
 
-Write technical claims from `src/`, `wrangler.jsonc`, and the installed
+Write technical claims from `backend/src/`, `backend/wrangler.jsonc`, and the installed
 configuration rather than copying README assumptions. Cite relevant source
 files or symbols. When source and the goal differ, label **Current behavior
 (as implemented)** and **Specification target (GOAL)** explicitly.
@@ -45,7 +45,7 @@ files or symbols. When source and the goal differ, label **Current behavior
 The combined build builds the dashboard first, then documentation, copies
 the documentation output into `public/docs`, and verifies the assembled site.
 Do not reverse that order: Vite empties `public` before its build.
-Source: `package.json`, `vite.config.ts`, and `scripts/copy-docs.mjs`.
+Source: root `package.json`, `frontend/vite.config.ts`, and `scripts/copy-docs.mjs`.
 
 ## Review and publication
 
@@ -69,5 +69,5 @@ of them requires re-running the live acceptance checklist (T10).
 | `@cloudflare/sandbox` | `0.12.9` | Must match the base image tag in `Dockerfile`. The `interceptHttps` + `outboundByHost` mechanism is the "no credentials in the container" guarantee. |
 | `CODING_MODEL` | `google/gemini-3.5-flash-lite` | Model ids retire. A retired model fails silently at run time. |
 
-`src/index.ts` throws on first request if `CODING_MODEL` is in the retired-id deny list.
+`backend/src/index.ts` throws on first request if `CODING_MODEL` is in the retired-id deny list.
 

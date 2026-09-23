@@ -1,11 +1,11 @@
 {
   "$schema": "https://developers.cloudflare.com/workers/wrangler/configuration-schema.json",
-  "name": "ai-intern",
+  "name": "shiba-ai-coworker",
   "main": "src/index.ts",
   "compatibility_date": "2026-06-01",
   "compatibility_flags": ["nodejs_compat"],
   "assets": {
-    "directory": "./public",
+    "directory": "../public",
     "not_found_handling": "404-page",
   },
   // Version preview URLs are reachable without a Cloudflare Access policy;
@@ -69,7 +69,7 @@
   "containers": [
     {
       "class_name": "Sandbox",
-      "name": "ai-intern-sandbox",
+      "name": "shiba-ai-coworker-sandbox",
       "image": "./Dockerfile",
       "instance_type": "standard-1",
       "max_instances": 5,

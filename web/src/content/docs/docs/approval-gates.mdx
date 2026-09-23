@@ -1,11 +1,11 @@
 ---
 title: Approval Gates
-description: Human-in-the-loop safety controls and authorization boundaries in AI Intern.
+description: Human-in-the-loop safety controls and authorization boundaries in AI Coworker.
 ---
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
 
-Approval gates are the central safety invariant in AI Intern. Autonomous agents are never permitted to clone private code, execute terminal commands, or push git branches without explicit human verification.
+Approval gates are the central safety invariant in AI Coworker. Autonomous agents are never permitted to clone private code, execute terminal commands, or push git branches without explicit human verification.
 
 ## Why Approval Gates Matter
 
@@ -18,7 +18,7 @@ Autonomous coding agents need shell execution, file writes, and package installa
 
 ## Approval Channels
 
-AI Intern provides three synchronous approval mechanisms:
+AI Coworker provides three synchronous approval mechanisms:
 
 ### 1. Slack Interactive Block Kit
 When an agent formulates a plan, it sends a formatted Slack Block Kit card directly to the originating thread:
@@ -28,7 +28,7 @@ When an agent formulates a plan, it sends a formatted Slack Block Kit card direc
   "type": "section",
   "text": {
     "type": "mrkdwn",
-    "text": "*Delegation Plan:* Fix input sanitization in `src/auth.ts`\n*Target:* `main` branch\n*Commands:* `pnpm test -- auth.test.ts`"
+    "text": "*Delegation Plan:* Fix input sanitization in `backend/src/auth.ts`\n*Target:* `main` branch\n*Commands:* `pnpm test -- auth.test.ts`"
   },
   "accessory": {
     "type": "button",

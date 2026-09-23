@@ -5,16 +5,16 @@
   "tsx": true,
   "tailwind": {
     "config": "tailwind.config.js",
-    "css": "src/dashboard/styles.css",
+    "css": "src/styles.css",
     "baseColor": "neutral",
     "cssVariables": true,
     "prefix": ""
   },
   "aliases": {
-    "components": "./src/dashboard/components",
-    "utils": "./src/dashboard/lib/utils",
-    "ui": "./src/dashboard/components/ui",
-    "lib": "./src/dashboard/lib"
+    "components": "./src/components",
+    "utils": "./src/lib/utils",
+    "ui": "./src/components/ui",
+    "lib": "./src/lib"
   },
   "iconLibrary": "lucide"
 }

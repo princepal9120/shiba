@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 
-const ROOT = join(__dirname, "..");
+const ROOT = join(__dirname, "..", "..");
 
 function runCheck(extraArgs: string[] = []) {
   return spawnSync("node", ["scripts/check-env-types.mjs", ...extraArgs], {

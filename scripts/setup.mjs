@@ -28,7 +28,7 @@ async function cf(token, method, path, body) {
 }
 
 // 1. wrangler auth
-console.log("\n== ai-intern setup ==\n");
+console.log("\n== shiba-ai-coworker setup ==\n");
 const whoami = spawnSync("npx", ["wrangler", "whoami"], { encoding: "utf8" });
 if (whoami.status !== 0 || /not authenticated/i.test(whoami.stdout + whoami.stderr)) {
   console.log("Not logged in. Run: npx wrangler login — then re-run pnpm setup.");
@@ -39,11 +39,11 @@ ok(`wrangler authenticated${accountId ? ` (account ${accountId.slice(0, 8)}…)`
 
 // 2. deploy
 if ((await ask("Deploy now with `wrangler deploy`? (y/n)", "y")).toLowerCase() === "y") {
-  const deploy = run("npx", ["wrangler", "deploy"]);
+  const deploy = run("npx", ["wrangler", "deploy", "--config", "backend/wrangler.jsonc"]);
   if (deploy.status !== 0) { console.log("Deploy failed — fix the error above and re-run."); process.exit(1); }
   ok("deployed");
 }
-const workerHost = await ask("Worker host (no scheme)", "ai-intern.<subdomain>.workers.dev");
+const workerHost = await ask("Worker host (no scheme)", "shiba-ai-coworker.<subdomain>.workers.dev");
 const workerUrl = `https://${workerHost}`;
 
 // 3. secrets
@@ -61,14 +61,14 @@ const collected = {};
 for (const [name, hint] of secrets) {
   const value = await askSecret(`${name} — ${hint}`);
   if (!value) { note(`${name} skipped`); continue; }
-  const r = run("npx", ["wrangler", "secret", "put", name], value + "\n");
+  const r = run("npx", ["wrangler", "secret", "put", name, "--config", "backend/wrangler.jsonc"], value + "\n");
   if (r.status === 0) { ok(`${name} set`); collected[name] = value; }
-  else note(`${name} failed — set later with: npx wrangler secret put ${name}`);
+  else note(`${name} failed — set later with: npx wrangler secret put ${name} --config backend/wrangler.jsonc`);
 }
 if (await ask("Require Cloudflare Access on the dashboard/API? (y/n)", "y") === "y") {
   collected.REQUIRE_ACCESS = "1";
   // Plain var, not a secret — wrangler secret put cannot set it.
-  note('add "REQUIRE_ACCESS": "1" under "vars" in wrangler.jsonc and re-run wrangler deploy');
+  note('add "REQUIRE_ACCESS": "1" under "vars" in backend/wrangler.jsonc and re-run wrangler deploy --config backend/wrangler.jsonc');
 }
 
 // 4. optional CF API automation
@@ -82,7 +82,7 @@ if (apiToken && accountId) {
   const email = await ask("Access: allow which email?", "");
   if (email) {
     const app = await cf(apiToken, "POST", `/accounts/${accountId}/access/apps`, {
-      name: "ai-intern", domain: workerHost, type: "self_hosted", session_duration: "24h",
+      name: "shiba-ai-coworker", domain: workerHost, type: "self_hosted", session_duration: "24h",
     });
     if (app.success) {
       const pol = await cf(apiToken, "POST", `/accounts/${accountId}/access/apps/${app.result.id}/policies`, {
@@ -96,9 +96,9 @@ if (apiToken && accountId) {
 // 5. local dev vars
 if (Object.keys(collected).length && await ask("Write secrets to .dev.vars for `wrangler dev`? (y/n)", "n") === "y") {
   const lines = Object.entries(collected).map(([k, v]) => `${k}=${v}`).join("\n") + "\n";
-  const existing = existsSync(".dev.vars") ? readFileSync(".dev.vars", "utf8") : "";
-  writeFileSync(".dev.vars", existing + lines);
-  ok(".dev.vars appended (gitignored)");
+  const existing = existsSync("backend/.dev.vars") ? readFileSync("backend/.dev.vars", "utf8") : "";
+  writeFileSync("backend/.dev.vars", existing + lines);
+  ok("backend/.dev.vars appended (gitignored)");
 }
 
 // 6. manual steps

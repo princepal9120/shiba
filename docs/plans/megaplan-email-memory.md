@@ -7,7 +7,7 @@ This file is the implementation plan argued from that spec.
 
 ## Context
 
-ai-intern is a self-hosted Cloudflare Workers app (`src/index.ts`) with Durable
+shiba-ai-coworker is a self-hosted Cloudflare Workers app (`src/index.ts`) with Durable
 Objects (`CodingOrchestrator`, `OpenCodeAgent`, `Sandbox`, `Automations`) and a
 Vite React dashboard (`src/dashboard/`). DO convention: thin DO class over a pure
 store module (see `automations-do.ts` + `automations.ts`) so store logic is

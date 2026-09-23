@@ -63,7 +63,7 @@ Follow `web/src/content/docs/docs/readiness.md` steps as written. For each bar, 
 |---|---|
 | Deploy succeeds | `npx wrangler deployments list` shows the version; `curl -I https://<worker>/` returns Access redirect (302), not 200 |
 | Unauthenticated refused | `curl -s -o /dev/null -w '%{http_code}' https://<worker>/api/runs` → `302` or `401`; same URL with `cf-access-authenticated-user-email: x` forged header from outside Access must **also** be refused — if it returns 200, the header-only check is exposed and JWT verification is not optional |
-| Reject starts no container | Cloudflare dashboard → Workers & Pages → ai-intern → Containers → instance count stays at 0 for the rejected run; `wrangler tail` shows no `Sandbox` DO invocation |
+| Reject starts no container | Cloudflare dashboard → Workers & Pages → shiba-ai-coworker → Containers → instance count stays at 0 for the rejected run; `wrangler tail` shows no `Sandbox` DO invocation |
 | Approve streams phases | `wrangler tail --format json` shows progress events; count them and compare to `MAX_PROGRESS_EVENTS` (256) — none dropped on a short task |
 | Diff matches reality | `git fetch && git diff main..<branch>` on the throwaway repo equals the dashboard diff byte for byte |
 | Failing task reports real exit | Task text: "run `exit 7`". Run must show `error` with exit 7, never `completed` (T8) |
@@ -82,7 +82,7 @@ Record every result, pass or fail, with date and versions in `VERIFICATION.md`. 
 Prerequisite: Access bypass policy for `/api/slack/*` and `/api/github/webhook`. Then:
 
 1. Slack app → Event Subscriptions → Request URL. Must verify **with Access enabled**. Failure here means the bypass is missing.
-2. `@ai-intern fix this` in a channel mapped via `SLACK_CHANNEL_REPOS`. Card appears in-thread showing the exact arguments.
+2. `@shiba-ai-coworker fix this` in a channel mapped via `SLACK_CHANNEL_REPOS`. Card appears in-thread showing the exact arguments.
 3. Click Approve from a user **not** in `SLACK_APPROVERS`. Expect ephemeral refusal; Containers panel stays at 0.
 4. Click Approve from an allowlisted user. Progress updates in the thread; PR link lands in the same thread.
 5. Click Approve again on the resolved card. Nothing starts.

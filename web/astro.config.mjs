@@ -16,26 +16,26 @@ export default defineConfig({
 	integrations: [
 		tailwind(),
 		starlight({
-			title: 'AI Intern',
+			title: 'AI Coworker',
 			description:
 				'Open-source, self-hosted coding workspace for approval-gated tasks in Cloudflare Sandbox.',
 			logo: {
 				src: './src/assets/logo.png',
-				alt: 'AI Intern Logo',
+				alt: 'AI Coworker Logo',
 			},
 			favicon: '/favicon.ico',
 			customCss: ['./src/styles/theme.css'],
 			social: [
-				{ icon: 'github', label: 'GitHub', href: 'https://github.com/princepal9120/ai-intern' },
+				{ icon: 'github', label: 'GitHub', href: 'https://github.com/princepal9120/shiba' },
 				{ icon: 'x.com', label: 'Twitter / X', href: 'https://x.com/prince_twets' },
 			],
 			editLink: {
-				baseUrl: 'https://github.com/princepal9120/ai-intern/edit/main/web/',
+				baseUrl: 'https://github.com/princepal9120/shiba/edit/main/web/',
 			},
 			sidebar: [
 				{
 					label: 'Landing Page ↗',
-					link: 'https://shiba-intern.pages.dev/',
+					link: 'https://shiba-ai-coworker.pages.dev/',
 					attrs: { target: '_blank', rel: 'noopener noreferrer' },
 				},
 				{

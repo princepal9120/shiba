@@ -16,7 +16,7 @@ Vite serves the dashboard at `http://localhost:5173`. It does not start the Work
 ## Worker and built assets
 
 ```sh
-cp .dev.vars.example .dev.vars
+cp backend/.dev.vars.example backend/.dev.vars
 pnpm build
 npx wrangler dev
 ```

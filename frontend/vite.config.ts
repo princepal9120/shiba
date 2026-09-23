@@ -1,17 +1,21 @@
 import { defineConfig } from "vite";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const rootDir = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
-  root: ".",
+  root: rootDir,
   // outDir is also named public/, so default publicDir would self-collide.
-  publicDir: "web/public",
+  publicDir: resolve(rootDir, "../web/public"),
   build: {
-    outDir: "public",
+    outDir: resolve(rootDir, "../public"),
     emptyOutDir: true,
     target: "es2022",
     sourcemap: false,
     rolldownOptions: {
-      // app/index.html → public/app/index.html; dashboard source lives in
-      // src/dashboard/ so shadscan's src/** scope sees it.
+      // app/index.html → public/app/index.html; the worker serves the
+      // dashboard under /app/ from the shared assets directory.
       input: ["app/index.html"],
     },
   },

@@ -1,9 +1,9 @@
 ---
 name: testing-shiba-dashboard
-description: How to run and browser-test the shiba ai-intern dashboard locally — dev server, routes, expected backend-down artifacts, and which UI surfaces need live data.
+description: How to run and browser-test the shiba shiba-ai-coworker dashboard locally — dev server, routes, expected backend-down artifacts, and which UI surfaces need live data.
 ---
 
-# Testing the shiba ai-intern dashboard locally
+# Testing the shiba shiba-ai-coworker dashboard locally
 
 ## Run it
 
@@ -31,7 +31,7 @@ Only vite runs in most sessions — the Cloudflare worker (Durable Objects, sand
 
 All of these work client-side and were verified in a restyle pass:
 
-- Sidebar nav: 8 views across WORKSPACE (Tasks/Runs/Missions/Automations) + SANDBOX (VM/Agents/Gates/Architecture), navy `#0000a8` active pill, navy header breadcrumb (`AI Intern / <label>`).
+- Sidebar nav: 8 views across WORKSPACE (Tasks/Runs/Missions/Automations) + SANDBOX (VM/Agents/Gates/Architecture), navy `#0000a8` active pill, navy header breadcrumb (`AI Coworker / <label>`).
 - SYSTEM cluster: Setup Guide modal (6-step onboarding), Documentation link (`href="/docs/"`), Keyboard shortcuts modal (7 rows), theme toggle.
 - Theme: `next-themes` toggles `html.dark`; dark mode is `filter: invert(1) hue-rotate(180deg)` on the root with img/video/canvas re-inverted — the whole page flips, not per-component styling.
 - ⌘K button in header + Ctrl/Cmd-K: cmdk command menu; all 8 "Go to …" items + New task + toggles.

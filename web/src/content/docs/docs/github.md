@@ -17,7 +17,7 @@ Publishing is off by default. The parent checks for GITHUB_TOKEN before a reques
 npx wrangler secret put GITHUB_TOKEN
 ~~~
 
-The Worker creates blobs, a tree, a commit, an ai-intern/<sandboxId> branch, and a PR via REST. It does not merge the PR or put the token in the container. API failures can leave branches/commits behind; inspect the repository before retrying.
+The Worker creates blobs, a tree, a commit, an shiba-ai-coworker/<sandboxId> branch, and a PR via REST. It does not merge the PR or put the token in the container. API failures can leave branches/commits behind; inspect the repository before retrying.
 
 ### Fidelity limits
 

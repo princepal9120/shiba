@@ -1,10 +1,10 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { Toaster } from "sonner";
-import { App } from "./dashboard/app";
-import { ErrorBoundary } from "./dashboard/components/ErrorBoundary";
-import { ThemeProvider } from "./dashboard/components/ThemeProvider";
-import "./dashboard/styles.css";
+import { App } from "./app";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+import { ThemeProvider } from "./components/ThemeProvider";
+import "./styles.css";
 
 const root = document.getElementById("root");
 if (!root) {
@@ -15,7 +15,7 @@ createRoot(root).render(
     <ErrorBoundary>
       <ThemeProvider>
         <App />
-        <Toaster theme="light" position="bottom-right" richColors />
+        <Toaster theme="dark" position="bottom-right" richColors />
       </ThemeProvider>
     </ErrorBoundary>
   </StrictMode>,

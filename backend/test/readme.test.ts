@@ -3,12 +3,12 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-const README = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "README.md"), "utf8");
+const README = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "..", "README.md"), "utf8");
 
 describe("README structure (T24 honest-ship contract)", () => {
   it("keeps the deploy button pointing at this repo", () => {
     expect(README).toContain("https://deploy.workers.cloudflare.com/button");
-    expect(README).toContain("?url=https://github.com/princepal9120/ai-intern");
+    expect(README).toContain("?url=https://github.com/princepal9120/shiba");
   });
 
   it("states the standard-4 platform ceiling", () => {
@@ -65,7 +65,7 @@ describe("README structure (T24 honest-ship contract)", () => {
 
   it("documents the Slack slash command without claiming unbuilt surfaces", () => {
     expect(README).toContain("/api/slack/command");
-    expect(README).toContain("/ai-intern");
+    expect(README).toContain("/shiba-ai-coworker");
     // Shipped surfaces are named; unproven ones stay labelled unverified.
     expect(README).toContain("/api/slack/events");
     expect(README).toContain("No P3 live workspace verification is claimed");

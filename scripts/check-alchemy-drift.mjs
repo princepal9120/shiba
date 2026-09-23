@@ -8,7 +8,7 @@
  *      bindings by className, the AI binding, assets config, crons,
  *      compatibility, main, container image/instances)
  *  (b) the worker name resolves to the wrangler `name` (directly or via
- *      the stage-conditional `workerName` const that pins "ai-intern")
+ *      the stage-conditional `workerName` const that pins "shiba-ai-coworker")
  *  (c) vars.INSTANCE_TYPE equals every containers[].instance_type in
  *      wrangler AND the matching Container's instanceType in alchemy.run.ts
  *  (d) every alchemy env entry is either a wrangler-declared name or a
@@ -34,7 +34,7 @@ if (process.argv.includes("--help") || process.argv.includes("-h")) {
   console.log(`Usage: node scripts/check-alchemy-drift.mjs [options]
 
 Options:
-  --wrangler=<path>  wrangler config (default: wrangler.jsonc)
+  --wrangler=<path>  wrangler config (default: backend/wrangler.jsonc)
   --alchemy=<path>   alchemy stack file (default: alchemy.run.ts)
   --help             show this text
 
@@ -46,7 +46,7 @@ env name is reported as drift.`);
   process.exit(0);
 }
 
-const wranglerPath = resolve(root, arg("wrangler") ?? "wrangler.jsonc");
+const wranglerPath = resolve(root, arg("wrangler") ?? "backend/wrangler.jsonc");
 const alchemyPath = resolve(root, arg("alchemy") ?? "alchemy.run.ts");
 
 // --- JSONC: two string-aware passes — strip comments BEFORE trailing commas,
@@ -361,6 +361,21 @@ const propIdent = (value, prop) => {
 };
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+const wranglerDir = dirname(wranglerPath);
+const alchemyDir = dirname(alchemyPath);
+// Path-valued props are compared as resolved absolute paths: wrangler
+// paths resolve against the wrangler config's directory, alchemy literals
+// — including `new URL("./x", import.meta.url)` — against alchemy.run.ts's.
+function pathValue(value, baseDir) {
+  const lit = literal(value);
+  if (typeof lit === "string") return resolve(baseDir, lit);
+  const m =
+    typeof value === "string"
+      ? value.match(/new\s+URL\s*\(\s*"([^"]+)"\s*,\s*import\.meta\.url\s*\)/)
+      : null;
+  return m ? resolve(baseDir, m[1]) : { raw: value };
+}
+
 let cfg;
 try {
   cfg = parseJsonc(readFileSync(wranglerPath, "utf8"));
@@ -411,7 +426,7 @@ const nameOk =
 if (!nameOk) {
   drift.push(`worker name: wrangler "${cfg.name}" vs alchemy.run.ts ${JSON.stringify(nameVal)}`);
 }
-if (literal(props.get("main")) !== cfg.main) {
+if (pathValue(props.get("main"), alchemyDir) !== resolve(wranglerDir, cfg.main)) {
   drift.push(`main: wrangler "${cfg.main}" vs ${JSON.stringify(props.get("main"))}`);
 }
 const compat = membersToMap(subMembers(props.get("compatibility") ?? ""));
@@ -428,7 +443,7 @@ const assets = membersToMap(subMembers(props.get("assets") ?? ""));
 if (cfg.assets && assets.size === 0) {
   drift.push("assets: wrangler declares an assets block but alchemy.run.ts has none");
 } else if (cfg.assets) {
-  if (literal(assets.get("directory")) !== cfg.assets.directory) {
+  if (pathValue(assets.get("directory"), alchemyDir) !== resolve(wranglerDir, cfg.assets.directory)) {
     drift.push(
       `assets directory: wrangler "${cfg.assets.directory}" vs ${JSON.stringify(assets.get("directory"))}`,
     );
@@ -522,8 +537,9 @@ for (const c of cfg.containers ?? []) {
   if (!cNameOk) {
     drift.push(`container "${c.name}": alchemy name "${cName ?? propIdent(entry, "name")}" != wrangler name "${c.name}"`);
   }
-  if (propString(entry, "dockerfile") !== c.image) {
-    drift.push(`container "${c.name}": alchemy dockerfile "${propString(entry, "dockerfile")}" != wrangler image "${c.image}"`);
+  const dockerfile = propString(entry, "dockerfile");
+  if (resolve(alchemyDir, dockerfile ?? "") !== resolve(wranglerDir, c.image)) {
+    drift.push(`container "${c.name}": alchemy dockerfile "${dockerfile}" != wrangler image "${c.image}"`);
   }
   if (propString(entry, "instanceType") !== c.instance_type) {
     drift.push(`container "${c.name}": alchemy instanceType "${propString(entry, "instanceType")}" != wrangler instance_type "${c.instance_type}"`);

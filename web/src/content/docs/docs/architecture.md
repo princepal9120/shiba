@@ -33,7 +33,7 @@ description: Components, data flow, and unfinished integration boundaries.
     <div class="arch-card">
       <div class="arch-card-header">
         <span class="arch-card-name">Slack ChatOps</span>
-        <span class="arch-card-pill">@AI Intern</span>
+        <span class="arch-card-pill">@AI Coworker</span>
       </div>
       <p class="arch-card-desc">Interactive Block Kit approval cards and thread execution updates.</p>
     </div>

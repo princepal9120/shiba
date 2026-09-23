@@ -1,4 +1,4 @@
-# AI Intern — End-to-End Completion Plan
+# AI Coworker — End-to-End Completion Plan
 
 **Revision:** 2026-09-17 (rev 4). Rev 3's §2 "genuinely broken" table is now largely historical — see §2.0 for what is actually left.
 
@@ -167,7 +167,7 @@ Self-hosted own-subscription use is grayer than a SaaS doing it, but shipping it
 Noted so the next reader knows these were considered rather than missed. None of them are on the critical path; none are scheduled.
 
 - **PR review agent** (~9h). A `review_pull_request` tool: clone at the PR head so the agent reads surrounding code rather than diff context alone, emit `{path, line, severity, comment}` findings, publish via `POST /repos/{o}/{r}/pulls/{n}/reviews` as `COMMENT` — never `APPROVE`, an agent must not approve. Reuses the whole pipeline with a different prompt and a different endpoint, so it stays cheap whenever it returns. Competitive cost, stated plainly: [Codra](https://github.com/devarshishimpi/codra) exists solely to be this, and Capy and Hoplite both ship one.
-- **PR feedback loop** (~4h, needs the review agent). Extend `/api/github/webhook` to `pull_request_review_comment`; a comment mentioning the bot on an ai-intern PR starts a run against that PR's branch and replies on the same thread.
+- **PR feedback loop** (~4h, needs the review agent). Extend `/api/github/webhook` to `pull_request_review_comment`; a comment mentioning the bot on an shiba-ai-coworker PR starts a run against that PR's branch and replies on the same thread.
 - **Live preview URLs.** `proxyToSandbox` is already imported at `src/index.ts:6` and unused — this is nearer than it looks.
 - **Resumable runs.** Stop/resume/fork, the way Cloudbox does it, for work exceeding `OPENCODE_TIMEOUT_MS`. A real architecture change, not a tuning knob (§16).
 
@@ -200,7 +200,7 @@ Unset → `lite` → 256 MiB. A Node coding CLI plus a git tree does not fit.
 // wrangler.jsonc:27-34
 {
   "class_name": "Sandbox",
-  "name": "ai-intern-sandbox",
+  "name": "shiba-ai-coworker-sandbox",
   "image": "./Dockerfile",
   // lite (the default) is 256 MiB / 2 GB disk — too small for OpenCode + a clone.
   "instance_type": "standard-1",
@@ -409,12 +409,12 @@ One moderate task (~200K in, ~15K out): **$0.15 + $0.056 ≈ $0.21**, against $0
 
 ## 9. Phase P3 — Slack Bot, End to End (~14h)
 
-The surface the dashboard cannot reach: on call, an alert fires, `@ai-intern fix this` in the thread that already holds the stack trace, PR link comes back in that thread.
+The surface the dashboard cannot reach: on call, an alert fires, `@shiba-ai-coworker fix this` in the thread that already holds the stack trace, PR link comes back in that thread.
 
 ```
 #incidents
   🔴 PagerDuty: 500s on /orders
-  └ @prince: retry path. @ai-intern fix this
+  └ @prince: retry path. @shiba-ai-coworker fix this
        │  Events API ─▶ POST /api/slack/events
        │  verify HMAC · dedupe event_id · burst-group · ack <3s · waitUntil
        ▼
@@ -474,7 +474,7 @@ export async function verifySlackRequest(body, headers, secret, now = Date.now()
 
 ### T13 · Resolve the repo, group bursts, gather and redact context (~3h)
 
-**Repo resolution — never guess.** (1) a GitHub URL in the mention or thread; (2) `SLACK_CHANNEL_REPOS` channel→repo map — this is what makes bare `@ai-intern fix this` work in `#incidents`; (3) neither → **reply asking**.
+**Repo resolution — never guess.** (1) a GitHub URL in the mention or thread; (2) `SLACK_CHANNEL_REPOS` channel→repo map — this is what makes bare `@shiba-ai-coworker fix this` work in `#incidents`; (3) neither → **reply asking**.
 
 **Burst grouping (borrowed from Capy).** An incident thread fires twenty messages in a minute. Each matched message extends a sliding window (default 10s, bounded 1–300s); the group closes when the window elapses, a different author posts, or it hits 20 messages / 100 KB. **One run per burst, not per message.** Without this, on call is unusable.
 
@@ -646,7 +646,7 @@ Both are **API-key** harnesses here, not subscription — §3 explains why that 
 ### T25 · Deploy button and prerequisites
 
 ```markdown
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/princepal9120/ai-intern)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/princepal9120/shiba-ai-coworker)
 ```
 
 1. Workers Paid (DOs + Containers require it) — §8 for what $5 covers.
@@ -709,7 +709,7 @@ T5–T8 are independent of each other. Within P3, T12 gates everything; T13/T14 
 
 **P2 — the one that matters** — `VERIFICATION.md` records a dated live run: submit → approve → clone/code/collect → diff matches reality · rejection provably starts no container (container metrics, not the UI) · a failing task reports its real exit code · a PR shows a deleted file as deleted · **peak memory measured**, `basic` vs `standard-1` decided on data
 
-**P3 — verified live in a real workspace** — Request URL verification succeeds *with Access enabled* · `@ai-intern fix this` posts a card in-thread · the card shows the exact arguments that will execute · a non-`SLACK_APPROVERS` user clicking Approve is refused and **no container starts** · an approver's click runs it and progress updates in-thread · PR link lands in the same thread · a second click on a resolved card starts nothing · a forced retry (duplicate `event_id`) produces **one** run · a 20-message burst produces **one** run · `aside` never reaches context · a pasted token appears in no Slack message or task input
+**P3 — verified live in a real workspace** — Request URL verification succeeds *with Access enabled* · `@shiba-ai-coworker fix this` posts a card in-thread · the card shows the exact arguments that will execute · a non-`SLACK_APPROVERS` user clicking Approve is refused and **no container starts** · an approver's click runs it and progress updates in-thread · PR link lands in the same thread · a second click on a resolved card starts nothing · a forced retry (duplicate `event_id`) produces **one** run · a 20-message burst produces **one** run · `aside` never reaches context · a pasted token appears in no Slack message or task input
 
 **P4** — a cron automation fires on schedule and posts an approval card · **no container starts before approval** · `run_when` skips a non-matching event and records why · a model failure in the gate fails closed · unattended mode refuses a non-allowlisted repo · the daily budget refuses run N+1 with a reason · a disabled automation never fires
 

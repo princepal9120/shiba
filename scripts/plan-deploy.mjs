@@ -37,7 +37,7 @@ Options:
                      instead of invoking wrangler (unit-testable, offline)
   --strict           exit 1 when the plan differs from wrangler.jsonc
   --wrangler=<path>  wrangler config for the expectation set
-                     (default: wrangler.jsonc)
+                     (default: backend/wrangler.jsonc)
   --outdir=<dir>     dry-run output dir (default: ./.wrangler/deploy-preview)
   --help             show this text
 
@@ -47,7 +47,7 @@ or re-kinded. Default exit 0 with warnings; a wrangler failure exits 1.`);
   process.exit(0);
 }
 
-const wranglerPath = resolve(root, arg("wrangler") ?? "wrangler.jsonc");
+const wranglerPath = resolve(root, arg("wrangler") ?? "backend/wrangler.jsonc");
 const fixturePath = arg("fixture");
 const strict = flag("strict");
 
@@ -202,7 +202,7 @@ function collectDeclared(cfg) {
 //   env.CodingOrchestrator (CodingOrchestrator)   Durable Object
 //   env.GATEWAY_ID ("default")       Environment Variable
 //   The following containers are available:
-//   - ai-intern-sandbox (/repo/Dockerfile)
+//   - shiba-ai-coworker-sandbox (/repo/Dockerfile)
 // --dry-run exits before the "Deployed <name> triggers" section, so routes
 // and crons can never appear here.
 function parsePlan(output) {

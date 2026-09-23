@@ -76,7 +76,7 @@ Map the extracted styles into code:
 
 ## Pre-Loaded Theme Reference: Manga-Tech & Capybara-Shiba
 
-This skill includes pre-analyzed documentation for the Manga-Tech developer tool aesthetic found in `ai-intern/web/public/assets/theme`:
+This skill includes pre-analyzed documentation for the Manga-Tech developer tool aesthetic found in `shiba-ai-coworker/web/public/assets/theme`:
 - [references/manga-tech-theme-blueprint.md](references/manga-tech-theme-blueprint.md): Full breakdown of all 28 assets, stroke rules, and character sheets.
 - [references/generative-prompts-library.md](references/generative-prompts-library.md): Ready-to-copy prompts for Midjourney v6, FLUX.1, and DALL-E 3.
 - [references/svg-and-css-recipes.md](references/svg-and-css-recipes.md): Copy-pasteable SVG patterns and Tailwind components.

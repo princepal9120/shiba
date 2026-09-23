@@ -1,9 +1,9 @@
 ---
 name: testing-dashboard-e2e
-description: Run the ai-intern dashboard end-to-end locally and seed Durable Object run state (e.g. unknown/error/completed runs) without a real sandbox execution.
+description: Run the shiba-ai-coworker dashboard end-to-end locally and seed Durable Object run state (e.g. unknown/error/completed runs) without a real sandbox execution.
 ---
 
-# Dashboard E2E Testing for ai-intern
+# Dashboard E2E Testing for shiba-ai-coworker
 
 ## Environment
 
@@ -43,7 +43,7 @@ worker edge. The reliable seam is the agents-SDK state row in the DO sqlite.
 ```bash
 node -e '
 const {DatabaseSync} = require("node:sqlite");
-const f = ".wrangler/state/v3/do/ai-intern-CodingOrchestrator/<hash>.sqlite"; // the non-metadata .sqlite
+const f = ".wrangler/state/v3/do/shiba-ai-coworker-CodingOrchestrator/<hash>.sqlite"; // the non-metadata .sqlite
 const db = new DatabaseSync(f);
 const row = db.prepare("SELECT state FROM cf_agents_state WHERE id=\"cf_state_row_id\"").get();
 const state = JSON.parse(row.state);

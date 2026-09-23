@@ -16,5 +16,5 @@
     "noFallthroughCasesInSwitch": true,
     "types": ["vite/client"]
   },
-  "include": ["src", "client", "test", "dashboard", "vite.config.ts", "vitest.config.ts", "alchemy.run.ts"]
+  "include": ["backend/src", "backend/test", "frontend/src", "frontend/vite.config.ts", "backend/vitest.config.ts", "alchemy.run.ts"]
 }

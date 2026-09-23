@@ -33,8 +33,8 @@ if (process.argv.includes("--help") || process.argv.includes("-h")) {
   console.log(`Usage: node scripts/check-env-types.mjs [options]
 
 Options:
-  --wrangler=<path>  wrangler config (default: wrangler.jsonc)
-  --env=<path>       env types file (default: src/env.ts)
+  --wrangler=<path>  wrangler config (default: backend/wrangler.jsonc)
+  --env=<path>       env types file (default: backend/src/env.ts)
   --help             show this text
 
 Checks both directions: every declared binding/var must be an Env field, and
@@ -42,8 +42,8 @@ every non-optional Env field must be declared in wrangler.`);
   process.exit(0);
 }
 
-const wranglerPath = resolve(root, arg("wrangler") ?? "wrangler.jsonc");
-const envPath = resolve(root, arg("env") ?? "src/env.ts");
+const wranglerPath = resolve(root, arg("wrangler") ?? "backend/wrangler.jsonc");
+const envPath = resolve(root, arg("env") ?? "backend/src/env.ts");
 
 // --- JSONC: two string-aware passes — strip comments BEFORE trailing commas,
 // so `{a:1, // note\n}` cleans up correctly.

@@ -1,10 +1,10 @@
-# Evaluating Effect-TS and Alchemy.run for ai-intern
+# Evaluating Effect-TS and Alchemy.run for shiba-ai-coworker
 
 Structured evaluation, not a migration plan. Both repos were read, not just homepages.
 
 > **Update:** this was the pattern-port analysis. The project has since adopted both —
 > `effect` as a worker dependency (v3 stable) and `alchemy` as a deploy-time devDependency.
-> See `src/effect/runtime.ts` and `alchemy.run.ts`; the verdicts below are preserved as
+> See `backend/src/effect/runtime.ts` and `alchemy.run.ts`; the verdicts below are preserved as
 > the evaluation record.
 
 Sources read:
@@ -27,7 +27,7 @@ Question per feature: can we port the pattern in plain TypeScript without the li
 | Effect feature | Verdict | Rationale |
 | --- | --- | --- |
 | `Effect.gen` / `yield*` (generators as do-notation) | PORT | Plain `async`/`await` already covers sequential composition; the extra layer buys typed error channels we cover with `RunErrorCode` instead. |
-| `TaggedError` / `catchTag` | PORT | `RunErrorCode` union + `classifyRunError` + `RUN_ERROR_DEFS` (`src/run-errors.ts`) is the plain-TS equivalent: closed vocabulary, exhaustive table, one wire projection. |
+| `TaggedError` / `catchTag` | PORT | `RunErrorCode` union + `classifyRunError` + `RUN_ERROR_DEFS` (`backend/src/run-errors.ts`) is the plain-TS equivalent: closed vocabulary, exhaustive table, one wire projection. |
 | `Layer` (dependency injection) | PORT | Constructor injection in `CodingOrchestrator`/`OpenCodeAgent` plus the `Env` object covers wiring; we have ~4 seams, not 40 services. |
 | `Scope` (acquire → use → release) | PORT | DO lifecycle + `finally` cleanup + `reclaimStaleRuns` cover the acquire/release contract at our granularity. |
 | `Fiber` + interruption | PORT | `AbortSignal` propagation + `AbortController` registry + the D5 uninterruptible-write rule is the equivalent at our scale. Flip: a loop needing interruption *inside* arbitrary awaits (fibers can preempt; signal checks are cooperative). |
@@ -41,7 +41,7 @@ Question per feature: can we port the pattern in plain TypeScript without the li
 where a Durable Object's single-threaded transactional state already answers the
 same questions.
 
-## S8.2 — Alchemy.run for ai-intern's own deployment
+## S8.2 — Alchemy.run for shiba-ai-coworker's own deployment
 
 Alchemy is Infrastructure-as-Effects: Cloudflare resources, bindings and the
 worker program declared in one TypeScript file, driven by `plan`/`deploy`/`destroy`.
@@ -51,7 +51,7 @@ Effect `Context.Service` (`Stage.ts`), `InferEnv<W>` infers env types from the
 Worker resource (`Workers/InferEnv.ts`), and Effect is used inside the core
 (`Worker.ts` imports `effect/Effect`).
 
-- **Replaces:** `wrangler.jsonc`, `wrangler deploy`, `scripts/setup.mjs`,
+- **Replaces:** `backend/wrangler.jsonc`, `wrangler deploy`, `scripts/setup.mjs`,
   `.dev.vars` + `wrangler secret put` juggling.
 - **Adds:** typed `alchemy.run.ts` program, `plan`/`deploy`/`destroy` lifecycle,
   `InferEnv<typeof Worker>` replacing our hand-maintained env types,
@@ -64,7 +64,7 @@ Worker resource (`Workers/InferEnv.ts`), and Effect is used inside the core
   "no new dependencies" rule — though that rule targets production worker code;
   a deploy tool is a build-side dep, a weaker objection.
 - **Enables:** per-PR preview deployments — disproportionately valuable here
-  because ai-intern *is* infrastructure people self-host; a throwaway demo
+  because shiba-ai-coworker *is* infrastructure people self-host; a throwaway demo
   environment per PR is a real product surface — plus eliminating the
   env-type-drift bug class via `InferEnv`.
 
@@ -74,7 +74,7 @@ Worker resource (`Workers/InferEnv.ts`), and Effect is used inside the core
 1. Alchemy ships a non-beta v2 (or v1 line we can pin) — removes the
    moving-API objection.
 2. Per-PR preview environments become an actual ask (a demo/threshold where a
-   maintainer wants a throwaway ai-intern per change) — this is the feature
+   maintainer wants a throwaway shiba-ai-coworker per change) — this is the feature
    `wrangler` cannot give us at any version.
 3. An env-type-drift bug is observed in production that `InferEnv` would have
    caught — turns a hypothetical into a paid invoice.
@@ -85,8 +85,8 @@ Adopt Effect-TS the library? **No** (superseded — see the update note above).
 The durability semantics it was carrying in the reference implementation — fenced
 identities, `outcome_unknown`, tagged error
 vocabulary, uninterruptible writes, sync transactions, boundary squashing —
-are now ported in plain TypeScript (`src/run-errors.ts`, `src/runs.ts`,
-`src/agents/orchestrator.ts`, `src/agents/opencode-agent.ts`), and the features
+are now ported in plain TypeScript (`backend/src/run-errors.ts`, `backend/src/runs.ts`,
+`backend/src/agents/orchestrator.ts`, `backend/src/agents/opencode-agent.ts`), and the features
 we have not needed (`Layer`, `Ref`, `Stream`) are covered by the DO execution
 model. The named flip trigger is a reconciler/progress loop that needs
 interruption inside arbitrary awaits. Adopt Alchemy.run? **WATCH** — track the

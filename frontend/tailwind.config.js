@@ -1,8 +1,13 @@
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const root = dirname(fileURLToPath(import.meta.url));
+
 /** @type {import('tailwindcss').Config} */
 export default {
   content: [
-    "./src/dashboard/**/*.{js,ts,jsx,tsx,html}",
-    "./web/src/**/*.{js,ts,jsx,tsx,html,astro,md,mdx}", "./src/**/*.{astro,html,js,jsx,md,mdx,svelte,ts,tsx,vue}"
+    resolve(root, "src/**/*.{js,ts,jsx,tsx,html}"),
+    resolve(root, "../web/src/**/*.{astro,html,js,jsx,md,mdx,svelte,ts,tsx,vue}"),
   ],
   theme: {
     extend: {

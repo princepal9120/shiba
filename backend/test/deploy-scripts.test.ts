@@ -4,8 +4,8 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 
-const ROOT = join(__dirname, "..");
-const FIXTURES = join(ROOT, "test", "fixtures");
+const ROOT = join(__dirname, "..", "..");
+const FIXTURES = join(ROOT, "backend", "test", "fixtures");
 
 function run(script: string, args: string[] = []) {
   return spawnSync("node", [`scripts/${script}`, ...args], {
@@ -76,7 +76,7 @@ describe("ephemeral-stack", () => {
   it("--dry-run prints the planned lifecycle without writing the temp config", () => {
     const out = run("ephemeral-stack.mjs", ["--dry-run", "--prefix=ci7"]);
     expect(out.status).toBe(0);
-    expect(out.stdout).toContain("ai-intern-ci7");
+    expect(out.stdout).toContain("shiba-ai-coworker-ci7");
     expect(out.stdout).toContain(".wrangler-ephemeral-ci7.jsonc");
     expect(out.stdout).toContain("wrangler deploy --config");
     expect(out.stdout).toContain("wrangler delete");
@@ -86,7 +86,7 @@ describe("ephemeral-stack", () => {
   it("defaults the prefix to test-<unix-ts>", () => {
     const out = run("ephemeral-stack.mjs", ["--dry-run"]);
     expect(out.status).toBe(0);
-    expect(out.stdout).toMatch(/ai-intern-test-\d+/);
+    expect(out.stdout).toMatch(/shiba-ai-coworker-test-\d+/);
   });
 
   it("documents the honest smoke target: GET / where any status counts (L4)", () => {
@@ -99,7 +99,7 @@ describe("ephemeral-stack", () => {
   it("--alchemy --dry-run prints the staged alchemy lifecycle", () => {
     const out = run("ephemeral-stack.mjs", ["--alchemy", "--dry-run", "--prefix=ci7"]);
     expect(out.status).toBe(0);
-    expect(out.stdout).toContain("ai-intern-ci7");
+    expect(out.stdout).toContain("shiba-ai-coworker-ci7");
     expect(out.stdout).toContain("ALCHEMY_STAGE=ci7");
     expect(out.stdout).toContain("alchemy deploy --stage ci7 --yes");
     expect(out.stdout).toContain("alchemy destroy --stage ci7 --yes");
@@ -313,12 +313,12 @@ describe("scripts/ built-ins-only guard (L6)", () => {
 });
 
 describe("alchemy adoption guards", () => {
-  it("src/ never imports alchemy — the app must stay runtime-agnostic", () => {
+  it("backend/src/ never imports alchemy — the app must stay runtime-agnostic", () => {
     const walk = (dir: string): string[] =>
       readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
         e.isDirectory() ? walk(join(dir, e.name)) : [join(dir, e.name)],
       );
-    const offenders = walk(join(ROOT, "src")).filter((f) =>
+    const offenders = walk(join(ROOT, "backend", "src")).filter((f) =>
       /from\s+["']alchemy|import\s*\(\s*["']alchemy|require\s*\(\s*["']alchemy/.test(
         readFileSync(f, "utf8"),
       ),
