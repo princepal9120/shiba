@@ -11,6 +11,7 @@
  */
 import type { Env } from "./env.js";
 import { MEMORY_REGISTRY_NAME, memoryRegistryStub, memoryStub } from "./memory-do.js";
+import type { SessionRecord } from "./memory-store.js";
 import type { DelegatedRun } from "./runs.js";
 import { boundTail, redactSecrets } from "./security.js";
 
@@ -159,12 +160,15 @@ export interface DistillResult {
 }
 
 /**
- * Bank one distilled fact on the agent's stub. A 409 means the id is
- * already banked (a replay) — counted, not fatal. Other failures log and
- * the remaining facts still try.
+ * Bank one distilled fact on the agent's stub. A 409 is ambiguous: the id
+ * may already be banked by this agent (a replay — counted) or owned by a
+ * different agent through the registry (a collision the bank rolled back —
+ * not this run's fact). The local read-back tells them apart: only a row
+ * that actually persisted on this stub counts.
  */
 async function bankFact(env: Env, agent: string, id: string, fact: string): Promise<boolean> {
-  const res = await memoryStub(env, agent).fetch(
+  const stub = memoryStub(env, agent);
+  const res = await stub.fetch(
     new Request(`${ROUTE_BASE}/facts`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -172,7 +176,12 @@ async function bankFact(env: Env, agent: string, id: string, fact: string): Prom
     }),
   );
   if (res.status === 409) {
-    return true;
+    const probe = await stub.fetch(new Request(`${ROUTE_BASE}/facts/${encodeURIComponent(id)}`));
+    if (probe.ok) {
+      return true;
+    }
+    console.warn(`memory_distill_bank_conflict ${JSON.stringify({ id, status: probe.status })}`);
+    return false;
   }
   if (!res.ok) {
     console.warn(`memory_distill_bank_failed ${JSON.stringify({ id, status: res.status })}`);
@@ -184,9 +193,13 @@ async function bankFact(env: Env, agent: string, id: string, fact: string): Prom
 /**
  * Record the session row on the shared registry. `id` is the run id, so a
  * replayed distillation is a no-op (409) rather than a second session.
+ * But sessions are keyed globally: a runId collision across orchestrator
+ * instances 409s on a row owned by a different agent — that row is not
+ * this run's record, so only an own-agent row counts.
  */
 async function recordSession(env: Env, run: DelegatedRun, agent: string, summary: string): Promise<boolean> {
-  const res = await memoryRegistryStub(env).fetch(
+  const registry = memoryRegistryStub(env);
+  const res = await registry.fetch(
     new Request(`${ROUTE_BASE}/sessions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -199,7 +212,19 @@ async function recordSession(env: Env, run: DelegatedRun, agent: string, summary
     }),
   );
   if (res.status === 409) {
-    return true;
+    const probe = await registry.fetch(
+      new Request(`${ROUTE_BASE}/sessions/${encodeURIComponent(run.runId)}`),
+    );
+    const owner = probe.ok
+      ? ((await probe.json()) as { session?: SessionRecord }).session?.agent
+      : undefined;
+    if (owner === agent) {
+      return true;
+    }
+    console.warn(
+      `memory_distill_session_conflict ${JSON.stringify({ runId: run.runId, owner: owner ?? null })}`,
+    );
+    return false;
   }
   if (!res.ok) {
     console.warn(`memory_distill_session_failed ${JSON.stringify({ runId: run.runId, status: res.status })}`);
@@ -248,7 +273,7 @@ export async function distillSession(
       console.warn(
         `memory_distill_bank_failed ${JSON.stringify({
           runId: run.runId,
-          error: error instanceof Error ? error.message : String(error),
+          error: redactSecrets(error instanceof Error ? error.message : String(error)),
         })}`,
       );
     }
@@ -260,7 +285,7 @@ export async function distillSession(
     console.warn(
       `memory_distill_session_failed ${JSON.stringify({
         runId: run.runId,
-        error: error instanceof Error ? error.message : String(error),
+        error: redactSecrets(error instanceof Error ? error.message : String(error)),
       })}`,
     );
   }

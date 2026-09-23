@@ -302,6 +302,59 @@ describe("T10 distillSession", () => {
     expect(await listSessions(env)).toHaveLength(1);
   });
 
+  it("does not count a cross-agent fact-id collision as banked", async () => {
+    const { env } = makeEnv({
+      distill: () => ({
+        response: JSON.stringify({ summary: "s", facts: ["f"] }),
+      }),
+    });
+    // Another agent already owns the deterministic distill id — the bank
+    // 409s on the registry claim and the row never lands on our stub.
+    const other = env.Memory.get(env.Memory.idFromName("other")) as unknown as FakeStub;
+    const claim = await other.fetch(
+      new Request(`${REGISTRY_BASE}/facts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: "distill_agent-tool:call-1_0",
+          fact: "foreign fact",
+          source: "manual",
+        }),
+      }),
+    );
+    expect(claim.status).toBe(201);
+    const result = await distillSession(env, completedRun(), { agent: "intern" });
+    expect(result).toEqual({ distilled: true, factsBanked: 0, sessionRecorded: true });
+    expect(await listFacts(env, "intern")).toHaveLength(0);
+    const others = await listFacts(env, "other");
+    expect(others).toHaveLength(1);
+    expect(others[0]?.fact).toBe("foreign fact");
+  });
+
+  it("does not count a foreign session-row collision as recorded", async () => {
+    const { env } = makeEnv({});
+    // A different run already wrote a session row under this run id.
+    const registry = env.Memory.get(env.Memory.idFromName("global")) as unknown as FakeStub;
+    const seed = await registry.fetch(
+      new Request(`${REGISTRY_BASE}/sessions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: "agent-tool:call-1",
+          agent: "other",
+          summary: "a different run's record",
+          started_at: 1,
+        }),
+      }),
+    );
+    expect(seed.status).toBe(201);
+    const result = await distillSession(env, completedRun(), { agent: "intern" });
+    expect(result).toEqual({ distilled: true, factsBanked: 1, sessionRecorded: false });
+    const sessions = await listSessions(env);
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]?.agent).toBe("other");
+  });
+
   it("persists redacted text when the model echoes secrets back", async () => {
     const { env } = makeEnv({
       distill: () => ({
@@ -382,6 +435,41 @@ describe("T10 orchestrator wiring", () => {
     expect(instance.state.runs[0]?.status).toBe("error");
   });
 
+  it("a run landing 'cancelled' does not distill", async () => {
+    const { env, aiCalls } = makeEnv({});
+    const { instance, pending } = makeOrchestrator(env);
+    const abort = new Error("aborted mid-run");
+    abort.name = "AbortError";
+    const childExecute = async () => {
+      throw abort;
+    };
+    await expect(
+      instance.executeDelegatedTask(DELEGATE_INPUT, childExecute, "call-abort"),
+    ).rejects.toThrow("aborted mid-run");
+    expect(instance.state.runs[0]?.status).toBe("cancelled");
+    await Promise.allSettled(pending);
+    expect(aiCalls.some((c) => c.input.messages !== undefined)).toBe(false);
+    expect(await listSessions(env)).toHaveLength(0);
+  });
+
+  it("a run reclaimed to 'unknown' does not distill", async () => {
+    const { env, aiCalls } = makeEnv({});
+    const { instance, pending } = makeOrchestrator(env);
+    instance.state.runs = [
+      {
+        ...completedRun(),
+        runId: "agent-tool:stale",
+        status: "running",
+        updatedAt: Date.now() - 46 * 60 * 1000,
+      },
+    ];
+    await instance.reclaimRuns();
+    expect(instance.state.runs[0]?.status).toBe("unknown");
+    await Promise.allSettled(pending);
+    expect(aiCalls.some((c) => c.input.messages !== undefined)).toBe(false);
+    expect(await listSessions(env)).toHaveLength(0);
+  });
+
   function queueRunApproval(instance: any, approvalId: string) {
     instance.state.pendingApprovals = createPendingApproval([], {
       threadKey: "default",
@@ -454,5 +542,33 @@ describe("T10 orchestrator wiring", () => {
     expect(run?.status).toBe("error");
     expect(run?.error).toBe("inner finish landed");
     expect(aiCalls.some((c) => c.input.messages !== undefined)).toBe(false);
+  });
+
+  it("the approval-resolve fallback landing 'cancelled' does not distill", async () => {
+    const { env, aiCalls } = makeEnv({});
+    const { instance, pending } = makeOrchestrator(env);
+    const abort = new Error("dispatch aborted");
+    abort.name = "AbortError";
+    instance.getTools = () => ({
+      delegate_coding_task: {
+        execute: async () => {
+          throw abort;
+        },
+      },
+    });
+    queueRunApproval(instance, "ap-abort");
+    const res = await instance.resolveApproval({
+      threadKey: "default",
+      approvalId: "ap-abort",
+      approved: true,
+      decidedBy: "test",
+    });
+    expect(res.status).toBe(200);
+    await new Promise((resolve) => setImmediate(resolve));
+    await Promise.allSettled(pending);
+    const run = instance.state.runs[0];
+    expect(run?.status).toBe("cancelled");
+    expect(aiCalls.some((c) => c.input.messages !== undefined)).toBe(false);
+    expect(await listSessions(env)).toHaveLength(0);
   });
 });

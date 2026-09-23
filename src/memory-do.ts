@@ -623,6 +623,15 @@ export class Memory {
         `Sessions are served by the ${MEMORY_REGISTRY_NAME} instance.`,
       );
     }
+    if (seg.length === 2) {
+      // Single-row read — a writer verifying a 409 tells its own replayed
+      // row from a foreign-owner collision by reading the stored owner.
+      if (request.method !== "GET") {
+        return json({ error: "Method not allowed." }, { status: 405 });
+      }
+      const session = this.store.getSession(pathParam(seg[1]));
+      return session ? json({ session }) : notFound("Session not found.");
+    }
     if (seg.length !== 1) {
       return notFound();
     }
