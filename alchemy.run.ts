@@ -45,6 +45,9 @@ import * as Alchemy from "alchemy";
 import * as Cloudflare from "alchemy/Cloudflare";
 import type { CodingOrchestrator } from "./src/agents/orchestrator.js";
 import type { OpenCodeAgent } from "./src/agents/opencode-agent.js";
+import type { Mailbox } from "./src/mailbox-do.js";
+import type { McpGateway } from "./src/mcp-gateway.js";
+import type { Memory } from "./src/memory-do.js";
 import type { Sandbox } from "./src/sandbox.js";
 
 const secrets = (names: readonly string[]) => {
@@ -72,6 +75,11 @@ const stage = process.env.ALCHEMY_STAGE;
 const isLiveStage = stage === undefined || LIVE_STAGE.test(stage);
 const workerName = isLiveStage ? "ai-intern" : `ai-intern-${stage}`;
 const containerName = isLiveStage ? "ai-intern-sandbox" : `ai-intern-sandbox-${stage}`;
+// Same stage isolation for the megaplan stores (KV/R2/D1/Vectorize): live
+// stages pin the wrangler names, test stages get a suffixed copy. Vectorize
+// names only allow lowercase letters, digits and hyphens — `_` stages
+// (alchemy's own pattern allows them) are normalized to `-`.
+const resSuffix = isLiveStage ? "" : `-${(stage as string).replaceAll("_", "-")}`;
 // Stage segments must still form valid Worker names (lowercase, digits,
 // dashes, start with a letter) — the CLI's own stage pattern allows `_`.
 if (!/^[a-z][a-z0-9-]{0,62}$/.test(workerName) || !/^[a-z][a-z0-9-]{0,62}$/.test(containerName)) {
@@ -114,6 +122,33 @@ export const Worker = Cloudflare.Worker("Worker", {
     Automations: Cloudflare.DurableObject("Automations", {
       className: "Automations",
     }),
+    Mailbox: Cloudflare.DurableObject<Mailbox>("Mailbox", {
+      className: "Mailbox",
+    }),
+    McpGateway: Cloudflare.DurableObject<McpGateway>("McpGateway", {
+      className: "McpGateway",
+    }),
+    Memory: Cloudflare.DurableObject<Memory>("Memory", {
+      className: "Memory",
+    }),
+
+    // Megaplan stores — wrangler keeps `__PENDING__` ids until the resources
+    // are created; alchemy provisions them on first deploy.
+    AGENT_TOKENS: Cloudflare.KV.Namespace("AGENT_TOKENS", {
+      title: `shiba-agent-tokens${resSuffix}`,
+    }),
+    ATTACHMENTS: Cloudflare.R2.Bucket("ATTACHMENTS", {
+      name: `shiba-attachments${resSuffix}`,
+    }),
+    AGENT_AUDIT: Cloudflare.D1.Database("AGENT_AUDIT", {
+      name: `shiba-audit${resSuffix}`,
+    }),
+    MEMORY_VECTORS: Cloudflare.Vectorize.Index("MEMORY_VECTORS", {
+      name: `shiba-memory${resSuffix}`,
+      dimensions: 768,
+      metric: "cosine",
+    }),
+    SEND_EMAIL: Cloudflare.Email.SendEmail("SEND_EMAIL"),
 
     // wrangler durable_objects.bindings Sandbox + containers[0]: the
     // Container decl is the DO namespace binding plus its container app.
