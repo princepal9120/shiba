@@ -36,6 +36,7 @@ const codingTaskResultSchema = z.object({
   diff: z.string(),
   files: z.array(changedFileSchema),
   summary: z.string(),
+  pullUrl: z.string().optional(),
 });
 
 export type CodingTaskResult = z.infer<typeof codingTaskResultSchema>;

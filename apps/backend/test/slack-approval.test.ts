@@ -45,6 +45,7 @@ function testDeps(overrides: Partial<{ pending: boolean }> = {}) {
     dispatchApprove: vi.fn(async (_pointer: ApprovalPointer, _userId: string): Promise<void> => {}),
     dispatchReject: vi.fn(async (_pointer: ApprovalPointer, _userId: string): Promise<void> => {}),
     respond: vi.fn(async (_responseUrl: string, _text: string): Promise<void> => {}),
+    replaceCard: vi.fn(async (_responseUrl: string, _body: Record<string, unknown>): Promise<void> => {}),
     isUnresolved: vi.fn(async (_pointer: ApprovalPointer): Promise<boolean> => pending),
   };
 }
@@ -66,6 +67,7 @@ async function signedInteractRequest(args: {
   responseUrl?: string;
   secret?: string;
   rawValue?: string;
+  blocks?: unknown[];
 }): Promise<Request> {
   const value =
     args.rawValue ?? buildApprovalValue({ threadKey: args.threadKey, approvalId: args.approvalId });
@@ -74,6 +76,7 @@ async function signedInteractRequest(args: {
     user: { id: args.userId },
     actions: [{ action_id: args.actionId, value }],
     response_url: args.responseUrl ?? "https://hooks.slack.com/actions/T/B/XXXX",
+    ...(args.blocks ? { message: { blocks: args.blocks } } : {}),
   };
   const body = new URLSearchParams({ payload: JSON.stringify(payload) }).toString();
   const timestamp = String(Math.floor(Date.now() / 1000));
@@ -137,6 +140,19 @@ describe("buildApprovalBlocks", () => {
     expect(buttons.map((b) => b.action_id).sort()).toEqual(["approve", "reject"]);
     expect(buttons.map((b) => b.value)).toEqual([expectedValue, expectedValue]);
     expect(parseApprovalValue(buttons[0]!.value)).toEqual(pointer);
+  });
+
+  it("escapes run-card task text so thread prose cannot ping <!channel>, and fits Slack's section limit", () => {
+    const blocks = buildApprovalBlocks({
+      repoUrl: "https://github.com/owner/repo",
+      task: `ping <!channel> ${"x".repeat(4000)}`,
+      threadKey: "default",
+      approvalId: "appr_3",
+    });
+    const headline = (blocks[0] as { text: { text: string } }).text.text;
+    expect(headline).not.toContain("<!channel>");
+    expect(headline).toContain("&lt;!channel&gt;");
+    expect(headline.length).toBeLessThan(3000);
   });
 
   it("renders the megaplan's email-kind copy — agent requests the send", () => {
@@ -316,6 +332,7 @@ describe("handleSlackInteract", () => {
     });
     const response = await handleSlackInteract(request, routeEnv("U1"), {
       orchestratorStub: { fetch: fetchMock },
+      replaceCard: async () => {},
     });
     expect(response?.status).toBe(200);
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
@@ -344,7 +361,10 @@ describe("handleSlackInteract", () => {
       threadKey: THREAD,
       approvalId: "appr_1",
     });
-    const response = await handleSlackInteract(request, routeEnv("U1"), { resolveOrchestrator });
+    const response = await handleSlackInteract(request, routeEnv("U1"), {
+      resolveOrchestrator,
+      replaceCard: async () => {},
+    });
     expect(response?.status).toBe(200);
     await vi.waitFor(() => expect(resolveOrchestrator).toHaveBeenCalledWith(THREAD));
     expect(fetchMock).toHaveBeenCalledOnce();
@@ -368,6 +388,45 @@ describe("handleSlackInteract", () => {
     expect(response?.status).toBe(200);
     await vi.waitFor(() => expect(respond).toHaveBeenCalledOnce());
     expect(respond.mock.calls[0]![1]).toContain("could not be recorded");
+  });
+
+  it("approve replaces the card: buttons gone, approver and running status shown", async () => {
+    const deps = testDeps();
+    const blocks = buildApprovalBlocks({ threadKey: THREAD, approvalId: "appr_1", repoUrl: "https://github.com/o/r", task: "fix it" });
+    const request = await signedInteractRequest({
+      userId: "U1",
+      actionId: "approve",
+      threadKey: THREAD,
+      approvalId: "appr_1",
+      blocks,
+    });
+    await handleSlackInteract(request, routeEnv("U1"), deps);
+    expect(deps.replaceCard).toHaveBeenCalledOnce();
+    const [url, body] = deps.replaceCard.mock.calls[0]! as [string, { replace_original?: boolean; blocks: Array<{ type: string }> }];
+    expect(url).toBe("https://hooks.slack.com/actions/T/B/XXXX");
+    expect(body.replace_original).toBe(true);
+    expect(body.blocks.some((b) => b.type === "actions")).toBe(false);
+    expect(JSON.stringify(body.blocks)).toContain("fix it");
+    expect(JSON.stringify(body.blocks)).toContain("*Approved* by <@U1> — run starting");
+  });
+
+  it("a failed dispatch leaves the card clickable and reports the error", async () => {
+    const deps = testDeps();
+    deps.dispatchApprove.mockRejectedValueOnce(new Error("do down"));
+    const request = await signedInteractRequest({
+      userId: "U1",
+      actionId: "approve",
+      threadKey: THREAD,
+      approvalId: "appr_1",
+    });
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await handleSlackInteract(request, routeEnv("U1"), deps);
+    } finally {
+      error.mockRestore();
+    }
+    expect(deps.replaceCard).not.toHaveBeenCalled();
+    expect(deps.respond.mock.calls[0]![1]).toContain("could not be recorded");
   });
 
   it("ignores non-interact paths", async () => {

@@ -1,8 +1,42 @@
 # Verification Results
 
-**Last run: 2026-09-19 (rev 6, local end-to-end run).**
+**Last run: 2026-09-24 (reliability + one-step-deploy pass).**
 
-## Status: PASS, every check green including the dry run
+## Status: Local checks PASS; deployment validation is blocked on Docker and Cloudflare OAuth
+
+| Check | Result |
+|-------|--------|
+| `pnpm typecheck` | PASS |
+| `pnpm lint` | PASS (0 errors) |
+| `pnpm test` | PASS (987 passed / 6 skipped across 62 files) |
+| `pnpm build` | PASS (docs: 25 pages, 1124 links verified; TanStack Start prerenders `/app` to `public/app/index.html`) |
+| Frontend dev smoke | PASS — `/app/`, `/app`, manifest, and both app icons return 200 with expected content types |
+| `npx wrangler deploy --dry-run` | BLOCKED — Docker CLI unavailable to build configured container image; Worker/assets dry-run passes with `--containers-rollout=none` |
+| Alchemy deploy (`pnpm run deploy`) | PENDING — needs user `npx alchemy profile edit --add Cloudflare --method oauth` + `.env` (`pnpm run bootstrap`) |
+| `npx alchemy plan` | Validates `alchemy.run.ts` loads and resolves stage `live_princepal`; stops only at `Provider 'Cloudflare' is not configured in profile 'default'` — expected until OAuth |
+
+## 2026-09-24 — reliability review→fix pipeline + Alchemy deploy path
+
+Four review agents audited the codebase; findings fixed and re-verified:
+
+- **C1 — DO email store crashed in production.** `MailboxStore.addEmail` ran `BEGIN IMMEDIATE` via `ctx.storage.sql.exec`, which real DO SQLite forbids (tests passed because the node:sqlite fake allowed it). `transactionSync` is now injected (`src/mailbox-store.ts`, `src/mailbox-do.ts`); the shared fake `test/fixtures/do-sql-storage.ts` throws on BEGIN/COMMIT so the regression cannot come back.
+- **C2 — no mailbox registration path.** Added `POST /api/mailboxes` on the directory DO + dashboard "+ Mailbox" form.
+- **Access JWT verification** (`src/access-jwt.ts`): `Cf-Access-Jwt-Assertion` verified against team-domain JWKS (RS256 + aud), email identity rebuilt only from the verified token — forged `CF-Access-Authenticated-User-Email` headers get 401 (verified live against the deployed Worker).
+- **Slack hardening**: slash ack within 3s + `response_url` follow-up via `waitUntil`; `ok:false` on HTTP 200 treated as failure; mrkdwn escaping on all user-controlled card fields; 3000-char section limit respected; approve click replaces the card.
+- **Orchestrator**: `keepAliveWhile` around dispatch, `schedule(deadline+60, "reclaimRuns")`, outcome-unknown post to the Slack thread, `pullUrl` post-back, teardown via `ctx.waitUntil`.
+- **Email handler**: R2 put failure deletes uploaded parts and throws; approval card carries 500-char body excerpt.
+- **MCP run tools** (`src/mcp-run-tools.ts`): `queue_run`, `run_status`, `list_runs`, `list_approvals` — all `sandbox:exec`-scoped, picked fields only, **no approve tool** (human gate stays human).
+- **`scripts/mint-token.mjs`**: mints `shb_` tokens as the same KV record `verifyToken` reads; `--namespace-id` for the Alchemy-owned KV; `--write` runs `wrangler kv key put`.
+- **Alchemy one-step deploy** (`alchemy.run.ts`): Worker, `shiba-agent-tokens` KV, Vectorize metadata index, hostname-scoped Access apps (dashboard allow-list + machine bypass paths — worker-level Access would 403 WebSockets). `.env` is the secrets source of truth (`process.loadEnvFile`); `pnpm run bootstrap` collects everything and deploys.
+- **Frontend**: TanStack Start SPA; mobile nav sheet, 44px targets, safe-area, PWA manifest/icons, Access-expiry redirect handling, seq-guarded polls, visibilitychange reconnect. Fresh verification: typecheck, lint, build and all 987 tests pass; dev URLs and PWA assets smoke-tested above.
+- **Live Worker locked**: `REQUIRE_ACCESS=1` secret set; 401s verified including forged identity header.
+- **Asset leak closed**: `apps/web/public/.assetsignore` (`**/.omc/`, `**/.DS_Store`) — Vite copies `apps/web/public` wholesale into deployable assets and `.omc` session state was shipping. Verified absent from `public/` after rebuild.
+
+---
+
+## Previous run: 2026-09-19 (rev 6, local end-to-end run)
+
+## Status then: PASS, every check green including the dry run
 
 | Check | Result |
 |-------|--------|

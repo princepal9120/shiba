@@ -271,8 +271,9 @@ describe("dashboard rendering", () => {
     expect(markup).toContain("GitHub Personal Access Token &amp; Repo Scoping");
     expect(markup).toContain("First Live Run &amp; Approval Gate");
     expect(markup).toContain("All (6)");
-    expect(markup).toContain("Pending (5)");
-    expect(markup).toContain("Completed (1)");
+    // Nothing is verified before /api/setup/status answers, so no step starts done.
+    expect(markup).toContain("Pending (6)");
+    expect(markup).toContain("Completed (0)");
     expect(markup).toContain('role="progressbar"');
     expect(markup).toContain('role="checkbox"');
   });

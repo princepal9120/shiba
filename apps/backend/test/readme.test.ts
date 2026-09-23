@@ -6,9 +6,10 @@ import { describe, expect, it } from "vitest";
 const README = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "README.md"), "utf8");
 
 describe("README structure (T24 honest-ship contract)", () => {
-  it("keeps the deploy button pointing at this repo", () => {
-    expect(README).toContain("https://deploy.workers.cloudflare.com/button");
-    expect(README).toContain("?url=https://github.com/princepal9120/shiba");
+  it("documents the one-command Alchemy deploy, not a one-click button that skips Access", () => {
+    expect(README).toContain("pnpm run bootstrap");
+    expect(README).toContain("REQUIRE_ACCESS=1");
+    expect(README).not.toContain("https://deploy.workers.cloudflare.com/button");
   });
 
   it("states the standard-4 platform ceiling", () => {

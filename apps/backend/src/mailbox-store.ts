@@ -457,8 +457,30 @@ function rowToAttachment(row: SqlRow): StoredAttachment {
 // MailboxStore
 // ---------------------------------------------------------------------------
 
+export type SqlTransaction = <T>(fn: () => T) => T;
+
+// DO storage rejects BEGIN/COMMIT through sql.exec; the DO injects transactionSync.
+const execTransaction = (exec: SqlExec): SqlTransaction => (fn) => {
+  exec(`BEGIN IMMEDIATE`);
+  try {
+    const result = fn();
+    exec(`COMMIT`);
+    return result;
+  } catch (error) {
+    exec(`ROLLBACK`);
+    throw error;
+  }
+};
+
 export class MailboxStore {
-  constructor(private readonly exec: SqlExec) {}
+  private readonly transaction: SqlTransaction;
+
+  constructor(
+    private readonly exec: SqlExec,
+    transaction?: SqlTransaction,
+  ) {
+    this.transaction = transaction ?? execTransaction(exec);
+  }
 
   /**
    * Idempotent — every statement is IF NOT EXISTS. Column additions
@@ -685,8 +707,7 @@ export class MailboxStore {
     // The email row, its Message-ID mapping, the attachment manifest, and
     // the thread bump commit as one unit: a mid-write failure must not
     // strand an email row pointing at a half-written manifest.
-    this.exec(`BEGIN IMMEDIATE`);
-    try {
+    this.transaction(() => {
       let threadId: string;
       if (input.thread_id !== undefined) {
         this.requireThread(input.thread_id);
@@ -740,11 +761,7 @@ export class MailboxStore {
         now,
         threadId,
       );
-      this.exec(`COMMIT`);
-    } catch (error) {
-      this.exec(`ROLLBACK`);
-      throw error;
-    }
+    });
     const stored = this.getEmail(id);
     if (!stored) {
       throw new Error("email insert did not produce a row");

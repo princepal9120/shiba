@@ -17,6 +17,7 @@ import {
 } from "../opencode-input.js";
 import {
   MAX_CONCURRENT_RUNS,
+  RUN_DEADLINE_MS,
   RunStore,
   canStartRun,
   createRun,
@@ -158,12 +159,19 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       .filter((run): run is DelegatedRun => run !== null && isActiveStatus(run.status));
     // Do not retry potentially published work after losing the execution context.
     for (const run of interrupted) {
-      this.store.transition(run.runId, "unknown", {
+      const updated = this.store.transition(run.runId, "unknown", {
         error: "Execution interrupted by orchestrator restart. Inspect repository state before retrying.",
         errorCode: "outcome_unknown",
       });
+      if (updated !== null) this.postOutcomeUnknown(updated);
     }
-    await Promise.all(interrupted.map((run) => this.destroySandbox(run.sandboxId)));
+    // Teardown runs in the background: awaiting container I/O here would block the DO's start.
+    const teardown = Promise.all(interrupted.map((run) => this.destroySandbox(run.sandboxId)));
+    if (typeof this.ctx === "object" && this.ctx !== null && "waitUntil" in this.ctx) {
+      this.ctx.waitUntil(teardown);
+    } else {
+      void teardown;
+    }
     // Before anything re-drives, free the draft claims a dead attempt
     // could leave behind: a `sending` row at DO start belongs to a
     // dispatch that died with the last lifetime — claims are only
@@ -379,11 +387,9 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         // child was running) drops the transition AND every side effect.
         const updated = this.store.transition(runId, status, patch, generation);
         if (updated === null) return null;
-        // Slack-originated runs get the outcome back in the thread; the
-        // summary carries the PR link when one was published.
-        if (status === "completed") {
-          this.postToSlackThread(`Run completed for ${fullInput.repoUrl}\n${patch?.summary?.slice(0, 1500) ?? ""}`.trim());
-        } else if (status === "error" || status === "unknown") {
+        // Slack-originated runs get the outcome back in the thread. The
+        // completed post-back lives at its call site, which has the PR link.
+        if (status === "error" || status === "unknown") {
           const wire = runErrorWire(patch?.errorCode ?? "internal_error");
           this.postToSlackThread(
             `${status === "unknown" ? "Run outcome unknown" : "Run failed"} for ${fullInput.repoUrl}\n${wire.userMessage}\n${patch?.error?.slice(0, 1000) ?? ""}`.trim(),
@@ -401,6 +407,14 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         return `Run ${runId} did not start — it is already ${this.store.get(runId)?.status ?? "missing"}.`;
       }
       const generation = running.generation;
+      // Durable backstop: reclaim fires at the deadline even when no request ever arrives.
+      yield* Effect.promise(async () => {
+        try {
+          await this.schedule(Math.ceil(RUN_DEADLINE_MS / 1000) + 60, "reclaimRuns");
+        } catch (error) {
+          console.warn(`Run ${runId} reclaim schedule failed`, redactSecrets(String(error)));
+        }
+      });
       this.postToSlackThread(`Run started for ${fullInput.repoUrl} (${fullInput.baseBranch ?? "main"}).`);
       return yield* Effect.acquireUseRelease(
         Effect.sync(() => {
@@ -425,7 +439,15 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
               // transport type instead would mark failed runs "completed".
               const parsed = parseAgentResult(output);
               if (parsed?.status === "completed") {
-                const finished = finish("completed", { summary: output.slice(0, 4000), diff: parsed?.diff ? parsed.diff.slice(0, 20000) : undefined });
+                const finished = finish("completed", { summary: output.slice(0, 4000), diff: parsed?.diff ? parsed.diff.slice(0, 20000) : undefined, pullUrl: parsed.pullUrl });
+                if (finished !== null) {
+                  // PR link first: the stored summary is the full log, where the link trails the diff.
+                  this.postToSlackThread([
+                    `Run completed for ${fullInput.repoUrl}`,
+                    ...(parsed.pullUrl ? [`PR: ${parsed.pullUrl}`] : []),
+                    parsed.summary.slice(0, 1000),
+                  ].join("\n").trim());
+                }
                 // TypeSafe Score: grade the run quality (fail-open — never
                 // blocks completion). Terminal runs are immutable
                 // (transitionRun refuses them), so the grade lands as a
@@ -634,11 +656,14 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     } catch (error) {
       return Response.json({ error: error instanceof Error ? error.message : "Could not queue approval." }, { status: 409 });
     }
+    const body = kind === "email_send" ? String(fields.body_text).trim() : "";
+    const excerpt = body.length > 500 ? `${body.slice(0, 499)}…` : body;
     this.postEmailApprovalCard({
       threadKey,
       approvalId,
       repoUrl: mailbox,
-      task,
+      // The card builder mrkdwn-escapes `task`, so the untrusted body excerpt is escaped with it.
+      task: excerpt ? `${task}\n${excerpt}` : task,
       kind,
       ...(registration.agent ? { agent: registration.agent } : {}),
     });
@@ -662,9 +687,11 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ channel, text: approvalCardText(input).slice(0, 3000), blocks: buildApprovalBlocks(input) }),
-    }).then((response) => {
-      if (!response.ok) {
-        console.error(`Slack email approval card post failed (${response.status})`);
+    }).then(async (response) => {
+      // Slack reports app-level failures (not_in_channel, …) as HTTP 200 with ok:false.
+      const body = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+      if (!response.ok || body?.ok !== true) {
+        console.error(`Slack email approval card post failed (${response.status}): ${body?.error ?? "unparseable response"}`);
       }
     }).catch((error) => {
       console.error("Slack email approval card post failed", redactSecrets(String(error)));
@@ -779,7 +806,10 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
           }
         }
       };
-      void dispatch();
+      // Slack/dashboard approvals hold no socket open, so without the heartbeat the DO can idle out mid-run.
+      this.keepAliveWhile(dispatch).catch((error) => {
+        console.error(`Run ${run.runId} dispatch failed`, redactSecrets(String(error)));
+      });
     }
     if (record && isEmailRecord) {
       this.dispatchApprovedEmail(record);
@@ -904,11 +934,21 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ channel: ids.channelId, thread_ts: ids.threadTs, text: text.slice(0, 3000) }),
       })
-        .then((response) => {
-          if (!response.ok) console.error(`Slack post-back failed (${response.status})`);
+        .then(async (response) => {
+          // Slack reports app-level failures (not_in_channel, …) as HTTP 200 with ok:false.
+          const body = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+          if (!response.ok || body?.ok !== true) {
+            console.error(`Slack post-back failed (${response.status}): ${body?.error ?? "unparseable response"}`);
+          }
         })
         .catch(() => { /* best-effort */ }),
     );
+  }
+
+  /** Terminal "unknown" notice for runs that end outside `finish` (restart, reclaim). */
+  private postOutcomeUnknown(run: DelegatedRun): void {
+    const wire = runErrorWire(run.errorCode ?? "outcome_unknown");
+    this.postToSlackThread(`Run outcome unknown for ${run.repoUrl}\n${wire.userMessage}\n${run.error?.slice(0, 1000) ?? ""}`.trim());
   }
 
   /** Wire projection for API responses: errorCode -> {status, code, userMessage}. */
@@ -945,12 +985,14 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     await destroyManagedContainer(this.env, sandboxId);
   }
 
-  private async reclaimRuns(): Promise<void> {
+  /** Public: also the `schedule()` callback armed when a run starts. */
+  async reclaimRuns(): Promise<void> {
     this.armLeakPersistence();
     const { runs, reclaimed } = reclaimStaleRuns(this.store.list(), Date.now());
     if (reclaimed.length > 0) {
       this.setState({ ...this.state, runs });
       await Promise.all(runs.filter((run) => reclaimed.includes(run.runId)).map(async (run) => {
+        this.postOutcomeUnknown(run);
         this.runControllers.get(run.runId)?.abort();
         await this.destroySandbox(run.sandboxId);
       }));

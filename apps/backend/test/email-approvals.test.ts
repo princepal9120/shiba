@@ -1325,6 +1325,46 @@ describe("email approval Slack card", () => {
     expect(text).toContain("default");
   });
 
+  it("shows an escaped, truncated body excerpt so approvers see what will be sent", async () => {
+    const bodies: Array<{ text?: string; blocks?: unknown[] }> = [];
+    vi.stubGlobal("fetch", vi.fn(async (_input: unknown, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body ?? "{}")) as { text?: string; blocks?: unknown[] });
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }));
+    const { env, settled } = agentWithMailbox({ slackApprovalsChannel: "C0APPROVALS" });
+    const body_text = `Hi <!channel> & team. ${"x".repeat(600)}TAIL`;
+    await queueEmailApproval(env as never, {
+      kind: "email_send",
+      mailbox: "agent-a@shiba.dev",
+      payload: { to_addr: "person@example.com", subject: "Status update", body_text },
+    });
+    await settled();
+    const section = (bodies[0]!.blocks![0] as { text: { text: string } }).text.text;
+    expect(section).toContain("Hi &lt;!channel&gt; &amp; team.");
+    expect(section).not.toContain("<!channel>");
+    expect(section).not.toContain("TAIL");
+    expect(section).toContain("…");
+    expect(bodies[0]!.text).toContain("Hi &lt;!channel&gt;");
+  });
+
+  it("logs a Slack ok:false card post that arrives as HTTP 200", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      new Response(JSON.stringify({ ok: false, error: "not_in_channel" }), { status: 200 })));
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const { env, settled } = agentWithMailbox({ slackApprovalsChannel: "C0APPROVALS" });
+      await queueEmailApproval(env as never, {
+        kind: "email_send",
+        mailbox: "agent-a@shiba.dev",
+        payload: { ...SEND_PAYLOAD },
+      });
+      await settled();
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("not_in_channel"));
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
   it("posts nothing when no approvals channel is configured", async () => {
     // Unset, the dashboard stays the only resolve surface — silently,
     // never a failed fetch.

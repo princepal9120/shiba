@@ -40,6 +40,8 @@ export interface DelegatedRun {
   /** Classified error code; set on every error/unknown transition. */
   errorCode?: RunErrorCode;
   diff?: string;
+  /** Published PR, kept apart from `summary` where a long diff would truncate it away. */
+  pullUrl?: string;
   receipts?: Receipt[];
 }
 
@@ -48,6 +50,7 @@ export type RunPatch = {
   error?: string;
   errorCode?: RunErrorCode;
   diff?: string;
+  pullUrl?: string;
   receipts?: Receipt[];
   sandboxId?: string;
 };
@@ -111,6 +114,7 @@ function applyPatch(run: DelegatedRun, patch: RunPatch | undefined): DelegatedRu
   if (patch.error !== undefined) next.error = patch.error;
   if (patch.errorCode !== undefined) next.errorCode = patch.errorCode;
   if (patch.diff !== undefined) next.diff = patch.diff;
+  if (patch.pullUrl !== undefined) next.pullUrl = patch.pullUrl;
   if (patch.receipts !== undefined) next.receipts = patch.receipts;
   if (patch.sandboxId !== undefined) next.sandboxId = patch.sandboxId;
   return next;

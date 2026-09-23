@@ -136,11 +136,13 @@ interface SetupStatusShape {
  * Shared by the modal checklist and the header setup pill.
  */
 export async function detectSetupSteps(): Promise<Set<string>> {
-  const found = new Set<string>(["workers-paid"]); // reachable = deployed
+  const found = new Set<string>();
   const status = (await fetch("/api/setup/status")
     .then((r) => (r.ok ? r.json() : null))
     .catch(() => null)) as SetupStatusShape | null;
-  if (status) {
+  // Only a Worker answers /api/setup/status with JSON, so that proves step 1.
+  if (status !== null && typeof status === "object") {
+    found.add("workers-paid");
     if (status.gateway?.reachable === "yes") found.add("ai-gateway");
     if (status.access?.required) found.add("access-bypass");
     if (status.github?.token) found.add("github-token");
@@ -159,7 +161,6 @@ export function OnboardingModal({
   onClose,
   onSelectStarterTask,
 }: OnboardingModalProps): React.JSX.Element | null {
-  // Endowed progress: step 1 is pre-completed by default to give users a head start (+40% completion effect)
   const [completedSteps, setCompletedSteps] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -169,7 +170,7 @@ export function OnboardingModal({
     } catch {
       // ignore
     }
-    return ["workers-paid"];
+    return [];
   });
 
   const [expandedStep, setExpandedStep] = useState<string | null>("workers-paid");

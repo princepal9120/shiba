@@ -88,9 +88,8 @@ describe("dashboard components SSR (T14 sweep)", () => {
     );
     expect(html).toContain("Setup &amp; Onboarding Guide");
     expect(html).toContain("Cloudflare Workers Paid");
-    // workers-paid is pre-completed + expanded by default → its detail toggle
-    // reads "Mark as Incomplete"; pending steps expose the checkbox affordance.
-    expect(html).toContain("Mark as Incomplete");
+    // workers-paid is expanded by default but not done until /api/setup/status proves it.
+    expect(html).toContain("Mark as Completed ✓");
     expect(html).toContain("Mark Cloudflare AI Gateway &amp; Stored BYOK Keys as complete");
   });
 
