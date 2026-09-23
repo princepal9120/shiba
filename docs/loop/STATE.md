@@ -21,7 +21,7 @@ approval-gated destructive ops, delivered as one PR. Deploy-time provisioning
 
 ## In progress
 
-PARALLEL LANES: A=T7-T10 backend, B=T11-T13 UI. T6 DONE; T11 done w/ controller adjudication (stale-sending sweep @bbe78be); T7 in fix rounds; 682 tests green.
+PARALLEL LANES: A=T7+T11+T13 done w/ controller adjudications; T8 exhausted -> adjudicated (bank-race 409 @84d5ab1); T9 impl in flight; T14 queued after run
 
 ## Phases (SDD task → review → fix loop)
 

@@ -13,7 +13,7 @@ Controller: Devin session devin-7261650508fa4a628628eed12636bf13
 | T5 McpGateway | 2 | devin-7bf2a1b1 (done, head 4e0a27e6) | r0 minor → r1 approved | 1 fix | DONE |
 | T6 email tools | 3 | devin-bec26a183 (head afd94360) | r0 major → r1 minor → r2 approved | 2 fixes | DONE |
 | T7 approval bridge | 3 | devin-0076a0d9 (head 8be6914b) | r0-r5 minor/major loop | 5 rounds EXHAUSTED + controller fix (restart-release scope) | DONE w/ adjudication |
-| T8 MemoryDO | 4 | — | — | 0 | pending |
+| T8 MemoryDO | 4 | devin-df608401 (head c6cf1dd) | r0-r5 minor loop | 5 rounds EXHAUSTED + controller fix (bank-race 409) | DONE w/ adjudication |
 | T9 memory tools | 4 | — | — | 0 | pending |
 | T10 distillation | 4 | — | — | 0 | pending |
 | T11 inbox+memory tabs | 5 | — | — | 0 | pending |
