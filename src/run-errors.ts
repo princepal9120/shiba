@@ -1,9 +1,16 @@
 /**
- * Run-level error classification, ported from CF-Open-Agents-API's
- * statusToTurnCode + DEFINITE error table, in plain TypeScript.
- * Deterministic only: no model calls, no parsing of unstructured prose
- * beyond an explicit "status <3-digit>" context.
+ * Run-level error classification in plain TypeScript: a closed
+ * RunErrorCode vocabulary, an HTTP-status/known-text classifier, and a
+ * single wire projection (`runErrorWire`) for API responses and Slack
+ * posts. Deterministic only: no model calls, no parsing of unstructured
+ * prose beyond an explicit "status <3-digit>" context.
+ *
+ * Effect bridge (spec B3): a single `RunError` Data.TaggedError carrying
+ * `code` — chosen over one tagged class per code as the smallest bridge
+ * that lets Effect code `catchTag("RunError")` while keeping
+ * `RunErrorCode` the only vocabulary.
  */
+import { Data } from "effect";
 
 export type RunErrorCode =
   | "authentication_error"
@@ -17,7 +24,12 @@ export type RunErrorCode =
   | "outcome_unknown"
   | "egress_denied"
   | "cancelled"
-  | "internal_error";
+  | "internal_error"
+  | "container_lost"
+  | "credential_expired"
+  | "quota_exhausted"
+  | "timeout_scope"
+  | "supervision_exhausted";
 
 /** HTTP status -> error code, ported from their statusToTurnCode. */
 export function statusToRunCode(httpStatus: number | null): RunErrorCode {
@@ -37,6 +49,39 @@ export function statusToRunCode(httpStatus: number | null): RunErrorCode {
  * 3-digit number (commit hash, file count, port) must never classify.
  */
 const STATUS_CONTEXT_RE = /(?:status(?: code)?|HTTP)\s*[:=]?\s*([1-5]\d{2})\b/i;
+
+/**
+ * Cloudflare quota code 10400 — like STATUS_CONTEXT_RE it requires an
+ * explicit context word ("code", "error", "errno", "status"); a bare 10400
+ * is a count, not a quota failure.
+ */
+const QUOTA_CONTEXT_RE = /(?:status|code|error|errno)\s*[:=]?\s*10400\b/i;
+
+/**
+ * Strong container-death signals always classify — a dead sandbox is the
+ * root cause even when a secondary HTTP status appears alongside. A bare
+ * "out of memory" is weak (JS heap, CUDA, V8): it only means container
+ * death next to a container-context word, otherwise normal flow continues.
+ */
+const CONTAINER_DEATH_STRONG_RE = /\bsigkill(?:ed)?\b|\boom[\s_-]?kill(?:ed)?\b|\boom\b/i;
+const CONTAINER_DEATH_WEAK_RE = /out[\s_-]of[\s_-]memory/i;
+const CONTAINER_CONTEXT_RE = /\b(?:sandbox|container|instance|pod)\b/i;
+
+/**
+ * Overall-run deadline language requires a run/sandbox/overall-qualified
+ * subject AND a failure verb or "timed out" form. Configuration ("the run
+ * timeout is 900s") and loose prose ("we missed the deadline") never
+ * classify — only the run's own deadline failing does.
+ */
+const TIMEOUT_SCOPE_RE =
+  /\b(?:run|sandbox)\s+timed[\s-]+out\b|\b(?:(?:run|sandbox)\s+|overall\s+(?:run\s+)?)(?:deadline|timeout)\s*(?:was\s+|is\s+)?(?:exceeded|reached|hit|expired|missed|passed|reclaimed)\b|\b(?:run|sandbox)\s+(?:exceeded|hit|reached|expired)\s+(?:its|the|a)\s+(?:[\w-]+\s+){0,4}(?:timeout|deadline)\b|\boverall\s+(?:run\s+)?timeout\b|\breclaimed\b[^.;]*\bdeadline\b/i;
+
+/**
+ * RetryExhaustedError survives flattening only as its message — the runtime
+ * boundary stringifies it into failureResult summaries, so the exhaustion
+ * phrase must classify too or "supervision_exhausted" is unreachable.
+ */
+const RETRY_EXHAUSTED_TEXT_RE = /\bretry budget (?:was\s+)?exhausted\b/i;
 
 const HARNESS_ERROR_NAMES = new Set([
   "OpenCodeErrorEvent",
@@ -58,8 +103,37 @@ export function classifyRunError(error: unknown): { code: RunErrorCode; message:
   try {
     const message = error instanceof Error ? error.message : String(error ?? "unknown");
     if (isAbortError(error)) return { code: "cancelled", message };
+    // An already-classified failure is authoritative: a RunError carries the
+    // code the Effect boundary chose from this same vocabulary, so re-deriving
+    // it from name/message would lose information (e.g. cancelled). A foreign
+    // `.code` field is not honored — it can collide with the vocabulary while
+    // meaning something else entirely.
+    if (error instanceof RunError) {
+      return { code: error.code, message };
+    }
+    // The retry budget being spent is the failure, whatever the attempts saw.
+    if (
+      (error instanceof Error && error.name === "RetryExhaustedError") ||
+      RETRY_EXHAUSTED_TEXT_RE.test(message)
+    ) {
+      return { code: "supervision_exhausted", message };
+    }
+    if (
+      CONTAINER_DEATH_STRONG_RE.test(message) ||
+      (CONTAINER_DEATH_WEAK_RE.test(message) && CONTAINER_CONTEXT_RE.test(message))
+    ) {
+      return { code: "container_lost", message };
+    }
+    if (QUOTA_CONTEXT_RE.test(message)) return { code: "quota_exhausted", message };
+    if (TIMEOUT_SCOPE_RE.test(message)) return { code: "timeout_scope", message };
     const match = STATUS_CONTEXT_RE.exec(message);
-    if (match) return { code: statusToRunCode(Number(match[1])), message };
+    if (match) {
+      const status = Number(match[1]);
+      if (status === 401 && /expired/i.test(message)) {
+        return { code: "credential_expired", message };
+      }
+      return { code: statusToRunCode(status), message };
+    }
     if (error instanceof Error && HARNESS_ERROR_NAMES.has(error.name)) {
       return { code: "executor_failed", message };
     }
@@ -130,6 +204,26 @@ export const RUN_ERROR_DEFS = {
     userFacing: false,
     summary: "An internal error occurred.",
   },
+  container_lost: {
+    userFacing: true,
+    summary: "The sandbox container died mid-run — side effects are unverified.",
+  },
+  credential_expired: {
+    userFacing: true,
+    summary: "The provider credential expired — rotate or refresh it and retry.",
+  },
+  quota_exhausted: {
+    userFacing: true,
+    summary: "A Cloudflare or account quota was exhausted — check usage limits and billing.",
+  },
+  timeout_scope: {
+    userFacing: true,
+    summary: "The run hit its overall deadline — side effects are unverified; verify repository state before retrying.",
+  },
+  supervision_exhausted: {
+    userFacing: false,
+    summary: "The retry budget was exhausted after repeated failed attempts.",
+  },
 } satisfies Record<RunErrorCode, { userFacing: boolean; summary: string }>;
 
 export interface RunErrorWire {
@@ -144,8 +238,18 @@ export interface RunErrorWire {
  */
 export function runErrorWire(code: RunErrorCode): RunErrorWire {
   return {
-    status: code === "outcome_unknown" ? "unknown" : "error",
+    status: code === "outcome_unknown" || code === "container_lost" ? "unknown" : "error",
     code,
     userMessage: RUN_ERROR_DEFS[code].summary,
   };
 }
+
+/** One tagged class for every run error — the code does the dispatching. */
+export class RunError extends Data.TaggedError("RunError")<{
+  code: RunErrorCode;
+  message: string;
+}> {}
+
+/** Lift a classified run error into an Effect-typed failure. */
+export const toTaggedError = (code: RunErrorCode, message: string): RunError =>
+  new RunError({ code, message });

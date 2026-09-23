@@ -1,0 +1,12 @@
+{
+  "name": "fixture-worker",
+  // vars these tests expect the plan to carry
+  "vars": {
+    "FOO": "x",
+    "BAR": "y",
+  },
+  "ai": { "binding": "AI" },
+  "durable_objects": {
+    "bindings": [{ "name": "JobRunner", "class_name": "JobRunner" }],
+  },
+}

@@ -1,0 +1,17 @@
+⛅️ wrangler 4.118.0
+───────────────────
+✨ Read 3 files from the assets directory /repo/public
+Total Upload: 9154.99 KiB / gzip: 1835.32 KiB
+Building image fixture-sandbox:worker
+
+Your Worker has access to the following bindings:
+Binding                                                    Resource
+env.JobRunner (JobRunner)                                  Durable Object
+env.AI                                                     AI
+env.FOO ("x")                                              Environment Variable
+env.BAR ("y")                                              Environment Variable
+
+The following containers are available:
+- fixture-sandbox (/repo/Dockerfile)
+
+--dry-run: exiting now.

@@ -1,14 +1,12 @@
-# CF-Open-Agents-API pattern decisions
+# Durability pattern decisions
 
-Porting decisions from [inaridiy/CF-Open-Agents-API](https://github.com/inaridiy/CF-Open-Agents-API)
-— an OpenAI-Agents-API reimplementation on Cloudflare Workers built on Effect-TS. We take its
-durability/error-handling semantics, not its architecture, and express them in plain TypeScript.
+Porting decisions from an agents-API implementation on Cloudflare Workers built on
+Effect-TS. We take its durability/error-handling semantics, not its architecture,
+and express them in plain TypeScript.
 
-Sources read: `packages/agent-api/src/session-state.ts`, `persistence/session-tx.ts`,
-`session-reservation.ts`, `session-reconcile.ts`, `errors.ts` (the `DEFINITE` table),
-`transport-failure.ts`, `containers.ts`, `files.ts`, `service.ts`, `vaults.ts`,
-`packages/supervisor/src/lifecycle.ts` (`statusToTurnCode`), `docs/architecture.md`,
-`docs/effect.md`.
+Sources read: its session-state, persistence, session-reservation, reconcile,
+errors (the `DEFINITE` table), transport-failure, containers, files, service,
+vaults, and supervisor lifecycle modules, plus its architecture and effect docs.
 
 ## Decision table
 

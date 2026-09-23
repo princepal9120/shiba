@@ -44,18 +44,31 @@ The full self-hosted flow provisions the Cloudflare Worker, Durable Objects, Con
 
 **Resolve the readiness blockers before deploying.** Confirm Workers/Containers plan eligibility, quotas, and account billing in current Cloudflare documentation. Configure an account-owned AI Gateway with a stored Google BYOK key or Unified Billing, and select an available model id (model ids retire — see Configuration).
 
-After implementing and validating the missing security boundaries, the self-hosted Worker commands are:
+After implementing and validating the missing security boundaries, the self-hosted Worker is deployed with Alchemy — `alchemy.run.ts` declares the same stack as `wrangler.jsonc`:
 
 ~~~sh
-npx wrangler login
-# Optional account mutations:
-npx wrangler secret put GITHUB_TOKEN
-npx wrangler secret put GITHUB_WEBHOOK_SECRET
+# One-time: credentials + remote state
+npx alchemy provider cloudflare token      # mint an API token into the default profile
+#   or: export CLOUDFLARE_API_TOKEN=... CLOUDFLARE_ACCOUNT_ID=...
+# Optional — only for the remote state store (local filesystem state is the default):
+npx alchemy provider cloudflare bootstrap  # needs Secrets Store scope on the token
+
+# Secrets — bound only when set in the deploy environment (see alchemy.run.ts)
+export GITHUB_TOKEN=...
+export GITHUB_WEBHOOK_SECRET=...
+
 pnpm build
-pnpm deploy
+pnpm deploy            # alchemy deploy — the live stage adopts the
+                       # wrangler-managed worker/resources in place automatically
+pnpm deploy:preview    # alchemy plan (dry-run)
+pnpm deploy:destroy    # alchemy destroy
 ~~~
 
-These commands change the operator's account. They are separate from the Pages-only command above. `pnpm deploy` invokes Wrangler for the Worker and does not automatically build the static assets first.
+Rollback to wrangler (same bindings, unchanged): `npx wrangler login`, preview via `pnpm deploy:preview:wrangler`, ship via `npx wrangler deploy`.
+
+Stage selection goes through `$ALCHEMY_STAGE` only (e.g. `ALCHEMY_STAGE=test-x pnpm deploy` gives the worker/container a `-test-x` suffix); do not pass `--stage` — resource names are derived from the env var and a diverging flag fails loudly instead of colliding with live. Local deploys use the filesystem state store by default; `ALCHEMY_STATE_BACKEND=cloudflare` opts into the remote State Store after the one-time `bootstrap` above (needs a token with the Secrets Store scope).
+
+These commands change the operator's account. They are separate from the Pages-only command above. `pnpm deploy` does not automatically build the static assets first.
 
 Protect every reachable hostname with Cloudflare Access or equivalent authentication. An obscure URL is not access control. Browser approval is not route authorization. Review the security docs before live operation.
 
