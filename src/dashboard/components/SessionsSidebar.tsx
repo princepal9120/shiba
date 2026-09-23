@@ -100,7 +100,7 @@ function SessionRow({
         <span className="min-w-0 flex-1">
           <span
             className={`block text-[13px] font-medium truncate leading-snug ${
-              session.live ? "text-[#1c1cc8]" : selected ? "text-[#222320]" : "text-[#222320]"
+              session.live ? "text-[#1c1cc8]" : "text-[#222320]"
             }`}
           >
             {session.title || "Untitled session"}

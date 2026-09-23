@@ -471,7 +471,7 @@ export function OnboardingModal({
                         className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors ${
                           isDone
                             ? "border-[#d3d2c8] bg-[#fffef8] text-[#6a6f63] hover:text-[#222320]"
-                            : "border-[#0000a8]/50 bg-[#0000a8]/10 text-[#1c1cc8] hover:bg-[#0000a8]/10"
+                            : "border-[#0000a8]/50 bg-[#0000a8]/10 text-[#1c1cc8] hover:bg-[#0000a8]/15"
                         }`}
                       >
                         {isDone ? "Mark as Incomplete" : "Mark as Completed ✓"}
