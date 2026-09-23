@@ -49,7 +49,7 @@ export function AuditPanel(): JSX.Element {
 
   return (
     <div className="flex flex-col gap-2">
-      <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-500 border-t border-slate-200 pt-3 flex items-center justify-between">
+      <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-500 border-t border-[var(--border)] pt-3 flex items-center justify-between">
         <span>Audit log</span>
         <button
           type="button"
@@ -68,18 +68,18 @@ export function AuditPanel(): JSX.Element {
       ) : null}
 
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-6 border border-dashed border-slate-200 rounded-xl bg-[#f8fafc] px-4 text-center">
+        <div className="flex flex-col items-center justify-center py-6 border border-dashed border-[var(--border)] rounded-xl bg-[var(--background)] px-4 text-center">
           <p className="text-slate-500 text-xs">Loading audit log…</p>
         </div>
       ) : entries.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-6 border border-dashed border-slate-200 rounded-xl bg-[#f8fafc] px-4 text-center">
+        <div className="flex flex-col items-center justify-center py-6 border border-dashed border-[var(--border)] rounded-xl bg-[var(--background)] px-4 text-center">
           <p className="text-slate-500 text-xs">No audited tool calls yet.</p>
         </div>
       ) : (
-        <div className="overflow-x-auto border border-slate-200 rounded-xl bg-[#f8fafc]">
+        <div className="overflow-x-auto border border-[var(--border)] rounded-xl bg-[var(--background)]">
           <table className="w-full text-[10px] font-mono text-slate-500">
             <thead>
-              <tr className="border-b border-slate-200 text-left">
+              <tr className="border-b border-[var(--border)] text-left">
                 <th className="px-2 py-1.5 font-medium">ts</th>
                 <th className="px-2 py-1.5 font-medium">principal</th>
                 <th className="px-2 py-1.5 font-medium">tool</th>
@@ -89,7 +89,7 @@ export function AuditPanel(): JSX.Element {
             </thead>
             <tbody>
               {entries.map((entry) => (
-                <tr key={entry.id} className="border-b border-slate-200/60 last:border-b-0">
+                <tr key={entry.id} className="border-b border-[var(--border)]/60 last:border-b-0">
                   <td
                     className="px-2 py-1.5 whitespace-nowrap"
                     title={new Date(entry.ts).toISOString()}

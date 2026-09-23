@@ -64,6 +64,13 @@ function isMcpPath(pathname: string): boolean {
   return pathname === "/mcp" || pathname.startsWith("/mcp/");
 }
 
+// Startup assertion (VERIFICATION_PLAN.md G2): `assertLiveCodingModel` already
+// enforces the retired-model deny list (see coding-model.ts). Re-running it on
+// every request is pure overhead once a request has proven CODING_MODEL live,
+// so gate it behind a first-request check — this flag flips to `true` only on
+// a non-throwing call, so a still-retired id keeps failing every request.
+let codingModelVerified = false;
+
 export function isAuthenticated(request: Request, env: Env): boolean {
   const { pathname } = new URL(request.url);
   if (SIGNATURE_AUTHENTICATED.includes(pathname)) return true;
@@ -1003,7 +1010,10 @@ export default {
       if (approvalsResponse) {
         return approvalsResponse;
       }
-      assertLiveCodingModel(env);
+      if (!codingModelVerified) {
+        assertLiveCodingModel(env);
+        codingModelVerified = true;
+      }
       // proxyToSandbox only needs the Sandbox binding; adapt the type.
       const sandboxEnv = {
         Sandbox: env.Sandbox as unknown as DurableObjectNamespace<SandboxBinding>,

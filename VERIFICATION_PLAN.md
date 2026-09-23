@@ -7,21 +7,23 @@ Every claim below carries a command or a file:line so you can confirm it without
 
 ---
 
+**Note (2026-09-23):** this doc was audited before the alchemy monorepo restructure (#10, commit `133a94a`). Paths below have been updated from `src/...` / `test/...` to `apps/backend/src/...` / `apps/backend/test/...` to match the current layout; findings themselves are unchanged except where marked resolved.
+
 ## 1. PLAN.md says "done" — repo says otherwise
 
 | # | PLAN claim | Reality | Evidence |
 |---|---|---|---|
-| G1 | T3 "live model id" done | Orchestrator fallback still names the model shut down 2026-06-01. Fires whenever `CODING_MODEL` is unset (e.g. `wrangler dev` with a trimmed `.dev.vars`). VERIFICATION.md line 40 says this was removed; it was not. | `src/agents/orchestrator.ts:50`, `:131` |
-| G2 | T3 startup assertion | None exists. Contributing doc still says "Add a startup assertion". | `grep -n assert src/index.ts` → empty; `apps/web/src/content/docs/docs/contributing.md:72` |
+| G1 | **RESOLVED** — T3 "live model id" done | Orchestrator no longer names the retired 2026-06-01 model; harness default is `google/gemini-3.5-flash-lite` and `gemini-2.0` only appears as the deny-list entry checked against. | `apps/backend/src/harness/index.ts:54` (default `google/gemini-3.5-flash-lite`); `grep -rln gemini-2.0 apps/backend/src` → only `apps/backend/src/coding-model.ts` (the retired-model deny-list, intentional) |
+| G2 | **RESOLVED** — T3 startup assertion | `assertLiveCodingModel` in `apps/backend/src/coding-model.ts` throws at first request if `env.CODING_MODEL` is in the `RETIRED_CODING_MODELS` deny list, called from `fetch` before any routing. Contributing doc no longer asks for one. | `apps/backend/src/coding-model.ts`; `apps/backend/src/index.ts:1014` (`assertLiveCodingModel(env)` call); `apps/backend/test/coding-model-startup.test.ts`; `grep -n "startup assertion" apps/web/src/content/docs/docs/contributing.md` → empty |
 | G3 | T4 step 8 / T24 "docs describe shipped state" | Six docs pages still lead with "provider callback returns 503", `WORKER_ORIGIN remains required`, "only google/* accepted", default `gemini-2.0-flash`. README was fixed; the docs site was not. | `overview.md:48`, `api.md:40`, `troubleshooting.md:16`, `readiness.md:12`, `deployment.md:18`, `configuration.md:12,16` |
 | G4 | T17 "GOAL.md updated for Slack" | `spec/GOAL.md` contains zero mentions of Slack. | `grep -ci slack spec/GOAL.md` → `0` |
-| G5 | §4 "cost-estimate UI cut; no invented prices" | `src/costs.ts` hardcodes `$2.50/hr` and `$0.00001/token`. Dead code (only its test imports it) but it is exactly what GOAL.md forbids. | `src/costs.ts:7,10`; `grep -rn estimateRunCost src dashboard` → only the definition |
-| G6 | — (not in PLAN) | `spec/COMPLETION.md` is a stale swarm contract that orders the *opposite* of PLAN: wire the provider callback, add renames, add multi-tenancy, add cost estimation. Next reader picks one of two contradictory specs. | `spec/COMPLETION.md:16-80` |
-| G7 | — (not in PLAN) | Docs site documents features that do not exist in `src/`: a PR review agent (`review.md`), Jira integration (`jira.mdx`), a Planner/Executor/Reviewer hierarchy (`multi-agent.mdx`), and Claude Code "installing npm/pip packages" (`claude-code.mdx`; `registry.npmjs.org` is deliberately blocked). PLAN §4 cuts review and Linear-class integrations. | `grep -rniE "jira|review_pull|planner" src` → empty |
+| G5 | **RESOLVED** — §4 "cost-estimate UI cut; no invented prices" | `apps/backend/src/costs.ts` hardcoded `$2.50/hr` and `$0.00001/token` (GOAL.md forbids invented prices). File already removed by commit `22217d6` (ancestor of HEAD) — confirmed absent from the tree, no remaining references. | `git ls-tree -r HEAD -- apps/backend/src/costs.ts` → empty; `grep -rn estimateRunCost backend` → no hits |
+| G6 | **RESOLVED** — (not in PLAN) | `spec/COMPLETION.md` was a stale swarm contract that ordered the *opposite* of PLAN: wire the provider callback, add renames, add multi-tenancy, add cost estimation. Already removed by commit `22217d6` (ancestor of HEAD) — confirmed absent from the tree. | `git ls-tree -r HEAD -- spec/COMPLETION.md` → empty |
+| G7 | — (not in PLAN) | Docs site documents features that do not exist in `apps/backend/src/`: a PR review agent (`review.md`), Jira integration (`jira.mdx`), a Planner/Executor/Reviewer hierarchy (`multi-agent.mdx`), and Claude Code "installing npm/pip packages" (`claude-code.mdx`; `registry.npmjs.org` is deliberately blocked). PLAN §4 cuts review and Linear-class integrations. | `grep -rniE "jira|review_pull|planner" apps/backend/src` → empty |
 | G8 | Test count | PLAN says 269, VERIFICATION.md says 270, actual is 272. Cosmetic, but it means neither document was regenerated from a run. | `pnpm test` |
 
 | G9 | GOAL.md "single-tenant; do not claim multi-tenant isolation" | Landing docs claim "Multi-Tenant Isolation". | `apps/web/src/content/docs/welcome.mdx:51-52` |
-| G10 | — | All 7 landing-page images live under `apps/web/public/assets/**`, which `.gitignore:3` ignores. Fresh clone renders broken images; `test/marketing.test.ts` passes only on this machine. | `git ls-tree -r HEAD -- apps/web/public` → empty |
+| G10 | — | All 7 landing-page images live under `apps/web/public/assets/**`, which `.gitignore:3` ignores. Fresh clone renders broken images; `apps/backend/test/marketing.test.ts` passes only on this machine. | `git ls-tree -r HEAD -- apps/web/public` → empty |
 | G11 | — | Duplicated files: `theme.css` ≡ `capy-theme.css` (same blob); root and `web/` copies of `postcss.config.js` and `tailwind.config.js`. | `git diff --no-index apps/web/src/styles/theme.css apps/web/src/styles/capy-theme.css` |
 
 **Honest ones, unchanged:** T10 live run not attempted · Claude Code / Codex CLIs absent from the image (`Dockerfile:7` installs only `opencode-ai`) · `agents` SDK hibernation still unverified · peak memory and cold start unmeasured.
@@ -40,10 +42,10 @@ Expected: all green, 272 tests. Anything else is a regression, not an environmen
 Then the greps from §1. Each must come back empty (or the count must be 0) once G1–G7 are fixed:
 
 ```bash
-grep -rn "gemini-2.0" src test apps/web/src/content
+grep -rn "gemini-2.0" apps/backend/src apps/backend/test apps/web/src/content
 grep -rnE "503|WORKER_ORIGIN|only google" apps/web/src/content/docs/docs
 grep -ci slack spec/GOAL.md            # want >= 1
-ls src/costs.ts spec/COMPLETION.md     # want: No such file
+ls apps/backend/src/costs.ts spec/COMPLETION.md   # already: No such file (G5/G6 resolved)
 ```
 
 ### Stage B — `wrangler deploy --dry-run`, needs Docker daemon, ~5 min
@@ -107,9 +109,9 @@ Blocked until the image carries the CLI. Build `Dockerfile.claude-code` installi
 
 ## 3. Smallest fixes that close the local gaps (G1–G7)
 
-- G1: `DEFAULT_CODING_MODEL = "google/gemini-3.5-flash-lite"` and add one test asserting no source or test string contains `gemini-2.0`.
-- G2: in `src/index.ts` `fetch`, throw at first request if `env.CODING_MODEL` is not in a small `RETIRED_MODELS` deny list. One line, one test.
+- G1: done — harness default is `google/gemini-3.5-flash-lite` (`apps/backend/src/harness/index.ts:54`); `gemini-2.0` only remains as the retired-model value checked against in `apps/backend/src/coding-model.ts`.
+- G2: done — `assertLiveCodingModel` (`apps/backend/src/coding-model.ts`) throws at first request when `env.CODING_MODEL` is in the `RETIRED_CODING_MODELS` deny list, called from `fetch` at `apps/backend/src/index.ts:1014`; covered by `apps/backend/test/coding-model-startup.test.ts`.
 - G3: rewrite the six 503 paragraphs to "provider traffic is intercepted at Sandbox egress; no callback exists". Add the grep from Stage A to `scripts/check-docs.mjs` so it cannot regress.
 - G4: one paragraph in `spec/GOAL.md` naming Slack as a second inbound surface.
-- G5, G6: `git rm src/costs.ts test/costs.test.ts spec/COMPLETION.md`.
+- G5, G6: done — `apps/backend/src/costs.ts`, `apps/backend/test/costs.test.ts`, and `spec/COMPLETION.md` are already absent from the tree (removed by commit `22217d6`, ancestor of HEAD).
 - G7: either delete `review.md`, `jira.mdx`, `multi-agent.mdx` or move them under a clearly labelled "Not built" section. Rewrite `claude-code.mdx` to drop the npm/pip claim. Docs describing unbuilt features are the failure PLAN §12 T24 exists to prevent.

@@ -86,11 +86,11 @@ export function DiffViewer({ diff, runId }: DiffViewerProps): JSX.Element {
   return (
     <div className="flex flex-col gap-2 w-full mt-2">
       {/* Diff Header Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-white border border-slate-200 rounded-t-xl shadow-sm text-xs">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-white border border-[var(--border)] rounded-t-xl shadow-sm text-xs">
         <div className="flex items-center gap-2 font-mono">
           <span className="text-slate-500 font-medium">Unified Diff</span>
           {stats.files > 0 ? (
-            <span className="bg-[#f8fafc] text-slate-900 border border-slate-200 rounded px-1.5 py-0.5 text-[11px]">
+            <span className="bg-[var(--background)] text-slate-900 border border-[var(--border)] rounded px-1.5 py-0.5 text-[11px]">
               {stats.files} file{stats.files === 1 ? "" : "s"}
             </span>
           ) : null}
@@ -102,7 +102,7 @@ export function DiffViewer({ diff, runId }: DiffViewerProps): JSX.Element {
             <button
               type="button"
               onClick={copyDiff}
-              className="text-[11px] font-sans px-2.5 py-1 rounded bg-[#f8fafc] hover:bg-slate-100 text-slate-900 border border-slate-200 transition-colors flex items-center gap-1.5"
+              className="text-[11px] font-sans px-2.5 py-1 rounded bg-[var(--background)] hover:bg-[var(--secondary)] text-slate-900 border border-[var(--border)] transition-colors flex items-center gap-1.5"
             >
               {copied ? (
                 <>
@@ -126,7 +126,7 @@ export function DiffViewer({ diff, runId }: DiffViewerProps): JSX.Element {
             <button
               type="button"
               onClick={downloadPatch}
-              className="text-[11px] font-sans px-2.5 py-1 rounded bg-[#f8fafc] hover:bg-slate-100 text-slate-500 hover:text-slate-900 border border-slate-200 transition-colors flex items-center gap-1"
+              className="text-[11px] font-sans px-2.5 py-1 rounded bg-[var(--background)] hover:bg-[var(--secondary)] text-slate-500 hover:text-slate-900 border border-[var(--border)] transition-colors flex items-center gap-1"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -139,7 +139,7 @@ export function DiffViewer({ diff, runId }: DiffViewerProps): JSX.Element {
 
       {/* Code Block */}
       <pre
-        className="font-mono text-xs leading-[1.45] bg-[#f8fafc] border border-t-0 border-slate-200 rounded-b-xl p-3.5 -mt-2 max-h-96 overflow-auto whitespace-pre block w-full shadow-inner"
+        className="font-mono text-xs leading-[1.45] bg-[var(--background)] border border-t-0 border-[var(--border)] rounded-b-xl p-3.5 -mt-2 max-h-96 overflow-auto whitespace-pre block w-full shadow-inner"
         aria-label={runId ? `Diff for ${runId}` : "Unified diff"}
       >
         <code className="block w-full font-mono">

@@ -9,7 +9,7 @@ import type { MemoryFact, MemorySession } from "../types";
 import { formatTimeAgo } from "../ui-helpers";
 
 const GHOST_BUTTON =
-  "text-[11px] bg-transparent hover:bg-white border border-slate-200 hover:border-slate-300 text-slate-500 hover:text-slate-900 font-medium py-1 px-2.5 rounded-md transition-colors";
+  "text-[11px] bg-transparent hover:bg-white border border-[var(--border)] hover:border-[var(--border)] text-slate-500 hover:text-slate-900 font-medium py-1 px-2.5 rounded-md transition-colors";
 const ACCENT_BUTTON =
   "text-[11px] bg-blue-600/10 hover:bg-blue-600/15 border border-[#0000a8]/15 text-blue-600 font-medium py-1 px-2.5 rounded-md transition-colors";
 const DANGER_BUTTON =
@@ -32,7 +32,7 @@ function sourceChipClass(source: string): string {
     case "email":
       return "text-[#b45309] border-[#f99c00]/40 bg-[#f99c00]/10";
     default:
-      return "text-slate-500 border-slate-200 bg-white";
+      return "text-slate-500 border-[var(--border)] bg-white";
   }
 }
 
@@ -116,7 +116,7 @@ export function MemoryTab(): JSX.Element {
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Recall a fact…"
-          className="flex-1 min-w-0 text-[11px] font-mono bg-white border border-slate-200 rounded-md px-2 py-1.5 text-slate-900 placeholder:text-slate-500 focus:outline-none focus:border-[#0000a8]/50"
+          className="flex-1 min-w-0 text-[11px] font-mono bg-white border border-[var(--border)] rounded-md px-2 py-1.5 text-slate-900 placeholder:text-slate-500 focus:outline-none focus:border-[#0000a8]/50"
         />
         <button type="submit" disabled={searching} className={ACCENT_BUTTON}>
           {searching ? "Recalling…" : "Recall"}
@@ -146,11 +146,11 @@ export function MemoryTab(): JSX.Element {
           {searchActive ? "Recall results" : "Facts"}
         </h4>
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-8 border border-dashed border-slate-200 rounded-xl bg-[#f8fafc] px-4 text-center">
+          <div className="flex flex-col items-center justify-center py-8 border border-dashed border-[var(--border)] rounded-xl bg-[var(--background)] px-4 text-center">
             <p className="text-slate-500 text-xs">Loading memory…</p>
           </div>
         ) : facts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-8 border border-dashed border-slate-200 rounded-xl bg-[#f8fafc] px-4 text-center">
+          <div className="flex flex-col items-center justify-center py-8 border border-dashed border-[var(--border)] rounded-xl bg-[var(--background)] px-4 text-center">
             <p className="text-slate-500 text-xs">
               {searchActive ? "Nothing recalled." : "No facts banked yet."}
             </p>
@@ -160,7 +160,7 @@ export function MemoryTab(): JSX.Element {
             {facts.map((fact) => (
               <li
                 key={fact.id}
-                className="border border-slate-200 rounded-xl bg-[#f8fafc] p-3"
+                className="border border-[var(--border)] rounded-xl bg-[var(--background)] p-3"
               >
                 <pre className="font-mono text-[11px] text-slate-900 whitespace-pre-wrap break-words mb-2">
                   {fact.fact}
@@ -216,11 +216,11 @@ export function MemoryTab(): JSX.Element {
       </div>
 
       <div className="flex flex-col gap-2">
-        <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-500 border-t border-slate-200 pt-3">
+        <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-500 border-t border-[var(--border)] pt-3">
           Sessions
         </h4>
         {!loading && sessions.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-6 border border-dashed border-slate-200 rounded-xl bg-[#f8fafc] px-4 text-center">
+          <div className="flex flex-col items-center justify-center py-6 border border-dashed border-[var(--border)] rounded-xl bg-[var(--background)] px-4 text-center">
             <p className="text-slate-500 text-xs">No sessions recorded.</p>
           </div>
         ) : (
@@ -230,8 +230,8 @@ export function MemoryTab(): JSX.Element {
               return (
                 <li
                   key={session.id}
-                  className={`border rounded-xl bg-[#f8fafc] overflow-hidden transition-colors ${
-                    expanded ? "border-[#0000a8]/50" : "border-slate-200 hover:border-slate-300"
+                  className={`border rounded-xl bg-[var(--background)] overflow-hidden transition-colors ${
+                    expanded ? "border-[#0000a8]/50" : "border-[var(--border)] hover:border-[var(--border)]"
                   }`}
                 >
                   <button
@@ -253,7 +253,7 @@ export function MemoryTab(): JSX.Element {
                     </span>
                   </button>
                   {expanded ? (
-                    <pre className="mx-3 mb-3 font-mono text-[11px] text-slate-900 bg-white p-2.5 rounded-lg border border-slate-200 whitespace-pre-wrap break-words max-h-40 overflow-auto">
+                    <pre className="mx-3 mb-3 font-mono text-[11px] text-slate-900 bg-white p-2.5 rounded-lg border border-[var(--border)] whitespace-pre-wrap break-words max-h-40 overflow-auto">
                       {session.summary}
                     </pre>
                   ) : null}

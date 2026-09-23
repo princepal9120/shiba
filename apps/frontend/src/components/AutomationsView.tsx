@@ -153,10 +153,10 @@ export function AutomationsView(): JSX.Element {
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-y-auto bg-[#f8fafc] text-slate-900 p-4 lg:p-8">
+    <div className="flex-1 flex flex-col h-full overflow-y-auto bg-[var(--background)] text-slate-900 p-4 lg:p-8">
       <div className="max-w-5xl mx-auto w-full flex flex-col gap-6">
         {/* Header */}
-        <div className="border-b border-slate-200 pb-4">
+        <div className="border-b border-[var(--border)] pb-4">
           <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
             <span>Automations & Inbound Triggers</span>
             <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-blue-600/10 border border-[#0000a8]/30 text-blue-600">
@@ -175,7 +175,7 @@ export function AutomationsView(): JSX.Element {
         ) : null}
 
         {/* Recipe Gallery — deploy a standing agent in one click */}
-        <div className="border border-slate-200 rounded-xl bg-white shadow-sm p-5 flex flex-col gap-4">
+        <div className="border border-[var(--border)] rounded-xl bg-white shadow-sm p-5 flex flex-col gap-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h3 className="text-sm font-semibold text-slate-900">Recipe Gallery</h3>
@@ -189,7 +189,7 @@ export function AutomationsView(): JSX.Element {
               value={repoUrl}
               onChange={(e) => setRepoUrl(e.target.value)}
               placeholder="https://github.com/owner/repo"
-              className="bg-white text-xs font-mono text-slate-900 border border-slate-200 rounded-lg px-3 py-1.5 w-72 transition-colors focus:outline-none focus:border-[#0000a8] focus:ring-1 focus:ring-[#0000a8]/30 placeholder:text-slate-500/50"
+              className="bg-white text-xs font-mono text-slate-900 border border-[var(--border)] rounded-lg px-3 py-1.5 w-72 transition-colors focus:outline-none focus:border-[#0000a8] focus:ring-1 focus:ring-[#0000a8]/30 placeholder:text-slate-500/50"
             />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
@@ -198,7 +198,7 @@ export function AutomationsView(): JSX.Element {
               return (
                 <div
                   key={recipe.id}
-                  className="bg-white p-4 rounded-lg border border-slate-200 hover:border-slate-300 flex flex-col gap-2 transition-colors"
+                  className="bg-white p-4 rounded-lg border border-[var(--border)] hover:border-[var(--border)] flex flex-col gap-2 transition-colors"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-semibold text-slate-900">{recipe.name}</span>
@@ -231,28 +231,28 @@ export function AutomationsView(): JSX.Element {
         </div>
 
         {/* Live automations from the DO */}
-        <div className="border border-slate-200 rounded-xl bg-white shadow-sm p-5 flex flex-col gap-3">
+        <div className="border border-[var(--border)] rounded-xl bg-white shadow-sm p-5 flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-slate-900">Deployed Automations</h3>
             <button
               type="button"
               onClick={refresh}
-              className="text-[11px] text-slate-500 hover:text-slate-900 hover:border-slate-300 border border-slate-200 rounded-md px-2 py-1 transition-colors"
+              className="text-[11px] text-slate-500 hover:text-slate-900 hover:border-[var(--border)] border border-[var(--border)] rounded-md px-2 py-1 transition-colors"
             >
               Refresh
             </button>
           </div>
           {automations === null ? (
             <div className="flex items-center gap-2 text-xs text-slate-500 font-mono py-2">
-              <span className="animate-spin inline-block w-3 h-3 border-2 border-[#6a6f63] border-t-transparent rounded-full" />
+              <span className="animate-spin inline-block w-3 h-3 border-2 border-[var(--muted)] border-t-transparent rounded-full" />
               <span>Loading…</span>
             </div>
           ) : automations.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 border border-dashed border-slate-200 rounded-lg bg-[#f8fafc] text-center px-4">
+            <div className="flex flex-col items-center justify-center py-10 border border-dashed border-[var(--border)] rounded-lg bg-[var(--background)] text-center px-4">
               <p className="text-slate-500 text-xs">None yet — deploy a recipe above or POST /api/automations.</p>
             </div>
           ) : (
-            <div className="flex flex-col divide-y divide-[#e0ded5]">
+            <div className="flex flex-col divide-y divide-[var(--line)]">
               {automations.map((a) => (
                 <div key={a.id} className="py-2.5 flex items-center justify-between gap-3 hover:bg-white -mx-2 px-2 rounded-lg transition-colors">
                   <div className="min-w-0">
@@ -262,7 +262,7 @@ export function AutomationsView(): JSX.Element {
                         className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${
                           a.enabled
                             ? "text-[#15803d] border-[#15803d]/30 bg-[#15803d]/10"
-                            : "text-slate-500 border-slate-200 bg-white"
+                            : "text-slate-500 border-[var(--border)] bg-white"
                         }`}
                       >
                         {a.enabled ? "enabled" : "disabled"}
@@ -302,7 +302,7 @@ export function AutomationsView(): JSX.Element {
         {/* Integration Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* GitHub Webhook */}
-          <div className="border border-slate-200 rounded-xl bg-white shadow-sm p-5 flex flex-col gap-3">
+          <div className="border border-[var(--border)] rounded-xl bg-white shadow-sm p-5 flex flex-col gap-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 font-semibold text-sm text-slate-900">
                 <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 24 24">
@@ -319,7 +319,7 @@ export function AutomationsView(): JSX.Element {
               Receives repo events (issues, PRs, comments) and automatically dispatches coding jobs to sandboxes.
             </p>
 
-            <div className="bg-white p-2.5 rounded-lg border border-slate-200 flex items-center justify-between text-xs font-mono">
+            <div className="bg-white p-2.5 rounded-lg border border-[var(--border)] flex items-center justify-between text-xs font-mono">
               <span className="text-slate-900 truncate">/api/github/webhook</span>
               <button
                 type="button"
@@ -335,7 +335,7 @@ export function AutomationsView(): JSX.Element {
           </div>
 
           {/* Slack Integration */}
-          <div className="border border-slate-200 rounded-xl bg-white shadow-sm p-5 flex flex-col gap-3">
+          <div className="border border-[var(--border)] rounded-xl bg-white shadow-sm p-5 flex flex-col gap-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 font-semibold text-sm text-slate-900">
                 <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 24 24">
@@ -353,19 +353,19 @@ export function AutomationsView(): JSX.Element {
             </p>
 
             <div className="flex flex-col gap-1.5 text-xs font-mono">
-              <div className="bg-white p-2 rounded border border-slate-200 flex items-center justify-between">
+              <div className="bg-white p-2 rounded border border-[var(--border)] flex items-center justify-between">
                 <span>Commands: /api/slack/command</span>
                 <button type="button" onClick={() => copyToClipboard("/api/slack/command", "slack1")} className="text-blue-600 hover:text-blue-600 text-[11px] transition-colors">
                   {copiedEndpoint === "slack1" ? "Copied" : "Copy"}
                 </button>
               </div>
-              <div className="bg-white p-2 rounded border border-slate-200 flex items-center justify-between">
+              <div className="bg-white p-2 rounded border border-[var(--border)] flex items-center justify-between">
                 <span>Events: /api/slack/events</span>
                 <button type="button" onClick={() => copyToClipboard("/api/slack/events", "slack2")} className="text-blue-600 hover:text-blue-600 text-[11px] transition-colors">
                   {copiedEndpoint === "slack2" ? "Copied" : "Copy"}
                 </button>
               </div>
-              <div className="bg-white p-2 rounded border border-slate-200 flex items-center justify-between">
+              <div className="bg-white p-2 rounded border border-[var(--border)] flex items-center justify-between">
                 <span>Interactivity: /api/slack/interact</span>
                 <button type="button" onClick={() => copyToClipboard("/api/slack/interact", "slack3")} className="text-blue-600 hover:text-blue-600 text-[11px] transition-colors">
                   {copiedEndpoint === "slack3" ? "Copied" : "Copy"}
@@ -376,7 +376,7 @@ export function AutomationsView(): JSX.Element {
         </div>
 
         {/* Automations DO Engine */}
-        <div className="border border-slate-200 rounded-xl bg-white shadow-sm p-5 flex flex-col gap-4">
+        <div className="border border-[var(--border)] rounded-xl bg-white shadow-sm p-5 flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
               <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -392,15 +392,15 @@ export function AutomationsView(): JSX.Element {
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 font-mono text-xs">
-            <div className="bg-white p-3 rounded-lg border border-slate-200 flex flex-col gap-1">
+            <div className="bg-white p-3 rounded-lg border border-[var(--border)] flex flex-col gap-1">
               <span className="text-slate-500 text-[11px]">Cron Scheduler</span>
               <span className="text-slate-900 font-semibold">Hourly Health Tick</span>
             </div>
-            <div className="bg-white p-3 rounded-lg border border-slate-200 flex flex-col gap-1">
+            <div className="bg-white p-3 rounded-lg border border-[var(--border)] flex flex-col gap-1">
               <span className="text-slate-500 text-[11px]">Evaluation Model</span>
               <span className="text-slate-900 font-semibold">TypeSafe System One / Llama</span>
             </div>
-            <div className="bg-white p-3 rounded-lg border border-slate-200 flex flex-col gap-1">
+            <div className="bg-white p-3 rounded-lg border border-[var(--border)] flex flex-col gap-1">
               <span className="text-slate-500 text-[11px]">Run Capacity</span>
               <span className="text-slate-900 font-semibold">5 Concurrent Sandboxes</span>
             </div>

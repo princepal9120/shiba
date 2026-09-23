@@ -172,7 +172,7 @@ export function StepTimeline({
         // Assistant / tool steps on the left icon rail.
         return (
           <li key={message.id} className="flex flex-col items-start">
-            <div className="relative pl-9 flex flex-col gap-3 w-full before:content-[''] before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-px before:bg-[#e0ded5]">
+            <div className="relative pl-9 flex flex-col gap-3 w-full before:content-[''] before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-px before:bg-[var(--line)]">
               {message.parts.map((part, index) => {
                 const text = partText(part);
                 if (text !== null) {

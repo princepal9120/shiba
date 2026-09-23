@@ -28,6 +28,7 @@
     "@effect/platform-bun": "4.0.0-rc.117",
     "@effect/platform-node": "4.0.0-rc.117",
     "@eslint/js": "^9.39.5",
+    "@types/react": "19.2.18",
     "alchemy": "2.0.0-beta.79",
     "effect": "4.0.0-rc.117",
     "eslint": "^9.39.5",

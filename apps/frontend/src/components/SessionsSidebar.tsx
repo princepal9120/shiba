@@ -36,7 +36,7 @@ export interface SessionsSidebarProps {
 
 export function statusDotClass(session: SessionItem): string {
   if (session.live || session.status === "live" || session.status === "running") {
-    return "bg-blue-600 animate-pulse-subtle";
+    return "bg-[var(--primary)] animate-pulse-subtle";
   }
   if (session.status === "waiting-approval" || session.status === "pending") {
     return "bg-[#f99c00]";
@@ -55,7 +55,7 @@ export function statusDotClass(session: SessionItem): string {
   ) {
     return "bg-[#fb2c36]";
   }
-  return "bg-[#6a6f63]";
+  return "bg-[var(--muted)]";
 }
 
 function connectionDotClass(tone: SessionsSidebarProps["connectionTone"]): string {
@@ -66,7 +66,7 @@ function connectionDotClass(tone: SessionsSidebarProps["connectionTone"]): strin
 
 function GroupLabel({ children }: { children: string }) {
   return (
-    <h3 className="px-3 pt-3.5 pb-1.5 text-[10px] font-mono font-semibold uppercase tracking-[0.1em] text-slate-500/60 select-none">
+    <h3 className="px-3 pt-3.5 pb-1.5 text-[10px] font-mono font-semibold uppercase tracking-[0.1em] text-[var(--muted)] select-none">
       {children}
     </h3>
   );
@@ -90,7 +90,7 @@ function SessionRow({
         onClick={() => onSelect(session.id)}
         aria-current={selected ? "true" : undefined}
         className={`group w-full text-left rounded-lg px-3 py-2 flex items-start gap-2.5 transition-colors ${
-          selected ? "bg-slate-100 text-slate-900 font-medium" : "hover:bg-slate-50 text-slate-700"
+          selected ? "bg-[var(--sidebar-accent)] text-[var(--sidebar-foreground)] font-medium" : "hover:bg-[var(--sidebar-accent)]/60 text-[var(--sidebar-foreground)]/80"
         }`}
       >
         <span
@@ -100,12 +100,12 @@ function SessionRow({
         <span className="min-w-0 flex-1">
           <span
             className={`block text-[13px] font-medium truncate leading-snug ${
-              session.live ? "text-blue-600 font-semibold" : "text-slate-800"
+              session.live ? "text-[var(--primary)] font-semibold" : "text-[var(--sidebar-foreground)]"
             }`}
           >
             {session.title || "Untitled session"}
           </span>
-          <span className="block text-[11px] font-mono text-slate-500/80 truncate mt-0.5 tabular-nums">
+          <span className="block text-[11px] font-mono text-[var(--muted)] truncate mt-0.5 tabular-nums">
             {session.repoName} · {statusLabel(session.status)} ·{" "}
             {formatTimeAgo(session.updatedAt)}
           </span>
@@ -123,11 +123,11 @@ function AgentRow({ agent }: { agent: AgentPrincipal }) {
     <Tooltip content={tooltipText} side="right" align="start" delayMs={400}>
       <div
         tabIndex={0}
-        className="group w-full text-left rounded-lg px-3 py-2 flex items-start gap-2.5 text-slate-900 focus:outline-none focus-visible:bg-black/[0.04]"
+        className="group w-full text-left rounded-lg px-3 py-2 flex items-start gap-2.5 text-[var(--sidebar-foreground)] focus:outline-none focus-visible:bg-[var(--sidebar-accent)]"
       >
         <span
           className={`mt-[7px] size-1.5 rounded-full shrink-0 ${
-            agent.live ? "bg-[#15803d] animate-pulse-subtle" : "bg-[#6a6f63]"
+            agent.live ? "bg-[#15803d] animate-pulse-subtle" : "bg-[var(--muted)]"
           }`}
           aria-hidden="true"
         />
@@ -135,7 +135,7 @@ function AgentRow({ agent }: { agent: AgentPrincipal }) {
           <span className="block text-[13px] font-medium truncate leading-snug">
             {agent.principal}
           </span>
-          <span className="block text-[11px] font-mono text-slate-500/80 truncate mt-0.5 tabular-nums">
+          <span className="block text-[11px] font-mono text-[var(--muted)] truncate mt-0.5 tabular-nums">
             {scopeLabel}
           </span>
         </span>
@@ -175,16 +175,16 @@ export function SessionsSidebar({
 
   return (
     <aside
-      className="w-[280px] shrink-0 h-full flex flex-col bg-white border-r border-slate-200"
+      className="w-[280px] shrink-0 h-full flex flex-col bg-[var(--sidebar)] border-r border-[var(--sidebar-border)]"
       aria-label="Sessions"
     >
       {/* Header with collapse button */}
       <div className="flex items-center justify-between px-3.5 pt-3.5 pb-2.5">
         <div className="flex items-center gap-2">
-          <h2 className="text-[11px] font-mono font-semibold uppercase tracking-[0.12em] text-slate-500">
+          <h2 className="text-[11px] font-mono font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
             Sessions
           </h2>
-          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-600 font-bold tabular-nums">
+          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-[var(--sidebar-accent)] border border-[var(--sidebar-border)] text-[var(--muted)] font-bold tabular-nums">
             {sessions.length}
           </span>
         </div>
@@ -195,7 +195,7 @@ export function SessionsSidebar({
               type="button"
               onClick={onToggleCollapse}
               aria-label={isMobileDrawer ? "Close sessions" : "Collapse sidebar"}
-              className="size-7 rounded-md flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-black/[0.06] transition-colors"
+              className="size-7 rounded-md flex items-center justify-center text-[var(--muted)] hover:text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-accent)] transition-colors"
             >
               {isMobileDrawer ? (
                 <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -217,7 +217,7 @@ export function SessionsSidebar({
           <button
             type="button"
             onClick={onNewTask}
-            className="w-full inline-flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-[13px] h-9 px-3 rounded-lg transition-colors shadow-sm"
+            className="w-full inline-flex items-center justify-center gap-1.5 bg-[var(--primary)] hover:opacity-90 text-[var(--primary-foreground)] font-semibold text-[13px] h-9 px-3 rounded-lg transition-colors shadow-sm"
           >
             <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
@@ -231,7 +231,7 @@ export function SessionsSidebar({
       <div className="px-3 pb-2">
         <div className="relative">
           <svg
-            className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-slate-500/60"
+            className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-[var(--muted)]"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -249,14 +249,14 @@ export function SessionsSidebar({
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search sessions…"
             aria-label="Search sessions"
-            className="w-full h-8 bg-slate-50 border border-slate-200 rounded-lg pl-8 pr-7 text-[13px] text-slate-800 focus:bg-white focus:border-blue-500 placeholder:text-slate-500/50 focus:border-[#1c1cc8]/40 focus:outline-none transition-colors"
+            className="w-full h-8 bg-[var(--sidebar-accent)] border border-[var(--sidebar-border)] rounded-lg pl-8 pr-7 text-[13px] text-[var(--sidebar-foreground)] focus:bg-[var(--card)] focus:border-[var(--primary)] placeholder:text-[var(--muted)] focus:outline-none transition-colors"
           />
           {query ? (
             <button
               type="button"
               onClick={() => setQuery("")}
               aria-label="Clear search"
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-900 text-xs"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-[var(--sidebar-foreground)] text-xs"
             >
               ✕
             </button>
@@ -267,7 +267,7 @@ export function SessionsSidebar({
       {/* Session list */}
       <div className="flex-1 overflow-y-auto px-2 pb-2">
         {filtered.length === 0 ? (
-          <p className="text-slate-500 text-xs px-3 py-8 text-center text-pretty">
+          <p className="text-[var(--muted)] text-xs px-3 py-8 text-center text-pretty">
             {sessions.length === 0
               ? "No sessions yet — start a task."
               : "No sessions match your search."}
@@ -320,14 +320,14 @@ export function SessionsSidebar({
       </div>
 
       {/* Footer */}
-      <div className="border-t border-slate-100 px-3 py-3 flex flex-col gap-2.5 bg-slate-50/50">
+      <div className="border-t border-[var(--sidebar-border)] px-3 py-3 flex flex-col gap-2.5 bg-[var(--sidebar-accent)]/30">
         <Tooltip content={setupComplete ? "All 6 setup steps verified" : `${setupDone ?? 0} of ${setupTotal} setup steps complete`} side="top">
           <button
             type="button"
             onClick={onOpenSetup}
             className={`inline-flex items-center gap-2 text-xs font-semibold rounded-lg px-2.5 py-1.5 border transition-colors w-fit ${
               setupComplete
-                ? "text-blue-600 border-[#0000a8]/40 bg-blue-600/10 hover:bg-blue-600/20"
+                ? "text-blue-600 border-[#0000a8]/40 bg-[var(--primary)]/10 hover:bg-[var(--primary)]/20"
                 : "text-[#b45309] border-[#b45309]/40 bg-[#b45309]/10 hover:bg-[#b45309]/20"
             }`}
           >
@@ -338,14 +338,14 @@ export function SessionsSidebar({
           <Tooltip content="Documentation & API guides" side="top">
             <a
               href="/docs"
-              className="text-xs text-slate-500 hover:text-slate-900 transition-colors shrink-0"
+              className="text-xs text-[var(--muted)] hover:text-[var(--sidebar-foreground)] transition-colors shrink-0"
             >
               Docs
             </a>
           </Tooltip>
           <Tooltip content={`Agent State: ${connectionLabel}`} side="top">
             <span
-              className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 min-w-0 cursor-default"
+              className="inline-flex items-center gap-1.5 text-[11px] text-[var(--muted)] min-w-0 cursor-default"
             >
               <span
                 className={`size-1.5 rounded-full shrink-0 ${connectionDotClass(connectionTone)}`}

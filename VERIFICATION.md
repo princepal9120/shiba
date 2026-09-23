@@ -47,6 +47,21 @@ Specifically unmeasured: peak container memory (which decides `basic` vs `standa
 
 ## Fix history
 
+**2026-09-23 (reskin-dashboard branch — VERIFICATION_PLAN gap closure + reskin consistency, 10-agent team, 961 tests)**
+
+Multi-agent pass closing VERIFICATION_PLAN.md §3 gaps and finishing the Inter + slate/navy reskin. All local gates green post-change: `pnpm typecheck` (tsc + astro check, 0 errors), `pnpm lint`, `pnpm test` (961 pass / 6 skip, 60 files), `pnpm build` (24 pages, 1036 links, 20 markdown stale-claim scan).
+
+- **G1 dead model default — already resolved post-restructure; regression test added.** `backend/src/harness/index.ts:54` defaults to `google/gemini-3.5-flash-lite`; orchestrator has no `gemini-2.0`. New `backend/test/no-dead-gemini-2.0.test.ts` fails if the retired id reappears outside the intentional deny-list files.
+- **G2 startup assertion — already present, now first-request gated.** `assertLiveCodingModel` (RETIRED_CODING_MODELS deny-list, `backend/src/coding-model.ts`) runs at `backend/src/index.ts:1014` behind a module flag that flips only on a non-throwing call — a retired `CODING_MODEL` still fails every request. New `backend/test/coding-model-startup.test.ts` (module-reset per test, order-independent).
+- **G3 stale 503/WORKER_ORIGIN docs — already fixed by 310c62d; verified.** `scripts/check-docs.mjs` gate exists and runs via `docs:verify` in `pnpm build`. Remaining grep hits are legitimate (negated "no provider callback", real webhook 503 for missing `GITHUB_WEBHOOK_SECRET`).
+- **G4 GOAL.md Slack — extended.** `spec/GOAL.md` inbound-surface paragraph now names `SLACK_CHANNEL_REPOS` (channel→repo mapping) alongside `SLACK_APPROVERS`.
+- **G5/G6 dead files — already removed upstream (22217d6).** `backend/src/costs.ts`, `backend/test/costs.test.ts`, `spec/COMPLETION.md` confirmed absent; no references remain.
+- **G7 unbuilt-feature docs — already absent; claude-code.mdx reworded.** review.md/jira.mdx/multi-agent.mdx not in tree or nav; claude-code.mdx no longer uses the literal "npm install" claim.
+- **VERIFICATION_PLAN.md updated.** G1/G2/G5/G6 rows marked RESOLVED with current evidence; all pre-restructure paths corrected to `backend/` layout.
+- **Reskin consistency — 69 hardcoded old-palette hex values → CSS vars** across 12 `frontend/src` files (`var(--panel)/--line/--muted/--text`). Verifier caught that Tailwind 3.4 emits no CSS for `var()` + opacity modifier; the 9 affected classes rewritten as `color-mix(in_srgb,...)` and confirmed present in emitted CSS. Landing `index.astro` cream `.section-light` features section converted to the page's dark token system.
+- **Monorepo rules — root `typecheck` now covers web.** Was bare `tsc --noEmit` (web/ never checked); now `tsc --noEmit && pnpm run docs:check`. `pnpm install` run — turbo/frontend node_modules were stale, which had masked a `next-themes@0.4.6` + `@types/react@19.2.18` types bug (ThemeProviderProps drops `children`); fixed with a one-line cast in `frontend/src/components/ThemeProvider.tsx` pending upstream fix.
+- **Flagged, not fixed (needs decision):** `web/package.json` has no `lint` script — `turbo run lint` silently skips Astro/MDX (fix needs an eslint-astro plugin dep). `.gitignore` ignores `.agents/` while 2 files under it are already tracked — new skills would go silently untracked.
+
 **2026-09-19 (missions + quality gates surfaces — 407 tests)**
 
 Factory/Droid-parity surfaces, verified live on `wrangler dev` (:8788):

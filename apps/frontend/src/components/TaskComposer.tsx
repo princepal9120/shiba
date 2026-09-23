@@ -67,7 +67,7 @@ export function TaskComposer({
   };
 
   const fieldClass =
-    "bg-white border border-slate-200 rounded-lg text-slate-900 px-2.5 py-1.5 text-xs focus:outline-none focus:border-[#1c1cc8] focus:ring-1 focus:ring-[#1c1cc8]/40 placeholder-[#6a6f63]/60 transition-colors";
+    "bg-[var(--card)] border border-[var(--border)] rounded-lg text-[var(--foreground)] px-2.5 py-1.5 text-xs focus:outline-none focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]/40 placeholder-[color:color-mix(in_srgb,var(--muted)_60%,transparent)] transition-colors";
 
   const currentHarness = HARNESS_OPTIONS.find((h) => h.value === harness);
 
@@ -76,7 +76,7 @@ export function TaskComposer({
       data-testid="task-composer"
       aria-label="Task composer"
       onSubmit={handleSubmit}
-      className="rounded-xl border border-slate-200 bg-white p-3 flex flex-col gap-2.5 shadow-lg relative group focus-within:border-black/[0.18] transition-colors"
+      className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-3 flex flex-col gap-2.5 shadow-lg relative group focus-within:border-[var(--primary)]/40 transition-colors"
     >
       <textarea
         ref={textareaRef}
@@ -85,7 +85,7 @@ export function TaskComposer({
         onKeyDown={handleKeyDown}
         placeholder="Describe the task or bug to fix (e.g. 'Fix the broken authentication test in auth.test.ts')…"
         rows={1}
-        className="w-full resize-none bg-transparent text-sm text-slate-900 placeholder-[#6a6f63]/70 focus:outline-none min-h-[72px] max-h-48 overflow-y-auto leading-relaxed"
+        className="w-full resize-none bg-transparent text-sm text-[var(--foreground)] placeholder-[color:color-mix(in_srgb,var(--muted)_70%,transparent)] focus:outline-none min-h-[72px] max-h-48 overflow-y-auto leading-relaxed"
         aria-label="Task description"
       />
 
@@ -129,21 +129,21 @@ export function TaskComposer({
         </Tooltip>
 
         <Tooltip content="Publish branch and open Pull Request on completion" side="top">
-          <label className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-900 cursor-pointer select-none px-1.5 py-1 rounded hover:bg-black/[0.04] transition-colors">
+          <label className="flex items-center gap-1.5 text-xs text-[var(--muted)] hover:text-[var(--foreground)] cursor-pointer select-none px-1.5 py-1 rounded hover:bg-[var(--secondary)] transition-colors">
             <input
               type="checkbox"
               checked={publishPullRequest}
               onChange={(event) => onPublishPullRequestChange(event.target.checked)}
-              className="accent-[#0000a8] w-3.5 h-3.5 rounded cursor-pointer"
+              className="accent-[var(--primary)] w-3.5 h-3.5 rounded cursor-pointer"
             />
             <span>Create PR</span>
           </label>
         </Tooltip>
       </div>
 
-      <div className="flex items-center justify-between gap-3 pt-1 border-t border-slate-100">
-        <span className="text-[11px] text-slate-500/80 font-mono flex items-center gap-1">
-          <span className="text-blue-600/80">●</span>
+      <div className="flex items-center justify-between gap-3 pt-1 border-t border-[var(--border)]">
+        <span className="text-[11px] text-[var(--muted)] font-mono flex items-center gap-1">
+          <span className="text-[var(--primary)]">●</span>
           <span>approval-gated · container isolated</span>
         </span>
         <div className="flex items-center gap-2">
@@ -152,7 +152,7 @@ export function TaskComposer({
               type="button"
               onClick={onClear}
               disabled={clearing || busy}
-              className="text-xs text-slate-500 hover:text-slate-900 bg-transparent border border-slate-200 hover:border-slate-300 font-medium py-1.5 px-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="text-xs text-[var(--muted)] hover:text-[var(--foreground)] bg-transparent border border-[var(--border)] hover:border-[var(--primary)]/40 font-medium py-1.5 px-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {clearing ? "Clearing…" : "Clear"}
             </button>
@@ -162,7 +162,7 @@ export function TaskComposer({
             <button
               type="submit"
               disabled={sendDisabled || isSubmitting}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-1.5 px-4 rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed text-xs flex items-center gap-1.5 shadow-sm active:scale-[0.98]"
+              className="bg-[var(--primary)] hover:opacity-90 text-[var(--primary-foreground)] font-semibold py-1.5 px-4 rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed text-xs flex items-center gap-1.5 shadow-sm active:scale-[0.98]"
             >
               {isSubmitting ? "Sending…" : "Send"}
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
