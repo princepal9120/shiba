@@ -90,7 +90,7 @@ function SessionRow({
         onClick={() => onSelect(session.id)}
         aria-current={selected ? "true" : undefined}
         className={`group w-full text-left rounded-lg px-3 py-2 flex items-start gap-2.5 transition-colors ${
-          selected ? "bg-[#eae8e1] text-[#171932] shadow-sm" : "hover:bg-black/[0.04] text-[#222320]"
+          selected ? "bg-[#e0ded5] text-[#222320] shadow-sm" : "hover:bg-black/[0.04] text-[#222320]"
         }`}
       >
         <span
@@ -100,7 +100,7 @@ function SessionRow({
         <span className="min-w-0 flex-1">
           <span
             className={`block text-[13px] font-medium truncate leading-snug ${
-              session.live ? "text-[#1c1cc8]" : selected ? "text-[#171932]" : "text-[#222320]"
+              session.live ? "text-[#1c1cc8]" : selected ? "text-[#222320]" : "text-[#222320]"
             }`}
           >
             {session.title || "Untitled session"}
@@ -256,7 +256,7 @@ export function SessionsSidebar({
               type="button"
               onClick={() => setQuery("")}
               aria-label="Clear search"
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-[#6a6f63] hover:text-[#171932] text-xs"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-[#6a6f63] hover:text-[#222320] text-xs"
             >
               ✕
             </button>

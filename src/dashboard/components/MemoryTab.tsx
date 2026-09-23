@@ -10,8 +10,8 @@ import { formatTimeAgo } from "../ui-helpers";
 
 const GHOST_BUTTON =
   "text-[11px] bg-transparent hover:bg-[#fffef8] border border-[#e0ded5] hover:border-[#d3d2c8] text-[#6a6f63] hover:text-[#222320] font-medium py-1 px-2.5 rounded-md transition-colors";
-const TEAL_BUTTON =
-  "text-[11px] bg-[#dceafa]/60 hover:bg-[#dceafa] border border-[#9cbce2]/60 text-[#1c1cc8] font-medium py-1 px-2.5 rounded-md transition-colors";
+const ACCENT_BUTTON =
+  "text-[11px] bg-[#0000a8]/10 hover:bg-[#0000a8]/15 border border-[#0000a8]/15 text-[#1c1cc8] font-medium py-1 px-2.5 rounded-md transition-colors";
 const DANGER_BUTTON =
   "text-[11px] bg-transparent hover:bg-[#fb2c36]/10 border border-[#fb2c36]/50 text-[#fb2c36] font-medium py-1 px-2.5 rounded-md transition-colors";
 
@@ -32,7 +32,7 @@ function sourceChipClass(source: string): string {
     case "email":
       return "text-[#b45309] border-[#f99c00]/40 bg-[#f99c00]/10";
     default:
-      return "text-[#6a6f63] border-[#eae8e1] bg-[#fffef8]";
+      return "text-[#6a6f63] border-[#e0ded5] bg-[#fffef8]";
   }
 }
 
@@ -118,7 +118,7 @@ export function MemoryTab(): JSX.Element {
           placeholder="Recall a fact…"
           className="flex-1 min-w-0 text-[11px] font-mono bg-[#fffef8] border border-[#e0ded5] rounded-md px-2 py-1.5 text-[#222320] placeholder:text-[#6a6f63] focus:outline-none focus:border-[#0000a8]/50"
         />
-        <button type="submit" disabled={searching} className={TEAL_BUTTON}>
+        <button type="submit" disabled={searching} className={ACCENT_BUTTON}>
           {searching ? "Recalling…" : "Recall"}
         </button>
         {searchActive ? (

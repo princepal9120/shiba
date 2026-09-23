@@ -115,7 +115,7 @@ function NavItem({
         "w-full flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-colors duration-100 " +
         (active
           ? "bg-[#0000a8] text-white shadow-sm"
-          : "text-[#3b3d36] hover:bg-[#eae8e1] hover:text-[#171932]")
+          : "text-[#222320] hover:bg-[#e0ded5] hover:text-[#222320]")
       }
     >
       <span className={active ? "text-white" : "text-[#6a6f63]"} aria-hidden="true">
@@ -156,8 +156,8 @@ export function AppNavRail({
         />
         <span className="min-w-0">
           <span className="flex items-center gap-1.5">
-            <span className="font-display text-lg leading-none text-[#171932]">AI Intern</span>
-            <span className="text-[9px] font-mono font-semibold uppercase tracking-wider text-[#0000a8] border border-[#9cbce2] bg-[#dceafa] rounded px-1 py-px">
+            <span className="font-display text-lg leading-none text-[#222320]">AI Intern</span>
+            <span className="text-[9px] font-mono font-semibold uppercase tracking-wider text-[#0000a8] border border-[#0000a8]/25 bg-[#0000a8]/10 rounded px-1 py-px">
               Beta
             </span>
           </span>
@@ -228,7 +228,7 @@ export function AppNavRail({
         <a
           href="/docs/"
           aria-label="Documentation"
-          className="w-full flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium text-[#3b3d36] hover:bg-[#eae8e1] hover:text-[#171932] transition-colors duration-100"
+          className="w-full flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium text-[#222320] hover:bg-[#e0ded5] hover:text-[#222320] transition-colors duration-100"
         >
           <span className="text-[#6a6f63]" aria-hidden="true">
             <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>

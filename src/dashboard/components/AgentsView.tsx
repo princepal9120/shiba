@@ -41,7 +41,7 @@ function statusChip(configured: boolean | null): JSX.Element {
     );
   }
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-md border border-[#d3d2c8] bg-[#eae8e1]/60 px-2 py-0.5 text-[11px] font-medium text-[#6a6f63]">
+    <span className="inline-flex items-center gap-1.5 rounded-md border border-[#d3d2c8] bg-[#e0ded5]/60 px-2 py-0.5 text-[11px] font-medium text-[#6a6f63]">
       <span className="size-1.5 rounded-full bg-[#6a6f63]" />
       AI Gateway
     </span>
@@ -76,7 +76,7 @@ export function AgentsView(): JSX.Element {
     <div className="flex-1 overflow-y-auto">
       <div className="mx-auto max-w-4xl px-6 py-8">
         <div className="mb-6">
-          <h2 className="text-lg font-bold text-[#171932]">Agents</h2>
+          <h2 className="text-lg font-bold text-[#222320]">Agents</h2>
           <p className="mt-1 text-sm text-[#6a6f63] leading-relaxed">
             Agent CLIs baked into the sandbox image on this account. Pick one per task in the composer;
             credentials are injected at the egress boundary and never enter the container.
@@ -94,12 +94,12 @@ export function AgentsView(): JSX.Element {
             {agents.map((agent) => (
               <div
                 key={agent.id}
-                className="rounded-xl border border-[#eae8e1] bg-[#fffef8] p-4 hover:border-[#d3d2c8] transition-colors"
+                className="rounded-xl border border-[#e0ded5] bg-[#fffef8] p-4 hover:border-[#d3d2c8] transition-colors"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-[#171932]">{agent.label}</span>
+                      <span className="text-sm font-semibold text-[#222320]">{agent.label}</span>
                       <span className="rounded-md border border-[#d3d2c8]/60 bg-[#f6f4ed] px-1.5 py-0.5 font-mono text-[10px] text-[#6a6f63]">
                         v{agent.version}
                       </span>

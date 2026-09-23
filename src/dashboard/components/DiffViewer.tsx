@@ -30,8 +30,8 @@ function classifyLine(line: string): LineKind {
 }
 
 const LINE_CLASSES: Record<LineKind, string> = {
-  file: "font-bold text-[#222320] bg-[#dceafa]/40 border-y border-[#9cbce2]/30 py-1 px-2 rounded block font-mono text-[11px]",
-  hunk: "text-[#0000a8] font-mono text-[11px] bg-[#dceafa]/20 py-0.5 px-2 block my-0.5 rounded",
+  file: "font-bold text-[#222320] bg-[#0000a8]/10 border-y border-[#0000a8]/10 py-1 px-2 rounded block font-mono text-[11px]",
+  hunk: "text-[#0000a8] font-mono text-[11px] bg-[#0000a8]/5 py-0.5 px-2 block my-0.5 rounded",
   add: "text-[#15803d] bg-[#15803d]/10 block w-full px-2 -mx-2 border-l-2 border-[#15803d]",
   del: "text-[#fb2c36] bg-[#fb2c36]/10 block w-full px-2 -mx-2 border-l-2 border-[#fb2c36]",
   context: "text-[#6a6f63] block px-2",

@@ -5,9 +5,9 @@ export function ArchitectureView(): JSX.Element {
     <div className="flex-1 flex flex-col h-full overflow-y-auto bg-[#f6f4ed] text-[#222320] p-4 lg:p-8">
       <div className="max-w-5xl mx-auto w-full flex flex-col gap-6">
         <div className="border-b border-black/[0.08] pb-4">
-          <h2 className="text-base font-semibold text-[#171932] flex items-center gap-2">
+          <h2 className="text-base font-semibold text-[#222320] flex items-center gap-2">
             <span>System Architecture & Isolation Boundary</span>
-            <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-[#dceafa]/60 border border-[#9cbce2]/60 text-[#0000a8]">Zero-Trust</span>
+            <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-[#0000a8]/10 border border-[#0000a8]/15 text-[#0000a8]">Zero-Trust</span>
           </h2>
           <p className="text-xs text-[#6a6f63]">Deep dive into the Cloudflare Native runtime topology, durable object coordination, and egress firewalling.</p>
         </div>

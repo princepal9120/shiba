@@ -238,17 +238,17 @@ export function OnboardingModal({
       aria-modal="true"
       aria-labelledby={modalTitleId}
     >
-      <div className="bg-[#fffef8] border border-[#eae8e1] rounded-2xl max-w-2xl w-full p-5 sm:p-7 shadow-2xl my-auto text-[#222320] max-h-[90dvh] flex flex-col">
+      <div className="bg-[#fffef8] border border-[#e0ded5] rounded-2xl max-w-2xl w-full p-5 sm:p-7 shadow-2xl my-auto text-[#222320] max-h-[90dvh] flex flex-col">
         {/* Modal Header */}
-        <div className="flex items-start justify-between gap-4 pb-4 border-b border-[#eae8e1] shrink-0">
+        <div className="flex items-start justify-between gap-4 pb-4 border-b border-[#e0ded5] shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#dceafa]/60 border border-[#0000a8]/50 flex items-center justify-center text-xl shadow-[0_0_12px_rgba(0,0,168,0.3)]">
+            <div className="w-10 h-10 rounded-xl bg-[#0000a8]/10 border border-[#0000a8]/50 flex items-center justify-center text-xl shadow-[0_0_12px_rgba(0,0,168,0.3)]">
               🚀
             </div>
             <div>
-              <h2 id={modalTitleId} className="text-lg font-bold text-[#171932] flex items-center gap-2 text-balance">
+              <h2 id={modalTitleId} className="text-lg font-bold text-[#222320] flex items-center gap-2 text-balance">
                 Setup & Onboarding Guide
-                <span className="text-[10px] font-mono font-normal text-[#0000a8] bg-[#dceafa]/60 border border-[#9cbce2]/60 px-2 py-0.5 rounded-full">
+                <span className="text-[10px] font-mono font-normal text-[#0000a8] bg-[#0000a8]/10 border border-[#0000a8]/15 px-2 py-0.5 rounded-full">
                   PLAN.md End-to-End
                 </span>
               </h2>
@@ -260,7 +260,7 @@ export function OnboardingModal({
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-lg border border-[#eae8e1] bg-[#fffef8] hover:bg-[#e0ded5] text-[#6a6f63] hover:text-[#171932] flex items-center justify-center text-sm font-mono transition-colors shrink-0"
+            className="w-8 h-8 rounded-lg border border-[#e0ded5] bg-[#fffef8] hover:bg-[#e0ded5] text-[#6a6f63] hover:text-[#222320] flex items-center justify-center text-sm font-mono transition-colors shrink-0"
             aria-label="Close onboarding modal"
           >
             ✕
@@ -268,9 +268,9 @@ export function OnboardingModal({
         </div>
 
         {/* Progress Tracker with Endowed Progress */}
-        <div className="py-3.5 border-b border-[#eae8e1]/70 shrink-0">
+        <div className="py-3.5 border-b border-[#e0ded5]/70 shrink-0">
           <div className="flex items-center justify-between text-xs mb-1.5">
-            <span className="font-semibold text-[#171932] flex items-center gap-2">
+            <span className="font-semibold text-[#222320] flex items-center gap-2">
               <span>Setup Progress</span>
               <span className="text-[11px] font-mono text-[#0000a8] font-normal tabular-nums">
                 {completedCount} of {totalSteps} steps completed
@@ -278,7 +278,7 @@ export function OnboardingModal({
             </span>
             <span className="font-mono text-[#0000a8] font-bold tabular-nums">{progressPercent}%</span>
           </div>
-          <div className="w-full bg-[#f1efe6] rounded-full h-2 overflow-hidden border border-[#eae8e1]">
+          <div className="w-full bg-[#f1efe6] rounded-full h-2 overflow-hidden border border-[#e0ded5]">
             <div
               className="bg-gradient-to-r from-[#0000a8] to-[#1c1cc8] h-full rounded-full transition-all duration-300 ease-out shadow-[0_0_10px_rgba(28,28,200,0.5)]"
               style={{ width: `${progressPercent}%` }}
@@ -291,25 +291,25 @@ export function OnboardingModal({
 
           {/* Filter & Action Toolbar */}
           <div className="flex items-center justify-between mt-3 text-xs flex-wrap gap-2">
-            <div className="inline-flex items-center p-0.5 bg-[#fffef8] rounded-lg border border-[#eae8e1] text-[11px] font-mono">
+            <div className="inline-flex items-center p-0.5 bg-[#fffef8] rounded-lg border border-[#e0ded5] text-[11px] font-mono">
               <button
                 type="button"
                 onClick={() => setFilter("all")}
-                className={`px-2.5 py-0.5 rounded-md transition-colors ${filter === "all" ? "bg-[#eae8e1] text-[#171932] font-semibold" : "text-[#6a6f63] hover:text-[#171932]"}`}
+                className={`px-2.5 py-0.5 rounded-md transition-colors ${filter === "all" ? "bg-[#e0ded5] text-[#222320] font-semibold" : "text-[#6a6f63] hover:text-[#222320]"}`}
               >
                 All ({totalSteps})
               </button>
               <button
                 type="button"
                 onClick={() => setFilter("pending")}
-                className={`px-2.5 py-0.5 rounded-md transition-colors ${filter === "pending" ? "bg-[#eae8e1] text-[#1c1cc8] font-semibold" : "text-[#6a6f63] hover:text-[#171932]"}`}
+                className={`px-2.5 py-0.5 rounded-md transition-colors ${filter === "pending" ? "bg-[#e0ded5] text-[#1c1cc8] font-semibold" : "text-[#6a6f63] hover:text-[#222320]"}`}
               >
                 Pending ({totalSteps - completedCount})
               </button>
               <button
                 type="button"
                 onClick={() => setFilter("completed")}
-                className={`px-2.5 py-0.5 rounded-md transition-colors ${filter === "completed" ? "bg-[#eae8e1] text-[#0000a8] font-semibold" : "text-[#6a6f63] hover:text-[#171932]"}`}
+                className={`px-2.5 py-0.5 rounded-md transition-colors ${filter === "completed" ? "bg-[#e0ded5] text-[#0000a8] font-semibold" : "text-[#6a6f63] hover:text-[#222320]"}`}
               >
                 Completed ({completedCount})
               </button>
@@ -337,7 +337,7 @@ export function OnboardingModal({
             </div>
           </div>
           {isAllComplete ? (
-            <div className="mt-3 text-xs bg-[#dceafa]/40 border border-[#0000a8]/40 text-[#1c1cc8] px-3 py-2 rounded-lg flex items-center justify-between">
+            <div className="mt-3 text-xs bg-[#0000a8]/10 border border-[#0000a8]/40 text-[#1c1cc8] px-3 py-2 rounded-lg flex items-center justify-between">
               <span>🎉 <strong>All systems configured!</strong> You are ready to run tasks safely.</span>
               <button
                 type="button"
@@ -360,7 +360,7 @@ export function OnboardingModal({
         {/* Step-by-Step Checklist */}
         <div className="py-3 flex flex-col gap-2.5 max-h-[55dvh] overflow-y-auto pr-1 flex-1 min-h-0">
           {filteredSteps.length === 0 ? (
-            <div className="text-center py-8 text-xs text-[#6a6f63] border border-dashed border-[#eae8e1] rounded-xl">
+            <div className="text-center py-8 text-xs text-[#6a6f63] border border-dashed border-[#e0ded5] rounded-xl">
               No steps match this filter.
             </div>
           ) : (
@@ -375,10 +375,10 @@ export function OnboardingModal({
                 key={step.id}
                 className={`border rounded-xl transition-colors ${
                   isDone
-                    ? "border-[#0000a8]/30 bg-[#dceafa]/10"
+                    ? "border-[#0000a8]/30 bg-[#0000a8]/5"
                     : isExpanded
                     ? "border-[#d3d2c8] bg-[#f1efe6]"
-                    : "border-[#eae8e1]/80 bg-[#f6f4ed] hover:border-[#d3d2c8]"
+                    : "border-[#e0ded5]/80 bg-[#f6f4ed] hover:border-[#d3d2c8]"
                 }`}
               >
                 <div className="p-3 sm:p-3.5 flex items-start justify-between gap-3">
@@ -406,17 +406,17 @@ export function OnboardingModal({
                     >
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-[11px] font-mono text-[#6a6f63]">Step {idx + 1}</span>
-                        <span className={`text-xs font-semibold ${isDone ? "text-[#1c1cc8] line-through opacity-80" : "text-[#171932]"}`}>
+                        <span className={`text-xs font-semibold ${isDone ? "text-[#1c1cc8] line-through opacity-80" : "text-[#222320]"}`}>
                           {step.title}
                         </span>
-                        <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-[#f1efe6] border border-[#eae8e1] text-[#6a6f63]">
+                        <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-[#f1efe6] border border-[#e0ded5] text-[#6a6f63]">
                           {step.category}
                         </span>
                         {!step.required ? (
                           <span className="text-[10px] text-[#6a6f63] italic">(optional)</span>
                         ) : null}
                         {isDetected ? (
-                          <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-[#dceafa]/60 border border-[#9cbce2]/60 text-[#1c1cc8]">
+                          <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-[#0000a8]/10 border border-[#0000a8]/15 text-[#1c1cc8]">
                             detected live
                           </span>
                         ) : null}
@@ -430,15 +430,15 @@ export function OnboardingModal({
                   <button
                     type="button"
                     onClick={() => setExpandedStep(isExpanded ? null : step.id)}
-                    className="text-xs text-[#6a6f63] hover:text-[#171932] font-mono px-2 py-1 rounded hover:bg-[#eae8e1]/60 transition-colors shrink-0"
+                    className="text-xs text-[#6a6f63] hover:text-[#222320] font-mono px-2 py-1 rounded hover:bg-[#e0ded5]/60 transition-colors shrink-0"
                   >
                     {isExpanded ? "▲ Hide" : "▼ Details"}
                   </button>
                 </div>
 
                 {isExpanded ? (
-                  <div className="px-3 sm:px-4 pb-3.5 pt-1 border-t border-[#eae8e1]/60 text-xs text-[#6a6f63] flex flex-col gap-2.5">
-                    <p className="leading-relaxed text-[#3b3d36]">{step.detail}</p>
+                  <div className="px-3 sm:px-4 pb-3.5 pt-1 border-t border-[#e0ded5]/60 text-xs text-[#6a6f63] flex flex-col gap-2.5">
+                    <p className="leading-relaxed text-[#222320]">{step.detail}</p>
                     <div className="flex items-center justify-between text-[11px] font-mono text-[#6a6f63]">
                       <span>Source: <strong className="text-[#0000a8]">{step.planRef}</strong></span>
                       <a
@@ -451,13 +451,13 @@ export function OnboardingModal({
 
                     {step.codeSnippet ? (
                       <div className="relative mt-1">
-                        <pre className="font-mono text-[11px] text-[#222320] bg-[#fffef8] p-3 rounded-lg border border-[#eae8e1] overflow-x-auto whitespace-pre leading-normal">
+                        <pre className="font-mono text-[11px] text-[#222320] bg-[#fffef8] p-3 rounded-lg border border-[#e0ded5] overflow-x-auto whitespace-pre leading-normal">
                           {step.codeSnippet}
                         </pre>
                         <button
                           type="button"
                           onClick={() => copySnippet(step.id, step.codeSnippet!)}
-                          className="absolute top-2 right-2 px-2 py-1 rounded bg-[#f1efe6] hover:bg-[#eae8e1] border border-[#d3d2c8] text-[10px] font-mono text-[#6a6f63] hover:text-[#171932] transition-colors"
+                          className="absolute top-2 right-2 px-2 py-1 rounded bg-[#f1efe6] hover:bg-[#e0ded5] border border-[#d3d2c8] text-[10px] font-mono text-[#6a6f63] hover:text-[#222320] transition-colors"
                         >
                           {copiedId === step.id ? "✓ Copied" : "Copy"}
                         </button>
@@ -470,8 +470,8 @@ export function OnboardingModal({
                         onClick={() => toggleStep(step.id)}
                         className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors ${
                           isDone
-                            ? "border-[#d3d2c8] bg-[#fffef8] text-[#6a6f63] hover:text-[#171932]"
-                            : "border-[#0000a8]/50 bg-[#dceafa]/40 text-[#1c1cc8] hover:bg-[#dceafa]/50"
+                            ? "border-[#d3d2c8] bg-[#fffef8] text-[#6a6f63] hover:text-[#222320]"
+                            : "border-[#0000a8]/50 bg-[#0000a8]/10 text-[#1c1cc8] hover:bg-[#0000a8]/10"
                         }`}
                       >
                         {isDone ? "Mark as Incomplete" : "Mark as Completed ✓"}
@@ -503,7 +503,7 @@ export function OnboardingModal({
         </div>
 
         {/* Modal Footer */}
-        <div className="pt-3.5 border-t border-[#eae8e1] flex items-center justify-between gap-3 shrink-0 flex-wrap">
+        <div className="pt-3.5 border-t border-[#e0ded5] flex items-center justify-between gap-3 shrink-0 flex-wrap">
           <a
             href="/docs/onboarding/"
             className="text-xs text-[#0000a8] hover:underline font-mono inline-flex items-center gap-1"
@@ -514,7 +514,7 @@ export function OnboardingModal({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-1.5 rounded-lg text-xs font-medium text-[#222320] bg-[#fffef8] border border-[#eae8e1] hover:bg-[#e0ded5] transition-colors"
+              className="px-4 py-1.5 rounded-lg text-xs font-medium text-[#222320] bg-[#fffef8] border border-[#e0ded5] hover:bg-[#e0ded5] transition-colors"
             >
               Close Guide
             </button>

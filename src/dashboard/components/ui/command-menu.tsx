@@ -31,7 +31,7 @@ function CommandDialog({
         role="dialog"
         aria-modal="true"
         aria-label="Command menu"
-        className="relative bg-[#fffef8] border border-[#eae8e1] rounded-xl max-w-md w-full shadow-2xl overflow-hidden"
+        className="relative bg-[#fffef8] border border-[#e0ded5] rounded-xl max-w-md w-full shadow-2xl overflow-hidden"
       >
         {children}
       </div>
@@ -54,7 +54,7 @@ export function CommandMenu({
         <Command.Input
           autoFocus
           placeholder="Type a command or search…"
-          className="w-full bg-transparent px-4 py-3 text-sm text-[#222320] placeholder:text-[#6a6f63] border-b border-[#eae8e1] focus:outline-none"
+          className="w-full bg-transparent px-4 py-3 text-sm text-[#222320] placeholder:text-[#6a6f63] border-b border-[#e0ded5] focus:outline-none"
         />
         <Command.List className="max-h-72 overflow-y-auto py-1.5">
           <Command.Empty className="px-4 py-6 text-center text-xs text-[#6a6f63]">

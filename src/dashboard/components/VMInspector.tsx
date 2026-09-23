@@ -228,7 +228,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
           </svg>
         </div>
-        <h3 className="text-base font-semibold text-[#171932] mb-1">No Virtual Machine Selected</h3>
+        <h3 className="text-base font-semibold text-[#222320] mb-1">No Virtual Machine Selected</h3>
         <p className="text-xs text-[#6a6f63] max-w-sm">
           Run or select a coding task to inspect its live sandbox environment, inspect workspace files, run terminal commands, and view web previews.
         </p>
@@ -295,7 +295,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
           <button
             type="button"
             onClick={copyShareLink}
-            className="text-xs bg-[#fffef8] hover:bg-[#eae8e1] border border-black/[0.08] text-[#222320] font-medium py-1.5 px-3 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
+            className="text-xs bg-[#fffef8] hover:bg-[#e0ded5] border border-black/[0.08] text-[#222320] font-medium py-1.5 px-3 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
             title="Copy shareable link for teammates to view this virtual machine"
           >
             {copiedLink ? (
@@ -321,7 +321,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
               void fetchSandboxInfo(sandboxId);
               void fetchFiles(sandboxId, currentPath);
             }}
-            className="text-xs bg-[#fffef8] hover:bg-[#eae8e1] border border-black/[0.08] text-[#6a6f63] hover:text-[#171932] p-1.5 rounded-lg transition-colors"
+            className="text-xs bg-[#fffef8] hover:bg-[#e0ded5] border border-black/[0.08] text-[#6a6f63] hover:text-[#222320] p-1.5 rounded-lg transition-colors"
             title="Refresh VM state"
           >
             <svg className={`w-4 h-4 ${infoLoading ? "animate-spin text-[#0000a8]" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -334,7 +334,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
       {/* METADATA STRIP: Repository, Task, Branch, Sandbox ID */}
       <div className="bg-[#f6f4ed]/70 border-b border-black/[0.08] px-4 lg:px-6 py-2.5 flex flex-wrap items-center justify-between gap-y-2 gap-x-4 text-xs font-mono text-[#6a6f63]">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-          <span className="text-[#171932] font-semibold flex items-center gap-1.5">
+          <span className="text-[#222320] font-semibold flex items-center gap-1.5">
             <svg className="w-3.5 h-3.5 text-[#0000a8]" fill="currentColor" viewBox="0 0 24 24">
               <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
             </svg>
@@ -343,7 +343,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
           <span>Branch: <span className="text-[#222320]">{activeRun.baseBranch}</span></span>
           <span>Sandbox ID: <span className="text-[#0000a8]">{activeRun.sandboxId}</span></span>
           {activeRun.publishPullRequest ? (
-            <span className="text-[#0000a8] bg-[#dceafa]/40 border border-[#9cbce2]/40 px-1.5 py-0.2 rounded text-[10px]">
+            <span className="text-[#0000a8] bg-[#0000a8]/10 border border-[#0000a8]/10 px-1.5 py-0.2 rounded text-[10px]">
               PR Enabled
             </span>
           ) : null}
@@ -373,7 +373,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
           onClick={() => setSubTab("diff")}
           className={`px-3 py-2.5 text-xs font-medium border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap ${
             subTab === "diff"
-              ? "border-[#0000a8] text-[#0000a8] font-semibold bg-[#eae8e1]/30"
+              ? "border-[#0000a8] text-[#0000a8] font-semibold bg-[#e0ded5]/30"
               : "border-transparent text-[#6a6f63] hover:text-[#222320]"
           }`}
         >
@@ -388,7 +388,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
           onClick={() => setSubTab("files")}
           className={`px-3 py-2.5 text-xs font-medium border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap ${
             subTab === "files"
-              ? "border-[#0000a8] text-[#0000a8] font-semibold bg-[#eae8e1]/30"
+              ? "border-[#0000a8] text-[#0000a8] font-semibold bg-[#e0ded5]/30"
               : "border-transparent text-[#6a6f63] hover:text-[#222320]"
           }`}
         >
@@ -403,7 +403,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
           onClick={() => setSubTab("terminal")}
           className={`px-3 py-2.5 text-xs font-medium border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap ${
             subTab === "terminal"
-              ? "border-[#0000a8] text-[#0000a8] font-semibold bg-[#eae8e1]/30"
+              ? "border-[#0000a8] text-[#0000a8] font-semibold bg-[#e0ded5]/30"
               : "border-transparent text-[#6a6f63] hover:text-[#222320]"
           }`}
         >
@@ -418,7 +418,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
           onClick={() => setSubTab("preview")}
           className={`px-3 py-2.5 text-xs font-medium border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap ${
             subTab === "preview"
-              ? "border-[#0000a8] text-[#0000a8] font-semibold bg-[#eae8e1]/30"
+              ? "border-[#0000a8] text-[#0000a8] font-semibold bg-[#e0ded5]/30"
               : "border-transparent text-[#6a6f63] hover:text-[#222320]"
           }`}
         >
@@ -434,7 +434,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
           onClick={() => setSubTab("processes")}
           className={`px-3 py-2.5 text-xs font-medium border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap ${
             subTab === "processes"
-              ? "border-[#0000a8] text-[#0000a8] font-semibold bg-[#eae8e1]/30"
+              ? "border-[#0000a8] text-[#0000a8] font-semibold bg-[#e0ded5]/30"
               : "border-transparent text-[#6a6f63] hover:text-[#222320]"
           }`}
         >
@@ -452,7 +452,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
           <div className="flex flex-col gap-4 max-w-5xl mx-auto">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-semibold text-[#171932]">Work in Progress Diff</h3>
+                <h3 className="text-sm font-semibold text-[#222320]">Work in Progress Diff</h3>
                 <p className="text-xs text-[#6a6f63]">
                   All uncommitted and committed modifications made in this virtual machine workspace.
                 </p>
@@ -528,8 +528,8 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
                       }}
                       className={`text-left px-2 py-1.5 rounded flex items-center gap-2 truncate transition-colors ${
                         selectedFile === entry.path
-                          ? "bg-[#dceafa]/60 text-[#1c1cc8] border border-[#9cbce2]/60"
-                          : "hover:bg-[#eae8e1] text-[#222320]"
+                          ? "bg-[#0000a8]/10 text-[#1c1cc8] border border-[#0000a8]/15"
+                          : "hover:bg-[#e0ded5] text-[#222320]"
                       }`}
                     >
                       <svg
@@ -563,7 +563,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
                     onClick={() => {
                       if (fileContent) void navigator.clipboard.writeText(fileContent);
                     }}
-                    className="text-[11px] text-[#6a6f63] hover:text-[#171932]"
+                    className="text-[11px] text-[#6a6f63] hover:text-[#222320]"
                   >
                     Copy content
                   </button>
@@ -590,7 +590,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
           <div className="flex flex-col gap-4 max-w-5xl mx-auto">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h3 className="text-sm font-semibold text-[#171932]">Live Virtual Machine Terminal</h3>
+                <h3 className="text-sm font-semibold text-[#222320]">Live Virtual Machine Terminal</h3>
                 <p className="text-xs text-[#6a6f63]">
                   Run diagnostics and inspect commands directly inside the micro-container.
                 </p>
@@ -603,7 +603,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
                     key={cmd}
                     type="button"
                     onClick={() => void executeCommand(cmd)}
-                    className="px-2.5 py-1 rounded bg-[#fffef8] border border-black/[0.08] hover:bg-[#eae8e1] text-[#222320] transition-colors"
+                    className="px-2.5 py-1 rounded bg-[#fffef8] border border-black/[0.08] hover:bg-[#e0ded5] text-[#222320] transition-colors"
                   >
                     {cmd}
                   </button>
@@ -618,7 +618,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
                   <span className="w-2.5 h-2.5 rounded-full bg-[#fb2c36]/80" />
                   <span className="w-2.5 h-2.5 rounded-full bg-[#b45309]/80" />
                   <span className="w-2.5 h-2.5 rounded-full bg-[#15803d]/80" />
-                  <span className="ml-2 text-[#171932]">sandbox@cloudflare-vm:~/workspace</span>
+                  <span className="ml-2 text-[#222320]">sandbox@cloudflare-vm:~/workspace</span>
                 </div>
                 <span>shiba-bash v1</span>
               </div>
@@ -635,7 +635,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
                       <div className="flex items-center justify-between text-[#6a6f63] text-[11px]">
                         <div className="flex items-center gap-1.5 text-[#0000a8] font-semibold">
                           <span>$</span>
-                          <span className="text-[#171932]">{item.command}</span>
+                          <span className="text-[#222320]">{item.command}</span>
                         </div>
                         <span>exit code: {item.exitCode} · {item.time}</span>
                       </div>
@@ -682,7 +682,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
                   value={customCommand}
                   onChange={(e) => setCustomCommand(e.target.value)}
                   placeholder="Enter command (e.g. npm test, ls -lh, git diff)..."
-                  className="flex-1 bg-transparent border-none text-xs font-mono text-[#171932] focus:outline-none placeholder:text-[#6a6f63]/50"
+                  className="flex-1 bg-transparent border-none text-xs font-mono text-[#222320] focus:outline-none placeholder:text-[#6a6f63]/50"
                   disabled={isPending}
                 />
                 <button
@@ -707,7 +707,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
           <div className="flex flex-col gap-4 max-w-5xl mx-auto h-full">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h3 className="text-sm font-semibold text-[#171932]">Cloudflare Sandbox Web Preview</h3>
+                <h3 className="text-sm font-semibold text-[#222320]">Cloudflare Sandbox Web Preview</h3>
                 <p className="text-xs text-[#6a6f63]">
                   Inspect the web app running inside the micro-container on exposed ports.
                 </p>
@@ -723,8 +723,8 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
                     onClick={() => setPreviewPort(port)}
                     className={`px-2.5 py-1 rounded border transition-colors ${
                       previewPort === port
-                        ? "bg-[#dceafa]/70 border-[#0000a8] text-[#1c1cc8] font-semibold"
-                        : "bg-[#fffef8] border-black/[0.08] text-[#6a6f63] hover:text-[#171932]"
+                        ? "bg-[#0000a8]/10 border-[#0000a8] text-[#1c1cc8] font-semibold"
+                        : "bg-[#fffef8] border-black/[0.08] text-[#6a6f63] hover:text-[#222320]"
                     }`}
                   >
                     {port}
@@ -735,7 +735,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
 
             {/* Preview Guide Card */}
             <div className="border border-black/[0.08] bg-[#f6f4ed] rounded-xl p-5 flex flex-col gap-3">
-              <div className="flex items-center gap-2 text-sm font-semibold text-[#171932]">
+              <div className="flex items-center gap-2 text-sm font-semibold text-[#222320]">
                 <svg className="w-5 h-5 text-[#0000a8]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -775,7 +775,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
                 <svg className="w-12 h-12 text-[#0000a8]/50 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
-                <h4 className="text-sm font-semibold text-[#171932] mb-1">Sandbox Web Application</h4>
+                <h4 className="text-sm font-semibold text-[#222320] mb-1">Sandbox Web Application</h4>
                 <p className="text-xs text-[#6a6f63] max-w-md mb-4">
                   To view live web services, launch your application inside the container using the Terminal tab:
                   <code className="block mt-2 bg-[#fffef8] p-2 rounded text-[#1c1cc8] font-mono text-xs">
@@ -792,7 +792,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
           <div className="flex flex-col gap-4 max-w-5xl mx-auto">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-semibold text-[#171932]">Container System & Security</h3>
+                <h3 className="text-sm font-semibold text-[#222320]">Container System & Security</h3>
                 <p className="text-xs text-[#6a6f63]">
                   Hardware, isolation boundary, running processes, and egress firewall rules.
                 </p>
@@ -803,7 +803,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-[#f6f4ed] border border-black/[0.08] rounded-xl p-4 flex flex-col gap-1">
                 <span className="text-xs text-[#6a6f63]">Container Status</span>
-                <span className="text-base font-semibold text-[#171932] flex items-center gap-2">
+                <span className="text-base font-semibold text-[#222320] flex items-center gap-2">
                   <span className={`w-2 h-2 rounded-full ${sandboxInfo?.available ? "bg-[#15803d]" : "bg-[#b45309]"}`} />
                   {sandboxInfo?.available ? "Active & Reachable" : "Ephemeral (Sleeping/Terminated)"}
                 </span>
@@ -811,14 +811,14 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
 
               <div className="bg-[#f6f4ed] border border-black/[0.08] rounded-xl p-4 flex flex-col gap-1">
                 <span className="text-xs text-[#6a6f63]">Placement Region</span>
-                <span className="text-base font-semibold text-[#171932] font-mono">
+                <span className="text-base font-semibold text-[#222320] font-mono">
                   {sandboxInfo?.placementId || "Cloudflare Edge Global"}
                 </span>
               </div>
 
               <div className="bg-[#f6f4ed] border border-black/[0.08] rounded-xl p-4 flex flex-col gap-1">
                 <span className="text-xs text-[#6a6f63]">Default Network Port</span>
-                <span className="text-base font-semibold text-[#171932] font-mono">
+                <span className="text-base font-semibold text-[#222320] font-mono">
                   Port {sandboxInfo?.defaultPort || 3000}
                 </span>
               </div>
@@ -849,7 +849,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
 
             {/* Processes Table */}
             <div className="bg-[#f6f4ed] border border-black/[0.08] rounded-xl p-5 flex flex-col gap-3">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-[#171932] font-mono">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-[#222320] font-mono">
                 Running Container Processes
               </h4>
               {sandboxInfo?.processes && sandboxInfo.processes.length > 0 ? (
@@ -862,11 +862,11 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
                         <th className="pb-2">Status</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#eae8e1]/50">
+                    <tbody className="divide-y divide-[#e0ded5]/50">
                       {sandboxInfo.processes.map((proc, i) => (
                         <tr key={i}>
                           <td className="py-2 text-[#0000a8]">{proc.pid}</td>
-                          <td className="py-2 text-[#171932]">{proc.command}</td>
+                          <td className="py-2 text-[#222320]">{proc.command}</td>
                           <td className="py-2 text-[#6a6f63]">{proc.status || "running"}</td>
                         </tr>
                       ))}

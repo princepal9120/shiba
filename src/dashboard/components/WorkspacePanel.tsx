@@ -89,8 +89,8 @@ const TABS: { id: WorkspaceTab; label: string }[] = [
 
 const GHOST_BUTTON =
   "text-[11px] bg-transparent hover:bg-[#fffef8] border border-[#e0ded5] hover:border-[#d3d2c8] text-[#6a6f63] hover:text-[#222320] font-medium py-1 px-2.5 rounded-md transition-colors";
-const TEAL_BUTTON =
-  "text-[11px] bg-[#dceafa]/60 hover:bg-[#dceafa] border border-[#9cbce2]/60 text-[#1c1cc8] font-medium py-1 px-2.5 rounded-md transition-colors";
+const ACCENT_BUTTON =
+  "text-[11px] bg-[#0000a8]/10 hover:bg-[#0000a8]/15 border border-[#0000a8]/15 text-[#1c1cc8] font-medium py-1 px-2.5 rounded-md transition-colors";
 const DANGER_BUTTON =
   "text-[11px] bg-transparent hover:bg-[#fb2c36]/10 border border-[#fb2c36]/50 text-[#fb2c36] font-medium py-1 px-2.5 rounded-md transition-colors";
 
@@ -165,7 +165,7 @@ function StoredApprovalCard({
       <div className="flex items-center gap-2">
         <button
           type="button"
-          className={TEAL_BUTTON}
+          className={ACCENT_BUTTON}
           disabled={decided}
           onClick={() => onDecide(approval, true)}
         >
@@ -444,7 +444,7 @@ export function WorkspacePanel({
                       <div className="flex items-center gap-2 mt-2 flex-wrap">
                         <button
                           type="button"
-                          className={TEAL_BUTTON}
+                          className={ACCENT_BUTTON}
                           onClick={() => onInspectVM(run.runId)}
                         >
                           Inspect VM
@@ -533,7 +533,7 @@ export function WorkspacePanel({
                               </button>
                               <button
                                 type="button"
-                                className={TEAL_BUTTON}
+                                className={ACCENT_BUTTON}
                                 onClick={() => onInspectVM(run.runId)}
                               >
                                 Inspect VM

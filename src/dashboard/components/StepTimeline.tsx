@@ -115,6 +115,9 @@ export function StepTimeline({
           alt="Shiba illustration mascot"
           className="w-56 h-auto max-h-40 rounded-xl shadow-lg border border-[#0000a8]/30 mb-3 object-cover"
         />
+        <h2 className="font-display text-3xl text-[#222320] mb-1">
+          Delegate the next task.
+        </h2>
         <p className="text-[#6a6f63] text-sm mb-2 font-medium">
           No messages yet. Submit a task to start.
         </p>
@@ -148,7 +151,7 @@ export function StepTimeline({
                 <span>You</span>
                 <span className="w-1.5 h-1.5 rounded-full bg-[#0000a8]" />
               </div>
-              <div className="flex flex-col gap-2 max-w-[92%] md:max-w-[85%] bg-[#0000a8] text-[#222320] rounded-2xl rounded-tr-sm p-4 font-medium shadow-sm">
+              <div className="flex flex-col gap-2 max-w-[92%] md:max-w-[85%] bg-[#0000a8] text-white rounded-2xl rounded-tr-sm p-4 font-medium shadow-sm">
                 {message.parts.map((part, index) => {
                   const text = partText(part);
                   if (text === null) return null;
