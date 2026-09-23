@@ -145,3 +145,18 @@ export interface MemorySession {
   started_at: number;
   summary: string;
 }
+
+/**
+ * Audit-log row from `GET /api/audit` (megaplan T13) — one per MCP tool
+ * call. `args_hash` is a SHA-256 fingerprint of the args, never the args
+ * themselves, so the table can show it verbatim. `ts` is epoch ms.
+ */
+export interface AuditEntry {
+  id: string;
+  ts: number;
+  principal: string;
+  tool: string;
+  args_hash: string;
+  outcome: string;
+  detail: string | null;
+}

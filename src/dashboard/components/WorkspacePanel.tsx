@@ -8,6 +8,7 @@ import { useMemo, useState, type JSX } from "react";
 import { DiffViewer } from "./DiffViewer";
 import { VMInspector, type VMRun } from "./VMInspector";
 import { ApprovalCard } from "./ApprovalCard";
+import { AuditPanel } from "./AuditPanel";
 import { InboxTab } from "./InboxTab";
 import { MemoryTab } from "./MemoryTab";
 import {
@@ -581,6 +582,7 @@ export function WorkspacePanel({
                 ))}
               </div>
             ) : null}
+            <AuditPanel />
           </div>
         ) : null}
       </div>

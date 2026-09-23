@@ -8,6 +8,7 @@ import { getAgentByName, routeAgentRequest } from "agents/routing";
 import { listTokens, verifyToken } from "./agent-tokens.js";
 import { OpenCodeAgent } from "./agents/opencode-agent.js";
 import { CodingOrchestrator } from "./agents/orchestrator.js";
+import { AUDIT_RETENTION_MS, listAuditEntries, pruneAuditLog } from "./audit.js";
 import { AUTOMATIONS_DO_NAME } from "./automation-runner.js";
 import { Automations } from "./automations-do.js";
 import { parseAutomationWebhookPath } from "./automations.js";
@@ -667,6 +668,45 @@ async function handleMemory(request: Request, env: Env): Promise<Response | null
 }
 
 /**
+ * `GET /api/audit` — the dashboard's read on the D1 audit log (megaplan
+ * T13), same Access gate as `/api/runs`. Rows come back newest-first;
+ * `?principal=` narrows to one agent, `?limit=` clamps at 200. The
+ * `args_hash` column is a SHA-256 fingerprint — never the args — so it
+ * is safe to return verbatim.
+ */
+async function handleAudit(request: Request, env: Env): Promise<Response | null> {
+  const url = new URL(request.url);
+  if (url.pathname !== "/api/audit") {
+    return null;
+  }
+  if (!isAuthenticated(request, env)) {
+    return Response.json({ error: "Authentication required." }, { status: 401 });
+  }
+  if (request.method !== "GET") {
+    return methodNotAllowed();
+  }
+  if (env.AGENT_AUDIT === undefined) {
+    return Response.json({ error: "Audit log is not provisioned yet." }, { status: 503 });
+  }
+  const limit = clampedLimit(url.searchParams.get("limit"), MAX_LIST_LIMIT);
+  const principal = url.searchParams.get("principal")?.trim();
+  try {
+    const entries = await listAuditEntries(env, {
+      limit,
+      ...(principal ? { principal } : {}),
+    });
+    return Response.json({ entries }, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    // The placeholder-id binding throws until `wrangler d1 create` runs —
+    // the same 503 the mailbox/memory routes answer while unprovisioned.
+    console.warn(
+      `audit read failed: ${redactSecrets(error instanceof Error ? error.message : String(error))}`,
+    );
+    return Response.json({ error: "Audit log is unavailable." }, { status: 503 });
+  }
+}
+
+/**
  * Registered MCP-token principals for `GET /api/agents` — one row per
  * principal name, aggregated across that name's token records. `live`
  * means at least one non-revoked token exists, i.e. the principal can
@@ -850,6 +890,24 @@ export default {
           console.error(redactSecrets(error instanceof Error ? error.message : String(error)));
         }),
     );
+    // Retention: audit_log keeps 90 days — pruned here on the same cron
+    // that ticks automations (megaplan T13). Best-effort like the writer:
+    // a D1 hiccup warns and retries on the next tick, never blocks it.
+    if (env.AGENT_AUDIT !== undefined) {
+      ctx.waitUntil(
+        pruneAuditLog(env, Date.now() - AUDIT_RETENTION_MS)
+          .then((deleted) => {
+            if (deleted > 0) {
+              console.log(`audit prune deleted ${deleted} row(s) older than 90 days`);
+            }
+          })
+          .catch((error: unknown) => {
+            console.warn(
+              `audit prune failed: ${redactSecrets(error instanceof Error ? error.message : String(error))}`,
+            );
+          }),
+      );
+    }
   },
   // Email Routing delivery — registered-mailbox gate + store, see email-handler.ts.
   async email(message: ForwardableEmailMessage, env: Env, ctx: ExecutionContext): Promise<void> {
@@ -927,6 +985,10 @@ export default {
       const memoryResponse = await handleMemory(request, env);
       if (memoryResponse) {
         return memoryResponse;
+      }
+      const auditResponse = await handleAudit(request, env);
+      if (auditResponse) {
+        return auditResponse;
       }
       const sandboxRouteResponse = await handleSandboxRoutes(request, env);
       if (sandboxRouteResponse) {

@@ -68,6 +68,14 @@ export async function initAudit(env: AuditEnv): Promise<void> {
  */
 const initialized = new WeakSet<D1Database>();
 
+/** Run the idempotent DDL once per isolate per binding. */
+async function ensureAuditTable(env: AuditEnv): Promise<void> {
+  if (!initialized.has(env.AGENT_AUDIT)) {
+    await initAudit(env);
+    initialized.add(env.AGENT_AUDIT);
+  }
+}
+
 /**
  * Insert one audit row. Never throws: init or insert failures log a
  * (secret-redacted) warning and resolve — audit is observability, not a
@@ -75,10 +83,7 @@ const initialized = new WeakSet<D1Database>();
  */
 export async function audit(env: AuditEnv, entry: AuditEntry): Promise<void> {
   try {
-    if (!initialized.has(env.AGENT_AUDIT)) {
-      await initAudit(env);
-      initialized.add(env.AGENT_AUDIT);
-    }
+    await ensureAuditTable(env);
     await env.AGENT_AUDIT.prepare(
       `INSERT INTO audit_log (id, ts, principal, tool, args_hash, outcome, detail)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -98,4 +103,59 @@ export async function audit(env: AuditEnv, entry: AuditEntry): Promise<void> {
       `audit write failed: ${redactSecrets(error instanceof Error ? error.message : String(error))}`,
     );
   }
+}
+
+/** Row shape the dashboard's `GET /api/audit` returns — one per MCP call. */
+export interface AuditRow {
+  id: string;
+  /** Epoch milliseconds. */
+  ts: number;
+  principal: string;
+  tool: string;
+  /** SHA-256 fingerprint of the args — never the args themselves. */
+  args_hash: string;
+  outcome: string;
+  detail: string | null;
+}
+
+/**
+ * Read audit rows newest-first for `GET /api/audit`. `principal` narrows to
+ * one agent; `limit` is already clamped by the caller (the route caps at
+ * 200). Throws on failure — unlike the write path this is a user-facing
+ * query, so a D1 outage must surface as an error, not a fake empty log.
+ */
+export async function listAuditEntries(
+  env: AuditEnv,
+  options: { limit: number; principal?: string },
+): Promise<AuditRow[]> {
+  await ensureAuditTable(env);
+  const principal = options.principal?.trim();
+  const statement = principal
+    ? `SELECT id, ts, principal, tool, args_hash, outcome, detail
+       FROM audit_log WHERE principal = ? ORDER BY ts DESC LIMIT ?`
+    : `SELECT id, ts, principal, tool, args_hash, outcome, detail
+       FROM audit_log ORDER BY ts DESC LIMIT ?`;
+  const prepared = env.AGENT_AUDIT.prepare(statement);
+  const { results } = await (principal
+    ? prepared.bind(principal, options.limit)
+    : prepared.bind(options.limit)
+  ).all<AuditRow>();
+  return results ?? [];
+}
+
+/** Retention window: the audit log is observability, not history — 90 days. */
+export const AUDIT_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
+
+/**
+ * Delete audit rows older than `cutoffTs` (epoch ms); the cron `scheduled`
+ * handler passes `Date.now() - AUDIT_RETENTION_MS`. Returns the deleted
+ * count when D1 reports it. Throws — the caller logs and the next tick
+ * retries, so a D1 hiccup never compounds.
+ */
+export async function pruneAuditLog(env: AuditEnv, cutoffTs: number): Promise<number> {
+  await ensureAuditTable(env);
+  const result = await env.AGENT_AUDIT.prepare(`DELETE FROM audit_log WHERE ts < ?`)
+    .bind(cutoffTs)
+    .run();
+  return typeof result.meta.changes === "number" ? result.meta.changes : 0;
 }
