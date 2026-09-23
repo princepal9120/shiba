@@ -5,17 +5,17 @@ How the engineering skills should consume this repo's domain documentation when 
 ## Before exploring, read these
 
 - **`CONTEXT.md`** at the repo root (single-context layout).
-- **`docs/adr/`**: read ADRs that touch the area you're about to work in.
+- **`apps/web/docs/adr/`**: read ADRs that touch the area you're about to work in.
 - **`spec/GOAL.md`**: the product contract. Treat its constraints (single-tenant, no invented prices, no prose scraping at the child boundary) as standing ADRs.
 
-If `CONTEXT.md` or `docs/adr/` don't exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront. The `/domain-modeling` skill creates them lazily when terms or decisions actually get resolved.
+If `CONTEXT.md` or `apps/web/docs/adr/` don't exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront. The `/domain-modeling` skill creates them lazily when terms or decisions actually get resolved.
 
 ## File structure
 
 ```
 /
 ├── CONTEXT.md
-├── docs/adr/
+├── apps/web/docs/adr/
 │   └── 0001-<slug>.md
 ├── spec/GOAL.md
 └── src/

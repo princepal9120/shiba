@@ -11,12 +11,12 @@ npx wrangler deploy --dry-run --config apps/backend/wrangler.jsonc   # needs Doc
 
 ### Issue tracker
 
-Tasks are `T<n>` sections in `PLAN.md`; state lives in its §2.0 table, evidence in `VERIFICATION.md`. See `docs/agents/issue-tracker.md`.
+Tasks are `T<n>` sections in `PLAN.md`; state lives in its §2.0 table, evidence in `VERIFICATION.md`. See `apps/web/docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
-Default five-role vocabulary, recorded as a `Status:` word in the §2.0 table. See `docs/agents/triage-labels.md`.
+Default five-role vocabulary, recorded as a `Status:` word in the §2.0 table. See `apps/web/docs/agents/triage-labels.md`.
 
 ### Domain docs
 
-Single-context: `CONTEXT.md` + `docs/adr/` at the root, with `spec/GOAL.md` as standing constraints. See `docs/agents/domain.md`.
+Single-context: `CONTEXT.md` at the root + `apps/web/docs/adr/`, with `spec/GOAL.md` as standing constraints. See `apps/web/docs/agents/domain.md`.

@@ -10,7 +10,7 @@ modern-minimal (dev-tool / infra)
 ## Macrostructure family
 
 - Marketing pages: n/a (no marketing surface in this repo)
-- App pages:       Workbench — dashboard (`dashboard/src/`). Dense panels,
+- App pages:       Workbench — dashboard (`apps/frontend/src/`). Dense panels,
   tab-nav, data rows; variation in card archetypes only.
 - Content pages:   Long Document — docs (`web/`, Starlight). Sidebar + prose
   column; variation in aside/card archetypes only.
@@ -115,7 +115,7 @@ Starlight defaults in docs). Named tokens only.
 ## Workbench layout
 
 Devin-style three-pane agent workbench for the dashboard Tasks view
-(`dashboard/src/`). Other views keep working under the same slim top
+(`apps/frontend/src/`). Other views keep working under the same slim top
 header (`h-14`): logo + Shiba, nav tabs, sandbox pill, connection,
 setup, docs.
 
@@ -173,6 +173,6 @@ setup, docs.
   `--line`, `--line-light`; ink `--text`/`--muted`; semantics
   `--ok`, `--pending` (#c9a227 for approvals), `--danger`,
   running blue #4f9cf0.
-- Status chips come from `statusChipClass` / `STATUS_CHIP_CLASSES` in `dashboard/src/ui-helpers.ts` (single source for every pane).
+- Status chips come from `statusChipClass` / `STATUS_CHIP_CLASSES` in `apps/frontend/src/ui-helpers.ts` (single source for every pane).
 - Density: 8pt spacing, radius 8–12px, `transition-colors` ≤200ms,
   silent success (no toasts).
