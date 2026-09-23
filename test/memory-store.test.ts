@@ -403,7 +403,7 @@ describe("Memory DO routes", () => {
   it("rejects a malformed list limit uniformly across facts and sessions", async () => {
     const h = makeHarness();
     await bank(h.stub("intern"), "alpha");
-    for (const bad of ["abc", ""]) {
+    for (const bad of ["abc", "", "-5", "0", "1.5"]) {
       expect((await get(h.stub("intern"), `/facts?limit=${bad}`)).status).toBe(400);
       expect((await get(h.registry, `/facts?limit=${bad}`)).status).toBe(400);
       expect((await get(h.registry, `/sessions?limit=${bad}`)).status).toBe(400);
@@ -412,6 +412,36 @@ describe("Memory DO routes", () => {
       facts: unknown[];
     };
     expect(body.facts).toHaveLength(1);
+  });
+
+  it("rejects non-numeric ttl/ttl_ms/started_at instead of ignoring them", async () => {
+    const h = makeHarness();
+    for (const extra of [{ ttl: "abc" }, { ttl: "durable" }, { ttl_ms: "soon" }]) {
+      const res = await send(h.stub("intern"), "POST", "/facts", {
+        fact: "x",
+        source: "run",
+        ...extra,
+      });
+      expect(res.status).toBe(400);
+    }
+    // A malformed optional number must not bank anything.
+    const listed = (await (await get(h.stub("intern"), "/facts")).json()) as { facts: unknown[] };
+    expect(listed.facts).toEqual([]);
+    const badSession = await send(h.registry, "POST", "/sessions", {
+      agent: "intern",
+      summary: "x",
+      started_at: "soon",
+    });
+    expect(badSession.status).toBe(400);
+    const okSession = await send(h.registry, "POST", "/sessions", {
+      agent: "intern",
+      summary: "x",
+      started_at: 1_000,
+    });
+    expect(okSession.status).toBe(201);
+    expect(((await okSession.json()) as { session: { started_at: number } }).session.started_at).toBe(
+      1_000,
+    );
   });
 
   it("rejects caller ids that shadow the /facts routes or already exist", async () => {
@@ -477,6 +507,10 @@ describe("Memory DO routes", () => {
     // The same name is not a valid ?agent= scope either — it would make the
     // registry fetch itself.
     expect((await get(h.registry, "/facts?agent=global")).status).toBe(400);
+    // The guard is uniform across the read routes: recall and sessions
+    // scope by agent the same way.
+    expect((await get(h.registry, "/facts/search?q=x&agent=global")).status).toBe(400);
+    expect((await get(h.registry, "/sessions?agent=global")).status).toBe(400);
   });
 
   it("returns 409 on a duplicate caller-supplied session id", async () => {
@@ -629,6 +663,24 @@ describe("Memory DO routes", () => {
       facts: unknown[];
     };
     expect(capped.facts).toHaveLength(10);
+  });
+
+  it("caps the merged fact listing fan-out on a wide registry", async () => {
+    const h = makeHarness();
+    // 51 registered agents exceeds the merge fan-out bound — the merged
+    // listing stays bounded instead of spending unbounded subrequests.
+    for (let i = 0; i < 51; i++) {
+      await bank(h.stub(`agent_${String(i).padStart(2, "0")}`), `fact ${i}`);
+    }
+    const res = await get(h.registry, "/facts");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { facts: Array<{ agent: string }> };
+    expect(body.facts).toHaveLength(50);
+    // A scoped read is a single fetch — unaffected by the cap.
+    const scoped = (await (await get(h.registry, "/facts?agent=agent_50")).json()) as {
+      facts: Array<{ agent: string }>;
+    };
+    expect(scoped.facts).toHaveLength(1);
   });
 
   it("skips a failing agent stub in cross-agent recall instead of failing the call", async () => {

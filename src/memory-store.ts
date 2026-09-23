@@ -246,15 +246,10 @@ export class MemoryStore {
    * Returns the purged ids so the DO can drop their vectors too.
    */
   purgeExpiredFacts(nowMs?: number): string[] {
-    const now = nowMs ?? Date.now();
-    const expired = this.exec(
-      `SELECT id FROM facts WHERE ttl IS NOT NULL AND ttl <= ?`,
-      now,
-    );
-    for (const row of expired) {
-      this.exec(`DELETE FROM facts WHERE id = ?`, String(row.id));
-    }
-    return expired.map((row) => String(row.id));
+    return this.exec(
+      `DELETE FROM facts WHERE ttl IS NOT NULL AND ttl <= ? RETURNING id`,
+      nowMs ?? Date.now(),
+    ).map((row) => String(row.id));
   }
 
   /** Live fact by id — an expired row is purged and reads as absent. */

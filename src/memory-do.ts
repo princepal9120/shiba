@@ -45,6 +45,13 @@ const EMBEDDING_DIMS = 768;
 /** Vectorize's documented `topK` ceiling (no values/metadata requested). */
 const MAX_RECALL_TOP_K = 100;
 
+/**
+ * Merged-listing fan-out ceiling — each registered agent costs one
+ * sequential stub fetch, and stub fetches spend the request's subrequest
+ * budget, so a wide registry must not iterate unbounded.
+ */
+const MAX_MERGE_FANOUT = 50;
+
 /** Per-agent stub — the unit every fact write/scoped read goes through. */
 export function memoryStub(env: Env, agent: string): DurableObjectStub {
   return env.Memory.get(env.Memory.idFromName(agent.trim()));
@@ -82,8 +89,19 @@ function requiredString(value: unknown, field: string): string {
   return value;
 }
 
-function optNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+/**
+ * Optional finite-number body field. Absent/`null` is "unset"; a present
+ * non-number is malformed input — a 400 like the string fields, not a
+ * silent default.
+ */
+function optNumber(value: unknown, field: string): number | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new InputError(`${field} must be a finite number.`);
+  }
+  return value;
 }
 
 /** Path segment decode — a malformed %escape is a 400, not a 500. */
@@ -105,6 +123,11 @@ function limitParam(raw: string | null): number | undefined {
   if (raw.trim() === "" || !Number.isFinite(value)) {
     throw new InputError("limit must be a number.");
   }
+  // A page bound is a positive integer — the contract topKParam enforces
+  // on `/facts/search`, applied uniformly across the list routes.
+  if (!Number.isInteger(value) || value < 1) {
+    throw new InputError("limit must be a positive integer.");
+  }
   return value;
 }
 
@@ -117,10 +140,7 @@ function topKParam(raw: string | null): number | undefined {
   const value = limitParam(raw);
   // Anything above the index's topK ceiling errors inside Vectorize (a 500)
   // and would fan out one fact fetch per match — reject it up front.
-  if (
-    value !== undefined &&
-    (!Number.isInteger(value) || value < 1 || value > MAX_RECALL_TOP_K)
-  ) {
+  if (value !== undefined && value > MAX_RECALL_TOP_K) {
     throw new InputError(
       `limit must be a positive integer no greater than ${MAX_RECALL_TOP_K}.`,
     );
@@ -295,8 +315,8 @@ export class Memory {
     const source = requiredString(body.source, "source");
     // `ttl` is the spec's epoch-ms deadline; `ttl_ms` is the caller-friendly
     // duration form — a deadline of `now + ttl_ms`.
-    let ttl = optNumber(body.ttl) ?? null;
-    const ttlMs = optNumber(body.ttl_ms);
+    let ttl = optNumber(body.ttl, "ttl") ?? null;
+    const ttlMs = optNumber(body.ttl_ms, "ttl_ms");
     if (ttlMs !== undefined) {
       if (ttlMs <= 0) {
         throw new InputError("ttl_ms must be positive.");
@@ -368,6 +388,11 @@ export class Memory {
     }
     const topK = topKParam(url.searchParams.get("limit"));
     const scopedAgent = this.isRegistry ? url.searchParams.get("agent")?.trim() || undefined : this.agent;
+    // The reserved name can never own facts — scoping recall to it is a
+    // 400 like on `GET /facts`, not an empty page.
+    if (scopedAgent === MEMORY_REGISTRY_NAME) {
+      throw new InputError(`agent must not be "${MEMORY_REGISTRY_NAME}".`);
+    }
     await this.collectPurged(this.store.purgeExpiredFacts());
     const vector = await this.embed(query);
     const matches = await this.env.MEMORY_VECTORS.query(vector, {
@@ -527,7 +552,9 @@ export class Memory {
     // top-`limit` — no agent can occupy more than `limit` merged slots.
     const cap = limit ?? MAX_LIST_LIMIT;
     const facts: Record<string, unknown>[] = [];
-    for (const agent of agents) {
+    // Sequential stub fetches spend the request's subrequest budget — cap
+    // the fan-out; a registry wider than the bound merges a prefix.
+    for (const agent of agents.slice(0, MAX_MERGE_FANOUT)) {
       const res = await memoryStub(this.env, agent).fetch(
         new Request(`https://internal${ROUTE_PREFIX}/facts?limit=${cap}`),
       );
@@ -590,6 +617,11 @@ export class Memory {
     }
     if (request.method === "GET") {
       const agent = url.searchParams.get("agent")?.trim() || undefined;
+      // Same reserved-name guard as the fact routes and the write path —
+      // the registry can never own sessions either.
+      if (agent === MEMORY_REGISTRY_NAME) {
+        throw new InputError(`agent must not be "${MEMORY_REGISTRY_NAME}".`);
+      }
       const limit = limitParam(url.searchParams.get("limit"));
       return json({ sessions: this.store.listSessions({ agent, limit }) });
     }
@@ -613,7 +645,7 @@ export class Memory {
       const session = this.store.addSession({
         agent,
         summary: requiredString(body.summary, "summary"),
-        started_at: optNumber(body.started_at),
+        started_at: optNumber(body.started_at, "started_at"),
         id,
       });
       return json({ session }, { status: 201 });
