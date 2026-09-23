@@ -21,7 +21,7 @@ approval-gated destructive ops, delivered as one PR. Deploy-time provisioning
 
 ## In progress
 
-P3: T6 email tools + T7 approval bridge. P2 VERIFIED: typecheck/lint/592 tests green.
+PARALLEL LANES: A=T7-T10 backend, B=T11-T13 UI. T6 DONE; T11 done w/ controller adjudication (stale-sending sweep @bbe78be); T7 in fix rounds; 682 tests green.
 
 ## Phases (SDD task → review → fix loop)
 
