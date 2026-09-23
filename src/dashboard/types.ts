@@ -81,6 +81,25 @@ export interface StoredApproval {
   createdAt: number;
   kind?: string;
   payload?: unknown;
+  baseBranch?: string;
+  publishPullRequest?: boolean;
+}
+
+/**
+ * Registered MCP-token principal from `GET /api/agents` — one row per
+ * principal name, aggregated across that name's token records. `live`
+ * means at least one non-revoked token exists: the principal can
+ * authenticate at `/mcp` right now. MCP calls are request-scoped, so
+ * credential state is the closest connection state the worker can
+ * observe — there is no persistent session to probe.
+ */
+export interface AgentPrincipal {
+  principal: string;
+  /** Union of scopes across the principal's tokens. */
+  scopes: string[];
+  /** Earliest token creation for this principal, epoch ms. */
+  created: number;
+  live: boolean;
 }
 
 export interface InboxAttachment {

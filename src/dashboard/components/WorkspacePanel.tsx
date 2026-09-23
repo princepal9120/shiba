@@ -35,6 +35,8 @@ export interface WorkspacePanelProps {
   storedDecisions: Record<string, boolean>;
   storedApprovalsError: string | null;
   onDecideStoredApproval: (approval: StoredApproval, ok: boolean) => void;
+  /** Name of the orchestrator instance driving this dashboard's chat. */
+  orchestratorName?: string | null;
   onRefreshRuns: () => void;
   onInspectVM: (runId: string) => void;
   onCancelRun?: (runId: string) => void;
@@ -89,11 +91,30 @@ const TEAL_BUTTON =
 const DANGER_BUTTON =
   "text-[11px] bg-transparent hover:bg-[#fb2c36]/10 border border-[#fb2c36]/50 text-[#fb2c36] font-medium py-1 px-2.5 rounded-md transition-colors";
 
-/** Kind-aware label for a stored approval pointer. */
+/** Kind-aware label for a stored approval pointer; unknown kinds render raw. */
 function storedApprovalKind(approval: StoredApproval): string {
   if (approval.kind === "email_send") return "Email send";
   if (approval.kind === "email_delete") return "Email delete";
-  return "Run task";
+  if (approval.kind === undefined || approval.kind === "run") return "Run task";
+  return approval.kind;
+}
+
+/**
+ * Which agent holds this approval. Email kinds ride the mailbox (payload
+ * mailbox, falling back to the repoUrl slot where the bridge parks the
+ * mailbox address); run kinds name the queueing thread (user identity,
+ * slack:… channel, or the shared orchestrator default).
+ */
+function storedApprovalAgent(approval: StoredApproval): string {
+  const payload = approval.payload;
+  if (typeof payload === "object" && payload !== null && !Array.isArray(payload)) {
+    const mailbox = (payload as Record<string, unknown>).mailbox;
+    if (typeof mailbox === "string" && mailbox.trim() !== "") return mailbox;
+  }
+  if (approval.kind === "email_send" || approval.kind === "email_delete") {
+    return approval.repoUrl;
+  }
+  return approval.threadKey === "" ? "orchestrator" : approval.threadKey;
 }
 
 /**
@@ -113,7 +134,14 @@ function StoredApprovalCard({
 }): JSX.Element {
   const frozen =
     approval.payload ??
-    ({ repoUrl: approval.repoUrl, task: approval.task } satisfies Record<string, unknown>);
+    ({
+      repoUrl: approval.repoUrl,
+      task: approval.task,
+      ...(approval.baseBranch !== undefined ? { baseBranch: approval.baseBranch } : {}),
+      ...(approval.publishPullRequest !== undefined
+        ? { publishPullRequest: approval.publishPullRequest }
+        : {}),
+    } satisfies Record<string, unknown>);
   return (
     <div className="border border-[#e0ded5] border-l-2 border-l-[#b45309] rounded-xl bg-[#f6f4ed] p-3">
       <div className="flex items-center justify-between gap-2 mb-1.5">
@@ -124,6 +152,9 @@ function StoredApprovalCard({
           {formatTimeAgo(approval.createdAt)}
         </span>
       </div>
+      <p className="text-[10px] font-mono text-[#6a6f63] truncate mb-1">
+        via {storedApprovalAgent(approval)}
+      </p>
       <p className="text-[11px] text-[#222320] font-medium break-words mb-1">{approval.task}</p>
       <pre className="font-mono text-[10px] text-[#6a6f63] bg-[#fffef8] p-2 rounded-lg border border-[#e0ded5] whitespace-pre-wrap break-words max-h-32 overflow-auto mb-2">
         {JSON.stringify(frozen, null, 2)}
@@ -161,6 +192,7 @@ export function WorkspacePanel({
   storedDecisions,
   storedApprovalsError,
   onDecideStoredApproval,
+  orchestratorName,
   onRefreshRuns,
   onInspectVM,
   onCancelRun,
@@ -524,11 +556,11 @@ export function WorkspacePanel({
                 <p className="text-[#6a6f63] text-xs">No pending approvals.</p>
               </div>
             ) : null}
-            {pendingApprovals.length > 0 ? (
+            {pendingApprovals.length > 0 || storedApprovals.length > 0 ? (
               <div className="flex flex-col gap-3" role="group" aria-label="Pending approvals">
                 <h4 className="text-[10px] font-bold uppercase tracking-wider text-[#b45309] flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-[#b45309] animate-pulse" />
-                  Waiting for your approval
+                  Pending approvals
                 </h4>
                 {pendingApprovals.map((approval) => (
                   <ApprovalCard
@@ -536,16 +568,9 @@ export function WorkspacePanel({
                     approval={approval}
                     decided={decisions[approval.approvalId] !== undefined}
                     onDecideApproval={onDecideApproval}
+                    agentName={orchestratorName ?? undefined}
                   />
                 ))}
-              </div>
-            ) : null}
-            {storedApprovals.length > 0 ? (
-              <div className="flex flex-col gap-3" role="group" aria-label="Queued approvals">
-                <h4 className="text-[10px] font-bold uppercase tracking-wider text-[#b45309] flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-[#b45309] animate-pulse" />
-                  Queued approvals
-                </h4>
                 {storedApprovals.map((approval) => (
                   <StoredApprovalCard
                     key={approval.approvalId}

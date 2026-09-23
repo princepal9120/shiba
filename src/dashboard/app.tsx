@@ -27,7 +27,7 @@ import {
   extractCompletedDiff,
   parseRepoName,
 } from "./ui-helpers";
-import type { RetainedRun, StoredApproval, ToolRunRecord } from "./types";
+import type { AgentPrincipal, RetainedRun, StoredApproval, ToolRunRecord } from "./types";
 
 const ORCHESTRATOR_AGENT = "coding-orchestrator";
 
@@ -110,6 +110,38 @@ function useStoredApprovals(refreshToken: number): {
   }, [refreshToken]);
 
   return { approvals, error };
+}
+
+// Registered MCP-token principals, polled on the same cadence as stored
+// approvals. No error surface: a failed poll just keeps the last list —
+// the sidebar Agents group is informational, not a decision surface.
+function useAgentPrincipals(refreshToken: number): AgentPrincipal[] {
+  const [principals, setPrincipals] = useState<AgentPrincipal[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = () => {
+      fetch("/api/agents")
+        .then(async (response) => {
+          if (!response.ok) {
+            throw new Error(`Agents request failed: ${response.status}`);
+          }
+          const body = (await response.json()) as { principals?: AgentPrincipal[] };
+          if (!cancelled) {
+            setPrincipals(Array.isArray(body.principals) ? body.principals : []);
+          }
+        })
+        .catch(() => {});
+    };
+    load();
+    const timer = window.setInterval(load, 10_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [refreshToken]);
+
+  return principals;
 }
 
 type MainView = AppNavView;
@@ -283,6 +315,7 @@ export function App(): React.JSX.Element {
   const { runs: retainedRuns, error: runsError } = useRetainedRuns(refreshToken);
   const { approvals: storedApprovals, error: storedApprovalsError } =
     useStoredApprovals(refreshToken);
+  const agentPrincipals = useAgentPrincipals(refreshToken);
 
   const toolRuns = useMemo(() => Object.values(runsById) as ToolRunRecord[], [runsById]);
 
@@ -813,6 +846,7 @@ export function App(): React.JSX.Element {
         >
           <SessionsSidebar
             sessions={sessions}
+            agents={agentPrincipals}
             selectedId={selectedSessionId}
             onSelect={handleSelectSession}
             onNewTask={handleNewTask}
@@ -843,6 +877,7 @@ export function App(): React.JSX.Element {
             <div className="absolute inset-y-0 left-0 shadow-2xl">
               <SessionsSidebar
                 sessions={sessions}
+                agents={agentPrincipals}
                 selectedId={selectedSessionId}
                 onSelect={handleSelectSession}
                 onNewTask={handleNewTask}
@@ -1071,6 +1106,7 @@ export function App(): React.JSX.Element {
           storedDecisions={storedDecisions}
           storedApprovalsError={storedApprovalsError}
           onDecideStoredApproval={decideStoredApproval}
+          orchestratorName={orchestratorName}
           onRefreshRuns={refreshRuns}
           onInspectVM={(id) => {
             setSelectedRunId(id);

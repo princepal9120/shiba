@@ -9,9 +9,11 @@ export interface ApprovalCardProps {
   approval: PendingApproval;
   decided: boolean;
   onDecideApproval: (approvalId: string, approved: boolean) => void;
+  /** Agent requesting the approval — the orchestrator instance driving the chat. */
+  agentName?: string;
 }
 
-export function ApprovalCard({ approval, decided, onDecideApproval }: ApprovalCardProps): JSX.Element {
+export function ApprovalCard({ approval, decided, onDecideApproval, agentName }: ApprovalCardProps): JSX.Element {
   return (
     <div className="border border-[#b45309]/60 bg-[#f1efe6] rounded-xl p-4 shadow-lg shadow-[#b45309]/5 flex flex-col gap-3">
       <div className="flex items-center justify-between gap-3">
@@ -29,6 +31,10 @@ export function ApprovalCard({ approval, decided, onDecideApproval }: ApprovalCa
           Action Required
         </span>
       </div>
+
+      {agentName !== undefined ? (
+        <p className="text-[10px] font-mono text-[#6a6f63] truncate -mt-1">via {agentName}</p>
+      ) : null}
 
       <pre className="whitespace-pre-wrap font-mono text-xs text-[#6a6f63] bg-[#fffef8] p-3 rounded-lg border border-[#e0ded5] max-h-56 overflow-auto">
         {typeof approval.input === "string"

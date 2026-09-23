@@ -5,6 +5,7 @@
  * Footer carries setup progress, docs link, and connection state.
  */
 import { useMemo, useState } from "react";
+import type { AgentPrincipal } from "../types";
 import { formatTimeAgo, statusLabel } from "../ui-helpers";
 import { Tooltip } from "./Tooltip";
 
@@ -19,6 +20,8 @@ export interface SessionItem {
 
 export interface SessionsSidebarProps {
   sessions: SessionItem[];
+  /** Registered MCP-token principals, shown in their own group. */
+  agents: AgentPrincipal[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   onNewTask: () => void;
@@ -112,8 +115,38 @@ function SessionRow({
   );
 }
 
+function AgentRow({ agent }: { agent: AgentPrincipal }) {
+  const scopeLabel = agent.scopes.length === 0 ? "no scopes" : agent.scopes.join(", ");
+  const tooltipText = `${agent.principal} — ${agent.live ? "live" : "offline"} · ${scopeLabel}`;
+
+  return (
+    <Tooltip content={tooltipText} side="right" align="start" delayMs={400}>
+      <div
+        tabIndex={0}
+        className="group w-full text-left rounded-lg px-3 py-2 flex items-start gap-2.5 text-[#222320] focus:outline-none focus-visible:bg-black/[0.04]"
+      >
+        <span
+          className={`mt-[7px] size-1.5 rounded-full shrink-0 ${
+            agent.live ? "bg-[#15803d] animate-pulse-subtle" : "bg-[#6a6f63]"
+          }`}
+          aria-hidden="true"
+        />
+        <span className="min-w-0 flex-1">
+          <span className="block text-[13px] font-medium truncate leading-snug">
+            {agent.principal}
+          </span>
+          <span className="block text-[11px] font-mono text-[#6a6f63]/80 truncate mt-0.5 tabular-nums">
+            {scopeLabel}
+          </span>
+        </span>
+      </div>
+    </Tooltip>
+  );
+}
+
 export function SessionsSidebar({
   sessions,
+  agents,
   selectedId,
   onSelect,
   onNewTask,
@@ -252,6 +285,18 @@ export function SessionsSidebar({
                         selected={session.id === selectedId}
                         onSelect={onSelect}
                       />
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+            {agents.length > 0 ? (
+              <section aria-label="Agents">
+                <GroupLabel>Agents</GroupLabel>
+                <ul className="flex flex-col gap-0.5">
+                  {agents.map((agent) => (
+                    <li key={agent.principal}>
+                      <AgentRow agent={agent} />
                     </li>
                   ))}
                 </ul>
