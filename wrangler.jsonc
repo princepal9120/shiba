@@ -33,6 +33,7 @@
       { "name": "Automations", "class_name": "Automations" },
       { "name": "Mailbox", "class_name": "Mailbox" },
       { "name": "McpGateway", "class_name": "McpGateway" },
+      { "name": "Memory", "class_name": "Memory" },
     ],
   },
   // Email attachment bodies >256KB go here, keyed `emailId/partId`
@@ -49,6 +50,12 @@
   // `wrangler d1 create shiba-audit` then paste the database_id.
   "d1_databases": [
     { "binding": "AGENT_AUDIT", "database_name": "shiba-audit", "database_id": "__PENDING__" },
+  ],
+  // Megaplan T8: bge-base-en-v1.5 embeddings of banked facts, keyed by
+  // fact id (768-dim, cosine). Provision:
+  // `wrangler vectorize create shiba-memory --dimensions=768 --metric=cosine`.
+  "vectorize": [
+    { "binding": "MEMORY_VECTORS", "index_name": "shiba-memory" },
   ],
   // Megaplan T7: outbound send for approval-gated email_send executions.
   // destination_addresses unset — every recipient is a human-approved
@@ -71,5 +78,6 @@
     { "tag": "v2", "new_sqlite_classes": ["Automations"] },
     { "tag": "v3", "new_sqlite_classes": ["Mailbox"] },
     { "tag": "v4", "new_sqlite_classes": ["McpGateway"] },
+    { "tag": "v5", "new_sqlite_classes": ["Memory"] },
   ],
 }

@@ -28,10 +28,16 @@ export interface Env {
   /**
    * Bound to the Memory Durable Object class in wrangler.jsonc — one stub
    * per agent name plus the shared "global" registry that indexes fact ids
-   * across agents (megaplan T8). Optional until that lane lands the class
-   * and the binding; dashboard routes treat its absence as 503.
+   * across agents (megaplan T8, see `memory-do.ts`).
    */
-  Memory?: DurableObjectNamespace;
+  Memory: DurableObjectNamespace;
+  /**
+   * Vectorize index holding the 768-dim bge-base embedding for every banked
+   * fact, keyed by fact id (megaplan T8). Index name `shiba-memory`; the
+   * index itself is provisioned outside code
+   * (`wrangler vectorize create shiba-memory --dimensions=768 --metric=cosine`).
+   */
+  MEMORY_VECTORS: VectorizeIndex;
   /**
    * R2 bucket holding every inbound attachment body (keyed `emailId/partId`)
    * plus raw-source dumps of unparseable mail (`emailId/raw-source`). The

@@ -27,6 +27,7 @@ import type {
   ThreadView,
 } from "./mailbox-store.js";
 import { encodePrincipal, McpGateway, MCP_PRINCIPAL_HEADER } from "./mcp-gateway.js";
+import { Memory } from "./memory-do.js";
 import { Sandbox } from "./sandbox.js";
 import { InputError, NotFoundError, redactSecrets, verifyGitHubWebhookSignature } from "./security.js";
 import { handleSlackInteract } from "./slack-approval.js";
@@ -36,7 +37,7 @@ import { ORCHESTRATOR_NAME, handleSlackCommand } from "./slack-routes.js";
 import { handleSandboxRoutes } from "./sandbox-routes.js";
 import { readSetupStatus } from "./setup-status.js";
 
-export { Automations, CodingOrchestrator, Mailbox, McpGateway, OpenCodeAgent, Sandbox, ContainerProxy };
+export { Automations, CodingOrchestrator, Mailbox, McpGateway, Memory, OpenCodeAgent, Sandbox, ContainerProxy };
 export { assertLiveCodingModel } from "./coding-model.js";
 
 export function getUserId(request: Request): string | null {
