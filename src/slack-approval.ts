@@ -115,7 +115,8 @@ export interface ApprovalCardInput extends ApprovalPointer {
  * buttons whose values are pointers back to the pending approval.
  * Email kinds render the megaplan's copy — "Agent X requests email send
  * to Y: subject" — where X is the mailbox/agent identity and the
- * record's task already carries "Send email to Y: subject".
+ * record's task already carries the action phrase ("email send to
+ * Y: subject" / "email delete of id \"subject\"").
  */
 export function buildApprovalBlocks(input: ApprovalCardInput): unknown[] {
   const value = buildApprovalValue({ threadKey: input.threadKey, approvalId: input.approvalId });

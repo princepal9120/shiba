@@ -1065,6 +1065,24 @@ export class MailboxStore {
   }
 
   /**
+   * Recovery seam: `queued` → `draft` for rows older than
+   * `staleBeforeMs`. `queued` is evidence a live pending approval owns
+   * the row, and an approval outlives its TTL never — so a `queued` row
+   * untouched past that horizon belongs to a decided-or-expired
+   * approval whose compensating unqueue failed or never ran. Freeing it
+   * re-sweeps exactly the rows {@link unqueueDraft}'s single shot can
+   * miss. Returns the rows it freed.
+   */
+  releaseStaleQueuedDrafts(staleBeforeMs: number, nowMs?: number): DraftRecord[] {
+    const rows = this.exec(
+      `UPDATE drafts SET status = 'draft', updated_at = ? WHERE status = 'queued' AND updated_at < ? RETURNING *`,
+      nowMs ?? Date.now(),
+      staleBeforeMs,
+    );
+    return rows.map((row) => rowToDraft(row));
+  }
+
+  /**
    * Compensating seam: `queued` → `draft`, the transition the approval
    * path performs when a queued send is rejected or the approval itself
    * never materialized (the mint failed after the queue CAS landed, or

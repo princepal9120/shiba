@@ -91,6 +91,13 @@ export interface Env {
   SLACK_APPROVERS?: string;
   /** Optional. Bot token used only to post approval cards (chat.postMessage). */
   SLACK_BOT_TOKEN?: string;
+  /**
+   * Optional. Channel id email-kind approval cards post to. Run approvals
+   * mint inside a Slack thread and post their card there; email approvals
+   * mint with no thread context, so their cards need a configured channel.
+   * Unset = the dashboard Approvals surface is their only resolve path.
+   */
+  SLACK_APPROVALS_CHANNEL?: string;
   /** Optional. JSON map `{channelId: "https://github.com/owner/repo"}` for bare mentions. */
   SLACK_CHANNEL_REPOS?: string;
   /** Optional. TypeSafe System One key for `run_when`; unset falls back to Workers AI. */

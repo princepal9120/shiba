@@ -31,6 +31,7 @@ import {
   type SqlRow,
   type UpdateDraftInput,
 } from "./mailbox-store.js";
+import { APPROVAL_TTL_MS } from "./pending-approvals.js";
 import { InputError } from "./security.js";
 
 /**
@@ -44,6 +45,11 @@ const ROUTE_PREFIX = "/internal/mailbox";
 /** A `sending` row untouched this long is a dead claim — a live send
  * completes or fails in seconds. */
 const STALE_SENDING_MS = 10 * 60 * 1000;
+
+/** A `queued` row untouched this long belongs to an approval that can
+ * no longer resolve: queue lands before the mint, so its age is at
+ * least the approval's, and no approval outlives its TTL. */
+const STALE_QUEUED_MS = APPROVAL_TTL_MS;
 
 /** Per-address stub — the unit every mailbox-scoped call goes through. */
 export function mailboxStub(env: Env, address: string): DurableObjectStub {
@@ -404,6 +410,25 @@ export class Mailbox {
       }
       return json({ error: "Method not allowed." }, { status: 405 });
     }
+    // Checked before the generic /drafts/:id branch — "release-stale"
+    // would otherwise be read as a draft id and the route never match.
+    if (seg.length === 2 && seg[1] === "release-stale") {
+      if (request.method !== "POST") {
+        return json({ error: "Method not allowed." }, { status: 405 });
+      }
+      // Recovery seam: a `sending` row older than the threshold is a
+      // dead claim — a live send holds `sending` for seconds — and a
+      // `queued` row older than the approval TTL belongs to a decided
+      // or expired approval whose single-shot release missed. The sweep
+      // frees only rows no live path can still be holding.
+      const now = Date.now();
+      return json({
+        drafts: [
+          ...this.store.releaseStaleSendingDrafts(now - STALE_SENDING_MS, now),
+          ...this.store.releaseStaleQueuedDrafts(now - STALE_QUEUED_MS, now),
+        ],
+      });
+    }
     if (seg.length === 2) {
       const id = pathParam(seg[1]);
       if (request.method === "GET") {
@@ -422,17 +447,6 @@ export class Mailbox {
       };
       const draft = this.store.updateDraft(id, input);
       return draft ? json({ draft }) : notFound("Draft not found.");
-    }
-    if (seg.length === 2 && seg[1] === "release-stale") {
-      if (request.method !== "POST") {
-        return json({ error: "Method not allowed." }, { status: 405 });
-      }
-      // Recovery seam: a `sending` row older than the threshold is a
-      // dead claim — a live send holds `sending` for seconds, so the
-      // sweep only ever frees attempts that can never finish.
-      return json({
-        drafts: this.store.releaseStaleSendingDrafts(Date.now() - STALE_SENDING_MS),
-      });
     }
     if (seg.length === 3 && seg[2] === "claim") {
       const id = pathParam(seg[1]);

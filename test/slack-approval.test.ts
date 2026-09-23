@@ -143,22 +143,23 @@ describe("buildApprovalBlocks", () => {
       threadKey: "default",
       approvalId: "appr_2",
       repoUrl: "agent-a@shiba.dev",
-      task: "Send email to person@example.com: Status update",
+      task: "email send to person@example.com: Status update",
       kind: "email_send",
     });
     const text = JSON.stringify(blocks[0]);
-    // Spec copy: "Agent X requests email send to Y: subject" — the record's
-    // repoUrl is the sending mailbox, task already carries to+subject.
+    // Spec copy verbatim: "Agent X requests email send to Y: subject" —
+    // the record's repoUrl is the sending mailbox, task carries the
+    // action phrase the headline reads after "requests".
     expect(text).toContain("agent-a@shiba.dev");
-    expect(text).toContain("requests");
-    expect(text).toContain("Send email to person@example.com: Status update");
+    expect(text).toContain("requests email send to person@example.com: Status update");
     expect(text).not.toContain("*Repo:*");
+    expect(text).not.toContain("Send email to");
 
     const labeled = buildApprovalBlocks({
       threadKey: "default",
       approvalId: "appr_3",
       repoUrl: "agent-a@shiba.dev",
-      task: "Send email to person@example.com: Status update",
+      task: "email send to person@example.com: Status update",
       kind: "email_send",
       agent: "deploy-bot",
     });

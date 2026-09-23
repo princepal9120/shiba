@@ -193,6 +193,43 @@ export async function unqueueEmailApprovalDraft(env: Env, record: PendingApprova
 }
 
 /**
+ * Restart-recovery seam: frees a `sending` claim the dead attempt left
+ * behind. Claims are only minted by the shared orchestrator's dispatch
+ * (`queueEmailApproval` pins that instance), and this runs before any
+ * new dispatch starts in the DO's fresh lifetime — so a `sending` row
+ * found here is provably dead, and unconditional release is the only
+ * surface that can reach it (`unqueue` refuses `sending`; the dead
+ * attempt's own `release` died with it). Returns true only when the row
+ * was freed — false means it was never `sending`, which the caller's
+ * re-drive adjudicates (`queued` sends, `sent` dedupes, `draft`/missing
+ * fails). Anything but a refusal is a real failure and throws.
+ */
+export async function releaseRestartedDraftClaim(env: Env, record: PendingApproval): Promise<boolean> {
+  const payload = record.payload;
+  if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
+    return false;
+  }
+  const fields = payload as Record<string, unknown>;
+  const mailbox = typeof fields.mailbox === "string" ? fields.mailbox : "";
+  const draftId = typeof fields.draft_id === "string" ? fields.draft_id.trim() : "";
+  if (draftId === "" || !ADDRESS_RE.test(mailbox)) {
+    return false;
+  }
+  const response = await mailboxStub(env, mailbox).fetch(
+    new Request(`https://internal/internal/mailbox/drafts/${encodeURIComponent(draftId)}/release`, {
+      method: "POST",
+    }),
+  );
+  if (response.ok) {
+    return true;
+  }
+  if (response.status === 400 || response.status === 404) {
+    return false;
+  }
+  throw new Error(`Mailbox POST /drafts/${draftId}/release failed (${response.status}).`);
+}
+
+/**
  * Reconcile the queued draft after a failed send. If the send went
  * out, the draft lands in `"sent"` — re-queueing would double-send.
  * If it never left, the row goes back to `"draft"` so the user can

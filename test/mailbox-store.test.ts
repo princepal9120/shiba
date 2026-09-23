@@ -451,6 +451,30 @@ describe("drafts", () => {
     expect(store.releaseStaleSendingDrafts(1e15, 100)).toEqual([]);
   });
 
+  it("releaseStaleQueuedDrafts frees stranded queued rows only — the decided-approval backstop", () => {
+    const store = makeStore();
+    const draft = store.createDraft({
+      to_addr: "sender@example.com",
+      subject: "x",
+      body_text: "y",
+    });
+    store.markDraftQueued(draft.id, 50);
+    // A `queued` row at-or-newer than the cutoff may still belong to a
+    // live pending approval — untouched.
+    expect(store.releaseStaleQueuedDrafts(50, 70)).toEqual([]);
+    expect(store.getDraft(draft.id)?.status).toBe("queued");
+    // Past the cutoff the row is provably orphaned: no approval outlives
+    // its TTL, so a `queued` row that old belongs to a decision whose
+    // compensating unqueue missed — freed back to editable `draft`.
+    expect(store.releaseStaleQueuedDrafts(60, 61).map((d) => d.id)).toEqual([draft.id]);
+    expect(store.getDraft(draft.id)?.status).toBe("draft");
+    // Non-queued rows are immune to the queued sweep.
+    store.markDraftQueued(draft.id, 80);
+    store.claimDraftSend(draft.id, 90);
+    expect(store.releaseStaleQueuedDrafts(1e15, 100)).toEqual([]);
+    expect(store.getDraft(draft.id)?.status).toBe("sending");
+  });
+
   it("markDraftSent moves queued→sent once, and refuses anything but a queued row", () => {
     const store = makeStore();
     const draft = store.createDraft({

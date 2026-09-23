@@ -38,6 +38,10 @@ function agentWithMailbox(opts: {
   messageIds?: Record<string, string[]>;
   /** Opt-in stateful draft rows (id → status) exercising the real CAS seams. */
   drafts?: Record<string, string>;
+  /** Opt-in registered addresses the directory's mailboxes list returns. */
+  registeredMailboxes?: string[];
+  /** Opt-in Slack approval-card target (SLACK_APPROVALS_CHANNEL + token). */
+  slackApprovalsChannel?: string;
 } = {}) {
   const mailboxCalls: MailboxCall[] = [];
   const send = vi.fn(async (_message: unknown) => ({ status: "ok" }));
@@ -60,6 +64,21 @@ function agentWithMailbox(opts: {
       if (request.method === "GET" && emailMatch) {
         const messageIds = opts.messageIds?.[decodeURIComponent(emailMatch[1]!)] ?? [];
         return new Response(JSON.stringify({ message_ids: messageIds }), { status: 200 });
+      }
+      // Checked before the draft-id match — "release-stale" would
+      // otherwise read as a draft id. Stateless age stand-in: frees
+      // every locked row the test opted into (`queued`/`sending`).
+      if (request.method === "POST" && url.pathname === "/internal/mailbox/drafts/release-stale") {
+        const freed: string[] = [];
+        if (drafts !== undefined) {
+          for (const [id, status] of Object.entries(drafts)) {
+            if (status === "queued" || status === "sending") {
+              drafts[id] = "draft";
+              freed.push(id);
+            }
+          }
+        }
+        return Response.json({ drafts: freed.map((id) => ({ id, status: "draft" })) });
       }
       const draftMatch = url.pathname.match(/^\/internal\/mailbox\/drafts\/([^/]+)(?:\/(claim|release|unqueue|sent))?$/);
       if (drafts !== undefined && draftMatch) {
@@ -100,6 +119,13 @@ function agentWithMailbox(opts: {
   const directoryStub = {
     fetch: async (request: Request) => {
       const url = new URL(request.url);
+      if (request.method === "GET" && url.pathname === "/internal/mailbox/mailboxes") {
+        return Response.json({
+          mailboxes: (opts.registeredMailboxes ?? []).map((address) => ({
+            address, label: null, agent: null, created_at: 0,
+          })),
+        });
+      }
       const match = url.pathname.match(/^\/internal\/mailbox\/mailboxes\/(.+)$/);
       const address = match ? decodeURIComponent(match[1]!).toLowerCase() : "";
       const registered = address.endsWith("@shiba.dev");
@@ -121,6 +147,9 @@ function agentWithMailbox(opts: {
       get: (id: string) => (id === MAILBOX_DIRECTORY_NAME ? directoryStub : mailboxStub),
     },
     CodingOrchestrator: {},
+    ...(opts.slackApprovalsChannel !== undefined
+      ? { SLACK_APPROVALS_CHANNEL: opts.slackApprovalsChannel, SLACK_BOT_TOKEN: "xoxb-test" }
+      : {}),
   };
   const instance = Object.assign(Object.create(CodingOrchestrator.prototype) as CodingOrchestrator, {
     env,
@@ -165,6 +194,7 @@ const DELETE_PAYLOAD = { email_id: "email-1", subject: "Old thread", from_addr: 
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.unstubAllGlobals();
   mocks.destroy.mockResolvedValue(undefined);
 });
 
@@ -453,6 +483,33 @@ describe("email approval execution", () => {
     await flush();
     expect(send).not.toHaveBeenCalled();
     expect(mailboxCalls).toHaveLength(0);
+  });
+
+  it("a rejection whose unqueue fails is freed by the stale-draft re-sweep", async () => {
+    // The compensating unqueue is single-shot best-effort — a mailbox
+    // failure would strand the row `queued` forever. The stale-draft
+    // sweep that same approval touch runs frees locks past their
+    // provable lifetime, so the decided approval's draft is recovered.
+    const drafts: Record<string, string> = { "draft-1": "queued" };
+    const { instance, env, send, mailboxCalls, settled } = agentWithMailbox({
+      drafts,
+      registeredMailboxes: ["agent-a@shiba.dev"],
+      failingMailboxPaths: /\/drafts\/draft-1\/unqueue$/,
+    });
+    const { approval_id } = await queueEmailApproval(env as never, {
+      kind: "email_send",
+      mailbox: "agent-a@shiba.dev",
+      payload: { ...SEND_PAYLOAD },
+    });
+    const response = await approve(instance, approval_id, false);
+    expect((await response.json() as { result: string }).result).toBe("rejected");
+    await settled();
+    expect(send).not.toHaveBeenCalled();
+    const paths = mailboxCalls.map((call) => `${call.method} ${call.path}`);
+    // The single-shot release ran and failed; the sweep recovered the row.
+    expect(paths).toContain("POST /internal/mailbox/drafts/draft-1/unqueue");
+    expect(paths).toContain("POST /internal/mailbox/drafts/release-stale");
+    expect(drafts["draft-1"]).toBe("draft");
   });
 
   it("a send failure after the claim releases the draft so it can be re-queued", async () => {
@@ -772,6 +829,26 @@ describe("GET /api/approvals", () => {
     ]);
     expect(send).not.toHaveBeenCalled();
   });
+
+  it("a poll re-sweeps a `queued` draft whose approval is unreachable", async () => {
+    // A draft can outlive every path that named it — the mint's
+    // compensating unqueue failed after the record never wrote, or the
+    // record was dropped. The stale sweep frees the row on the next
+    // approval-surface touch even with nothing left to decide.
+    const drafts: Record<string, string> = { "draft-orphan": "queued" };
+    const { instance, send, mailboxCalls, settled } = agentWithMailbox({
+      drafts,
+      registeredMailboxes: ["agent-a@shiba.dev"],
+    });
+    const list = await instance.onRequest(new Request("https://internal/api/approvals"));
+    expect(list.status).toBe(200);
+    await settled();
+    expect(mailboxCalls).toEqual([
+      { method: "POST", path: "/internal/mailbox/drafts/release-stale", body: undefined },
+    ]);
+    expect(drafts["draft-orphan"]).toBe("draft");
+    expect(send).not.toHaveBeenCalled();
+  });
 });
 
 describe("orchestrator restart recovery", () => {
@@ -779,7 +856,7 @@ describe("orchestrator restart recovery", () => {
     threadKey: "default",
     approvalId: "apv-stale",
     repoUrl: "agent-a@shiba.dev",
-    task: "Send email to person@example.com: Status update",
+    task: "email send to person@example.com: Status update",
     status: "approved" as const,
     createdAt: 1,
     decidedBy: "U1",
@@ -843,21 +920,27 @@ describe("orchestrator restart recovery", () => {
     expect(decided?.execution?.error).toContain("outcome unknown");
   });
 
-  it("a draft left `sending` by the dead attempt fails visibly — no silent resend", async () => {
+  it("a draft left `sending` by the dead attempt is released and fails visibly — no silent resend", async () => {
     // `sending` means the first attempt claimed the row and died
-    // mid-flight: transmit status is unknowable, so the recovery
-    // records a failure rather than deduping or re-sending.
+    // mid-flight: transmit status is unknowable, so the recovery frees
+    // the dead claim back to `draft` and records a failure rather than
+    // deduping or re-sending — otherwise the row sits `sending` forever,
+    // unreachable by `unqueue` or any live executor.
     const drafts: Record<string, string> = { "draft-1": "sending" };
-    const { instance, send, settled } = agentWithMailbox({ drafts });
+    const { instance, send, mailboxCalls, settled } = agentWithMailbox({ drafts });
     instance.state.pendingApprovals = [
       approvedRecord({ kind: "email_send", payload: { ...SEND_PAYLOAD, mailbox: "agent-a@shiba.dev" } }),
     ];
     await instance.onStart();
     await settled();
     expect(send).not.toHaveBeenCalled();
+    expect(mailboxCalls.map((call) => `${call.method} ${call.path}`))
+      .toContain("POST /internal/mailbox/drafts/draft-1/release");
+    expect(drafts["draft-1"]).toBe("draft");
     const decided = (instance.state.pendingApprovals ?? [])[0];
     expect(decided?.execution?.status).toBe("failed");
     expect(decided?.execution?.error).toContain("sending");
+    expect(decided?.execution?.error).toContain("outcome unknown");
   });
 
   it("leaves pending and already-executed approvals alone", async () => {
@@ -877,5 +960,55 @@ describe("orchestrator restart recovery", () => {
     const approvals = instance.state.pendingApprovals ?? [];
     expect(approvals[0]?.execution).toBeUndefined();
     expect(approvals[1]?.execution?.status).toBe("executed");
+  });
+});
+
+describe("email approval Slack card", () => {
+  it("posts the card to the configured approvals channel — the plan's second surface", async () => {
+    // Email approvals mint with no Slack thread to post into; the
+    // configured channel is where their pointer buttons become
+    // decidable from Slack, matching the dashboard's card.
+    const bodies: Array<{ channel?: string; text?: string; blocks?: unknown[] }> = [];
+    const fetchMock = vi.fn(async (_input: unknown, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body ?? "{}")) as { channel?: string; text?: string; blocks?: unknown[] });
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { env, settled } = agentWithMailbox({ slackApprovalsChannel: "C0APPROVALS" });
+    const { approval_id } = await queueEmailApproval(env as never, {
+      kind: "email_send",
+      mailbox: "agent-a@shiba.dev",
+      payload: { ...SEND_PAYLOAD },
+    });
+    await settled();
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(String(fetchMock.mock.calls[0]![0])).toBe("https://slack.com/api/chat.postMessage");
+    const body = bodies[0]!;
+    expect(body.channel).toBe("C0APPROVALS");
+    const text = JSON.stringify(body.blocks);
+    // Spec copy: "Agent X requests email send to Y: subject" — the
+    // mailbox stands in for X when the registration carries no agent.
+    expect(text).toContain("agent-a@shiba.dev");
+    expect(text).toContain("requests email send to person@example.com: Status update");
+    expect(text).not.toContain("Send email to");
+    // The card carries the live pointer the interact path re-resolves.
+    expect(text).toContain(approval_id);
+    expect(text).toContain("default");
+  });
+
+  it("posts nothing when no approvals channel is configured", async () => {
+    // Unset, the dashboard stays the only resolve surface — silently,
+    // never a failed fetch.
+    const fetchMock = vi.fn(async (_input: unknown, _init?: RequestInit) =>
+      new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { env, settled } = agentWithMailbox();
+    await queueEmailApproval(env as never, {
+      kind: "email_send",
+      mailbox: "agent-a@shiba.dev",
+      payload: { ...SEND_PAYLOAD },
+    });
+    await settled();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
