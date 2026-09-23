@@ -37,6 +37,9 @@ const ROUTE_PREFIX = "/internal/memory";
 const EMBEDDING_MODEL = "@cf/baai/bge-base-en-v1.5" as const;
 const EMBEDDING_DIMS = 768;
 
+/** Vectorize's documented `topK` ceiling (no values/metadata requested). */
+const MAX_RECALL_TOP_K = 100;
+
 /** Per-agent stub — the unit every fact write/scoped read goes through. */
 export function memoryStub(env: Env, agent: string): DurableObjectStub {
   return env.Memory.get(env.Memory.idFromName(agent.trim()));
@@ -87,7 +90,13 @@ function limitParam(raw: string | null): number | undefined {
   if (raw === null) {
     return undefined;
   }
-  return Number(raw);
+  const value = Number(raw);
+  // Non-numeric input must not reach `slice`/`LIMIT` or fan out to agent
+  // stubs as `?limit=NaN` — reject it as a 400 like `/facts/search` does.
+  if (raw.trim() === "" || !Number.isFinite(value)) {
+    throw new InputError("limit must be a number.");
+  }
+  return value;
 }
 
 /**
@@ -97,8 +106,15 @@ function limitParam(raw: string | null): number | undefined {
  */
 function topKParam(raw: string | null): number | undefined {
   const value = limitParam(raw);
-  if (value !== undefined && (!Number.isInteger(value) || value < 1)) {
-    throw new InputError("limit must be a positive integer.");
+  // Anything above the index's topK ceiling errors inside Vectorize (a 500)
+  // and would fan out one fact fetch per match — reject it up front.
+  if (
+    value !== undefined &&
+    (!Number.isInteger(value) || value < 1 || value > MAX_RECALL_TOP_K)
+  ) {
+    throw new InputError(
+      `limit must be a positive integer no greater than ${MAX_RECALL_TOP_K}.`,
+    );
   }
   return value;
 }
@@ -434,6 +450,11 @@ export class Memory {
     if (!this.isRegistry) {
       return this.listFacts(url);
     }
+    // A row whose agent is the registry's own name would make this stub
+    // fetch itself — the reserved name is never a valid scope or owner.
+    if (scoped === MEMORY_REGISTRY_NAME) {
+      throw new InputError(`agent must not be "${MEMORY_REGISTRY_NAME}".`);
+    }
     const agents = scoped ? [scoped] : this.store.listRegisteredAgents();
     const facts: Record<string, unknown>[] = [];
     for (const agent of agents) {
@@ -501,11 +522,17 @@ export class Memory {
     }
     if (request.method === "POST") {
       const body = await this.jsonBody(request);
+      const id = optString(body.id);
+      // Same contract as bank(): a caller id that already exists is a 409,
+      // not a UNIQUE-constraint error surfacing as a 500.
+      if (id !== undefined && this.store.getSession(id) !== null) {
+        return json({ error: `Session "${id}" already exists.` }, { status: 409 });
+      }
       const session = this.store.addSession({
         agent: requiredString(body.agent, "agent"),
         summary: requiredString(body.summary, "summary"),
         started_at: optNumber(body.started_at),
-        id: optString(body.id),
+        id,
       });
       return json({ session }, { status: 201 });
     }
@@ -528,9 +555,15 @@ export class Memory {
       }
       if (request.method === "POST") {
         const body = await this.jsonBody(request);
+        const agent = requiredString(body.agent, "agent").trim();
+        // The reserved registry name as an owner routes /facts?agent= and
+        // DELETE /facts/:id back to this stub — self-recursive fetches.
+        if (agent === MEMORY_REGISTRY_NAME) {
+          throw new InputError(`agent must not be "${MEMORY_REGISTRY_NAME}".`);
+        }
         const entry = this.store.registerFact({
           fact_id: requiredString(body.fact_id, "fact_id"),
-          agent: requiredString(body.agent, "agent"),
+          agent,
         });
         return json({ entry }, { status: 201 });
       }

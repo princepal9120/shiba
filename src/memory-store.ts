@@ -301,6 +301,12 @@ export class MemoryStore {
     return rowToSession(row);
   }
 
+  /** Session by id, or null when absent — the duplicate-id pre-check. */
+  getSession(id: string): SessionRecord | null {
+    const row = this.exec(`SELECT * FROM sessions WHERE id = ?`, id)[0];
+    return row ? rowToSession(row) : null;
+  }
+
   /** Sessions, newest first; `agent` narrows to one agent's log. */
   listSessions(filter: { agent?: string; limit?: number } = {}): SessionRecord[] {
     const limit = clampLimit(filter.limit);

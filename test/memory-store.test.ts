@@ -383,6 +383,29 @@ describe("Memory DO routes", () => {
     expect((await get(h.registry, "/facts/search?q=x&limit=2")).status).toBe(200);
   });
 
+  it("rejects a recall limit above the Vectorize topK ceiling", async () => {
+    const h = makeHarness();
+    await bank(h.stub("intern"), "alpha");
+    for (const bad of ["101", "5000"]) {
+      expect((await get(h.registry, `/facts/search?q=x&limit=${bad}`)).status).toBe(400);
+    }
+    expect((await get(h.registry, "/facts/search?q=x&limit=100")).status).toBe(200);
+  });
+
+  it("rejects a malformed list limit uniformly across facts and sessions", async () => {
+    const h = makeHarness();
+    await bank(h.stub("intern"), "alpha");
+    for (const bad of ["abc", ""]) {
+      expect((await get(h.stub("intern"), `/facts?limit=${bad}`)).status).toBe(400);
+      expect((await get(h.registry, `/facts?limit=${bad}`)).status).toBe(400);
+      expect((await get(h.registry, `/sessions?limit=${bad}`)).status).toBe(400);
+    }
+    const body = (await (await get(h.registry, "/facts?limit=1")).json()) as {
+      facts: unknown[];
+    };
+    expect(body.facts).toHaveLength(1);
+  });
+
   it("rejects caller ids that shadow the /facts routes or already exist", async () => {
     const h = makeHarness();
     for (const id of ["search", "a/b", ""]) {
@@ -432,5 +455,35 @@ describe("Memory DO routes", () => {
       fact: { ttl: number };
     };
     expect(fact.fact.ttl).toBeGreaterThan(Date.now());
+  });
+
+  it("rejects the reserved registry name as a planted fact owner or scope", async () => {
+    const h = makeHarness();
+    for (const agent of ["global", " global "]) {
+      const res = await send(h.registry, "POST", "/registry", {
+        fact_id: "fact_x",
+        agent,
+      });
+      expect(res.status).toBe(400);
+    }
+    // The same name is not a valid ?agent= scope either — it would make the
+    // registry fetch itself.
+    expect((await get(h.registry, "/facts?agent=global")).status).toBe(400);
+  });
+
+  it("returns 409 on a duplicate caller-supplied session id", async () => {
+    const h = makeHarness();
+    const first = await send(h.registry, "POST", "/sessions", {
+      id: "sess_mine",
+      agent: "intern",
+      summary: "did the thing",
+    });
+    expect(first.status).toBe(201);
+    const dup = await send(h.registry, "POST", "/sessions", {
+      id: "sess_mine",
+      agent: "scout",
+      summary: "another",
+    });
+    expect(dup.status).toBe(409);
   });
 });
