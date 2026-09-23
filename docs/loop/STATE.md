@@ -21,7 +21,7 @@ approval-gated destructive ops, delivered as one PR. Deploy-time provisioning
 
 ## In progress
 
-PARALLEL LANES: A=T7+T11+T13 done w/ controller adjudications; T8 exhausted -> adjudicated (bank-race 409 @84d5ab1); T9 impl in flight; T14 queued after run
+PARALLEL LANES: lane A (backend T7-T10) + lane B (UI T11-T13) ran concurrently. T7, T11, T13 DONE w/ controller adjudications; T8 exhausted → adjudicated (bank-race 409 @84d5ab1); T9 impl in flight; T10 next on lane A. T14 (visual-consistency pass) queued for a follow-up run.
 
 ## Phases (SDD task → review → fix loop)
 
@@ -32,14 +32,15 @@ PARALLEL LANES: A=T7+T11+T13 done w/ controller adjudications; T8 exhausted -> a
 | T3 email() handler + MIME | 1 | DONE (3 fix rounds) |
 | T4 tokens + audit writer | 2 | DONE (1 fix round) |
 | T5 McpGateway + /mcp route | 2 | DONE (1 fix round) |
-| T6 email MCP tools (13) | 3 | pending |
-| T7 email approval bridge | 3 | pending (parallel with T6; seam defined in plan) |
-| T8 MemoryDO + Vectorize | 4 | pending |
-| T9 memory MCP tools (4) | 4 | pending |
+| T6 email MCP tools (13) | 3 | DONE |
+| T7 email approval bridge | 3 | DONE (exhausted → adjudicated @395fcaf) |
+| T8 MemoryDO + Vectorize | 4 | DONE (exhausted → adjudicated @9e89c15) |
+| T9 memory MCP tools (4) | 4 | in flight |
 | T10 session distillation | 4 | pending |
-| T11 Inbox + Memory tabs | 5 | pending |
-| T12 sidebar agents + unified approvals | 5 | pending |
-| T13 audit view + retention | 5 | pending |
+| T11 Inbox + Memory tabs | 5 | DONE (exhausted → adjudicated @bbe78be) |
+| T12 sidebar agents + unified approvals | 5 | DONE |
+| T13 audit view + retention | 5 | DONE |
+| T14 visual-consistency pass (landing + dashboard) | 5 | queued |
 
 ## Verify (cheap signals)
 
