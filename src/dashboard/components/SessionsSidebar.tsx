@@ -272,54 +272,51 @@ export function SessionsSidebar({
               ? "No sessions yet — start a task."
               : "No sessions match your search."}
           </p>
-        ) : (
-          <>
-            {activeSessions.length > 0 ? (
-              <section aria-label="Active sessions">
-                <GroupLabel>Active</GroupLabel>
-                <ul className="flex flex-col gap-0.5">
-                  {activeSessions.map((session) => (
-                    <li key={session.id}>
-                      <SessionRow
-                        session={session}
-                        selected={session.id === selectedId}
-                        onSelect={onSelect}
-                      />
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ) : null}
-            {agents.length > 0 ? (
-              <section aria-label="Agents">
-                <GroupLabel>Agents</GroupLabel>
-                <ul className="flex flex-col gap-0.5">
-                  {agents.map((agent) => (
-                    <li key={agent.principal}>
-                      <AgentRow agent={agent} />
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ) : null}
-            {recentSessions.length > 0 ? (
-              <section aria-label="Recent sessions">
-                <GroupLabel>Recent</GroupLabel>
-                <ul className="flex flex-col gap-0.5">
-                  {recentSessions.map((session) => (
-                    <li key={session.id}>
-                      <SessionRow
-                        session={session}
-                        selected={session.id === selectedId}
-                        onSelect={onSelect}
-                      />
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ) : null}
-          </>
-        )}
+        ) : null}
+        {activeSessions.length > 0 ? (
+          <section aria-label="Active sessions">
+            <GroupLabel>Active</GroupLabel>
+            <ul className="flex flex-col gap-0.5">
+              {activeSessions.map((session) => (
+                <li key={session.id}>
+                  <SessionRow
+                    session={session}
+                    selected={session.id === selectedId}
+                    onSelect={onSelect}
+                  />
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+        {agents.length > 0 ? (
+          <section aria-label="Agents">
+            <GroupLabel>Agents</GroupLabel>
+            <ul className="flex flex-col gap-0.5">
+              {agents.map((agent) => (
+                <li key={agent.principal}>
+                  <AgentRow agent={agent} />
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+        {recentSessions.length > 0 ? (
+          <section aria-label="Recent sessions">
+            <GroupLabel>Recent</GroupLabel>
+            <ul className="flex flex-col gap-0.5">
+              {recentSessions.map((session) => (
+                <li key={session.id}>
+                  <SessionRow
+                    session={session}
+                    selected={session.id === selectedId}
+                    onSelect={onSelect}
+                  />
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
       </div>
 
       {/* Footer */}

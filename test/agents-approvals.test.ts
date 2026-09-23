@@ -172,6 +172,22 @@ describe("SessionsSidebar agents group", () => {
     );
     expect(markup).not.toContain('aria-label="Agents"');
   });
+
+  it("still renders the Agents group when the session list is empty", () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(SessionsSidebar, {
+        ...sidebarProps,
+        sessions: [],
+        agents: [
+          { principal: "ci-bot", scopes: ["email:read"], created: 1, live: true },
+        ],
+        selectedId: null,
+      }),
+    );
+    expect(markup).toContain("No sessions yet");
+    expect(markup).toContain('aria-label="Agents"');
+    expect(markup).toContain("ci-bot");
+  });
 });
 
 describe("WorkspacePanel unified Approvals tab", () => {
