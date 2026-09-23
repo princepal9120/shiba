@@ -338,6 +338,44 @@ describe("dashboard inbox routes", () => {
     expect(JSON.parse(stubA.calls[0]!.body!)).toMatchObject({ thread_id: "thr-1" });
   });
 
+  it("POST /api/drafts rejects malformed JSON and non-object bodies with 400", async () => {
+    const { env, stubA } = makeEnvWithTwoMailboxes();
+    for (const raw of ["{not json", "null", "[1,2]", "\"text\""]) {
+      const response = await worker.fetch(
+        new Request("https://worker/api/drafts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: raw,
+        }),
+        env,
+        ctx,
+      );
+      expect(response.status).toBe(400);
+    }
+    expect(stubA.calls.some((c) => c.method === "POST")).toBe(false);
+  });
+
+  it("POST /api/drafts answers the normalized registered mailbox, not the caller's casing", async () => {
+    const { env } = makeEnvWithTwoMailboxes();
+    const response = await worker.fetch(
+      new Request("https://worker/api/drafts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mailbox: " Agent-A@SHIBA.DEV ",
+          to_addr: "alice@example.com",
+          subject: "Re: Deploy request",
+          body_text: "on it",
+        }),
+      }),
+      env,
+      ctx,
+    );
+    expect(response.status).toBe(201);
+    const body = (await response.json()) as { mailbox: string };
+    expect(body.mailbox).toBe("agent-a@shiba.dev");
+  });
+
   it("POST /api/drafts/:id/send refuses while the approval bridge is unwired", async () => {
     queuedApprovals.calls.length = 0;
     queuedApprovals.bridgeReady = false;
@@ -396,6 +434,53 @@ describe("dashboard inbox routes", () => {
         (c) => c.method === "POST" && c.url.endsWith("/internal/mailbox/drafts/drf-1/queue"),
       ),
     ).toBe(true);
+  });
+
+  it("POST /api/drafts/:id/send freezes the payload the queue CAS locked, not the earlier read", async () => {
+    queuedApprovals.calls.length = 0;
+    queuedApprovals.bridgeReady = true;
+    const directory = makeStub([
+      { match: "/internal/mailbox/mailboxes", body: { mailboxes: [{ address: "agent-a@shiba.dev", label: null, agent: null, created_at: 1 }] } },
+    ]);
+    const stubA = makeStub([
+      { match: "/internal/mailbox/drafts/drf-1", body: { draft: draftA } },
+      // A PATCH racing in ahead of the CAS lands inside the lock — the
+      // approval must freeze this row, not the pre-lock read above.
+      { method: "POST", match: "/internal/mailbox/drafts/drf-1/queue", body: { draft: { ...draftA, body_text: "edited just before queue", status: "queued" } } },
+    ]);
+    const env = makeEnv({ [DIRECTORY]: directory, "agent-a@shiba.dev": stubA });
+    const response = await worker.fetch(
+      new Request("https://worker/api/drafts/drf-1/send", { method: "POST" }),
+      env,
+      ctx,
+    );
+    expect(response.status).toBe(200);
+    expect(queuedApprovals.calls[0]!.payload).toMatchObject({
+      body_text: "edited just before queue",
+      draft_id: "drf-1",
+    });
+  });
+
+  it("POST /api/drafts/:id/send mints no approval when the queue CAS fails", async () => {
+    queuedApprovals.calls.length = 0;
+    queuedApprovals.bridgeReady = true;
+    const directory = makeStub([
+      { match: "/internal/mailbox/mailboxes", body: { mailboxes: [{ address: "agent-a@shiba.dev", label: null, agent: null, created_at: 1 }] } },
+    ]);
+    const stubA = makeStub([
+      { match: "/internal/mailbox/drafts/drf-1", body: { draft: draftA } },
+      // Concurrent discard: the CAS refuses — the request must fail without
+      // leaving a resolvable approval behind.
+      { method: "POST", match: "/internal/mailbox/drafts/drf-1/queue", body: { error: "draft is 'discarded'" }, status: 400 },
+    ]);
+    const env = makeEnv({ [DIRECTORY]: directory, "agent-a@shiba.dev": stubA });
+    const response = await worker.fetch(
+      new Request("https://worker/api/drafts/drf-1/send", { method: "POST" }),
+      env,
+      ctx,
+    );
+    expect(response.status).toBe(400);
+    expect(queuedApprovals.calls).toHaveLength(0);
   });
 
   it("POST /api/drafts/:id/send rejects a non-draft row and unknown ids", async () => {

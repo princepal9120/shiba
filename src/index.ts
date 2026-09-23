@@ -141,6 +141,20 @@ async function mailboxDoJsonOrNull<T>(
   }
 }
 
+/** Same contract as MailboxDO's `jsonBody` — a JSON object or a 400. */
+async function jsonObjectBody(request: Request): Promise<Record<string, unknown>> {
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    throw new InputError("Request body is not valid JSON.");
+  }
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    throw new InputError("Request body must be a JSON object.");
+  }
+  return body as Record<string, unknown>;
+}
+
 async function registeredMailboxes(env: Env): Promise<MailboxRecord[]> {
   const body = await mailboxDoJson<{ mailboxes?: MailboxRecord[] }>(
     mailboxDirectoryStub(env),
@@ -216,8 +230,11 @@ async function findInboxDraft(
 
 /**
  * POST /api/drafts/:id/send — the dashboard's entry into the same approval
- * gate `send_email` uses: freeze the payload, queue an email_send approval,
- * then lock the draft row behind it. Nothing here transmits mail.
+ * gate `send_email` uses: lock the draft row, then mint an email_send
+ * approval freezing the row the queue CAS returned. Nothing here transmits
+ * mail. Lock-then-mint keeps `queued` honest both ways: a failed CAS mints
+ * no approval, and the payload is exactly what the row froze — a PATCH
+ * racing in ahead of the CAS lands inside the lock, not beside it.
  */
 async function queueDraftSend(env: Env, draftId: string): Promise<Response> {
   const located = await findInboxDraft(env, draftId);
@@ -240,22 +257,22 @@ async function queueDraftSend(env: Env, draftId: string): Promise<Response> {
       { status: 503 },
     );
   }
-  const approval = await queueEmailApproval(env, {
-    kind: "email_send",
-    mailbox,
-    payload: {
-      to_addr: draft.to_addr,
-      subject: draft.subject,
-      body_text: draft.body_text,
-      ...(draft.thread_id !== null ? { thread_id: draft.thread_id } : {}),
-      draft_id: draft.id,
-    },
-  });
   const { draft: queued } = await mailboxDoJson<{ draft: DraftRecord }>(
     mailboxStub(env, mailbox),
     `/drafts/${encodeURIComponent(draftId)}/queue`,
     { method: "POST" },
   );
+  const approval = await queueEmailApproval(env, {
+    kind: "email_send",
+    mailbox,
+    payload: {
+      to_addr: queued.to_addr,
+      subject: queued.subject,
+      body_text: queued.body_text,
+      ...(queued.thread_id !== null ? { thread_id: queued.thread_id } : {}),
+      draft_id: queued.id,
+    },
+  });
   return Response.json({
     status: "pending_approval",
     kind: "email_send",
@@ -434,7 +451,7 @@ async function handleInbox(request: Request, env: Env): Promise<Response | null>
         return Response.json({ drafts: drafts.slice(0, limit) });
       }
       if (request.method === "POST") {
-        const body = (await request.json()) as Record<string, unknown>;
+        const body = await jsonObjectBody(request);
         const mailbox = typeof body.mailbox === "string" ? body.mailbox.trim() : "";
         if (mailbox === "") {
           return Response.json({ error: "Provide a mailbox address." }, { status: 400 });
@@ -460,7 +477,7 @@ async function handleInbox(request: Request, env: Env): Promise<Response | null>
             }),
           },
         );
-        return Response.json({ mailbox, draft: created.draft }, { status: 201 });
+        return Response.json({ mailbox: registered, draft: created.draft }, { status: 201 });
       }
       return methodNotAllowed();
     }
