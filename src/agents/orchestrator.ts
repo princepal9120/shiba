@@ -41,7 +41,7 @@ import { makeSandboxId, parseGitHubRepoUrl, redactSecrets } from "../security.js
 import { executeEmailApproval, PostTransmitError, releaseRestartedDraftClaim, unqueueEmailApprovalDraft } from "../email-approvals.js";
 import { ADDRESS_RE, type MailboxRecord } from "../mailbox-store.js";
 import { mailboxDirectoryStub, mailboxStub, registeredMailbox } from "../mailbox-do.js";
-import { buildApprovalBlocks, type ApprovalCardInput } from "../slack-approval.js";
+import { approvalCardText, buildApprovalBlocks, type ApprovalCardInput } from "../slack-approval.js";
 import { classifyExecutorError, classifyRunError, runErrorWire, type RunErrorCode, type RunErrorWire } from "../run-errors.js";
 import { parseSlackThreadName } from "../slack-thread.js";
 import { evaluateResultQuality } from "../result-quality.js";
@@ -91,6 +91,16 @@ type DelegateInput = z.infer<typeof delegateInputSchema>;
 
 const DEFAULT_ORCHESTRATOR_MODEL = "@cf/meta/llama-3.1-8b-instruct";
 
+/**
+ * Floor between full-mailbox stale-draft sweeps. The sweep is a
+ * backstop, not a per-poll job — the dashboard polls approvals every
+ * 10s and each run wakes every registered mailbox DO, so it fires at
+ * most this often per orchestrator lifetime. A touch that just
+ * dropped expired email sends passes `force` — their drafts need
+ * freeing now, not at the next tick.
+ */
+const STALE_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
+
 export class CodingOrchestrator extends Think<Env, OrchestratorState> {
   /** The orchestrator plans and delegates; it never runs shell commands. */
   override workspaceBash = false;
@@ -113,6 +123,13 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
   private get approvals(): PendingApproval[] {
     return this.state?.pendingApprovals ?? [];
   }
+
+  /**
+   * Wall-clock time of this lifetime's last stale-draft sweep —
+   * volatile on purpose: an evicted DO re-sweeps once on its next
+   * approval touch, which is the correct post-restart behavior anyway.
+   */
+  private lastStaleSweepAt: number | undefined;
 
   private writeApprovals(next: PendingApproval[]): void {
     this.setState({ ...this.state, pendingApprovals: next });
@@ -197,7 +214,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         this.dispatchApprovedEmail(approval);
       }
     }
-    this.sweepStaleDrafts();
+    this.sweepStaleDrafts(true);
   }
 
   override getModel(): string {
@@ -563,7 +580,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     const posted = fetch("https://slack.com/api/chat.postMessage", {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ channel, text: input.task.slice(0, 3000), blocks: buildApprovalBlocks(input) }),
+      body: JSON.stringify({ channel, text: approvalCardText(input).slice(0, 3000), blocks: buildApprovalBlocks(input) }),
     }).then((response) => {
       if (!response.ok) {
         console.error(`Slack email approval card post failed (${response.status})`);
@@ -685,7 +702,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     // an approval that aged out can never be resolved, so its draft
     // would sit `queued` forever without this compensating release.
     this.releaseEmailApprovalDrafts(expiredSends);
-    this.sweepStaleDrafts();
+    this.sweepStaleDrafts(expiredSends.length > 0);
     return Response.json({ result: result.result satisfies ResolveResult });
   }
 
@@ -852,10 +869,21 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
    * failed or never ran — including records a prune dropped or a mint
    * that never wrote. Sweeps every registered mailbox through the
    * `/drafts/release-stale` seam, which frees only provably-dead rows,
-   * so running it on every approval-surface touch can never unlock a
-   * live lock. Best-effort per mailbox, never fatal to its trigger.
+   * so it can never unlock a live lock. Best-effort per mailbox, never
+   * fatal to its trigger.
+   *
+   * Cadence-bounded by {@link STALE_SWEEP_INTERVAL_MS}: the approvals
+   * poll fires every 10s and each run would otherwise wake every
+   * registered mailbox ~4×/min. `force` bypasses the floor for the one
+   * case that cannot wait — a touch that just dropped expired sends
+   * (or a DO restart, where the floor starts at zero anyway).
    */
-  private sweepStaleDrafts(): void {
+  private sweepStaleDrafts(force = false): void {
+    const now = Date.now();
+    if (!force && now - (this.lastStaleSweepAt ?? 0) < STALE_SWEEP_INTERVAL_MS) {
+      return;
+    }
+    this.lastStaleSweepAt = now;
     const sweep = (async () => {
       const listing = await mailboxDirectoryStub(this.env).fetch(
         new Request("https://internal/internal/mailbox/mailboxes"),
@@ -908,7 +936,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       this.writeApprovals(pruned);
       this.releaseEmailApprovalDrafts(expiredSends);
     }
-    this.sweepStaleDrafts();
+    this.sweepStaleDrafts(expiredSends.length > 0);
     return Response.json({
       approvals: pruned.filter((approval) => approval.status === "pending"),
     });

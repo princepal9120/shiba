@@ -110,6 +110,19 @@ export interface ApprovalCardInput extends ApprovalPointer {
 }
 
 /**
+ * Plain-text mirror of the card headline for the chat.postMessage
+ * `text` field — notifications and other block-less surfaces render
+ * it, so it carries the same requester the mrkdwn headline does
+ * rather than the bare action phrase.
+ */
+export function approvalCardText(input: ApprovalCardInput): string {
+  const isEmail = input.kind === "email_send" || input.kind === "email_delete";
+  return isEmail
+    ? `${input.agent ?? input.repoUrl} requests ${input.task}`
+    : `Approval requested\nRepo: ${input.repoUrl}\nTask: ${input.task}`;
+}
+
+/**
  * Block Kit approval card. Renders the exact structured input that will
  * execute (same discipline as the dashboard approval cards) and two
  * buttons whose values are pointers back to the pending approval.

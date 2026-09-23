@@ -46,10 +46,19 @@ const ROUTE_PREFIX = "/internal/mailbox";
  * completes or fails in seconds. */
 const STALE_SENDING_MS = 10 * 60 * 1000;
 
+/** Grace beyond the approval TTL: the queue CAS stamps
+ * `drafts.updated_at` strictly before the mint writes the approval's
+ * `createdAt`, and the two clocks can skew — TTL alone would make the
+ * row sweepable that gap before its approval actually expires, and an
+ * approve landing inside the window would find the lock already freed.
+ * The buffer must only exceed any plausible queue→mint latency; a mint
+ * stalled past it never happened anyway. */
+const STALE_QUEUED_GRACE_MS = 5 * 60 * 1000;
+
 /** A `queued` row untouched this long belongs to an approval that can
  * no longer resolve: queue lands before the mint, so its age is at
  * least the approval's, and no approval outlives its TTL. */
-const STALE_QUEUED_MS = APPROVAL_TTL_MS;
+const STALE_QUEUED_MS = APPROVAL_TTL_MS + STALE_QUEUED_GRACE_MS;
 
 /** Per-address stub — the unit every mailbox-scoped call goes through. */
 export function mailboxStub(env: Env, address: string): DurableObjectStub {
@@ -418,9 +427,10 @@ export class Mailbox {
       }
       // Recovery seam: a `sending` row older than the threshold is a
       // dead claim — a live send holds `sending` for seconds — and a
-      // `queued` row older than the approval TTL belongs to a decided
-      // or expired approval whose single-shot release missed. The sweep
-      // frees only rows no live path can still be holding.
+      // `queued` row older than the approval TTL plus the mint-latency
+      // grace belongs to a decided or expired approval whose single-shot
+      // release missed. The sweep frees only rows no live path can
+      // still be holding.
       const now = Date.now();
       return json({
         drafts: [

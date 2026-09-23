@@ -1003,6 +1003,53 @@ describe("GET /api/approvals", () => {
     expect(drafts["draft-orphan"]).toBe("draft");
     expect(send).not.toHaveBeenCalled();
   });
+
+  it("polls inside the sweep interval do not re-wake every mailbox", async () => {
+    // The sweep is a backstop, not a per-poll job: the dashboard polls
+    // every 10s, so consecutive polls ride the cadence floor instead
+    // of waking every registered mailbox each time.
+    const drafts: Record<string, string> = { "draft-orphan": "queued" };
+    const { instance, mailboxCalls, settled } = agentWithMailbox({
+      drafts,
+      registeredMailboxes: ["agent-a@shiba.dev"],
+    });
+    await instance.onRequest(new Request("https://internal/api/approvals"));
+    await settled();
+    expect(mailboxCalls).toHaveLength(1);
+    // A second poll inside the interval must not sweep again.
+    await instance.onRequest(new Request("https://internal/api/approvals"));
+    await settled();
+    expect(mailboxCalls).toHaveLength(1);
+  });
+
+  it("an expired email_send forces a sweep inside the interval", async () => {
+    // The cadence floor yields when a touch just dropped expired sends
+    // — the drafts they owned need freeing now, not at the next tick.
+    const drafts: Record<string, string> = { "draft-orphan": "queued" };
+    const { instance, env, mailboxCalls, settled } = agentWithMailbox({
+      drafts,
+      registeredMailboxes: ["agent-a@shiba.dev"],
+    });
+    await instance.onRequest(new Request("https://internal/api/approvals"));
+    await settled();
+    expect(mailboxCalls).toHaveLength(1);
+
+    const stale = await queueEmailApproval(env as never, {
+      kind: "email_send",
+      mailbox: "agent-a@shiba.dev",
+      payload: { ...SEND_PAYLOAD, draft_id: "draft-orphan" },
+    });
+    (instance.state.pendingApprovals ?? []).find(
+      (a) => a.approvalId === stale.approval_id,
+    )!.createdAt = Date.now() - APPROVAL_TTL_MS - 1;
+
+    await instance.onRequest(new Request("https://internal/api/approvals"));
+    await settled();
+    const staleSweeps = mailboxCalls.filter(
+      (call) => call.path === "/internal/mailbox/drafts/release-stale",
+    );
+    expect(staleSweeps).toHaveLength(2);
+  });
 });
 
 describe("orchestrator restart recovery", () => {
@@ -1145,6 +1192,11 @@ describe("email approval Slack card", () => {
     expect(text).toContain("agent-a@shiba.dev");
     expect(text).toContain("requests email send to person@example.com: Status update");
     expect(text).not.toContain("Send email to");
+    // The plain-text fallback renders on notification surfaces where
+    // the blocks do not — it carries the same requester, not the bare
+    // action phrase alone.
+    expect(body.text).toContain("agent-a@shiba.dev");
+    expect(body.text).toContain("requests email send to person@example.com: Status update");
     // The card carries the live pointer the interact path re-resolves.
     expect(text).toContain(approval_id);
     expect(text).toContain("default");
