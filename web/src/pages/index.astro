@@ -327,12 +327,8 @@ import '../styles/theme.css';
       <div class="max-w-6xl mx-auto px-4 sm:px-6">
         
         <!-- MAIN HEADLINE -->
-        <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-blue-500/30 bg-blue-500/10 text-xs font-semibold text-blue-300 backdrop-blur-md mb-6 shadow-sm">
-          <span class="size-2 rounded-full bg-blue-400 animate-pulse"></span>
-          <span>Cloudflare Native • Isolated Sandbox MicroVMs • 100% Private</span>
-        </div>
-        <h1 class="font-heading text-5xl sm:text-6xl md:text-7xl lg:text-[6.8rem] font-extrabold tracking-tight uppercase leading-[0.92] max-w-5xl mx-auto mb-6">
-          <span class="block bg-gradient-to-r from-blue-400 via-cyan-300 to-indigo-300 bg-clip-text text-transparent">THE BEST SELF-HOSTED</span>
+        <h1 class="font-heading text-6xl sm:text-7xl md:text-8xl lg:text-[7.5rem] tracking-tight uppercase text-white leading-[0.88] max-w-5xl mx-auto mb-6">
+          <span class="block text-teal-400">THE BEST SELF-HOSTED</span>
           <span class="block text-white">AI SOFTWARE ENGINEER</span>
         </h1>
 
@@ -340,6 +336,32 @@ import '../styles/theme.css';
         <p class="font-dm-mono text-base sm:text-lg md:text-xl text-neutral-400 max-w-2xl mx-auto mb-8 leading-relaxed">
           Orchestrate a fleet of cloud coding agents in all of the apps your team already lives in.
         </p>
+
+        <!-- HERO REPO INPUT WITH SLEEPING SHIBA MASCOT -->
+        <div class="relative flex items-center justify-center max-w-md mx-auto mb-8">
+          <img
+            draggable="false"
+            alt="Shiba sleeping"
+            width="134"
+            height="59"
+            class="pointer-events-none absolute z-20 h-14 object-contain select-none -top-11 right-6 translate-x-2"
+            src="/assets/mascot/shiba-sticker-sleeping.webp"
+          />
+          <form action="/app/" method="get" class="flex w-full flex-col sm:flex-row items-center overflow-hidden rounded-xl border-2 border-black bg-white p-1.5 shadow-[-3px_3px_0_0_#267b7a]">
+            <input
+              class="font-inter block h-10 w-full px-3 text-black placeholder:font-mono text-xs sm:text-sm focus:outline-none"
+              placeholder="github.com/owner/repo"
+              type="text"
+              name="repo"
+            />
+            <button
+              type="submit"
+              class="manga-btn-primary px-5 py-2.5 rounded-lg text-xs sm:text-sm font-heading tracking-wider uppercase whitespace-nowrap shrink-0 w-full sm:w-auto"
+            >
+              Get Started 🚀
+            </button>
+          </form>
+        </div>
 
         <!-- CTAS -->
         <div class="flex flex-wrap items-center justify-center gap-4 mb-14">
@@ -543,7 +565,7 @@ $ run checks
           <span class="px-3 py-1 bg-[#101218] rounded border border-neutral-800 text-purple-300 font-bold">React 19 Dashboard</span>
           <span class="px-3 py-1 bg-[#101218] rounded border border-neutral-800 text-white font-bold">Astro Starlight</span>
           <span class="px-3 py-1 bg-[#101218] rounded border border-neutral-800 text-white font-bold">TypeScript 5.9</span>
-          <span class="px-3 py-1 bg-[#101218] rounded border border-neutral-800 text-emerald-400 font-bold">397/397 Vitest Tests</span>
+          <span class="px-3 py-1 bg-[#101218] rounded border border-neutral-800 text-emerald-400 font-bold">964/964 Vitest Tests</span>
           <span class="px-3 py-1 bg-[#101218] rounded border border-neutral-800 text-white font-bold">Cloudflare AI Gateway</span>
 
           <!-- Duplicate for continuous loop -->
@@ -555,7 +577,7 @@ $ run checks
           <span class="px-3 py-1 bg-[#101218] rounded border border-neutral-800 text-purple-300 font-bold">React 19 Dashboard</span>
           <span class="px-3 py-1 bg-[#101218] rounded border border-neutral-800 text-white font-bold">Astro Starlight</span>
           <span class="px-3 py-1 bg-[#101218] rounded border border-neutral-800 text-white font-bold">TypeScript 5.9</span>
-          <span class="px-3 py-1 bg-[#101218] rounded border border-neutral-800 text-emerald-400 font-bold">397/397 Vitest Tests</span>
+          <span class="px-3 py-1 bg-[#101218] rounded border border-neutral-800 text-emerald-400 font-bold">964/964 Vitest Tests</span>
           <span class="px-3 py-1 bg-[#101218] rounded border border-neutral-800 text-white font-bold">Cloudflare AI Gateway</span>
         </div>
       </div>
