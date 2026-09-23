@@ -4,6 +4,7 @@
  */
 import type { Env } from "./env.js";
 import { redactSecrets } from "./security.js";
+import { postSlackMessage, SLACK_POST_TIMEOUT_MS } from "./slack.js";
 import { postSystemOne, readChoiceAnswer, type TypeSafeFetch } from "./typesafe.js";
 import { buildApprovalBlocks } from "./slack-approval.js";
 import {
@@ -27,7 +28,6 @@ import {
   resolveThreadTs,
 } from "./slack-thread.js";
 
-const SLACK_POST_MESSAGE = "https://slack.com/api/chat.postMessage";
 const SLACK_REPLIES = "https://slack.com/api/conversations.replies";
 
 export interface SlackMentionQueueResult {
@@ -98,6 +98,7 @@ async function slackApi(
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json; charset=utf-8",
     },
+    signal: AbortSignal.timeout(SLACK_POST_TIMEOUT_MS),
     body: JSON.stringify(body),
   });
   const json = (await response.json().catch(() => ({}))) as Record<string, unknown>;
@@ -111,12 +112,7 @@ async function defaultPostMessage(
   token: string,
   input: { channel: string; threadTs: string; text: string; blocks?: unknown[] },
 ): Promise<void> {
-  await slackApi(token, SLACK_POST_MESSAGE, {
-    channel: input.channel,
-    thread_ts: input.threadTs,
-    text: input.text,
-    ...(input.blocks ? { blocks: input.blocks } : {}),
-  });
+  await postSlackMessage(token, input);
 }
 
 async function defaultFetchThread(token: string, channel: string, threadTs: string): Promise<SlackThreadMessage[]> {

@@ -54,6 +54,13 @@ async function hmacHex(secret: string, message: string): Promise<string> {
 const SLACK_POST_MESSAGE = "https://slack.com/api/chat.postMessage";
 
 /**
+ * Bounded wait on any Slack write: a hung API must not stall the run's
+ * critical path (progress posts share the emit loop) — callers still
+ * decide whether the resulting timeout error is fatal.
+ */
+export const SLACK_POST_TIMEOUT_MS = 8000;
+
+/**
  * chat.postMessage to a channel (or thread when `threadTs` is set).
  * Throws on transport failure or a Slack `error` field — callers decide
  * whether a failed post is fatal (cards) or best-effort (progress).
@@ -68,6 +75,7 @@ export async function postSlackMessage(
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json; charset=utf-8",
     },
+    signal: AbortSignal.timeout(SLACK_POST_TIMEOUT_MS),
     body: JSON.stringify({
       channel: input.channel,
       ...(input.threadTs ? { thread_ts: input.threadTs } : {}),

@@ -220,7 +220,9 @@ export class OpenCodeAgent extends AIChatAgent<Env> {
           for (const line of renderRunTranscript({ input: safeInput, progress: [], result: safeResult, pullUrl })) {
             write(this.safeText(line, 24_000));
           }
-          write(formatAgentResult(safeResult));
+          // pullUrl rides the envelope: the parent's text scrape of the
+          // transcript is only a legacy fallback, never the source of truth.
+          write(formatAgentResult({ ...safeResult, ...(pullUrl ? { pullUrl } : {}) }));
           writer.write({ type: "text-end", id });
           if (safeResult.status === "error") writer.write({ type: "error", errorText: safeResult.summary });
           writer.write({ type: "finish", finishReason: safeResult.status === "error" ? "error" : "stop" });
