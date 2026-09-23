@@ -1,14 +1,14 @@
 ---
 import '../styles/tailwind.css';
-import '../styles/theme.css';
 ---
 <!DOCTYPE html>
 <html lang="en" class="dark scroll-smooth">
 <head>
   <meta charset="utf-8" />
-  <link rel="icon" type="image/svg+xml" href="/assets/brand/logo.svg" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Shiba - The best AI software engineer</title>
+  <!-- AI Coworker - The best AI software engineer -->
   <meta name="description" content="Shiba is the best AI software engineer. Delegate tasks to parallel coding agents that plan, build, and ship — from task to merged PR." />
   <link rel="canonical" href="https://tryshiba.dev/" />
   <link rel="sitemap" href="/sitemap.xml" />
@@ -17,12 +17,12 @@ import '../styles/theme.css';
   <meta property="og:url" content="https://tryshiba.dev/" />
   <meta property="og:title" content="Shiba - The best AI software engineer" />
   <meta property="og:description" content="Delegate tasks to parallel coding agents that plan, build, and ship — from task to merged PR." />
-  <meta property="og:image" content="https://tryshiba.dev/assets/brand/logo.svg" />
+  <meta property="og:image" content="https://tryshiba.dev/assets/mascot/pet-logo.png" />
   <meta name="twitter:card" content="summary" />
   <meta name="twitter:site" content="@prince_twets" />
   <meta name="twitter:title" content="Shiba - The best AI software engineer" />
   <meta name="twitter:description" content="Delegate tasks to parallel coding agents that plan, build, and ship — from task to merged PR." />
-  <meta name="twitter:image" content="https://tryshiba.dev/assets/brand/logo.svg" />
+  <meta name="twitter:image" content="https://tryshiba.dev/assets/mascot/pet-logo.png" />
   <script type="application/ld+json" set:html={JSON.stringify({
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
@@ -37,610 +37,1356 @@ import '../styles/theme.css';
   })} />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
 
   <style is:global>
     :root {
-      --bg: #0a0a0b;
-      --panel: #101013;
-      --elevated: #161619;
-      --line: rgba(255, 255, 255, 0.07);
-      --accent: #2dd4bf;
+      --bg: #0b0b0b;
+      --bg-raised: #111111;
+      --bg-code: #0d1117;
+      --border: rgba(255, 255, 255, 0.08);
+      --border-strong: rgba(255, 255, 255, 0.14);
+      --text: #ededed;
+      --text-muted: #a1a1a1;
+      --text-subtle: #8a8a8a;
+      --cream: #f4f2f2;
+      --ink: #0b0b0b;
+      --ink-muted: #57534e;
+      --green: #28a745;
+      --green-fg: #3fb950;
+      --red: #d73a49;
     }
 
     body {
-      background-color: #0a0a0b !important;
-      color: #e4e4e7 !important;
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      letter-spacing: -0.011em;
       margin: 0;
       padding: 0;
       overflow-x: hidden;
       -webkit-font-smoothing: antialiased;
     }
 
-    .font-mono {
-      font-family: 'DM Mono', ui-monospace, SFMono-Regular, monospace !important;
+    .mono {
+      font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing: 0;
+    }
+
+    .eyebrow {
+      font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-subtle);
+    }
+    .section-light .eyebrow { color: var(--ink-muted); }
+
+    /* Hero backdrop: faint grid fading out from the top */
+    .hero-grid {
+      background-image: linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+                        linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+      background-size: 64px 64px;
+      -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 20%, transparent 75%);
+      mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 20%, transparent 75%);
+    }
+    .hero-glow {
+      background: radial-gradient(ellipse 50% 45% at 50% 0%, rgba(255, 255, 255, 0.07), transparent 70%);
+    }
+    .window-glow {
+      background: radial-gradient(ellipse 55% 50% at 50% 30%, rgba(255, 255, 255, 0.06), transparent 70%);
+    }
+
+    /* Buttons: sizing and radius come from utilities */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      font-weight: 500;
+      line-height: 1;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    }
+    .btn-primary { background: var(--text); color: var(--ink); border: 1px solid var(--text); }
+    .btn-primary:hover { background: #ffffff; border-color: #ffffff; }
+    .btn-secondary { background: transparent; color: var(--text); border: 1px solid var(--border-strong); }
+    .btn-secondary:hover { background: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.24); }
+
+    .nav-link { color: var(--text-muted); transition: color 0.15s ease; }
+    .nav-link:hover { color: var(--text); }
+
+    /* Surfaces */
+    .panel { background: var(--bg-raised); border: 1px solid var(--border); transition: border-color 0.2s ease; }
+    .panel:hover { border-color: rgba(255, 255, 255, 0.16); }
+    .well { background: var(--bg); border: 1px solid var(--border); }
+    .window {
+      background: #0f0f0f;
+      border: 1px solid var(--border-strong);
+      box-shadow: 0 40px 120px -40px rgba(0, 0, 0, 0.9);
+    }
+    .section-light { background: var(--cream); color: var(--ink); }
+    .panel-light { background: #ffffff; border: 1px solid rgba(11, 11, 11, 0.08); transition: border-color 0.2s ease; }
+    .panel-light:hover { border-color: rgba(11, 11, 11, 0.18); }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
+      padding: 0.1875rem 0.5rem;
+      border-radius: 9999px;
+      border: 1px solid var(--border-strong);
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+      line-height: 1.2;
+      letter-spacing: 0;
+      white-space: nowrap;
+    }
+    .chip-green { color: var(--green-fg); border-color: rgba(63, 185, 80, 0.35); background: rgba(46, 160, 67, 0.1); }
+    .section-light .chip { color: var(--ink-muted); border-color: rgba(11, 11, 11, 0.14); }
+    .check { color: var(--green-fg); }
+
+    .icon-box {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 2.5rem;
+      height: 2.5rem;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--text);
+      flex-shrink: 0;
+    }
+
+    .code-inline {
+      font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.92em;
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.05rem 0.3rem;
+    }
+    .mention { color: #1d9bd1; background: rgba(29, 155, 209, 0.12); border-radius: 3px; padding: 0 2px; }
+
+    /* GitHub-dark diff + syntax */
+    .diff-add, .diff-del { white-space: pre-wrap; overflow-wrap: anywhere; color: #e6edf3; }
+    .diff-add { background-color: rgba(46, 160, 67, 0.15); box-shadow: inset 2px 0 0 var(--green); }
+    .diff-del { background-color: rgba(215, 58, 73, 0.15); box-shadow: inset 2px 0 0 var(--red); }
+    .diff-add .sign { color: #dafbe1; }
+    .diff-del .sign { color: #ffdcd7; }
+    .tok-k { color: #ff7b72; }
+    .tok-s { color: #a5d6ff; }
+    .tok-f { color: #d2a8ff; }
+    .tok-v { color: #ffa657; }
+    .tok-c { color: #8b949e; }
+
+    /* Infinite logo strip */
+    @keyframes marquee {
+      from { transform: translateX(0); }
+      to { transform: translateX(-50%); }
+    }
+    .marquee {
+      display: flex;
+      width: max-content;
+      animation: marquee 40s linear infinite;
+    }
+    .marquee:hover { animation-play-state: paused; }
+    .marquee-mask {
+      -webkit-mask-image: linear-gradient(to right, transparent, #000 12%, #000 88%, transparent);
+      mask-image: linear-gradient(to right, transparent, #000 12%, #000 88%, transparent);
+    }
+
+    @keyframes typing {
+      0%, 60%, 100% { opacity: 0.25; }
+      30% { opacity: 1; }
+    }
+    .typing-dot-1, .typing-dot-2, .typing-dot-3 { animation: typing 1s ease-in-out infinite; }
+    .typing-dot-2 { animation-delay: 0.15s; }
+    .typing-dot-3 { animation-delay: 0.3s; }
+
+    /* Hero demo tabs: active state is driven by aria-pressed */
+    .agent-tab {
+      flex-shrink: 0;
+      white-space: nowrap;
+      min-height: 36px;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+    }
+    .agent-tab:hover { color: var(--text); }
+    .agent-tab[aria-pressed="true"] {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.06);
+      border-color: var(--border-strong);
+    }
+
+    .resolve-btn {
+      font-size: 12px;
+      padding: 0.25rem 0.625rem;
+      border-radius: 6px;
+      border: 1px solid var(--border-strong);
+      color: var(--text);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    }
+    .resolve-btn:hover { background: rgba(255, 255, 255, 0.06); }
+    .resolve-btn.is-approved { color: var(--green-fg); border-color: rgba(63, 185, 80, 0.35); background: rgba(46, 160, 67, 0.1); }
+
+    [hidden] { display: none !important; }
+    :is(a, button, [tabindex]):focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
+    main section { scroll-margin-top: 5rem; }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto !important; }
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+    }
+
+    @media (max-width: 639px) {
+      header nav a, footer nav a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+      }
+      #hero-replay-btn, .resolve-btn, .agent-tab { min-height: 44px; }
     }
   </style>
 </head>
-<body class="bg-[#0a0a0b] text-zinc-200 antialiased selection:bg-teal-500/20 selection:text-teal-200">
+<body class="antialiased selection:bg-[#28a745]/40 selection:text-white">
 
-  <!-- TOP NAVIGATION BAR -->
-  <header class="sticky top-0 z-50 w-full border-b border-white/[0.07] bg-[#0a0a0b]">
-    <div class="max-w-6xl mx-auto px-4 sm:px-6 h-12 flex items-center justify-between gap-4">
-      <div class="flex items-center gap-3">
-        <a href="/" class="flex items-center gap-2.5 text-zinc-100 hover:text-white transition-colors">
-          <img src="/assets/brand/logo.svg" alt="Shiba" class="w-5 h-5" />
-          <span class="font-semibold text-sm tracking-tight text-zinc-100">Shiba</span>
+  <!-- HEADER -->
+  <header class="sticky top-0 z-50 w-full border-b border-white/[0.06] bg-[#0b0b0b]/80 backdrop-blur-md">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+      <a href="/" class="flex items-center gap-2.5 shrink-0">
+        <img src="/assets/mascot/pet-logo.png" alt="" width="28" height="28" class="w-7 h-7 rounded-md bg-white object-contain" />
+        <span class="text-[15px] font-semibold tracking-tight text-white">Shiba</span>
+      </a>
+
+      <nav aria-label="Main navigation" class="flex items-center gap-1 text-sm">
+        <a href="#use-cases" class="nav-link hidden md:inline-flex px-3 py-2">Product</a>
+        <a href="#integrations" class="nav-link hidden md:inline-flex px-3 py-2">Integrations</a>
+        <a href="#security" class="nav-link hidden md:inline-flex px-3 py-2">Security</a>
+        <a href="#pricing" class="nav-link hidden md:inline-flex px-3 py-2">Pricing</a>
+        <a href="/docs/overview" class="nav-link inline-flex px-3 py-2">Docs</a>
+        <a href="https://github.com/princepal9120/shiba" target="_blank" rel="noopener noreferrer" class="nav-link hidden sm:inline-flex items-center px-3 py-2" aria-label="Shiba on GitHub">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
         </a>
-        <span class="inline-flex items-center gap-1.5 px-2 py-0.5 text-[11px] font-mono text-zinc-400 border border-white/[0.07] rounded bg-[#101013]">
-          <span class="w-1.5 h-1.5 rounded-full bg-[#2dd4bf]"></span>
-          <span>v0.1.0</span>
-        </span>
-      </div>
-
-      <nav aria-label="Main navigation" class="hidden md:flex items-center gap-6 text-xs text-zinc-400">
-        <a href="/docs/overview" class="hover:text-zinc-200 transition-colors">Documentation</a>
-        <a href="/docs/getting-started" class="hover:text-zinc-200 transition-colors">Quickstart</a>
-        <a href="/docs/architecture" class="hover:text-zinc-200 transition-colors">Architecture</a>
-        <a href="/docs/security" class="hover:text-zinc-200 transition-colors">Security</a>
-        <a href="https://github.com/princepal9120/shiba" target="_blank" rel="noopener noreferrer" class="hover:text-zinc-200 transition-colors">GitHub ↗</a>
+        <a href="/app/" class="nav-link hidden sm:inline-flex px-3 py-2">Dashboard</a>
+        <a href="/docs/getting-started" class="btn btn-primary h-9 px-3.5 ml-1 rounded-lg text-sm">Get started</a>
       </nav>
-
-      <div class="flex items-center gap-3">
-        <a href="/docs/getting-started" class="hidden sm:inline-flex text-xs font-medium text-zinc-400 hover:text-zinc-200 transition-colors">Docs</a>
-        <a href="/app/" class="bg-zinc-100 hover:bg-white text-zinc-900 font-medium text-xs px-3 py-1.5 rounded-md transition-colors">Open App</a>
-      </div>
     </div>
   </header>
 
   <main>
-    <!-- HERO SECTION -->
-    <section class="grid-bg relative py-20 sm:py-28 border-b border-white/[0.07] text-center">
+    <!-- HERO -->
+    <section class="relative isolate overflow-hidden pt-20 sm:pt-28 pb-6 text-center">
+      <div class="hero-grid absolute inset-0 -z-10" aria-hidden="true"></div>
+      <div class="hero-glow absolute inset-0 -z-10" aria-hidden="true"></div>
       <div class="max-w-4xl mx-auto px-4 sm:px-6">
-        
-        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/[0.07] bg-[#101013] text-[11px] font-mono text-zinc-400 mb-6">
-          <span class="w-1.5 h-1.5 rounded-full bg-[#2dd4bf]"></span>
-          <span class="uppercase tracking-wider">THE BEST SELF-HOSTED</span>
-          <span class="text-zinc-600">·</span>
-          <span>SANDBOX WORKSPACE</span>
+        <div class="inline-flex max-w-full items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs text-neutral-400 mb-8">
+          <span class="size-1.5 shrink-0 rounded-full bg-[#3fb950]" aria-hidden="true"></span>
+          <span class="truncate">Cloudflare native · Isolated Sandbox microVMs · 100% private</span>
         </div>
 
-        <h1 class="text-3xl sm:text-5xl lg:text-6xl font-semibold tracking-tight text-zinc-100 leading-tight">
-          AI SOFTWARE ENGINEER
+        <h1 class="text-[2.75rem] leading-[1.04] sm:text-6xl lg:text-[4.75rem] font-semibold tracking-[-0.045em] text-white text-balance mb-6">
+          The best self-hosted AI software engineer
         </h1>
 
-        <p class="mt-5 text-base sm:text-lg text-zinc-400 max-w-2xl mx-auto leading-relaxed">
-          Open-source coding agents running in isolated Cloudflare Sandboxes. Submit tasks from Slack or Dashboard with human approval gates, automated test verification, and clean PR delivery.
+        <p class="text-lg sm:text-xl text-neutral-400 max-w-2xl mx-auto mb-10 leading-relaxed text-balance">
+          Orchestrate a fleet of cloud coding agents in all of the apps your team already lives in.
         </p>
 
-        <div class="flex flex-wrap items-center justify-center gap-3 mt-8">
-          <a href="/app/" class="bg-zinc-100 hover:bg-white text-zinc-900 font-medium text-sm px-4 py-2 rounded-md transition-colors inline-flex items-center gap-2">
-            <span>Launch Dashboard</span>
-            <span class="text-zinc-500">→</span>
+        <div class="flex flex-col sm:flex-row items-center justify-center gap-3">
+          <a href="/app/" class="btn btn-primary h-11 px-5 rounded-lg text-[15px] w-full sm:w-auto">
+            <span>Open dashboard</span>
+            <span aria-hidden="true">→</span>
           </a>
-          <a href="/docs/getting-started" class="border border-white/10 hover:bg-white/5 text-zinc-300 font-medium text-sm px-4 py-2 rounded-md transition-colors inline-flex items-center gap-2">
-            <span>Quickstart Guide</span>
-          </a>
-          <a href="https://github.com/princepal9120/shiba" target="_blank" rel="noopener noreferrer" class="border border-white/10 hover:bg-white/5 text-zinc-400 hover:text-zinc-200 text-sm px-3 py-2 rounded-md transition-colors">
-            <span>GitHub</span>
+          <a href="/docs/getting-started" class="btn btn-secondary h-11 px-5 rounded-lg text-[15px] w-full sm:w-auto">
+            Read the docs
           </a>
         </div>
-
-        <!-- HERO DEMO / WORKBENCH TERMINAL PREVIEW -->
-        <div class="mt-14 max-w-3xl mx-auto text-left bg-[#101013] border border-white/[0.07] rounded-lg overflow-hidden">
-          
-          <div class="h-10 px-4 border-b border-white/[0.07] bg-[#161619] flex items-center justify-between">
-            <div class="flex items-center gap-2">
-              <span class="w-2 h-2 rounded-full bg-zinc-700"></span>
-              <span class="w-2 h-2 rounded-full bg-zinc-700"></span>
-              <span class="w-2 h-2 rounded-full bg-zinc-700"></span>
-              <span class="ml-2 text-xs font-mono text-zinc-400">task-run-482 · sandbox micro-vm</span>
-            </div>
-            <button id="hero-replay-btn" class="border border-white/10 hover:bg-white/5 text-zinc-300 text-xs font-mono px-2.5 py-1 rounded transition-colors flex items-center gap-1.5 cursor-pointer">
-              <span class="w-1.5 h-1.5 rounded-full bg-[#2dd4bf]"></span>
-              <span>Replay run</span>
-            </button>
-          </div>
-
-          <div class="px-4 py-2 border-b border-white/[0.07] bg-[#101013] flex items-center gap-1 overflow-x-auto text-xs font-mono">
-            <button id="tab-all" aria-pressed="true" class="agent-tab px-2.5 py-1 rounded text-zinc-200 bg-white/5 border border-white/10 transition-colors">
-              Pipeline View
-            </button>
-            <button id="tab-captain" aria-pressed="false" class="agent-tab px-2.5 py-1 rounded text-zinc-400 hover:text-zinc-200 transition-colors">
-              Planner
-            </button>
-            <button id="tab-build" aria-pressed="false" class="agent-tab px-2.5 py-1 rounded text-zinc-400 hover:text-zinc-200 transition-colors">
-              Sandbox Exec
-            </button>
-            <button id="tab-review" aria-pressed="false" class="agent-tab px-2.5 py-1 rounded text-zinc-400 hover:text-zinc-200 transition-colors">
-              Verification
-            </button>
-          </div>
-
-          <div id="demo-step-display" class="p-4 sm:p-5 font-mono text-xs text-zinc-300 space-y-3 bg-[#0e0e11]">
-            <div class="text-[11px] text-zinc-500 uppercase tracking-wider flex items-center justify-between pb-1 border-b border-white/[0.05]">
-              <span>PIPELINE ORCHESTRATION · BRANCH: FIX-AUTH-TOKEN</span>
-              <span class="text-[#2dd4bf] font-medium">LIVE</span>
-            </div>
-
-            <div class="space-y-2 pt-1" data-demo-agent="all">
-              <div class="flex items-start gap-3">
-                <span class="text-zinc-500">01</span>
-                <div class="flex-1">
-                  <div class="text-zinc-200 font-medium">01. Approval-Gated: Plan verification before execution</div>
-                  <div class="text-zinc-500 text-[11px] mt-0.5">Plan reviewed by security rules · Slack sign-off confirmed</div>
-                </div>
-                <span class="text-xs text-emerald-400">approved</span>
-              </div>
-
-              <div class="flex items-start gap-3">
-                <span class="text-zinc-500">02</span>
-                <div class="flex-1">
-                  <div class="text-zinc-200 font-medium">02. Sandbox Environment Provisioned</div>
-                  <div class="text-zinc-500 text-[11px] mt-0.5">Cloudflare micro-VM · Node.js 22 · Egress boundary active</div>
-                </div>
-                <span class="text-xs text-emerald-400">ready</span>
-              </div>
-
-              <div class="flex items-start gap-3">
-                <span class="text-zinc-500">03</span>
-                <div class="flex-1">
-                  <div class="text-zinc-200 font-medium">03. Harness Exec: OpenCode / Claude Code / Codex</div>
-                  <div class="text-zinc-500 text-[11px] mt-0.5">14 files inspected · 2 targeted edits · 32 tests passed</div>
-                </div>
-                <span class="text-xs text-[#2dd4bf]">completed</span>
-              </div>
-
-              <div class="flex items-start gap-3">
-                <span class="text-zinc-500">04</span>
-                <div class="flex-1">
-                  <div class="text-zinc-200 font-medium">04. Pull Request Published</div>
-                  <div class="text-zinc-500 text-[11px] mt-0.5">PR #128 opened on GitHub with diff summary and test traces</div>
-                </div>
-                <span class="text-xs text-emerald-400">merged</span>
-              </div>
-            </div>
-
-            <div class="hidden space-y-2 pt-1" data-demo-agent="captain">
-              <div class="text-zinc-400">Captain Agent · Task decomposition</div>
-              <div class="p-2.5 rounded bg-[#161619] border border-white/[0.07] text-zinc-300 text-[11px] space-y-1">
-                <div>• Parsed Slack command: "Fix session token expiry in auth middleware"</div>
-                <div>• Generated execution DAG: 2 read ops, 1 patch, 1 test run</div>
-                <div>• Approval Gate: Waiting for operator sign-off before git push</div>
-              </div>
-            </div>
-
-            <div class="hidden space-y-2 pt-1" data-demo-agent="build">
-              <div class="text-zinc-400">Sandbox Worker · Isolated execution</div>
-              <div class="p-2.5 rounded bg-[#161619] border border-white/[0.07] text-zinc-300 text-[11px] space-y-1">
-                <div>$ git checkout -b fix-auth-token</div>
-                <div>$ pnpm test test/auth.test.ts</div>
-                <div class="text-emerald-400">✓ 8 tests passed in 410ms</div>
-              </div>
-            </div>
-
-            <div class="hidden space-y-2 pt-1" data-demo-agent="review">
-              <div class="text-zinc-400">Verifier Agent · Automated quality gate</div>
-              <div class="p-2.5 rounded bg-[#161619] border border-white/[0.07] text-zinc-300 text-[11px] space-y-1">
-                <div>• Typecheck: PASS (tsc --noEmit)</div>
-                <div>• Egress check: Zero unauthorized outbound calls</div>
-                <div>• Diff sanity: 2 files changed, +14 lines, -3 lines</div>
-              </div>
-            </div>
-
-          </div>
-
-          <div class="px-4 py-2.5 border-t border-white/[0.07] bg-[#161619] flex items-center justify-between text-xs text-zinc-500 font-mono">
-            <span>Status: 100% Verified</span>
-            <a href="/docs/overview" class="text-zinc-400 hover:text-zinc-200 transition-colors">Read architecture overview →</a>
-          </div>
-
-        </div>
-
       </div>
     </section>
 
-    <!-- CORE FEATURES / CAPABILITIES -->
-    <section id="features" class="py-20 border-b border-white/[0.07]">
+    <!-- LOGO STRIP: OPEN SOURCE & CLOUDFLARE RUNTIMES -->
+    <section aria-label="Built on" class="py-14">
+      <p class="text-center text-sm text-neutral-400 mb-6 px-4">Built on modern open source and Cloudflare runtimes</p>
+      <div class="marquee-mask relative w-full overflow-hidden">
+        <div class="marquee">
+          <ul class="flex items-center gap-12 pr-12 text-[15px] font-medium text-neutral-400 whitespace-nowrap">
+            <li>Cloudflare Workers</li>
+            <li>Sandbox Micro-Containers</li>
+            <li>OpenCode Interpreter</li>
+            <li>Claude Code Adapter</li>
+            <li>Codex Runtime</li>
+            <li>React 19 Dashboard</li>
+            <li>Astro Starlight</li>
+            <li>TypeScript 5.9</li>
+            <li>397/397 Vitest Tests</li>
+            <li>Cloudflare AI Gateway</li>
+          </ul>
+          <!-- Duplicate for continuous loop -->
+          <ul aria-hidden="true" class="flex items-center gap-12 pr-12 text-[15px] font-medium text-neutral-400 whitespace-nowrap">
+            <li>Cloudflare Workers</li>
+            <li>Sandbox Micro-Containers</li>
+            <li>OpenCode Interpreter</li>
+            <li>Claude Code Adapter</li>
+            <li>Codex Runtime</li>
+            <li>React 19 Dashboard</li>
+            <li>Astro Starlight</li>
+            <li>TypeScript 5.9</li>
+            <li>397/397 Vitest Tests</li>
+            <li>Cloudflare AI Gateway</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- PRODUCT PREVIEW: MULTI-AGENT WORKSPACE -->
+    <section aria-label="Product preview" class="pb-24 sm:pb-32">
+      <div class="relative max-w-6xl mx-auto px-4 sm:px-6">
+        <div class="window-glow absolute inset-x-0 -top-24 h-[520px] -z-10" aria-hidden="true"></div>
+
+        <div class="window rounded-2xl overflow-hidden text-left">
+          <!-- Titlebar -->
+          <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.08] px-4 py-3">
+            <div class="flex items-center gap-3 min-w-0">
+              <div class="flex gap-1.5" aria-hidden="true">
+                <span class="size-3 rounded-full bg-white/10"></span>
+                <span class="size-3 rounded-full bg-white/10"></span>
+                <span class="size-3 rounded-full bg-white/10"></span>
+              </div>
+              <span class="mono text-xs text-neutral-400 truncate">
+                <span class="text-neutral-200">shiba-orchestrator</span><span class="text-neutral-600 mx-1.5">/</span>task-SCO-15215
+              </span>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <span class="chip">
+                <span class="size-1.5 rounded-full bg-[#3fb950] animate-pulse" aria-hidden="true"></span>
+                <span>Example workflow</span>
+              </span>
+              <button id="hero-replay-btn" type="button" class="btn btn-secondary h-8 px-3 rounded-lg text-xs">
+                <svg fill="none" height="12" viewBox="0 0 14 14" width="12" xmlns="http://www.w3.org/2000/svg" class="size-3" aria-hidden="true">
+                  <path d="M2.5 7C2.5 9.48528 4.51472 11.5 7 11.5C9.48528 11.5 11.5 9.48528 11.5 7C11.5 4.51472 9.48528 2.5 7 2.5C5.40879 2.5 4.00852 3.32376 3.19629 4.5625" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+                  <path d="M3 2V4.75H5.75" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path>
+                </svg>
+                <span>Replay run</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Agent view tabs -->
+          <div role="group" aria-label="Agent view" class="flex items-center gap-1 overflow-x-auto border-b border-white/[0.08] px-3 py-2 text-[13px]">
+            <button id="tab-all" type="button" aria-pressed="true" aria-controls="demo-step-display" class="agent-tab inline-flex items-center px-3 rounded-md">Pipeline view</button>
+            <button id="tab-captain" type="button" aria-pressed="false" aria-controls="demo-step-display" class="agent-tab inline-flex items-center px-3 rounded-md">Captain (planner)</button>
+            <button id="tab-build" type="button" aria-pressed="false" aria-controls="demo-step-display" class="agent-tab inline-flex items-center px-3 rounded-md">Build agent (sandbox)</button>
+            <button id="tab-review" type="button" aria-pressed="false" aria-controls="demo-step-display" class="agent-tab inline-flex items-center px-3 rounded-md">Review agent (QA)</button>
+            <button id="tab-terminal" type="button" aria-pressed="false" aria-controls="demo-step-display" class="agent-tab inline-flex items-center gap-1.5 px-3 rounded-md"><span class="mono text-xs" aria-hidden="true">&gt;_</span><span>Terminal log</span></button>
+          </div>
+
+          <!-- Workspace body -->
+          <div id="demo-console-body" class="p-4 sm:p-6 min-h-[340px] flex flex-col justify-between">
+            <div id="demo-step-display" class="space-y-3">
+              <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 mono text-[11px] uppercase tracking-wider text-neutral-500 mb-1">
+                <span>Orchestration pipeline · Task: fix sign-up form data & approval gates</span>
+                <span class="text-neutral-400">Illustrative run · sample data</span>
+              </div>
+
+              <!-- Captain -->
+              <div data-demo-agent="captain" class="flex items-start gap-3.5 rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
+                <div class="icon-box !w-9 !h-9" aria-hidden="true">
+                  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+                </div>
+                <div class="min-w-0 flex-1 space-y-1.5">
+                  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <span class="text-sm font-medium text-white">Captain: Spec & parallel delegation</span>
+                      <span class="chip">Planning active</span>
+                    </div>
+                    <span class="mono text-[11px] text-neutral-500">00:00.12</span>
+                  </div>
+                  <p class="text-[13px] leading-relaxed text-neutral-400">
+                    Deconstructed issue <span class="mono text-neutral-200">#15215</span>: booting isolated Sandbox microVM, applying patch to <code class="code-inline">src/auth/handler.ts</code>, delegating regression test sweep to Build Agent.
+                  </p>
+                </div>
+              </div>
+
+              <!-- Build agent -->
+              <div data-demo-agent="build" class="flex items-start gap-3.5 rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
+                <div class="icon-box !w-9 !h-9" aria-hidden="true">
+                  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-6-6-6M12 19h8"/></svg>
+                </div>
+                <div class="min-w-0 flex-1 space-y-2">
+                  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <span class="text-sm font-medium text-white">Build Agent: Cloudflare Sandbox microVM</span>
+                      <span class="chip">standard-1 VM</span>
+                    </div>
+                    <span class="mono text-[11px] text-neutral-400">Booted in 340ms</span>
+                  </div>
+
+                  <div class="mono text-[12px] leading-6 rounded-lg overflow-hidden border border-white/[0.08] bg-[#0d1117]">
+                    <div class="flex items-center justify-between gap-2 border-b border-white/[0.06] px-3 py-1.5 text-[11px] text-neutral-400">
+                      <span class="truncate">src/auth/handler.ts</span>
+                      <span class="shrink-0"><span class="check">+2</span> <span class="text-[#f85149]">−1</span></span>
+                    </div>
+                    <div class="diff-del px-3"><span class="sign">-</span> <span class="tok-k">const</span> user = <span class="tok-k">await</span> db.<span class="tok-f">query</span>(<span class="tok-s">'SELECT * FROM users WHERE id = ?'</span>, [rawId]);</div>
+                    <div class="diff-add px-3"><span class="sign">+</span> <span class="tok-k">const</span> user = <span class="tok-k">await</span> db.<span class="tok-f">query</span>(<span class="tok-s">'SELECT * FROM users WHERE id = ?'</span>, [validatedId]);</div>
+                    <div class="diff-add px-3"><span class="sign">+</span> <span class="tok-k">await</span> auditLogger.<span class="tok-f">record</span>(&#123; <span class="tok-v">action</span>: <span class="tok-s">'APPROVAL_GATE_VERIFIED'</span>, runId &#125;);</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Review agent -->
+              <div data-demo-agent="review" class="flex items-start gap-3.5 rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
+                <div class="icon-box !w-9 !h-9" aria-hidden="true">
+                  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9 12l2 2 4-4"/></svg>
+                </div>
+                <div class="min-w-0 flex-1 space-y-1.5">
+                  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5">
+                    <span class="text-sm font-medium text-white">Review Agent: Multi-pass verification & visual QA</span>
+                    <span class="chip chip-green self-start sm:self-auto">Approved ✓</span>
+                  </div>
+                  <p class="text-[13px] leading-relaxed text-neutral-400">
+                    Typecheck: <span class="check">clean</span> · Vitest: <span class="check">32 test files passed (397/397)</span> · Egress security: <span class="check">0 secrets leaked</span> · GitHub PR <a href="/docs/github" class="text-white underline underline-offset-2 decoration-white/30 hover:decoration-white">#546 ready to merge</a>.
+                  </p>
+                </div>
+              </div>
+
+              <pre data-demo-agent="terminal" hidden class="mono overflow-x-auto rounded-xl border border-white/[0.08] bg-[#0d1117] p-4 text-[13px] leading-6 text-[#e6edf3]" tabindex="0" aria-label="Sample terminal log"><code><span class="tok-c">$</span> validate task
+<span class="check">✓</span> Task approved
+<span class="tok-c">$</span> run coding harness
+<span class="check">✓</span> Patch collected
+<span class="tok-c">$</span> run checks
+<span class="check">✓</span> Example run ready for review</code></pre>
+            </div>
+
+            <!-- Status bar -->
+            <div class="mt-5 pt-4 border-t border-white/[0.08] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs text-neutral-400">
+              <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-[#3fb950]" aria-hidden="true"></span>Isolated microVM</span>
+                <span class="text-neutral-700" aria-hidden="true">|</span>
+                <span>Egress filter: <strong class="check font-medium">Masked</strong></span>
+                <span class="text-neutral-700" aria-hidden="true">|</span>
+                <span>Runtime: Cloudflare Workers + Sandbox</span>
+              </div>
+              <a href="/docs/dashboard" class="text-neutral-200 hover:text-white inline-flex items-center gap-1">
+                <span>Dashboard setup</span>
+                <span aria-hidden="true">→</span>
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- USE CASES -->
+    <section id="use-cases" class="py-24 sm:py-32 border-t border-white/[0.06]">
       <div class="max-w-6xl mx-auto px-4 sm:px-6">
-        
+        <div class="flex flex-col md:flex-row items-start md:items-end justify-between gap-6 mb-12">
+          <div class="max-w-2xl">
+            <p class="eyebrow mb-4">Product</p>
+            <h2 class="text-4xl sm:text-5xl font-semibold tracking-[-0.035em] text-white mb-4">Use cases</h2>
+            <p class="text-lg text-neutral-400 leading-relaxed">
+              From clearing hundreds of tickets at once to running security audits on a schedule.
+            </p>
+          </div>
+          <a href="/docs/getting-started" class="btn btn-secondary h-10 px-4 rounded-lg text-sm shrink-0">
+            <span>Deploy on Cloudflare</span>
+            <span aria-hidden="true">→</span>
+          </a>
+        </div>
+
+        <div id="usecases-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+
+          <!-- E2E testing -->
+          <article class="panel usecase-panel rounded-2xl p-6 flex flex-col" data-panel-index="0">
+            <p class="eyebrow mb-4">Browser & terminal</p>
+            <h3 class="text-lg font-semibold tracking-tight text-white mb-2">E2E testing</h3>
+            <p class="text-sm text-neutral-400 leading-relaxed mb-6">
+              Take your agent runs end to end with native computer use, browser use and annotated videos.
+            </p>
+
+            <div class="well mt-auto rounded-xl overflow-hidden">
+              <div class="flex items-center gap-3 border-b border-white/[0.06] px-3 py-2">
+                <div class="flex gap-1.5" aria-hidden="true">
+                  <span class="size-2 rounded-full bg-white/15"></span>
+                  <span class="size-2 rounded-full bg-white/15"></span>
+                  <span class="size-2 rounded-full bg-white/15"></span>
+                </div>
+                <span class="mono flex-1 truncate rounded bg-white/[0.04] px-2 py-0.5 text-center text-[10px] text-neutral-400">chromium:test-sandbox</span>
+              </div>
+              <div id="e2e-status-box" class="mono space-y-1.5 p-4 text-[12px]">
+                <p id="e2e-status-line" class="flex items-center gap-2">
+                  <span class="check">✓</span><span class="text-neutral-200">32 test specs completed in 1.4s</span>
+                </p>
+                <p class="flex items-center gap-2 text-neutral-400"><span class="check">✓</span><span>Recorded DOM diff & visual artifacts</span></p>
+              </div>
+            </div>
+          </article>
+
+          <!-- Bug triage and fix -->
+          <article class="panel usecase-panel rounded-2xl p-6 flex flex-col" data-panel-index="1">
+            <p class="eyebrow mb-4">Slack to PR</p>
+            <h3 class="text-lg font-semibold tracking-tight text-white mb-2">Bug triage and fix</h3>
+            <p class="text-sm text-neutral-400 leading-relaxed mb-6">
+              Slack @mention to reproduced bug, fixed PR, and passing test suite.
+            </p>
+
+            <div class="well mt-auto rounded-xl p-4 space-y-3 text-[13px]">
+              <div class="flex gap-3">
+                <span class="size-7 shrink-0 rounded-md bg-neutral-700 flex items-center justify-center text-[11px] font-semibold text-white" aria-hidden="true">L</span>
+                <div class="min-w-0">
+                  <div class="flex items-baseline gap-2">
+                    <span class="font-semibold text-white">lisa</span>
+                    <span class="text-[11px] text-neutral-500">2:47 PM</span>
+                  </div>
+                  <p class="text-neutral-300 leading-snug"><span class="mention">@Coworker</span> can you help me with this bug in sign-up form data?</p>
+                </div>
+              </div>
+
+              <div class="pt-3 border-t border-white/[0.06]">
+                <div id="triage-typing-dots" class="hidden items-center gap-1 py-1 pl-10 text-neutral-400">
+                  <span class="w-1.5 h-1.5 bg-neutral-400 rounded-full typing-dot-1"></span>
+                  <span class="w-1.5 h-1.5 bg-neutral-400 rounded-full typing-dot-2"></span>
+                  <span class="w-1.5 h-1.5 bg-neutral-400 rounded-full typing-dot-3"></span>
+                  <span class="text-[11px] text-neutral-500 ml-1.5">Coworker is typing…</span>
+                </div>
+
+                <div id="triage-reply-box" class="flex gap-3">
+                  <img src="/assets/mascot/pet-logo.png" alt="" width="28" height="28" class="size-7 shrink-0 rounded-md bg-white object-contain" />
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-1.5">
+                      <span class="font-semibold text-white">Coworker</span>
+                      <span class="rounded bg-white/10 px-1 text-[9px] font-semibold uppercase tracking-wide text-neutral-300">App</span>
+                    </div>
+                    <p class="text-neutral-300 leading-snug">Reproduced SCO-15215. Patch ready in PR #546.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <!-- Code review -->
+          <article class="panel usecase-panel rounded-2xl p-6 flex flex-col" data-panel-index="2">
+            <p class="eyebrow mb-4">Multi-pass QA</p>
+            <h3 class="text-lg font-semibold tracking-tight text-white mb-2">Code review</h3>
+            <p class="text-sm text-neutral-400 leading-relaxed mb-6">
+              Automated diff critique, architectural sanity checks, and security scan before merge.
+            </p>
+
+            <div class="well mt-auto rounded-xl p-3 space-y-2 text-[13px]">
+              <div class="review-item flex items-center justify-between gap-3 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2" id="rev-1">
+                <div class="flex items-center gap-2 min-w-0">
+                  <span class="check" aria-hidden="true">✓</span>
+                  <span class="text-neutral-200 truncate">Security: egress masking</span>
+                </div>
+                <button type="button" class="resolve-btn" data-rev-id="1">Approve</button>
+              </div>
+
+              <div class="review-item flex items-center justify-between gap-3 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2" id="rev-2">
+                <div class="flex items-center gap-2 min-w-0">
+                  <span class="check" aria-hidden="true">✓</span>
+                  <span class="text-neutral-200 truncate">Syntax & type checking</span>
+                </div>
+                <button type="button" class="resolve-btn" data-rev-id="2">Approve</button>
+              </div>
+
+              <div class="flex items-center justify-between px-1 pt-1 text-[12px]">
+                <span id="review-verdict-label" class="text-neutral-400">Verdict: <span class="check font-medium">100% approved</span></span>
+                <span class="mono text-[11px] text-neutral-500">2 / 2 checks</span>
+              </div>
+            </div>
+          </article>
+
+          <!-- Migration & refactor -->
+          <article class="panel usecase-panel rounded-2xl p-6 flex flex-col" data-panel-index="3">
+            <p class="eyebrow mb-4">Mass refactors</p>
+            <h3 class="text-lg font-semibold tracking-tight text-white mb-2">Migration & refactor</h3>
+            <p class="text-sm text-neutral-400 leading-relaxed mb-6">
+              Burn down tech debt and run bulk refactors across multiple repositories in parallel.
+            </p>
+
+            <div class="well mt-auto rounded-xl p-4">
+              <div class="mono text-[13px] text-neutral-200 mb-3">React 18 → React 19</div>
+              <div class="w-full bg-white/[0.08] rounded-full h-1.5 mb-2.5 overflow-hidden">
+                <div id="migration-progress-bar" class="bg-neutral-200 h-1.5 rounded-full transition-all duration-1000 ease-out" style="width: 0%"></div>
+              </div>
+              <span id="migration-counter-text" class="mono text-[11px] text-neutral-400">0 / 100 modules upgraded</span>
+            </div>
+          </article>
+
+          <!-- Bring your own key -->
+          <article class="panel usecase-panel rounded-2xl p-6 flex flex-col" data-panel-index="4">
+            <p class="eyebrow mb-4">Zero markup</p>
+            <h3 class="text-lg font-semibold tracking-tight text-white mb-2">Bring your own key (BYOK)</h3>
+            <p class="text-sm text-neutral-400 leading-relaxed mb-6">
+              Connect your own Anthropic, OpenAI, or Google API keys through Cloudflare AI Gateway with zero middleman markup.
+            </p>
+
+            <div class="well mt-auto rounded-xl p-4 mono text-[12px]">
+              <ul class="space-y-2">
+                <li class="flex items-center justify-between gap-2">
+                  <span class="flex items-center gap-2 text-neutral-200"><span class="w-1.5 h-1.5 rounded-full bg-[#3fb950]" aria-hidden="true"></span>Claude 3.7</span>
+                  <span class="text-neutral-500">140ms</span>
+                </li>
+                <li class="flex items-center justify-between gap-2">
+                  <span class="flex items-center gap-2 text-neutral-200"><span class="w-1.5 h-1.5 rounded-full bg-[#3fb950]" aria-hidden="true"></span>OpenAI GPT-5</span>
+                  <span class="text-neutral-500">185ms</span>
+                </li>
+                <li class="flex items-center justify-between gap-2">
+                  <span class="flex items-center gap-2 text-neutral-200"><span class="w-1.5 h-1.5 rounded-full bg-[#3fb950]" aria-hidden="true"></span>Gemini 2.5 Flash</span>
+                  <span class="text-neutral-500">95ms</span>
+                </li>
+              </ul>
+              <div class="mt-3 pt-3 border-t border-white/[0.06] text-[11px] text-neutral-400">Keys stored in Cloudflare AI Gateway</div>
+            </div>
+          </article>
+
+          <!-- Automations -->
+          <article class="panel usecase-panel rounded-2xl p-6 flex flex-col" data-panel-index="5">
+            <p class="eyebrow mb-4">Cron & webhooks</p>
+            <h3 class="text-lg font-semibold tracking-tight text-white mb-2">Automations</h3>
+            <p class="text-sm text-neutral-400 leading-relaxed mb-6">
+              Trigger on schedule or webhook. Nightly dependency updates, flaky test triage, and lint sweeps.
+            </p>
+
+            <div class="well mt-auto rounded-xl p-4 space-y-2.5 text-[12px]">
+              <div class="flex items-center justify-between text-neutral-400">
+                <span class="mono">cron <code class="text-neutral-200">0 3 * * *</code></span>
+                <span class="flex items-center gap-1.5 check font-medium">
+                  <span class="relative flex h-2 w-2" aria-hidden="true">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#3fb950] opacity-60"></span>
+                    <span class="relative inline-flex rounded-full h-2 w-2 bg-[#3fb950]"></span>
+                  </span>
+                  <span>Active</span>
+                </span>
+              </div>
+              <p id="cron-heartbeat-text" class="text-neutral-300 text-[13px] leading-snug">
+                Nightly vulnerability sweep & package lock reconciliation across all worktrees.
+              </p>
+              <div class="mono text-[11px] text-neutral-400 pt-2.5 border-t border-white/[0.06] flex items-center justify-between">
+                <span>Next tick: 02:45:12</span>
+                <span class="text-neutral-500">Status: idle</span>
+              </div>
+            </div>
+          </article>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- FEATURES & BENCHMARK (light section) -->
+    <section id="features" class="section-light py-24 sm:py-32">
+      <div class="max-w-6xl mx-auto px-4 sm:px-6">
         <div class="text-center max-w-2xl mx-auto mb-14">
-          <div class="text-xs font-mono uppercase tracking-widest text-zinc-500 mb-2">Capabilities</div>
-          <h2 class="text-2xl sm:text-3xl font-semibold text-zinc-100 tracking-tight">
-            Engineered for safe autonomous execution
-          </h2>
-          <p class="mt-3 text-sm text-zinc-400">
-            Every layer from prompt ingestion to git publish is governed by deterministic boundaries.
+          <p class="eyebrow mb-4">Features</p>
+          <h2 class="text-4xl sm:text-5xl font-semibold tracking-[-0.035em] text-[#0b0b0b] mb-4 text-balance">Features for a modern dev team</h2>
+          <p class="text-lg text-[#57534e] leading-relaxed">
+            Plan and execute complex engineering tasks, from code migrations to on-call incident resolution.
           </p>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          
-          <div class="p-5 rounded-lg border border-white/[0.07] bg-[#101013] hover:border-white/15 transition-colors">
-            <div class="text-xs font-mono text-[#2dd4bf] mb-2">01. Approval-Gated</div>
-            <h3 class="text-sm font-semibold text-zinc-100 mb-1.5">Human sign-off by default</h3>
-            <p class="text-xs text-zinc-400 leading-relaxed">
-              No code merges or destructive actions execute without explicit operator sign-off via Slack buttons or the dashboard.
-            </p>
-            <div class="mt-4 pt-3 border-t border-white/[0.05]">
-              <a href="/docs/approval-gates" class="text-xs text-zinc-400 hover:text-zinc-200 inline-flex items-center gap-1 transition-colors">
-                Learn about gates →
-              </a>
+        <div class="panel-light rounded-2xl p-6 sm:p-10 mb-4">
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
+            <div>
+              <span class="chip mb-5">Terminal-Bench & SWE-bench</span>
+              <h3 class="text-3xl sm:text-4xl font-semibold tracking-[-0.03em] text-[#0b0b0b] mb-4">World-class harness performance</h3>
+              <p class="text-[15px] text-[#57534e] leading-relaxed mb-8">
+                Built for long-horizon tasks. Ephemeral microVMs boot in milliseconds with full shell, git, and language toolchains without host environment contamination.
+              </p>
+              <dl class="grid grid-cols-3 gap-6 border-t border-black/[0.08] pt-6">
+                <div>
+                  <dt class="text-xs text-[#57534e] mb-1">MicroVM boot time</dt>
+                  <dd class="text-2xl font-semibold tracking-tight text-[#0b0b0b]">340ms</dd>
+                </div>
+                <div>
+                  <dt class="text-xs text-[#57534e] mb-1">Egress isolation</dt>
+                  <dd class="text-2xl font-semibold tracking-tight text-[#0b0b0b]">100%</dd>
+                </div>
+                <div>
+                  <dt class="text-xs text-[#57534e] mb-1">Host pollution</dt>
+                  <dd class="text-2xl font-semibold tracking-tight text-[#0b0b0b]">Zero</dd>
+                </div>
+              </dl>
+            </div>
+
+            <!-- Verification evidence -->
+            <div class="rounded-xl bg-[#0b0b0b] p-6 space-y-6 text-[13px] shadow-[0_24px_60px_-30px_rgba(0,0,0,0.5)]">
+              <div>
+                <div class="flex flex-wrap justify-between items-center gap-2 mb-2">
+                  <span class="font-medium text-white">Automated test suites</span>
+                  <span class="mono text-xs check">397 / 397 pass (100%)</span>
+                </div>
+                <div class="w-full bg-white/[0.08] h-1.5 rounded-full overflow-hidden">
+                  <div class="bg-[#3fb950] h-full rounded-full" style="width: 100%"></div>
+                </div>
+                <span class="text-xs text-neutral-400 mt-2 block">32 test files covering egress, harnesses, slack, git, and DO runtime</span>
+              </div>
+
+              <div>
+                <div class="flex flex-wrap justify-between items-center gap-2 mb-2">
+                  <span class="font-medium text-white">Micro-container spinup</span>
+                  <span class="mono text-xs text-neutral-200">~340ms (gVisor sandbox)</span>
+                </div>
+                <div class="w-full bg-white/[0.08] h-1.5 rounded-full overflow-hidden">
+                  <div class="bg-neutral-200 h-full rounded-full" style="width: 92%"></div>
+                </div>
+                <span class="text-xs text-neutral-400 mt-2 block">Ephemeral container server with zero host filesystem contamination</span>
+              </div>
+
+              <div>
+                <div class="flex flex-wrap justify-between items-center gap-2 mb-2">
+                  <span class="font-medium text-white">Static typecheck & lint</span>
+                  <span class="mono text-xs check">0 errors / 0 warnings</span>
+                </div>
+                <div class="w-full bg-white/[0.08] h-1.5 rounded-full overflow-hidden">
+                  <div class="bg-[#3fb950] h-full rounded-full" style="width: 100%"></div>
+                </div>
+                <span class="text-xs text-neutral-400 mt-2 block">Strict TypeScript 5.9 with ESLint flat config validation</span>
+              </div>
             </div>
           </div>
-
-          <div class="p-5 rounded-lg border border-white/[0.07] bg-[#101013] hover:border-white/15 transition-colors">
-            <div class="text-xs font-mono text-[#2dd4bf] mb-2">02. Micro-VM Isolation</div>
-            <h3 class="text-sm font-semibold text-zinc-100 mb-1.5">Cloudflare Sandbox runtime</h3>
-            <p class="text-xs text-zinc-400 leading-relaxed">
-              Every job spawns in an isolated ephemeral micro-VM container with strictly scoped filesystem and outbound network controls.
-            </p>
-            <div class="mt-4 pt-3 border-t border-white/[0.05]">
-              <a href="/docs/security" class="text-xs text-zinc-400 hover:text-zinc-200 inline-flex items-center gap-1 transition-colors">
-                Security boundaries →
-              </a>
-            </div>
-          </div>
-
-          <div class="p-5 rounded-lg border border-white/[0.07] bg-[#101013] hover:border-white/15 transition-colors">
-            <div class="text-xs font-mono text-[#2dd4bf] mb-2">03. Multi-Harness Engine</div>
-            <h3 class="text-sm font-semibold text-zinc-100 mb-1.5">OpenCode, Claude Code, Codex</h3>
-            <p class="text-xs text-zinc-400 leading-relaxed">
-              Route tasks to Anthropic Claude Code, Google OpenCode, or OpenAI Codex with identical approval contracts.
-            </p>
-            <div class="mt-4 pt-3 border-t border-white/[0.05]">
-              <a href="/docs/claude-code" class="text-xs text-zinc-400 hover:text-zinc-200 inline-flex items-center gap-1 transition-colors">
-                Supported harnesses →
-              </a>
-            </div>
-          </div>
-
-          <div class="p-5 rounded-lg border border-white/[0.07] bg-[#101013] hover:border-white/15 transition-colors">
-            <div class="text-xs font-mono text-[#2dd4bf] mb-2">04. Slack Integration</div>
-            <h3 class="text-sm font-semibold text-zinc-100 mb-1.5">Team collaboration channel</h3>
-            <p class="text-xs text-zinc-400 leading-relaxed">
-              Mention @shiba-ai-coworker in any channel to triage bugs, request features, or review proposed code diffs inline.
-            </p>
-            <div class="mt-4 pt-3 border-t border-white/[0.05]">
-              <a href="/docs/slack" class="text-xs text-zinc-400 hover:text-zinc-200 inline-flex items-center gap-1 transition-colors">
-                Slack setup guide →
-              </a>
-            </div>
-          </div>
-
-          <div class="p-5 rounded-lg border border-white/[0.07] bg-[#101013] hover:border-white/15 transition-colors">
-            <div class="text-xs font-mono text-[#2dd4bf] mb-2">05. Pull Request Delivery</div>
-            <h3 class="text-sm font-semibold text-zinc-100 mb-1.5">Clean commits and GitHub PRs</h3>
-            <p class="text-xs text-zinc-400 leading-relaxed">
-              Automated branch checkout, focused commits, and structured PR summaries complete with test traces and logs.
-            </p>
-            <div class="mt-4 pt-3 border-t border-white/[0.05]">
-              <a href="/docs/github" class="text-xs text-zinc-400 hover:text-zinc-200 inline-flex items-center gap-1 transition-colors">
-                GitHub integration →
-              </a>
-            </div>
-          </div>
-
-          <div class="p-5 rounded-lg border border-white/[0.07] bg-[#101013] hover:border-white/15 transition-colors">
-            <div class="text-xs font-mono text-[#2dd4bf] mb-2">06. Self-Hosted & Low Cost</div>
-            <h3 class="text-sm font-semibold text-zinc-100 mb-1.5">Own your infrastructure</h3>
-            <p class="text-xs text-zinc-400 leading-relaxed">
-              Deploy to your Cloudflare account with simple wrangler configuration. Zero seat licenses or opaque markups.
-            </p>
-            <div class="mt-4 pt-3 border-t border-white/[0.05]">
-              <a href="/docs/deployment" class="text-xs text-zinc-400 hover:text-zinc-200 inline-flex items-center gap-1 transition-colors">
-                Deployment docs →
-              </a>
-            </div>
-          </div>
-
         </div>
 
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="panel-light rounded-2xl p-6">
+            <p class="mono text-xs text-[#57534e] mb-3">01</p>
+            <h3 class="text-lg font-semibold tracking-tight text-[#0b0b0b] mb-2">Approval-gated</h3>
+            <p class="text-sm text-[#57534e] leading-relaxed">
+              Every tool execution, file modification, and egress communication passes through strict cryptographically verified approval gates. Zero unauthorized actions.
+            </p>
+          </div>
+
+          <div class="panel-light rounded-2xl p-6">
+            <p class="mono text-xs text-[#57534e] mb-3">02</p>
+            <h3 class="text-lg font-semibold tracking-tight text-[#0b0b0b] mb-2">Micro-containers</h3>
+            <p class="text-sm text-[#57534e] leading-relaxed">
+              Cloudflare Sandbox microVMs boot in 340ms, providing pristine isolated environments with full Docker toolchains and egress secret masking.
+            </p>
+          </div>
+
+          <div class="panel-light rounded-2xl p-6">
+            <p class="mono text-xs text-[#57534e] mb-3">03</p>
+            <h3 class="text-lg font-semibold tracking-tight text-[#0b0b0b] mb-2">Issue triage</h3>
+            <p class="text-sm text-[#57534e] leading-relaxed">
+              Automated bug reproduction from Slack alerts and GitHub issues. Reproduces bugs in sandbox, drafts verified patches, and opens clean pull requests.
+            </p>
+          </div>
+        </div>
       </div>
     </section>
 
-    <!-- USE CASES SECTION -->
-    <section id="use-cases" class="py-20 border-b border-white/[0.07]">
+    <!-- INTEGRATIONS -->
+    <section id="integrations" class="py-24 sm:py-32">
       <div class="max-w-6xl mx-auto px-4 sm:px-6">
-        
-        <div class="max-w-2xl mb-12">
-          <div class="text-xs font-mono uppercase tracking-widest text-zinc-500 mb-2">Workflows</div>
-          <h2 class="text-2xl sm:text-3xl font-semibold text-zinc-100 tracking-tight">
-            Built for everyday engineering velocity
-          </h2>
-          <p class="mt-3 text-sm text-zinc-400">
-            Handle routine maintenance, bug investigations, and scheduled repository hygiene without context switching.
+        <div class="text-center max-w-2xl mx-auto mb-14">
+          <p class="eyebrow mb-4">Integrations</p>
+          <h2 class="text-4xl sm:text-5xl font-semibold tracking-[-0.035em] text-white mb-4 text-balance">Everything syncs in real time</h2>
+          <p class="text-lg text-neutral-400 leading-relaxed">
+            From Slack discussions to GitHub pull requests and isolated Cloudflare Sandboxes.
+          </p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+
+          <!-- Slack -->
+          <div class="panel rounded-2xl p-5 sm:p-6 flex flex-col">
+            <div class="flex items-center justify-between mb-5">
+              <div class="icon-box p-2">
+                <svg class="w-full h-full" viewBox="0 0 47 47" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                  <path d="M9.789 29.33c0 2.696-2.179 4.875-4.875 4.875S0.039 32.026 0.039 29.33c0-2.696 2.179-4.875 4.875-4.875h4.875v4.875zm2.438 0c0-2.696 2.179-4.875 4.875-4.875s4.875 2.179 4.875 4.875v12.188c0 2.696-2.179 4.875-4.875 4.875s-4.875-2.179-4.875-4.875V29.33z" fill="#E01E5A"/>
+                  <path d="M17.1 9.752c-2.696 0-4.875-2.179-4.875-4.875S14.404.002 17.1.002s4.875 2.179 4.875 4.875v4.875H17.1zm0 2.475c2.696 0 4.875 2.179 4.875 4.875s-2.179 4.875-4.875 4.875H4.875C2.179 21.977 0 19.798 0 17.102s2.179-4.875 4.875-4.875H17.1z" fill="#36C5F0"/>
+                  <path d="M36.633 17.1c0-2.696 2.179-4.875 4.875-4.875s4.875 2.179 4.875 4.875-2.179 4.875-4.875 4.875h-4.875V17.1zm-2.438 0c0 2.696-2.179 4.875-4.875 4.875s-4.875-2.179-4.875-4.875V4.875C24.445 2.179 26.624 0 29.32 0s4.875 2.179 4.875 4.875V17.1z" fill="#2EB67D"/>
+                  <path d="M29.32 36.641c2.696 0 4.875 2.179 4.875 4.875s-2.179 4.875-4.875 4.875-4.875-2.179-4.875-4.875v-4.875h4.875zm0-2.438c-2.696 0-4.875-2.179-4.875-4.875s2.179-4.875 4.875-4.875h12.225c2.696 0 4.875 2.179 4.875 4.875s-2.179 4.875-4.875 4.875H29.32z" fill="#ECB22E"/>
+                </svg>
+              </div>
+              <span class="chip">ChatOps</span>
+            </div>
+
+            <div class="well rounded-xl p-3 space-y-2 mb-5 text-[12px]">
+              <div class="mono flex items-center justify-between text-[11px] text-neutral-500 pb-1.5 border-b border-white/[0.06]">
+                <span>#dev-triage</span>
+                <span>Slack bot</span>
+              </div>
+              <p class="text-neutral-300"><span class="mention">@Coworker</span> fix login crash in staging</p>
+              <div class="rounded-lg border border-white/[0.06] bg-white/[0.02] p-2 space-y-2">
+                <div class="flex items-center gap-1.5 text-neutral-200">
+                  <span class="check" aria-hidden="true">✓</span>
+                  <span>PR #546 opened · 397 pass</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                  <span class="rounded-md bg-[#28a745] px-2 py-0.5 text-[11px] font-medium text-white">Approve</span>
+                  <span class="rounded-md border border-white/[0.12] px-2 py-0.5 text-[11px] text-neutral-300">Reject</span>
+                </div>
+              </div>
+            </div>
+
+            <h3 class="text-lg font-semibold tracking-tight text-white mb-2">Slack</h3>
+            <p class="text-sm text-neutral-400 leading-relaxed mb-5">
+              Chat directly with Shiba in channels. Trigger tasks, review diffs, and click Approve right in Slack threads.
+            </p>
+            <a href="/docs/slack" class="mt-auto mono text-xs text-neutral-300 hover:text-white inline-flex items-center gap-1">
+              <span>/shiba-ai-coworker fix & review</span>
+              <span aria-hidden="true">→</span>
+            </a>
+          </div>
+
+          <!-- GitHub -->
+          <div class="panel rounded-2xl p-5 sm:p-6 flex flex-col">
+            <div class="flex items-center justify-between mb-5">
+              <div class="icon-box p-2">
+                <svg class="w-full h-full fill-white" viewBox="0 0 24 24" aria-hidden="true">
+                  <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
+                </svg>
+              </div>
+              <span class="chip">Automated PR</span>
+            </div>
+
+            <div class="well rounded-xl p-3 space-y-2 mb-5 text-[12px]">
+              <div class="flex items-center justify-between text-[11px]">
+                <span class="mono text-neutral-400">PR #546</span>
+                <span class="chip chip-green">Open</span>
+              </div>
+              <div class="rounded-lg border border-white/[0.06] bg-white/[0.02] p-2 space-y-1.5">
+                <div class="font-medium text-white truncate">fix(auth): approval gates</div>
+                <div class="flex items-center justify-between text-[11px] text-neutral-400">
+                  <span><span class="check">✓</span> 397 checks passed</span>
+                  <span class="mono"><span class="check">+34</span> <span class="text-[#f85149]">−12</span></span>
+                </div>
+              </div>
+            </div>
+
+            <h3 class="text-lg font-semibold tracking-tight text-white mb-2">GitHub</h3>
+            <p class="text-sm text-neutral-400 leading-relaxed mb-5">
+              Automated PR creation, branch management, commit hygiene, and webhook event processing.
+            </p>
+            <a href="/docs/github" class="mt-auto mono text-xs text-neutral-300 hover:text-white inline-flex items-center gap-1">
+              <span>Webhooks & bot app</span>
+              <span aria-hidden="true">→</span>
+            </a>
+          </div>
+
+          <!-- Cloudflare Sandbox -->
+          <div class="panel rounded-2xl p-5 sm:p-6 flex flex-col">
+            <div class="flex items-center justify-between mb-5">
+              <div class="icon-box p-2">
+                <svg class="w-full h-full" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z" fill="#F48120"/>
+                  <path d="M13 9L8 15h4l-1 6 6-7h-4l2-5h-2z" fill="#FFFFFF"/>
+                </svg>
+              </div>
+              <span class="chip">MicroVM</span>
+            </div>
+
+            <div class="well rounded-xl p-3 space-y-2 mb-5 mono text-[11px]">
+              <div class="flex items-center justify-between">
+                <span class="text-neutral-400">sandbox-worker-01</span>
+                <span class="check">Active</span>
+              </div>
+              <div class="rounded-lg border border-white/[0.06] bg-white/[0.02] p-2 space-y-1 text-neutral-400">
+                <div class="flex items-center justify-between">
+                  <span>Boot <span class="text-neutral-200">340ms</span></span>
+                  <span>RAM <span class="text-neutral-200">1GB</span></span>
+                </div>
+                <div class="truncate">Egress <span class="check">proxy masked</span></div>
+                <div class="text-neutral-500">Zero host contamination</div>
+              </div>
+            </div>
+
+            <h3 class="text-lg font-semibold tracking-tight text-white mb-2">Cloudflare Sandbox</h3>
+            <p class="text-sm text-neutral-400 leading-relaxed mb-5">
+              Ephemeral micro-containers boot in milliseconds. Execute untrusted scripts with egress boundary proxies.
+            </p>
+            <a href="/docs/security" class="mt-auto mono text-xs text-neutral-300 hover:text-white inline-flex items-center gap-1">
+              <span>MicroVM isolation</span>
+              <span aria-hidden="true">→</span>
+            </a>
+          </div>
+
+          <!-- REST & CLI API -->
+          <div class="panel rounded-2xl p-5 sm:p-6 flex flex-col">
+            <div class="flex items-center justify-between mb-5">
+              <div class="icon-box">
+                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <path d="M4 17l6-6-6-6M12 19h8" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+              <span class="chip">HTTP API</span>
+            </div>
+
+            <div class="well rounded-xl p-3 space-y-1.5 mb-5 mono text-[11px]">
+              <div class="flex items-center gap-2 truncate">
+                <span class="w-10 shrink-0 text-[#79c0ff]">GET</span>
+                <span class="text-neutral-300">/api/runs</span>
+              </div>
+              <div class="flex items-center gap-2 truncate">
+                <span class="w-10 shrink-0 check">POST</span>
+                <span class="text-neutral-300">/api/tasks</span>
+              </div>
+              <div class="flex items-center gap-2 truncate">
+                <span class="w-10 shrink-0 check">POST</span>
+                <span class="text-neutral-300">/slack/events</span>
+              </div>
+            </div>
+
+            <h3 class="text-lg font-semibold tracking-tight text-white mb-2">REST & CLI API</h3>
+            <p class="text-sm text-neutral-400 leading-relaxed mb-5">
+              Headless triggers for CI/CD pipelines, custom GitHub actions, and automated scheduled workflows.
+            </p>
+            <a href="/docs/api" class="mt-auto mono text-xs text-neutral-300 hover:text-white inline-flex items-center gap-1">
+              <span>HTTP API reference</span>
+              <span aria-hidden="true">→</span>
+            </a>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- HARNESS RUNTIME ARCHITECTURE -->
+    <section id="harness" class="py-24 sm:py-32 border-t border-white/[0.06]">
+      <div class="max-w-6xl mx-auto px-4 sm:px-6 grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+        <div class="lg:order-2">
+          <p class="eyebrow mb-4">Harness</p>
+          <h2 class="text-4xl sm:text-5xl font-semibold tracking-[-0.035em] text-white mb-4">The agent harness</h2>
+          <p class="text-lg text-neutral-400 leading-relaxed mb-8">
+            Built for multi-agent execution loops with zero risk of rogue commands reaching your local environment.
+          </p>
+          <div class="border-l-2 border-[#28a745] pl-5">
+            <h3 class="text-lg font-semibold tracking-tight text-white mb-2">The real key never enters the container.</h3>
+            <p class="text-sm text-neutral-400 leading-relaxed">
+              API tokens and provider credentials live exclusively in Cloudflare Worker secrets. The egress proxy validates and signs outgoing calls while masking secrets in logs.
+            </p>
+          </div>
+        </div>
+
+        <div class="lg:order-1 space-y-4">
+          <div class="panel rounded-2xl p-6">
+            <p class="mono text-xs text-neutral-500 mb-2">Runner 01</p>
+            <h3 class="text-lg font-semibold tracking-tight text-white mb-2">OpenCode runner</h3>
+            <p class="text-sm text-neutral-400 leading-relaxed">
+              OpenCode binary runs natively inside the Cloudflare Sandbox container, executing edits and test suites in rootless isolation.
+            </p>
+          </div>
+
+          <div class="panel rounded-2xl p-6">
+            <p class="mono text-xs text-neutral-500 mb-2">Runner 02</p>
+            <h3 class="text-lg font-semibold tracking-tight text-white mb-2">Claude Code adapter</h3>
+            <p class="text-sm text-neutral-400 leading-relaxed">
+              Direct compatibility with Claude Code CLI workflows, prompt contracts, and automated repository analysis tools.
+            </p>
+          </div>
+
+          <div class="panel rounded-2xl p-6">
+            <p class="mono text-xs text-neutral-500 mb-2">Runner 03</p>
+            <h3 class="text-lg font-semibold tracking-tight text-white mb-2">Codex orchestrator</h3>
+            <p class="text-sm text-neutral-400 leading-relaxed">
+              Coordinates task decomposition, approval gates, and multi-round code reviews across parallel agent threads.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ENTERPRISE & SECURITY -->
+    <section id="security" class="py-24 sm:py-32 border-t border-white/[0.06]">
+      <div class="max-w-6xl mx-auto px-4 sm:px-6">
+        <div class="flex flex-col md:flex-row items-start md:items-end justify-between gap-6 mb-12">
+          <div class="max-w-2xl">
+            <p class="eyebrow mb-4">Security</p>
+            <h2 class="text-4xl sm:text-5xl font-semibold tracking-[-0.035em] text-white mb-4">Security architecture</h2>
+            <p class="text-lg text-neutral-400 leading-relaxed">
+              Architected for containment, egress isolation, and explicit human sign-off.
+            </p>
+          </div>
+          <a href="/docs/security" class="btn btn-secondary h-10 px-4 rounded-lg text-sm shrink-0">
+            <span>Read security docs</span>
+            <span aria-hidden="true">→</span>
+          </a>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="panel rounded-2xl p-6 flex flex-col">
+            <div class="icon-box mb-5">
+              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <h3 class="text-lg font-semibold tracking-tight text-white mb-2">gVisor sandbox</h3>
+            <p class="text-sm text-neutral-400 leading-relaxed mb-5">
+              Kernel-level syscall interception in Cloudflare Sandbox ensures untrusted code cannot compromise host runtimes.
+            </p>
+            <span class="mt-auto text-xs"><span class="check">✓</span> <span class="text-neutral-300">Kernel-level isolation</span></span>
+          </div>
+
+          <div class="panel rounded-2xl p-6 flex flex-col">
+            <div class="icon-box mb-5">
+              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0110 0v4"/>
+              </svg>
+            </div>
+            <h3 class="text-lg font-semibold tracking-tight text-white mb-2">Data protection</h3>
+            <p class="text-sm text-neutral-400 leading-relaxed mb-5">
+              Isolated environments. Encrypted at every layer. Your code never leaves your Cloudflare perimeter.
+            </p>
+            <span class="mt-auto text-xs"><span class="check">✓</span> <span class="text-neutral-300">Zero code retention</span></span>
+          </div>
+
+          <div class="panel rounded-2xl p-6 flex flex-col">
+            <div class="icon-box mb-5">
+              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+                <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <h3 class="text-lg font-semibold tracking-tight text-white mb-2">Approval gates</h3>
+            <p class="text-sm text-neutral-400 leading-relaxed mb-5">
+              Cryptographically verified approval cards in Slack and the dashboard halt execution before shell commands run.
+            </p>
+            <span class="mt-auto text-xs"><span class="check">✓</span> <span class="text-neutral-300">Human verification gate</span></span>
+          </div>
+
+          <div class="panel rounded-2xl p-6 flex flex-col">
+            <div class="icon-box mb-5">
+              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+                <path d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <h3 class="text-lg font-semibold tracking-tight text-white mb-2">BYO key, BYO cloud</h3>
+            <p class="text-sm text-neutral-400 leading-relaxed mb-5">
+              Bring your own API keys or host entirely on your own Cloudflare account with zero third-party data transit.
+            </p>
+            <span class="mt-auto text-xs"><span class="check">✓</span> <span class="text-neutral-300">Self-hosted freedom</span></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PRICING: SELF-HOSTING & OPEN SOURCE -->
+    <section id="pricing" class="py-24 sm:py-32 border-t border-white/[0.06]">
+      <div class="max-w-5xl mx-auto px-4 sm:px-6">
+        <div class="text-center max-w-2xl mx-auto mb-14">
+          <span class="chip mb-6">
+            <span class="size-1.5 rounded-full bg-[#3fb950]" aria-hidden="true"></span>
+            <span>100% open source & account-owned</span>
+          </span>
+          <h2 class="text-4xl sm:text-5xl font-semibold tracking-[-0.035em] text-white mb-4 text-balance">No subscription fees. No seat tax.</h2>
+          <p class="text-lg text-neutral-400 leading-relaxed">
+            Shiba is free open-source software under the MIT License. Deploy directly into your own Cloudflare account with zero vendor markups.
           </p>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          
-          <div class="p-5 rounded-lg border border-white/[0.07] bg-[#101013]">
-            <div class="flex items-center justify-between mb-3">
-              <span class="text-xs font-mono text-zinc-400">E2E BUG TRIAGE & FIX</span>
-              <span class="text-[11px] font-mono text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded border border-emerald-400/20">VERIFIED</span>
+          <!-- Full source transparency -->
+          <div class="panel rounded-2xl p-8 flex flex-col !border-white/[0.16]">
+            <div class="flex items-start justify-between gap-4 mb-1">
+              <h3 class="text-xl font-semibold tracking-tight text-white">Full source transparency</h3>
+              <span class="chip shrink-0">MIT License</span>
             </div>
-            <h3 class="text-sm font-semibold text-zinc-200 mb-1.5">Isolate failures and patch with regression tests</h3>
-            <p class="text-xs text-zinc-400 mb-4 leading-relaxed">
-              Spawns the test runner in the sandbox, reproduces the failing assertion, modifies source code, and validates that the full suite stays green.
-            </p>
-            <div class="p-3 rounded bg-[#161619] border border-white/[0.07] font-mono text-[11px] text-zinc-300">
-              <div class="text-zinc-500">$ npx vitest run test/auth.test.ts</div>
-              <div class="text-emerald-400">✓ test/auth.test.ts (4 tests passed)</div>
+            <p class="text-sm text-neutral-400 mb-8">Fork, inspect, and customize without limits</p>
+
+            <div class="flex items-baseline gap-2 mb-8">
+              <span class="text-5xl font-semibold tracking-[-0.04em] text-white">$0</span>
+              <span class="text-sm text-neutral-400">forever</span>
             </div>
+
+            <ul class="space-y-3 text-sm text-neutral-300 mb-10">
+              <li class="flex items-start gap-3">
+                <span class="check mt-px" aria-hidden="true">✓</span>
+                <span><strong class="font-medium text-white">100% open source:</strong> Permissive MIT license with zero commercial restrictions</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="check mt-px" aria-hidden="true">✓</span>
+                <span><strong class="font-medium text-white">Unlimited team seats:</strong> Add your whole engineering team without paying $20–$50/user fees</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="check mt-px" aria-hidden="true">✓</span>
+                <span><strong class="font-medium text-white">Model agnostic:</strong> Connect Claude 3.7, Gemini 2.5, OpenAI, or local weights with your own keys</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="check mt-px" aria-hidden="true">✓</span>
+                <span><strong class="font-medium text-white">Extensible workflows:</strong> Customize approval policies, webhook handlers, and container images</span>
+              </li>
+            </ul>
+
+            <a href="/docs/getting-started" class="btn btn-primary mt-auto h-11 w-full rounded-lg text-[15px]">
+              Deploy with Wrangler →
+            </a>
           </div>
 
-          <div class="p-5 rounded-lg border border-white/[0.07] bg-[#101013]">
-            <div class="flex items-center justify-between mb-3">
-              <span class="text-xs font-mono text-zinc-400">SCHEDULED REPO SWEEPS</span>
-              <span class="text-[11px] font-mono text-teal-400 bg-teal-400/10 px-2 py-0.5 rounded border border-teal-400/20">CRON ACTIVE</span>
-            </div>
-            <h3 class="text-sm font-semibold text-zinc-200 mb-1.5">Automated security and dependency maintenance</h3>
-            <p class="text-xs text-zinc-400 mb-4 leading-relaxed">
-              Cron automations trigger nightly sweeps across dependencies, run audit commands, and open structured PRs with changelogs.
-            </p>
-            <div class="p-3 rounded bg-[#161619] border border-white/[0.07] font-mono text-[11px] text-zinc-300">
-              <div class="text-zinc-500">Scheduled: 0 3 * * * (Nightly 03:00 UTC)</div>
-              <div>Audit: 0 vulnerabilities found · 2 patch updates available</div>
-            </div>
-          </div>
+          <!-- Direct infrastructure control -->
+          <div class="panel rounded-2xl p-8 flex flex-col">
+            <h3 class="text-xl font-semibold tracking-tight text-white mb-1">Direct infrastructure control</h3>
+            <p class="text-sm text-neutral-400 mb-8">Zero SaaS margin · Pay Cloudflare directly at cost</p>
 
-          <div class="p-5 rounded-lg border border-white/[0.07] bg-[#101013]">
-            <div class="flex items-center justify-between mb-3">
-              <span class="text-xs font-mono text-zinc-400">REFACTORING & MODERNIZATION</span>
-              <span class="text-[11px] font-mono text-zinc-400 bg-white/5 px-2 py-0.5 rounded border border-white/10">PHASED</span>
+            <div class="flex items-baseline gap-2 mb-8">
+              <span class="text-5xl font-semibold tracking-[-0.04em] text-white">~$5</span>
+              <span class="text-sm text-neutral-400">/mo baseline for Workers Paid</span>
             </div>
-            <h3 class="text-sm font-semibold text-zinc-200 mb-1.5">Systematic migrations across multi-file surfaces</h3>
-            <p class="text-xs text-zinc-400 mb-4 leading-relaxed">
-              Executes mechanical refactors (API deprecations, import paths, library migrations) with AST checks and type safety verification.
-            </p>
-            <div class="p-3 rounded bg-[#161619] border border-white/[0.07] font-mono text-[11px] text-zinc-300">
-              <div class="text-zinc-500">Batch migration: 18 files updated</div>
-              <div>Typecheck: 0 errors · 0 warnings</div>
-            </div>
-          </div>
 
-          <div class="p-5 rounded-lg border border-white/[0.07] bg-[#101013]">
-            <div class="flex items-center justify-between mb-3">
-              <span class="text-xs font-mono text-zinc-400">PULL REQUEST REVIEW & QA</span>
-              <span class="text-[11px] font-mono text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded border border-emerald-400/20">APPROVAL GATE</span>
-            </div>
-            <h3 class="text-sm font-semibold text-zinc-200 mb-1.5">Independent second-pair-of-eyes verification</h3>
-            <p class="text-xs text-zinc-400 mb-4 leading-relaxed">
-              Inspects candidate pull requests for security flaws, credentials, missing unit tests, and performance regressions before merge.
-            </p>
-            <div class="p-3 rounded bg-[#161619] border border-white/[0.07] font-mono text-[11px] text-zinc-300">
-              <div class="text-zinc-500">Review Gate: Security + Coverage Passed</div>
-              <div class="text-zinc-400">Signed off for automated merge</div>
-            </div>
-          </div>
+            <ul class="space-y-3 text-sm text-neutral-300 mb-10">
+              <li class="flex items-start gap-3">
+                <span class="check mt-px" aria-hidden="true">✓</span>
+                <span><strong class="font-medium text-white">Account owned:</strong> Runs inside your own Cloudflare perimeter; code never leaves your account</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="check mt-px" aria-hidden="true">✓</span>
+                <span><strong class="font-medium text-white">Per-second compute:</strong> Isolated Sandbox containers bill only for exact active execution time</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="check mt-px" aria-hidden="true">✓</span>
+                <span><strong class="font-medium text-white">Zero provider markups:</strong> Tokens bill directly through your own AI Gateway stored keys</span>
+              </li>
+              <li class="flex items-start gap-3">
+                <span class="check mt-px" aria-hidden="true">✓</span>
+                <span><strong class="font-medium text-white">Granular spend limits:</strong> Enforce strict spend caps and rate limits in Cloudflare dashboard</span>
+              </li>
+            </ul>
 
+            <a href="/docs/costs" class="btn btn-secondary mt-auto h-11 w-full rounded-lg text-[15px]">
+              Read cloud cost breakdown →
+            </a>
+          </div>
         </div>
-
       </div>
     </section>
 
-    <!-- ARCHITECTURE & HARNESS RUNTIME -->
-    <section id="harness" class="py-20 border-b border-white/[0.07]">
+    <!-- GUIDES -->
+    <section class="py-24 border-t border-white/[0.06]">
       <div class="max-w-6xl mx-auto px-4 sm:px-6">
-        
-        <div class="max-w-2xl mb-12">
-          <div class="text-xs font-mono uppercase tracking-widest text-zinc-500 mb-2">Runtime</div>
-          <h2 class="text-2xl sm:text-3xl font-semibold text-zinc-100 tracking-tight">
-            Pluggable coding harness architecture
-          </h2>
-          <p class="mt-3 text-sm text-zinc-400">
-            Decoupled execution drivers let you switch foundation models and coding tools without altering your approval pipeline.
-          </p>
+        <div class="flex items-end justify-between gap-4 mb-8">
+          <h2 class="text-3xl sm:text-4xl font-semibold tracking-[-0.03em] text-white">Explore the guides</h2>
+          <a href="/docs/overview" class="text-sm text-neutral-400 hover:text-white inline-flex items-center gap-1">
+            <span>View all</span>
+            <span aria-hidden="true">→</span>
+          </a>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-          
-          <div class="p-5 rounded-lg border border-white/[0.07] bg-[#101013]">
-            <div class="text-xs font-mono text-zinc-400 mb-1">HARNESS 01</div>
-            <h3 class="text-base font-semibold text-zinc-100 mb-2">OpenCode</h3>
-            <p class="text-xs text-zinc-400 leading-relaxed mb-4">
-              Default open harness supporting Google Gemini, Anthropic Claude, and OpenAI models via provider gateways.
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <a href="/docs/deployment" class="panel rounded-2xl p-6 sm:p-8 block group">
+            <div class="flex flex-wrap items-center gap-2 mb-4">
+              <span class="chip">Announcement</span>
+              <span class="chip">Product</span>
+              <span class="mono text-xs text-neutral-500 ml-1">4 Sept 26</span>
+            </div>
+            <h3 class="text-xl sm:text-2xl font-semibold tracking-tight text-white mb-3">
+              Deploy Shiba to your Cloudflare account
+            </h3>
+            <p class="text-sm text-neutral-400 leading-relaxed mb-5">
+              Configure your GitHub credentials, set up Cloudflare AI Gateway bindings, and deploy the orchestrator worker alongside isolated sandbox micro-containers in minutes.
             </p>
-            <span class="inline-flex text-[11px] font-mono text-zinc-500 bg-white/5 px-2 py-0.5 rounded">Default Runner</span>
-          </div>
+            <span class="text-sm text-neutral-300 group-hover:text-white inline-flex items-center gap-1">Read guide <span aria-hidden="true" class="transition-transform group-hover:translate-x-0.5">→</span></span>
+          </a>
 
-          <div class="p-5 rounded-lg border border-white/[0.07] bg-[#101013]">
-            <div class="text-xs font-mono text-zinc-400 mb-1">HARNESS 02</div>
-            <h3 class="text-base font-semibold text-zinc-100 mb-2">Claude Code</h3>
-            <p class="text-xs text-zinc-400 leading-relaxed mb-4">
-              Native Claude Code CLI integration inside Cloudflare Sandbox micro-VMs with streaming output and file tools.
+          <a href="/docs/overview" class="panel rounded-2xl p-6 sm:p-8 block group">
+            <div class="flex flex-wrap items-center gap-2 mb-4">
+              <span class="chip">Architecture</span>
+              <span class="chip">Security</span>
+              <span class="mono text-xs text-neutral-500 ml-1">18 Sept 26</span>
+            </div>
+            <h3 class="text-xl sm:text-2xl font-semibold tracking-tight text-white mb-3">
+              Zero-trust ephemeral sandboxes for autonomous coding
+            </h3>
+            <p class="text-sm text-neutral-400 leading-relaxed mb-5">
+              How Cloudflare Sandbox micro-containers isolate agent executions with egress proxy credentials, masking secrets while generating verified GitHub PRs.
             </p>
-            <a href="/docs/claude-code" class="inline-flex text-[11px] font-mono text-teal-400 hover:underline">Claude Code Docs →</a>
-          </div>
-
-          <div class="p-5 rounded-lg border border-white/[0.07] bg-[#101013]">
-            <div class="text-xs font-mono text-zinc-400 mb-1">HARNESS 03</div>
-            <h3 class="text-base font-semibold text-zinc-100 mb-2">Codex</h3>
-            <p class="text-xs text-zinc-400 leading-relaxed mb-4">
-              OpenAI Codex CLI harness for fast edits, type fixes, and deterministic subtask completion loops.
-            </p>
-            <span class="inline-flex text-[11px] font-mono text-zinc-500 bg-white/5 px-2 py-0.5 rounded">CLI Integration</span>
-          </div>
-
+            <span class="text-sm text-neutral-300 group-hover:text-white inline-flex items-center gap-1">Read guide <span aria-hidden="true" class="transition-transform group-hover:translate-x-0.5">→</span></span>
+          </a>
         </div>
-
       </div>
     </section>
 
-    <!-- PRICING & DEPLOYMENT REALITY -->
-    <section id="pricing" class="py-20 border-b border-white/[0.07]">
-      <div class="max-w-4xl mx-auto px-4 sm:px-6 text-center">
-        
-        <div class="text-xs font-mono uppercase tracking-widest text-zinc-500 mb-2">Infrastructure</div>
-        <h2 class="text-2xl sm:text-3xl font-semibold text-zinc-100 tracking-tight">
-          Transparent, self-hosted economics
-        </h2>
-        <p class="mt-3 text-sm text-zinc-400 max-w-xl mx-auto">
-          No markups, per-seat licensing, or proprietary cloud lock-in. You pay only for Cloudflare Workers compute and your model API keys.
+    <!-- BOTTOM CTA -->
+    <section class="relative isolate overflow-hidden py-28 sm:py-36 border-t border-white/[0.06] text-center">
+      <div class="hero-grid absolute inset-0 -z-10 opacity-70" aria-hidden="true"></div>
+      <div class="max-w-3xl mx-auto px-4 sm:px-6">
+        <h2 class="text-4xl sm:text-6xl font-semibold tracking-[-0.04em] text-white mb-5 text-balance">Add Shiba to your team</h2>
+        <p class="text-lg sm:text-xl text-neutral-400 mb-10">
+          The teammate you actually want to work with.
         </p>
-
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-10 text-left">
-          
-          <div class="p-5 rounded-lg border border-white/[0.07] bg-[#101013]">
-            <div class="text-xs font-mono text-zinc-500 mb-1">INFRASTRUCTURE</div>
-            <div class="text-xl font-semibold text-zinc-100 mb-1">$5 / mo</div>
-            <div class="text-xs text-zinc-400 leading-relaxed">Cloudflare Workers Paid plan covers edge coordination, static docs, and state.</div>
-          </div>
-
-          <div class="p-5 rounded-lg border border-white/[0.07] bg-[#101013]">
-            <div class="text-xs font-mono text-zinc-500 mb-1">EXECUTION SANDBOX</div>
-            <div class="text-xl font-semibold text-zinc-100 mb-1">~$0.01 / run</div>
-            <div class="text-xs text-zinc-400 leading-relaxed">Cloudflare Sandbox micro-VM compute per active execution minute.</div>
-          </div>
-
-          <div class="p-5 rounded-lg border border-white/[0.07] bg-[#101013]">
-            <div class="text-xs font-mono text-zinc-500 mb-1">MODEL KEYS</div>
-            <div class="text-xl font-semibold text-zinc-100 mb-1">Direct API</div>
-            <div class="text-xs text-zinc-400 leading-relaxed">Bring your own Anthropic, Google, or OpenAI keys with zero markup.</div>
-          </div>
-
+        <div class="flex flex-col sm:flex-row items-center justify-center gap-3">
+          <a href="/docs/getting-started" class="btn btn-primary h-11 px-5 rounded-lg text-[15px] w-full sm:w-auto">
+            Get started
+          </a>
+          <a href="https://github.com/princepal9120/shiba" target="_blank" rel="noopener noreferrer" class="btn btn-secondary h-11 px-5 rounded-lg text-[15px] w-full sm:w-auto">
+            <span>View on GitHub</span>
+            <span aria-hidden="true">↗</span>
+          </a>
         </div>
-
-        <div class="mt-8 text-xs text-zinc-500 font-mono">
-          Detailed estimates available in the <a href="/docs/costs" class="text-zinc-400 hover:text-zinc-200 underline">Models & Costs guide</a>.
-        </div>
-
       </div>
     </section>
 
-    <!-- CALL TO ACTION -->
-    <section class="py-20">
-      <div class="max-w-3xl mx-auto px-4 sm:px-6 text-center">
-        
-        <div class="p-8 sm:p-12 rounded-lg border border-white/[0.07] bg-[#101013]">
-          <h2 class="text-xl sm:text-2xl font-semibold text-zinc-100 tracking-tight">
-            Deploy your private AI intern in 5 minutes
-          </h2>
-          <p class="mt-3 text-sm text-zinc-400 max-w-lg mx-auto">
-            Self-hosted on Cloudflare Workers. Connect your Slack workspace and GitHub repos with deterministic approval gates.
-          </p>
-
-          <div class="flex flex-wrap items-center justify-center gap-3 mt-6">
-            <a href="/docs/getting-started" class="bg-zinc-100 hover:bg-white text-zinc-900 font-medium text-xs px-4 py-2 rounded-md transition-colors">
-              Get Started Now
-            </a>
-            <a href="/app/" class="border border-white/10 hover:bg-white/5 text-zinc-300 font-medium text-xs px-4 py-2 rounded-md transition-colors">
-              Open Dashboard
-            </a>
-            <a href="https://github.com/princepal9120/shiba" target="_blank" rel="noopener noreferrer" class="border border-white/10 hover:bg-white/5 text-zinc-400 hover:text-zinc-200 font-medium text-xs px-4 py-2 rounded-md transition-colors">
-              Star on GitHub
-            </a>
-          </div>
-        </div>
-
-      </div>
-    </section>
   </main>
 
   <!-- FOOTER -->
-  <footer class="border-t border-white/[0.07] bg-[#0a0a0b] py-12 text-xs text-zinc-400">
-    <div class="max-w-6xl mx-auto px-4 sm:px-6">
-      
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-8 pb-10 border-b border-white/[0.07]">
-        <div>
-          <div class="flex items-center gap-2 text-zinc-100 font-medium text-sm mb-3">
-            <img src="/assets/brand/logo.svg" alt="Shiba" class="w-4 h-4" />
-            <span>Shiba</span>
+  <footer class="border-t border-white/[0.08]">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 pt-16 pb-10">
+      <div class="grid grid-cols-1 md:grid-cols-5 gap-10 mb-14">
+        <div class="md:col-span-2 space-y-4">
+          <div class="flex items-center gap-2.5">
+            <img src="/assets/mascot/pet-logo.png" alt="" width="28" height="28" class="w-7 h-7 rounded-md bg-white object-contain" />
+            <span class="text-[15px] font-semibold tracking-tight text-white">Shiba</span>
           </div>
-          <p class="text-xs text-zinc-500 leading-relaxed">
-            Open-source, self-hosted software engineering agent running in Cloudflare Sandbox.
+          <p class="text-sm text-neutral-400 max-w-xs leading-relaxed">
+            Shiba is the best AI software engineer. Orchestrating parallel coding agents that plan, build, and ship from task to merged PR.
           </p>
         </div>
 
-        <div>
-          <div class="text-xs font-mono uppercase tracking-wider text-zinc-500 mb-3">Product</div>
-          <ul class="space-y-2">
-            <li><a href="/app/" class="hover:text-zinc-200 transition-colors">Dashboard App</a></li>
-            <li><a href="/docs/overview" class="hover:text-zinc-200 transition-colors">Documentation</a></li>
-            <li><a href="/docs/getting-started" class="hover:text-zinc-200 transition-colors">Quickstart</a></li>
-            <li><a href="/docs/dashboard" class="hover:text-zinc-200 transition-colors">Tasks & Runs</a></li>
-          </ul>
-        </div>
-
-        <div>
-          <div class="text-xs font-mono uppercase tracking-wider text-zinc-500 mb-3">Integrations</div>
-          <ul class="space-y-2">
-            <li><a href="/docs/slack" class="hover:text-zinc-200 transition-colors">Slack Integration</a></li>
-            <li><a href="/docs/github" class="hover:text-zinc-200 transition-colors">GitHub Pull Requests</a></li>
-            <li><a href="/docs/claude-code" class="hover:text-zinc-200 transition-colors">Claude Code Harness</a></li>
-            <li><a href="/docs/automations" class="hover:text-zinc-200 transition-colors">Automations & Cron</a></li>
-          </ul>
-        </div>
-
-        <div>
-          <div class="text-xs font-mono uppercase tracking-wider text-zinc-500 mb-3">Resources</div>
-          <ul class="space-y-2">
-            <li><a href="/docs/architecture" class="hover:text-zinc-200 transition-colors">Architecture</a></li>
-            <li><a href="/docs/security" class="hover:text-zinc-200 transition-colors">Security Boundaries</a></li>
-            <li><a href="/docs/costs" class="hover:text-zinc-200 transition-colors">Models & Costs</a></li>
-            <li><a href="/docs/api" class="hover:text-zinc-200 transition-colors">API Reference</a></li>
-            <li><a href="/docs/deployment" class="hover:text-zinc-200 transition-colors">Deployment Guide</a></li>
-          </ul>
-        </div>
+        <nav aria-label="Footer navigation" class="md:col-span-3 grid grid-cols-2 sm:grid-cols-3 gap-8 text-sm">
+          <div>
+            <p class="font-medium text-white mb-3">Product</p>
+            <ul class="space-y-2 text-neutral-400">
+              <li><a href="/app/" class="hover:text-white">Dashboard</a></li>
+              <li><a href="#use-cases" class="hover:text-white">Use cases</a></li>
+              <li><a href="#security" class="hover:text-white">Security</a></li>
+              <li><a href="#pricing" class="hover:text-white">Pricing</a></li>
+            </ul>
+          </div>
+          <div>
+            <p class="font-medium text-white mb-3">Docs</p>
+            <ul class="space-y-2 text-neutral-400">
+              <li><a href="/docs/overview" class="hover:text-white">Overview</a></li>
+              <li><a href="/docs/slack" class="hover:text-white">Integrations</a></li>
+              <li><a href="/docs/claude-code" class="hover:text-white">Agents</a></li>
+              <li><a href="/docs/deployment" class="hover:text-white">Deployment</a></li>
+            </ul>
+          </div>
+          <div>
+            <p class="font-medium text-white mb-3">Community</p>
+            <ul class="space-y-2 text-neutral-400">
+              <li><a href="https://github.com/princepal9120/shiba" target="_blank" rel="noopener noreferrer" class="hover:text-white">GitHub</a></li>
+              <li><a href="https://x.com/prince_twets" target="_blank" rel="noopener noreferrer" class="hover:text-white">X / Twitter</a></li>
+            </ul>
+          </div>
+        </nav>
       </div>
 
-      <div class="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 text-[11px] text-zinc-500">
-        <div>© 2026 Shiba. Open source under Apache 2.0. Self-hosted on Cloudflare Workers + Sandbox.</div>
+      <div class="pt-8 border-t border-white/[0.06] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 text-xs text-neutral-500">
+        <div>© 2026 Shiba. All rights reserved. Self-hosted on Cloudflare Workers + Sandbox.</div>
         <div class="flex items-center gap-2">
-          <span class="w-1.5 h-1.5 rounded-full bg-[#2dd4bf]"></span>
-          <span>Open source · Cloudflare Sandbox</span>
+          <span class="w-1.5 h-1.5 rounded-full bg-[#3fb950]" aria-hidden="true"></span>
+          <span>Open source · Self-hosted</span>
         </div>
       </div>
-
     </div>
   </footer>
 
   <!-- CLIENT INTERACTIONS SCRIPT -->
   <script>
-    // Tab switcher in demo preview
-    const tabAll = document.getElementById('tab-all');
-    const tabCaptain = document.getElementById('tab-captain');
-    const tabBuild = document.getElementById('tab-build');
-    const tabReview = document.getElementById('tab-review');
-    const tabs = [tabAll, tabCaptain, tabBuild, tabReview].filter(Boolean) as HTMLElement[];
+    // 1. Interactive review approvals
+    document.querySelectorAll('.resolve-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const target = e.currentTarget as HTMLElement;
+        target.textContent = '✓ Approved';
+        target.classList.add('is-approved');
+      });
+    });
+
+    // 2. Replay button interaction in hero demo
+    const replayBtn = document.getElementById('hero-replay-btn');
+    const demoConsole = document.getElementById('demo-step-display');
+    if (replayBtn && demoConsole) {
+      const replayLabel = replayBtn.innerHTML;
+      replayBtn.addEventListener('click', () => {
+        replayBtn.innerHTML = '<span>Running…</span>';
+        demoConsole.style.opacity = '0.4';
+        demoConsole.style.transition = 'opacity 0.3s ease';
+        setTimeout(() => {
+          demoConsole.style.opacity = '1';
+          replayBtn.innerHTML = '<span class="check">✓ Replayed</span>';
+          setTimeout(() => {
+            replayBtn.innerHTML = replayLabel;
+          }, 1500);
+        }, 700);
+      });
+    }
+
+    // 3. Multi-agent interactive tab switcher (active style follows aria-pressed)
+    const tabs = ['tab-all', 'tab-captain', 'tab-build', 'tab-review', 'tab-terminal']
+      .map(id => document.getElementById(id))
+      .filter(Boolean) as HTMLElement[];
 
     tabs.forEach((tab) => {
       tab.addEventListener('click', () => {
-        tabs.forEach(t => {
-          t.classList.remove('bg-white/5', 'text-zinc-200', 'border', 'border-white/10');
-          t.classList.add('text-zinc-400');
-        });
-        tab.classList.remove('text-zinc-400');
-        tab.classList.add('bg-white/5', 'text-zinc-200', 'border', 'border-white/10');
         tabs.forEach(t => t.setAttribute('aria-pressed', String(t === tab)));
-        
         const selected = tab.id.replace('tab-', '');
         document.querySelectorAll<HTMLElement>('[data-demo-agent]').forEach(panel => {
-          panel.classList.toggle('hidden', panel.dataset.demoAgent !== selected);
+          panel.hidden = selected === 'all' ? panel.dataset.demoAgent === 'terminal' : panel.dataset.demoAgent !== selected;
         });
       });
     });
 
-    // Replay interaction in demo
-    const replayBtn = document.getElementById('hero-replay-btn');
-    const demoConsole = document.getElementById('demo-step-display');
-    if (replayBtn && demoConsole) {
-      replayBtn.addEventListener('click', () => {
-        replayBtn.textContent = 'Running...';
-        demoConsole.style.opacity = '0.5';
-        setTimeout(() => {
-          demoConsole.style.opacity = '1';
-          replayBtn.textContent = '✓ Replayed';
-          setTimeout(() => {
-            replayBtn.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-[#2dd4bf]"></span><span>Replay run</span>';
-          }, 1500);
-        }, 500);
-      });
+    // 4. Use Cases Scroll-Triggered Entrance & Live Simulations
+    const useCasesSection = document.getElementById('use-cases');
+    const useCasePanels = document.querySelectorAll('.usecase-panel');
+    let useCasesAnimated = false;
+
+    if (useCasesSection && useCasePanels.length > 0) {
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && !useCasesAnimated) {
+            useCasesAnimated = true;
+
+            // Staggered reveal for each panel
+            useCasePanels.forEach((panel, i) => {
+              setTimeout(() => {
+                panel.classList.add('is-visible');
+              }, i * 75);
+            });
+
+            // Card 1: E2E Terminal state simulation
+            const e2eLine = document.getElementById('e2e-status-line');
+            if (e2eLine) {
+              e2eLine.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-neutral-400 animate-pulse"></span><span class="text-neutral-400">Running 32 test specs in sandbox…</span>';
+              setTimeout(() => {
+                e2eLine.innerHTML = '<span class="check">✓</span><span class="text-neutral-200">32 test specs completed in 1.4s</span>';
+              }, 700);
+            }
+
+            // Card 2: Bug triage typing stream simulation
+            const typingDots = document.getElementById('triage-typing-dots');
+            const replyBox = document.getElementById('triage-reply-box');
+            if (typingDots && replyBox) {
+              replyBox.style.opacity = '0.3';
+              typingDots.classList.remove('hidden');
+              typingDots.classList.add('flex');
+              setTimeout(() => {
+                typingDots.classList.add('hidden');
+                typingDots.classList.remove('flex');
+                replyBox.style.opacity = '1';
+                replyBox.style.transition = 'opacity 0.4s ease';
+              }, 600);
+            }
+
+            // Card 4: Migration progress bar sweep & number count-up
+            const progressBar = document.getElementById('migration-progress-bar');
+            const counterText = document.getElementById('migration-counter-text');
+            if (progressBar && counterText) {
+              setTimeout(() => {
+                progressBar.style.width = '85%';
+                let count = 0;
+                const timer = setInterval(() => {
+                  count += 5;
+                  if (count > 85) {
+                    count = 85;
+                    clearInterval(timer);
+                  }
+                  counterText.textContent = count + ' / 100 modules upgraded';
+                }, 40);
+              }, 200);
+            }
+          }
+        });
+      }, { threshold: 0.12 });
+
+      observer.observe(useCasesSection);
     }
   </script>
 
 </body>
 </html>
-
