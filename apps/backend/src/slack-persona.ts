@@ -52,6 +52,7 @@ export function describeHarness(harness: string | undefined): string {
 /** "a claude code" / "an opencode" — the agent phrase for prose. */
 export function agentPhrase(harness: string | undefined): string {
   const name = describeHarness(harness);
+  if (name.startsWith("the ")) return name;
   return `${/^[aeiou]/i.test(name) ? "an" : "a"} ${name}`;
 }
 

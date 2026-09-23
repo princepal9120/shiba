@@ -441,7 +441,10 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
                     repoUrl: fullInput.repoUrl,
                     summary: parsed.summary ?? "",
                     changedFiles: parsed.changedFiles?.length,
-                    pullUrl: extractPullRequestUrl(output),
+                    // The envelope carries pullUrl; the transcript scrape is a
+                    // fallback for older children — never the source of truth,
+                    // so a fake "Pull request:" line can't spoof it.
+                    pullUrl: parsed.pullUrl ?? extractPullRequestUrl(output),
                   }),
                 );
                 // TypeSafe Score: grade the run quality (fail-open — never
@@ -515,7 +518,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
                   }, slackRunFailed({
                     repoUrl: fullInput.repoUrl,
                     userMessage: runErrorWire(failure.code).userMessage,
-                    detail: failure.message.slice(0, 1000),
+                    detail: redactSecrets(failure.message).slice(0, 1000),
                     unknown: failureStatus === "unknown",
                   }));
                 }),
@@ -822,8 +825,18 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
             error: redactSecrets(failure.message).slice(0, 4000),
             errorCode: failure.code,
           }, generation);
-          if (updated !== null && (status === "completed" || status === "error")) {
-            this.dispatchSessionDistill(updated);
+          if (updated !== null) {
+            // A pre-start failure never reaches `finish`'s slackText seam —
+            // post here or the thread sees ack + card + approved, then silence.
+            this.postToSlackThread(slackRunFailed({
+              repoUrl: run.repoUrl,
+              userMessage: runErrorWire(failure.code).userMessage,
+              detail: redactSecrets(failure.message).slice(0, 1000),
+              unknown: status === "unknown",
+            }));
+            if (status === "completed" || status === "error") {
+              this.dispatchSessionDistill(updated);
+            }
           }
         }
       };
@@ -995,6 +1008,13 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       this.setState({ ...this.state, runs });
       await Promise.all(runs.filter((run) => reclaimed.includes(run.runId)).map(async (run) => {
         this.runControllers.get(run.runId)?.abort();
+        // Reclaimed runs go terminal without ever reaching `finish`'s
+        // slackText seam — the thread deserves the same honest ending.
+        this.postToSlackThread(slackRunFailed({
+          repoUrl: run.repoUrl,
+          userMessage: runErrorWire("outcome_unknown").userMessage,
+          unknown: true,
+        }));
         await this.destroySandbox(run.sandboxId);
       }));
     }

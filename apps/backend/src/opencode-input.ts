@@ -47,6 +47,12 @@ const codingTaskResultSchema = z.object({
   diff: z.string(),
   files: z.array(changedFileSchema),
   summary: z.string(),
+  /**
+   * The PR the child published, when it did. Carried on the envelope so the
+   * parent reads it from structured output — never scraped out of rendered
+   * text, where agent stdout could plant a fake `Pull request:` line.
+   */
+  pullUrl: z.string().optional(),
 });
 
 export type CodingTaskResult = z.infer<typeof codingTaskResultSchema>;
