@@ -12,7 +12,7 @@ import { AUTOMATIONS_DO_NAME } from "./automation-runner.js";
 import { Automations } from "./automations-do.js";
 import { parseAutomationWebhookPath } from "./automations.js";
 import { assertLiveCodingModel } from "./coding-model.js";
-import { queueEmailApproval } from "./email-approvals.js";
+import { emailApprovalBridgeReady, queueEmailApproval } from "./email-approvals.js";
 import { handleInboundEmail } from "./email-handler.js";
 import type { Env } from "./env.js";
 import { agentCliCatalog } from "./harness/catalog.js";
@@ -149,6 +149,20 @@ async function registeredMailboxes(env: Env): Promise<MailboxRecord[]> {
   return body.mailboxes ?? [];
 }
 
+/**
+ * Resolve a user-supplied mailbox address to a registered one, or null.
+ * Callers must check before `mailboxStub`: `idFromName` instantiates a DO
+ * for any string, so probing an unregistered address would create empty
+ * mailboxes at unbounded cardinality.
+ */
+async function resolveRegisteredMailbox(env: Env, address: string): Promise<string | null> {
+  const normalized = address.trim().toLowerCase();
+  const record = (await registeredMailboxes(env)).find(
+    (entry) => entry.address === normalized,
+  );
+  return record?.address ?? null;
+}
+
 /** First non-null probe result across registered mailboxes, like findDraft's. */
 async function probeMailboxes<T>(
   env: Env,
@@ -218,6 +232,12 @@ async function queueDraftSend(env: Env, draftId: string): Promise<Response> {
     return Response.json(
       { error: `Draft "${draftId}" is "${draft.status}" — only drafts in "draft" can be queued for approval.` },
       { status: 409 },
+    );
+  }
+  if (!emailApprovalBridgeReady(env)) {
+    return Response.json(
+      { error: "Email approvals are not wired yet — the approval bridge ships with T7, so this draft stays editable." },
+      { status: 503 },
     );
   }
   const approval = await queueEmailApproval(env, {
@@ -295,11 +315,18 @@ async function handleInbox(request: Request, env: Env): Promise<Response | null>
       }
       const mailbox = url.searchParams.get("mailbox");
       if (mailbox !== null && mailbox !== "") {
+        const registered = await resolveRegisteredMailbox(env, mailbox);
+        if (registered === null) {
+          return Response.json(
+            { error: `"${mailbox}" is not a registered mailbox.` },
+            { status: 400 },
+          );
+        }
         const body = await mailboxDoJson<{ emails?: StoredEmail[] }>(
-          mailboxStub(env, mailbox),
+          mailboxStub(env, registered),
           `${path}?${query.toString()}`,
         );
-        return Response.json({ mailbox, emails: body.emails ?? [] });
+        return Response.json({ mailbox: registered, emails: body.emails ?? [] });
       }
       const emails = await collectMailboxRows<StoredEmail>(env, async (stub) => {
         const body = await mailboxDoJson<{ emails?: StoredEmail[] }>(
@@ -328,7 +355,14 @@ async function handleInbox(request: Request, env: Env): Promise<Response | null>
       return Response.json({
         mailbox: located.mailbox,
         email: located.value.email,
-        attachments: located.value.attachments ?? [],
+        // Attachment rows carry internal storage fields (r2_key, content_id);
+        // the wire shape is the dashboard's InboxAttachment only.
+        attachments: (located.value.attachments ?? []).map((attachment) => ({
+          part_id: attachment.part_id,
+          filename: attachment.filename,
+          mime_type: attachment.mime_type,
+          size: attachment.size,
+        })),
       });
     }
     if (emailReadId !== undefined) {
@@ -376,11 +410,18 @@ async function handleInbox(request: Request, env: Env): Promise<Response | null>
         query.set("limit", String(limit));
         const mailbox = url.searchParams.get("mailbox");
         if (mailbox !== null && mailbox !== "") {
+          const registered = await resolveRegisteredMailbox(env, mailbox);
+          if (registered === null) {
+            return Response.json(
+              { error: `"${mailbox}" is not a registered mailbox.` },
+              { status: 400 },
+            );
+          }
           const body = await mailboxDoJson<{ drafts?: DraftRecord[] }>(
-            mailboxStub(env, mailbox),
+            mailboxStub(env, registered),
             `/drafts?${query.toString()}`,
           );
-          return Response.json({ mailbox, drafts: body.drafts ?? [] });
+          return Response.json({ mailbox: registered, drafts: body.drafts ?? [] });
         }
         const drafts = await collectMailboxRows<DraftRecord>(env, async (stub) => {
           const body = await mailboxDoJson<{ drafts?: DraftRecord[] }>(
@@ -398,15 +439,15 @@ async function handleInbox(request: Request, env: Env): Promise<Response | null>
         if (mailbox === "") {
           return Response.json({ error: "Provide a mailbox address." }, { status: 400 });
         }
-        const known = await registeredMailboxes(env);
-        if (!known.some((record) => record.address === mailbox.toLowerCase())) {
+        const registered = await resolveRegisteredMailbox(env, mailbox);
+        if (registered === null) {
           return Response.json(
             { error: `"${mailbox}" is not a registered mailbox.` },
             { status: 400 },
           );
         }
         const created = await mailboxDoJson<{ draft: DraftRecord }>(
-          mailboxStub(env, mailbox),
+          mailboxStub(env, registered),
           "/drafts",
           {
             method: "POST",

@@ -35,6 +35,18 @@ export interface EmailApprovalResult {
   approval_id: string;
 }
 
+/**
+ * Whether the approval bridge is live. Until T7 swaps the stub below for
+ * the real PendingApproval insert this returns false, and callers that
+ * would lock state behind a queued approval — the dashboard's draft send,
+ * which irreversibly flips a draft to "queued" — must refuse rather than
+ * strand that state behind a stub-minted id that nothing can resolve.
+ */
+export function emailApprovalBridgeReady(env: Env): boolean {
+  void env;
+  return false;
+}
+
 export async function queueEmailApproval(
   env: Env,
   request: EmailApprovalRequest,

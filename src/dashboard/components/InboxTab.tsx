@@ -60,6 +60,19 @@ function replyAddress(email: InboxEmail): string {
   return email.direction === "in" ? email.from_addr : email.to_addr;
 }
 
+/**
+ * Mailbox a reply draft should be attributed to. The detail route returns
+ * the owning mailbox at top level (`StoredEmail` carries none); the row's
+ * `mailbox` tag only exists on fan-out list responses, so the "All
+ * mailboxes" view must not rely on it.
+ */
+export function replyMailbox(
+  detail: { mailbox: string | null; email: InboxEmail } | null,
+  mailboxFilter: string,
+): string {
+  return detail?.mailbox ?? detail?.email.mailbox ?? mailboxFilter;
+}
+
 function replySubject(subject: string): string {
   return /^\s*re:/i.test(subject) ? subject : `Re: ${subject}`;
 }
@@ -79,7 +92,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
   const [search, setSearch] = useState("");
   const [searching, setSearching] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [detail, setDetail] = useState<{ email: InboxEmail; attachments: InboxAttachment[] } | null>(null);
+  const [detail, setDetail] = useState<{ mailbox: string | null; email: InboxEmail; attachments: InboxAttachment[] } | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [thread, setThread] = useState<InboxThread | null>(null);
   const [threadLoading, setThreadLoading] = useState(false);
@@ -160,10 +173,10 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
       setReplyBody("");
       setDetailLoading(true);
       try {
-        const body = await apiJson<{ email: InboxEmail; attachments?: InboxAttachment[] }>(
+        const body = await apiJson<{ mailbox?: string; email: InboxEmail; attachments?: InboxAttachment[] }>(
           `/api/emails/${encodeURIComponent(email.id)}`,
         );
-        setDetail({ email: body.email, attachments: body.attachments ?? [] });
+        setDetail({ mailbox: body.mailbox ?? null, email: body.email, attachments: body.attachments ?? [] });
         if (email.status === "unread") {
           setEmails((prev) =>
             prev.map((row) => (row.id === email.id ? { ...row, status: "read" } : row)),
@@ -202,7 +215,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
 
   const saveReply = useCallback(async () => {
     if (detail === null || replyBody.trim() === "") return;
-    const mailboxAddress = detail.email.mailbox ?? mailbox;
+    const mailboxAddress = replyMailbox(detail, mailbox);
     if (mailboxAddress === "") {
       setError("Pick a mailbox in the filter to reply from.");
       return;

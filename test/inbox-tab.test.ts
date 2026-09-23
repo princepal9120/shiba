@@ -37,17 +37,19 @@ vi.mock("agents/mcp", () => ({
 // so the test asserts the frozen send payload, not the stub's internals.
 const queuedApprovals = vi.hoisted(() => ({
   calls: [] as Array<{ kind: string; mailbox: string; payload: Record<string, unknown> }>,
+  bridgeReady: true,
 }));
 vi.mock("../src/email-approvals.js", () => ({
   queueEmailApproval: async (_env: unknown, request: { kind: string; mailbox: string; payload: Record<string, unknown> }) => {
     queuedApprovals.calls.push(request);
     return { approval_id: "apv-test-1" };
   },
+  emailApprovalBridgeReady: () => queuedApprovals.bridgeReady,
 }));
 
 import worker from "../src/index.js";
 import type { Env } from "../src/env.js";
-import { InboxTab } from "../src/dashboard/components/InboxTab";
+import { InboxTab, replyMailbox } from "../src/dashboard/components/InboxTab";
 import { MemoryTab } from "../src/dashboard/components/MemoryTab";
 
 interface FakeStub {
@@ -158,7 +160,7 @@ function makeEnvWithTwoMailboxes() {
   const stubA = makeStub([
     { match: /^\/internal\/mailbox\/emails$/, body: { emails: [emailA] } },
     { match: /^\/internal\/mailbox\/emails\/search$/, body: { emails: [emailA] } },
-    { match: "/internal/mailbox/emails/eml-a1", body: { email: emailA, attachments: [] } },
+    { match: "/internal/mailbox/emails/eml-a1", body: { email: emailA, attachments: [{ part_id: "p1", filename: "a.pdf", mime_type: "application/pdf", size: 1234, content_id: "cid-1", r2_key: "eml-a1/p1" }] } },
     { match: "/internal/mailbox/threads/thr-1", body: { thread: { id: "thr-1", subject: "Deploy request", last_message_at: 1000, emails: [emailA] } } },
     { method: "POST", match: "/internal/mailbox/drafts", body: { draft: draftA }, status: 201 },
     { match: /^\/internal\/mailbox\/drafts$/, body: { drafts: [draftA] } },
@@ -217,6 +219,20 @@ describe("dashboard inbox routes", () => {
     expect(stubB.calls).toHaveLength(0);
   });
 
+  it("GET read routes reject an unregistered ?mailbox= without instantiating its stub", async () => {
+    const { env } = makeEnvWithTwoMailboxes();
+    for (const path of [
+      "/api/emails?mailbox=ghost@shiba.dev",
+      "/api/emails-search?q=hi&mailbox=ghost@shiba.dev",
+      "/api/drafts?mailbox=ghost@shiba.dev",
+    ]) {
+      const response = await worker.fetch(new Request(`https://worker${path}`), env, ctx);
+      expect(response.status).toBe(400);
+      const body = (await response.json()) as { error: string };
+      expect(body.error).toContain("not a registered mailbox");
+    }
+  });
+
   it("GET /api/emails/:id probes mailboxes until one owns the id", async () => {
     const { env, stubA, stubB } = makeEnvWithTwoMailboxes();
     const response = await worker.fetch(new Request("https://worker/api/emails/eml-a1"), env, ctx);
@@ -226,6 +242,15 @@ describe("dashboard inbox routes", () => {
     expect(body.email.id).toBe("eml-a1");
     expect(stubA.calls.some((c) => c.url.endsWith("/emails/eml-a1"))).toBe(true);
     expect(stubB.calls).toHaveLength(0);
+  });
+
+  it("GET /api/emails/:id strips internal storage fields from attachments", async () => {
+    const { env } = makeEnvWithTwoMailboxes();
+    const response = await worker.fetch(new Request("https://worker/api/emails/eml-a1"), env, ctx);
+    const body = (await response.json()) as { attachments: Array<Record<string, unknown>> };
+    expect(body.attachments).toEqual([
+      { part_id: "p1", filename: "a.pdf", mime_type: "application/pdf", size: 1234 },
+    ]);
   });
 
   it("GET /api/emails/:id returns 404 when no registered mailbox owns it", async () => {
@@ -313,8 +338,27 @@ describe("dashboard inbox routes", () => {
     expect(JSON.parse(stubA.calls[0]!.body!)).toMatchObject({ thread_id: "thr-1" });
   });
 
+  it("POST /api/drafts/:id/send refuses while the approval bridge is unwired", async () => {
+    queuedApprovals.calls.length = 0;
+    queuedApprovals.bridgeReady = false;
+    const { env, stubA } = makeEnvWithTwoMailboxes();
+    const response = await worker.fetch(
+      new Request("https://worker/api/drafts/drf-1/send", { method: "POST" }),
+      env,
+      ctx,
+    );
+    expect(response.status).toBe(503);
+    expect(queuedApprovals.calls).toHaveLength(0);
+    // The draft is never locked — no /queue call reaches its mailbox.
+    expect(
+      stubA.calls.some((c) => c.url.endsWith("/internal/mailbox/drafts/drf-1/queue")),
+    ).toBe(false);
+    queuedApprovals.bridgeReady = true;
+  });
+
   it("POST /api/drafts/:id/send queues an approval and locks the draft — it never transmits", async () => {
     queuedApprovals.calls.length = 0;
+    queuedApprovals.bridgeReady = true;
     const { env, stubA } = makeEnvWithTwoMailboxes();
     const response = await worker.fetch(
       new Request("https://worker/api/drafts/drf-1/send", { method: "POST" }),
@@ -356,6 +400,7 @@ describe("dashboard inbox routes", () => {
 
   it("POST /api/drafts/:id/send rejects a non-draft row and unknown ids", async () => {
     queuedApprovals.calls.length = 0;
+    queuedApprovals.bridgeReady = true;
     const directory = makeStub([
       { match: "/internal/mailbox/mailboxes", body: { mailboxes: [{ address: "agent-a@shiba.dev", label: null, agent: null, created_at: 1 }] } },
     ]);
@@ -465,5 +510,22 @@ describe("InboxTab + MemoryTab SSR", () => {
     expect(inbox).toContain("Loading mail");
     const memory = renderToStaticMarkup(React.createElement(MemoryTab));
     expect(memory).toContain("Loading memory");
+  });
+});
+
+describe("replyMailbox", () => {
+  it("uses the detail response's top-level mailbox when the filter is 'All mailboxes'", () => {
+    const detail = { mailbox: "agent-a@shiba.dev", email: emailA };
+    expect(replyMailbox(detail, "")).toBe("agent-a@shiba.dev");
+  });
+
+  it("falls back to the row's fan-out tag, then the mailbox filter", () => {
+    const untagged = { mailbox: null, email: { ...emailA, mailbox: "agent-b@shiba.dev" } };
+    expect(replyMailbox(untagged, "")).toBe("agent-b@shiba.dev");
+    expect(replyMailbox({ mailbox: null, email: emailA }, "agent-a@shiba.dev")).toBe(
+      "agent-a@shiba.dev",
+    );
+    expect(replyMailbox(null, "agent-a@shiba.dev")).toBe("agent-a@shiba.dev");
+    expect(replyMailbox(null, "")).toBe("");
   });
 });
