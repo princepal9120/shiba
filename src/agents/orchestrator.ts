@@ -131,6 +131,36 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       });
     }
     await Promise.all(interrupted.map((run) => this.destroySandbox(run.sandboxId)));
+    // Approved email approvals execute through ctx.waitUntil — an
+    // eviction between the persisted decision and the dispatch leaves
+    // `approved` with no `execution` and nothing to re-drive it (a
+    // silent no-send). Re-drive what a restart proves safe: a delete
+    // is idempotent, and a draft-backed send's claim CAS refuses what
+    // the first attempt already finished. An unanchored composed send
+    // could have transmitted before the restart — stamp its outcome
+    // unknown instead of risking a second copy.
+    for (const approval of this.approvals) {
+      if (approval.status !== "approved" || approval.execution !== undefined) {
+        continue;
+      }
+      const payload = isJsonObject(approval.payload) ? approval.payload : {};
+      const draftId = typeof payload.draft_id === "string" ? payload.draft_id.trim() : "";
+      if (approval.kind === "email_send" && draftId === "") {
+        this.writeApprovals(recordApprovalExecution(this.approvals, {
+          threadKey: approval.threadKey,
+          approvalId: approval.approvalId,
+          execution: {
+            status: "failed",
+            error: "Execution interrupted by orchestrator restart — outcome unknown. Inspect the mailbox before re-sending.",
+            executedAt: Date.now(),
+          },
+        }));
+        continue;
+      }
+      if (approval.kind === "email_send" || approval.kind === "email_delete") {
+        this.dispatchApprovedEmail(approval);
+      }
+    }
   }
 
   override getModel(): string {
@@ -515,38 +545,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       void dispatch();
     }
     if (record && isEmailRecord) {
-      const emailRecord = record;
-      const dispatch = async () => {
-        try {
-          await executeEmailApproval(this.env, emailRecord);
-          // The record is the only durable account of this runless
-          // execution — the outcome lands on it, not only in logs.
-          this.writeApprovals(recordApprovalExecution(this.approvals, {
-            threadKey: emailRecord.threadKey,
-            approvalId,
-            execution: { status: "executed", executedAt: Date.now() },
-          }));
-        } catch (error) {
-          // The pointer is already spent — the failure is written back
-          // onto the persisted record so an approved-but-failed send/
-          // delete leaves durable state, not a misleading "recorded" reply.
-          const message = redactSecrets(String(error)).slice(0, 4000);
-          console.error(`Email approval ${approvalId} execution failed`, message);
-          this.writeApprovals(recordApprovalExecution(this.approvals, {
-            threadKey: emailRecord.threadKey,
-            approvalId,
-            execution: { status: "failed", error: message, executedAt: Date.now() },
-          }));
-        }
-      };
-      const pending = dispatch();
-      // waitUntil keeps the DO alive through the send; without a ctx
-      // (tests) the promise still runs to its own settle point.
-      if (typeof this.ctx === "object" && this.ctx !== null && "waitUntil" in this.ctx) {
-        this.ctx.waitUntil(pending);
-      } else {
-        void pending;
-      }
+      this.dispatchApprovedEmail(record);
     }
     if (rejectedEmail) {
       // Rejecting frees the queued draft back to `draft` — otherwise the
@@ -565,6 +564,47 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       }
     }
     return Response.json({ result: result.result satisfies ResolveResult });
+  }
+
+  /**
+   * Execute an approved email approval and stamp the outcome back onto
+   * the persisted record — the record is the only durable account of a
+   * runless execution. Shared by the resolve path and the onStart
+   * recovery pass for approved-but-never-executed records.
+   */
+  private dispatchApprovedEmail(record: PendingApproval): void {
+    const { approvalId, threadKey } = record;
+    const dispatch = async () => {
+      try {
+        await executeEmailApproval(this.env, record);
+        // The record is the only durable account of this runless
+        // execution — the outcome lands on it, not only in logs.
+        this.writeApprovals(recordApprovalExecution(this.approvals, {
+          threadKey,
+          approvalId,
+          execution: { status: "executed", executedAt: Date.now() },
+        }));
+      } catch (error) {
+        // The pointer is already spent — the failure is written back
+        // onto the persisted record so an approved-but-failed send/
+        // delete leaves durable state, not a misleading "recorded" reply.
+        const message = redactSecrets(String(error)).slice(0, 4000);
+        console.error(`Email approval ${approvalId} execution failed`, message);
+        this.writeApprovals(recordApprovalExecution(this.approvals, {
+          threadKey,
+          approvalId,
+          execution: { status: "failed", error: message, executedAt: Date.now() },
+        }));
+      }
+    };
+    const pending = dispatch();
+    // waitUntil keeps the DO alive through the send; without a ctx
+    // (tests) the promise still runs to its own settle point.
+    if (typeof this.ctx === "object" && this.ctx !== null && "waitUntil" in this.ctx) {
+      this.ctx.waitUntil(pending);
+    } else {
+      void pending;
+    }
   }
 
   /** Cancel a retained run and destroy its sandbox. Returns null when unknown. */

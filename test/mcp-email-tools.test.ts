@@ -26,6 +26,8 @@ vi.mock("../src/email-approvals.js", () => ({
     queueCalls.push(request);
     return { approval_id: `apv-mock-${queueCalls.length}` };
   },
+  // Real contract preserved: wired exactly when the SEND_EMAIL binding exists.
+  emailApprovalBridgeReady: (env: { SEND_EMAIL?: unknown }) => env.SEND_EMAIL !== undefined,
 }));
 
 import { registerEmailTools } from "../src/mcp-email-tools.js";
@@ -105,6 +107,7 @@ function makeEnv() {
       get: async () => null,
       delete: async () => {},
     },
+    SEND_EMAIL: { send: async () => ({ status: "ok" }) },
     AGENT_AUDIT: d1 as unknown as D1Database,
   };
   return { env: env as unknown as Env, d1, stubs };
@@ -368,6 +371,9 @@ describe("registerEmailTools — drafts, moves", () => {
     expect(reply.draft.to_addr).toBe("client@example.com");
     expect(reply.draft.subject).toBe("Re: Pricing?");
     expect(reply.draft.thread_id).toBe(email.thread_id);
+    // The reply link rides on the draft row — whichever send path later
+    // releases it can freeze real wire threading into the payload.
+    expect(reply.draft.in_reply_to_email_id).toBe(email.id);
 
     const marked = resultData(
       await registry.invoke("mark_email_read", { id: email.id }, reader),
@@ -477,6 +483,49 @@ describe("registerEmailTools — approval-gated tools", () => {
     // The record survives: the queue, not the tool, owns the action.
     const still = await findEmailDirect(env, email.id);
     expect(still).not.toBeNull();
+  });
+
+  it("send_email from a reply draft freezes its reply link into the payload", async () => {
+    const { env } = makeEnv();
+    const registry = makeRegistry(env);
+    await registerMailbox(env);
+    const email = await addEmail(env, { from_addr: "client@example.com" });
+    const reply = resultData(
+      await registry.invoke("draft_reply", { email_id: email.id, body: "Ack." }, reader),
+    );
+    const draftId = reply.draft.id as string;
+
+    const sent = resultData(await registry.invoke("send_email", { draft_id: draftId }, reader));
+    expect(sent.status).toBe("pending_approval");
+    // Without this the approval's wire send goes out unthreaded even
+    // though the draft knows exactly which email it answers.
+    expect(queueCalls.at(-1)!.payload.in_reply_to_email_id).toBe(email.id);
+    expect(queueCalls.at(-1)!.payload.draft_id).toBe(draftId);
+  });
+
+  it("send tools fail fast when the SEND_EMAIL bridge is unwired — no approval minted", async () => {
+    const { env } = makeEnv();
+    (env as unknown as { SEND_EMAIL?: unknown }).SEND_EMAIL = undefined;
+    const registry = makeRegistry(env);
+    await registerMailbox(env);
+    const email = await addEmail(env, { from_addr: "client@example.com" });
+    const before = queueCalls.length;
+
+    for (const tool of [
+      ["send_email", { mailbox: REGISTERED, to: "x@y.z", subject: "s", body: "b" }],
+      ["send_reply", { email_id: email.id, body: "Ack." }],
+    ] as const) {
+      const result = await registry.invoke(tool[0], tool[1], reader);
+      expect(result.isError, tool[0]).toBe(true);
+      expect(JSON.stringify(result.content)).toContain("SEND_EMAIL");
+    }
+    // An unwired bridge mints nothing — the dashboard send route refuses
+    // the same way rather than queueing an approval nobody can execute.
+    expect(queueCalls).toHaveLength(before);
+
+    // delete_email needs no SEND_EMAIL binding — it stays mintable.
+    const del = resultData(await registry.invoke("delete_email", { id: email.id }, reader));
+    expect(del.status).toBe("pending_approval");
   });
 });
 

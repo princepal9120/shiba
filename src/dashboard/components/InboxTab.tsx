@@ -233,6 +233,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
           subject: replySubject(detail.email.subject),
           body_text: replyBody,
           thread_id: detail.email.thread_id,
+          in_reply_to_email_id: detail.email.id,
         }),
       });
       setNotice("Reply saved to drafts.");

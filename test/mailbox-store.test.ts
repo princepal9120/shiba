@@ -324,10 +324,21 @@ describe("drafts", () => {
     expect(updated?.body_text).toBe("thanks — queued");
     expect(updated?.updated_at).toBe(20);
     expect(updated?.created_at).toBe(10);
+    expect(draft.in_reply_to_email_id).toBeNull();
 
-    expect(store.listDrafts().map((d) => d.id)).toEqual([draft.id]);
+    const reply = store.createDraft({
+      to_addr: "sender@example.com",
+      subject: "Re: Deploy report",
+      body_text: "ack",
+      thread_id: email.thread_id,
+      in_reply_to_email_id: email.id,
+    });
+    expect(reply.in_reply_to_email_id).toBe(email.id);
+    expect(store.getDraft(reply.id)?.in_reply_to_email_id).toBe(email.id);
+
+    expect(store.listDrafts().map((d) => d.id).sort()).toEqual([draft.id, reply.id].sort());
     store.updateDraft(draft.id, { status: "discarded" });
-    expect(store.listDrafts({ status: "draft" })).toEqual([]);
+    expect(store.listDrafts({ status: "draft" }).map((d) => d.id)).toEqual([reply.id]);
     expect(store.listDrafts({ status: "discarded" })).toHaveLength(1);
     expect(store.updateDraft("drf-nope", { subject: "x" })).toBeNull();
     expect(() => store.updateDraft(draft.id, { to_addr: "nope" })).toThrow(/to_addr/);
@@ -443,6 +454,67 @@ describe("drafts", () => {
     expect(() => store.unqueueDraft(queued.id)).toThrow(InputError);
     expect(() => store.markDraftQueued(queued.id)).toThrow(InputError);
     expect(store.markDraftSent("drf-nope")).toBeNull();
+  });
+
+  it("claimDraftSend moves queued→sending once — the executor's pre-wire dedupe", () => {
+    const store = makeStore();
+    const draft = store.createDraft({
+      to_addr: "sender@example.com",
+      subject: "x",
+      body_text: "y",
+    });
+    // Only `queued` rows may be claimed: live drafts, sent rows, and a
+    // second claim all refuse — two approvals on one draft race here.
+    expect(() => store.claimDraftSend(draft.id)).toThrow(InputError);
+    store.markDraftQueued(draft.id, 40);
+    const claimed = store.claimDraftSend(draft.id, 50);
+    expect(claimed?.status).toBe("sending");
+    expect(claimed?.updated_at).toBe(50);
+    expect(() => store.claimDraftSend(draft.id)).toThrow(InputError);
+    expect(store.claimDraftSend("drf-nope")).toBeNull();
+    // A claim keeps the row immutable to edits and the release seams —
+    // `unqueue` frees only `queued`; it cannot steal a sibling's claim.
+    expect(() => store.updateDraft(draft.id, { body_text: "mutated" })).toThrow(InputError);
+    expect(() => store.unqueueDraft(draft.id)).toThrow(InputError);
+  });
+
+  it("releaseDraftClaim returns sending→draft once, editable and re-queueable", () => {
+    const store = makeStore();
+    const draft = store.createDraft({
+      to_addr: "sender@example.com",
+      subject: "x",
+      body_text: "y",
+    });
+    store.markDraftQueued(draft.id, 40);
+    // Only a claimed row releases — a still-queued or already-sent row
+    // refuses, so a failed executor can't resurrect evidence either way.
+    expect(() => store.releaseDraftClaim(draft.id)).toThrow(InputError);
+    store.claimDraftSend(draft.id, 45);
+    const released = store.releaseDraftClaim(draft.id, 50);
+    expect(released?.status).toBe("draft");
+    expect(released?.updated_at).toBe(50);
+    expect(() => store.releaseDraftClaim(draft.id)).toThrow(InputError);
+    expect(store.releaseDraftClaim("drf-nope")).toBeNull();
+    // Back in `draft`, the row is editable and re-queueable like a rejection.
+    expect(store.updateDraft(draft.id, { body_text: "edited" })?.body_text).toBe("edited");
+    expect(store.markDraftQueued(draft.id)?.status).toBe("queued");
+  });
+
+  it("markDraftSent accepts a claimed row — the executor's post-send mark", () => {
+    const store = makeStore();
+    const draft = store.createDraft({
+      to_addr: "sender@example.com",
+      subject: "x",
+      body_text: "y",
+    });
+    store.markDraftQueued(draft.id, 40);
+    store.claimDraftSend(draft.id, 45);
+    const sent = store.markDraftSent(draft.id, 50);
+    expect(sent?.status).toBe("sent");
+    // `sent` stays terminal from the claimed path too.
+    expect(() => store.releaseDraftClaim(draft.id)).toThrow(InputError);
+    expect(() => store.unqueueDraft(draft.id)).toThrow(InputError);
+    expect(() => store.claimDraftSend(draft.id)).toThrow(InputError);
   });
 });
 

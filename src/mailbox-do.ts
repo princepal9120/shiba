@@ -394,6 +394,7 @@ export class Mailbox {
           subject: requiredString(body.subject, "subject"),
           body_text: requiredString(body.body_text, "body_text"),
           thread_id: optString(body.thread_id),
+          in_reply_to_email_id: optString(body.in_reply_to_email_id),
         };
         return json({ draft: this.store.createDraft(input) }, { status: 201 });
       }
@@ -416,6 +417,25 @@ export class Mailbox {
         status: optString(body.status) as UpdateDraftInput["status"],
       };
       const draft = this.store.updateDraft(id, input);
+      return draft ? json({ draft }) : notFound("Draft not found.");
+    }
+    if (seg.length === 3 && seg[2] === "claim") {
+      const id = pathParam(seg[1]);
+      if (request.method !== "POST") {
+        return json({ error: "Method not allowed." }, { status: 405 });
+      }
+      // Approval-executor seam: the only route that may set `sending`.
+      const draft = this.store.claimDraftSend(id);
+      return draft ? json({ draft }) : notFound("Draft not found.");
+    }
+    if (seg.length === 3 && seg[2] === "release") {
+      const id = pathParam(seg[1]);
+      if (request.method !== "POST") {
+        return json({ error: "Method not allowed." }, { status: 405 });
+      }
+      // Compensating seam: a claimed-but-never-sent draft returns to
+      // editable `draft` instead of stranding behind `sending`.
+      const draft = this.store.releaseDraftClaim(id);
       return draft ? json({ draft }) : notFound("Draft not found.");
     }
     if (seg.length === 3 && seg[2] === "queue") {

@@ -276,6 +276,9 @@ async function queueDraftSend(env: Env, draftId: string): Promise<Response> {
         subject: queued.subject,
         body_text: queued.body_text,
         ...(queued.thread_id !== null ? { thread_id: queued.thread_id } : {}),
+        ...(queued.in_reply_to_email_id !== null
+          ? { in_reply_to_email_id: queued.in_reply_to_email_id }
+          : {}),
         draft_id: queued.id,
       },
     });
@@ -495,6 +498,9 @@ async function handleInbox(request: Request, env: Env): Promise<Response | null>
               subject: body.subject,
               body_text: body.body_text,
               ...(typeof body.thread_id === "string" ? { thread_id: body.thread_id } : {}),
+              ...(typeof body.in_reply_to_email_id === "string"
+                ? { in_reply_to_email_id: body.in_reply_to_email_id }
+                : {}),
             }),
           },
         );

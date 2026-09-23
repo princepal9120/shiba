@@ -143,11 +143,11 @@ export async function executeEmailApproval(env: Env, record: PendingApproval): P
   }
   const stub = mailboxStub(env, registration.address);
   if (record.kind === "email_send") {
-    const progress = { transmitted: false };
+    const progress = { transmitted: false, claimed: false };
     try {
       await sendApprovedEmail(env, stub, registration.address, fields, progress);
     } catch (error) {
-      await reconcileQueuedDraft(stub, fields, progress.transmitted);
+      await reconcileQueuedDraft(stub, fields, progress);
       throw error;
     }
     return;
@@ -193,32 +193,35 @@ export async function unqueueEmailApprovalDraft(env: Env, record: PendingApprova
 }
 
 /**
- * Reconcile the queued draft after a failed send. If the send never
- * left, the draft goes back to `"draft"` so the user can edit and
- * re-queue; if it went out, reconcile it to `"sent"` — re-queueing
- * would double-send. Best-effort: the original error propagates either
- * way, so a failed reconcile is logged, not thrown.
+ * Reconcile the queued draft after a failed send. If the send went
+ * out, the draft lands in `"sent"` — re-queueing would double-send.
+ * If it never left, the row goes back to `"draft"` so the user can
+ * edit and re-queue: `release` frees the executor's own claim
+ * (`sending` → `draft`), `unqueue` frees a row the claim never took
+ * (`queued` → `draft`). Releasing only when this executor claimed
+ * keeps a failed approval from stealing a live sibling's `sending`
+ * row. Best-effort: the original error propagates either way, so a
+ * failed reconcile is logged, not thrown.
  */
 async function reconcileQueuedDraft(
   stub: MailboxFetch,
   fields: Record<string, unknown>,
-  transmitted: boolean,
+  progress: { transmitted: boolean; claimed: boolean },
 ): Promise<void> {
   const draftId = typeof fields.draft_id === "string" ? fields.draft_id.trim() : "";
   if (draftId === "") {
     return;
   }
+  const seam = progress.transmitted ? "sent" : progress.claimed ? "release" : "unqueue";
   try {
-    await mailboxCall(
-      stub,
-      `/drafts/${encodeURIComponent(draftId)}/${transmitted ? "sent" : "unqueue"}`,
-      { method: "POST" },
-    );
+    await mailboxCall(stub, `/drafts/${encodeURIComponent(draftId)}/${seam}`, {
+      method: "POST",
+    });
   } catch (error) {
     console.warn(
       `email draft reconcile failed ${JSON.stringify({
         draft_id: draftId,
-        transmitted,
+        transmitted: progress.transmitted,
         error: error instanceof Error ? error.message : String(error),
       })}`,
     );
@@ -236,13 +239,26 @@ async function sendApprovedEmail(
   stub: MailboxFetch,
   mailbox: string,
   fields: Record<string, unknown>,
-  progress: { transmitted: boolean },
+  progress: { transmitted: boolean; claimed: boolean },
 ): Promise<void> {
   const toAddr = requirePayloadField(fields, "to_addr");
   const subject = requirePayloadField(fields, "subject");
   const bodyText = requirePayloadField(fields, "body_text");
   if (!env.SEND_EMAIL) {
     throw new Error("SEND_EMAIL binding is not configured — enable Email Sending.");
+  }
+  const draftId = typeof fields.draft_id === "string" ? fields.draft_id.trim() : "";
+  if (draftId !== "") {
+    // Claim the draft before anything reaches the wire: the `queued` →
+    // `sending` CAS dedupes the live-approval race a post-send mark
+    // cannot — two approvals frozen on one draft stop competing here.
+    const claimed = await claimDraftForSend(stub, draftId);
+    if (!claimed) {
+      // The draft already carries `sent`: a sibling approval sent this
+      // payload, so this record resolves executed without a second copy.
+      return;
+    }
+    progress.claimed = true;
   }
   // `send_reply` freezes the parent's internal id as in_reply_to_email_id;
   // the wire send must quote its RFC822 Message-ID in In-Reply-To/
@@ -278,11 +294,44 @@ async function sendApprovedEmail(
       ...(threading !== undefined ? { in_reply_to: threading.inReplyTo } : {}),
     }),
   });
-  // A queued draft proves its send happened only through this seam —
-  // `/drafts/:id/sent` refuses anything but a queued row.
-  const draftId = typeof fields.draft_id === "string" ? fields.draft_id.trim() : "";
+  // The sent mark proves the send happened only through this seam —
+  // `/drafts/:id/sent` refuses anything but a queued or claimed row.
   if (draftId !== "") {
     await mailboxCall(stub, `/drafts/${encodeURIComponent(draftId)}/sent`, { method: "POST" });
+  }
+}
+
+/**
+ * `queued` → `sending` claim inside the mailbox DO. Returns false only
+ * when the draft already carries `sent` — proof a sibling approval
+ * already satisfied this payload, so the record resolves `executed`
+ * without a second copy on the wire. Every other non-queued state
+ * (still `draft`, a live sibling's `sending`, `discarded`, a missing
+ * row) means this approval can no longer be honored and throws.
+ */
+async function claimDraftForSend(stub: MailboxFetch, draftId: string): Promise<boolean> {
+  try {
+    await mailboxCall(stub, `/drafts/${encodeURIComponent(draftId)}/claim`, {
+      method: "POST",
+    });
+    return true;
+  } catch {
+    const response = await stub.fetch(
+      new Request(
+        `https://internal/internal/mailbox/drafts/${encodeURIComponent(draftId)}`,
+      ),
+    );
+    const status = response.ok
+      ? (((await response.json()) as { draft?: { status?: unknown } }).draft?.status as
+          | string
+          | undefined)
+      : undefined;
+    if (status === "sent") {
+      return false;
+    }
+    throw new InputError(
+      `Draft ${draftId} is ${JSON.stringify(status ?? "unknown")} — only a queued draft can be claimed for sending.`,
+    );
   }
 }
 

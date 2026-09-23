@@ -32,7 +32,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import type { Scope } from "./agent-tokens.js";
-import { queueEmailApproval } from "./email-approvals.js";
+import { emailApprovalBridgeReady, queueEmailApproval } from "./email-approvals.js";
 import type { Env } from "./env.js";
 import { mailboxDirectoryStub, mailboxStub, registeredMailbox } from "./mailbox-do.js";
 import {
@@ -567,6 +567,7 @@ export function registerEmailTools(registry: ToolRegistry, env: Env): void {
           subject: replySubject(email.subject),
           body_text: text,
           thread_id: email.thread_id,
+          in_reply_to_email_id: email.id,
         }),
       );
       return jsonResult({
@@ -595,6 +596,14 @@ export function registerEmailTools(registry: ToolRegistry, env: Env): void {
     SEND,
     async (args) => {
       const input = parseArgs(sendEmailSchema, args);
+      // Same fail-fast the dashboard's send route enforces: minting an
+      // approval nobody can execute strands a pending record — and for
+      // a draft send, locks the row behind a send that can never happen.
+      if (!emailApprovalBridgeReady(env)) {
+        throw new InputError(
+          "Email sending is not configured — the SEND_EMAIL binding is unset.",
+        );
+      }
       // Exactly one form: send an existing draft, or send a fresh compose.
       // A mixed payload (draft_id beside compose fields) is ambiguous —
       // refuse it rather than silently discarding the composed content.
@@ -630,6 +639,9 @@ export function registerEmailTools(registry: ToolRegistry, env: Env): void {
             subject: draft.subject,
             body_text: draft.body_text,
             ...(draft.thread_id !== null ? { thread_id: draft.thread_id } : {}),
+            ...(draft.in_reply_to_email_id !== null
+              ? { in_reply_to_email_id: draft.in_reply_to_email_id }
+              : {}),
             draft_id: draft.id,
           },
         });
@@ -699,6 +711,13 @@ export function registerEmailTools(registry: ToolRegistry, env: Env): void {
     SEND,
     async (args) => {
       const { email_id, body: text } = parseArgs(sendReplySchema, args);
+      // Same fail-fast as send_email: no pending approval when the
+      // bridge that would execute it is not wired.
+      if (!emailApprovalBridgeReady(env)) {
+        throw new InputError(
+          "Email sending is not configured — the SEND_EMAIL binding is unset.",
+        );
+      }
       const hit = await findEmail(env, email_id);
       if (hit === null) {
         throw new InputError(`Email not found: ${email_id}`);

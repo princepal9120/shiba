@@ -96,23 +96,38 @@ export function parseApprovalValue(value: string): ApprovalPointer {
 }
 
 export interface ApprovalCardInput extends ApprovalPointer {
+  /** Repository URL for run approvals; the sending mailbox for email kinds. */
   repoUrl: string;
   task: string;
+  /** PendingApproval kind — "email_send" / "email_delete" get email copy. */
+  kind?: string;
+  /**
+   * Human-readable requester for email kinds (e.g. the mailbox's agent
+   * label). Falls back to the mailbox address the record already carries.
+   */
+  agent?: string;
 }
 
 /**
  * Block Kit approval card. Renders the exact structured input that will
  * execute (same discipline as the dashboard approval cards) and two
  * buttons whose values are pointers back to the pending approval.
+ * Email kinds render the megaplan's copy — "Agent X requests email send
+ * to Y: subject" — where X is the mailbox/agent identity and the
+ * record's task already carries "Send email to Y: subject".
  */
 export function buildApprovalBlocks(input: ApprovalCardInput): unknown[] {
   const value = buildApprovalValue({ threadKey: input.threadKey, approvalId: input.approvalId });
+  const isEmail = input.kind === "email_send" || input.kind === "email_delete";
+  const headline = isEmail
+    ? `*${input.agent ?? input.repoUrl}* requests ${input.task}`
+    : `*Approval requested*\n*Repo:* ${input.repoUrl}\n*Task:* ${input.task}`;
   return [
     {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `*Approval requested*\n*Repo:* ${input.repoUrl}\n*Task:* ${input.task}`,
+        text: headline,
       },
     },
     {

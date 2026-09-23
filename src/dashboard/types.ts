@@ -104,6 +104,7 @@ export interface InboxDraft {
   subject: string;
   body_text: string;
   status: string;
+  in_reply_to_email_id: string | null;
   created_at: number;
   updated_at: number;
   mailbox?: string;

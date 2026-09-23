@@ -137,6 +137,33 @@ describe("buildApprovalBlocks", () => {
     expect(buttons.map((b) => b.value)).toEqual([expectedValue, expectedValue]);
     expect(parseApprovalValue(buttons[0]!.value)).toEqual(pointer);
   });
+
+  it("renders the megaplan's email-kind copy — agent requests the send", () => {
+    const blocks = buildApprovalBlocks({
+      threadKey: "default",
+      approvalId: "appr_2",
+      repoUrl: "agent-a@shiba.dev",
+      task: "Send email to person@example.com: Status update",
+      kind: "email_send",
+    });
+    const text = JSON.stringify(blocks[0]);
+    // Spec copy: "Agent X requests email send to Y: subject" — the record's
+    // repoUrl is the sending mailbox, task already carries to+subject.
+    expect(text).toContain("agent-a@shiba.dev");
+    expect(text).toContain("requests");
+    expect(text).toContain("Send email to person@example.com: Status update");
+    expect(text).not.toContain("*Repo:*");
+
+    const labeled = buildApprovalBlocks({
+      threadKey: "default",
+      approvalId: "appr_3",
+      repoUrl: "agent-a@shiba.dev",
+      task: "Send email to person@example.com: Status update",
+      kind: "email_send",
+      agent: "deploy-bot",
+    });
+    expect(JSON.stringify(labeled[0])).toContain("deploy-bot");
+  });
 });
 
 describe("handleSlackInteract", () => {

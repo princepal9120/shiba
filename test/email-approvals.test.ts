@@ -7,6 +7,7 @@ import {
   queueEmailApproval,
 } from "../src/email-approvals.js";
 import { MAILBOX_DIRECTORY_NAME } from "../src/mailbox-do.js";
+import type { PendingApproval } from "../src/pending-approvals.js";
 import { InputError } from "../src/security.js";
 
 const mocks = vi.hoisted(() => ({ execute: vi.fn(), getAgentByName: vi.fn(), destroy: vi.fn() }));
@@ -32,9 +33,15 @@ interface MailboxCall {
  * executions run against a fake `env.Mailbox` stub + `env.SEND_EMAIL`
  * binding that record every call the frozen payload produces.
  */
-function agentWithMailbox(opts: { failingMailboxPaths?: RegExp; messageIds?: Record<string, string[]> } = {}) {
+function agentWithMailbox(opts: {
+  failingMailboxPaths?: RegExp;
+  messageIds?: Record<string, string[]>;
+  /** Opt-in stateful draft rows (id → status) exercising the real CAS seams. */
+  drafts?: Record<string, string>;
+} = {}) {
   const mailboxCalls: MailboxCall[] = [];
   const send = vi.fn(async (_message: unknown) => ({ status: "ok" }));
+  const drafts = opts.drafts;
   const mailboxStub = {
     fetch: async (request: Request) => {
       const url = new URL(request.url);
@@ -53,6 +60,37 @@ function agentWithMailbox(opts: { failingMailboxPaths?: RegExp; messageIds?: Rec
       if (request.method === "GET" && emailMatch) {
         const messageIds = opts.messageIds?.[decodeURIComponent(emailMatch[1]!)] ?? [];
         return new Response(JSON.stringify({ message_ids: messageIds }), { status: 200 });
+      }
+      const draftMatch = url.pathname.match(/^\/internal\/mailbox\/drafts\/([^/]+)(?:\/(claim|release|unqueue|sent))?$/);
+      if (drafts !== undefined && draftMatch) {
+        const id = decodeURIComponent(draftMatch[1]!);
+        const seam = draftMatch[2];
+        const status = drafts[id];
+        if (seam === undefined) {
+          return status === undefined
+            ? new Response("{}", { status: 404 })
+            : Response.json({ draft: { id, status } });
+        }
+        const from: Record<string, string[]> = {
+          claim: ["queued"],
+          release: ["sending"],
+          unqueue: ["queued"],
+          sent: ["queued", "sending"],
+        };
+        const to: Record<string, string> = {
+          claim: "sending",
+          release: "draft",
+          unqueue: "draft",
+          sent: "sent",
+        };
+        if (status === undefined) {
+          return new Response("{}", { status: 404 });
+        }
+        if (!from[seam]!.includes(status)) {
+          return Response.json({ error: `draft is '${status}'` }, { status: 400 });
+        }
+        drafts[id] = to[seam]!;
+        return Response.json({ draft: { id, status: drafts[id] } });
       }
       return new Response("{}", { status: 200 });
     },
@@ -416,7 +454,7 @@ describe("email approval execution", () => {
     expect(mailboxCalls).toHaveLength(0);
   });
 
-  it("a send failure before transmission unqueues the draft so it can be re-queued", async () => {
+  it("a send failure after the claim releases the draft so it can be re-queued", async () => {
     const { instance, env, send, mailboxCalls, settled } = agentWithMailbox();
     send.mockRejectedValue(new Error("smtp down"));
     const { approval_id } = await queueEmailApproval(env as never, {
@@ -427,11 +465,62 @@ describe("email approval execution", () => {
     const response = await approve(instance, approval_id, true);
     expect((await response.json() as { result: string }).result).toBe("approved");
     await settled();
-    // The payload never left — the draft goes back to editable `draft`,
-    // not to `sent`.
+    // The payload never left — the executor's own claim is released
+    // (sending → draft), not marked sent and not left claimed.
     expect(mailboxCalls).toEqual([
-      { method: "POST", path: "/internal/mailbox/drafts/draft-1/unqueue", body: undefined },
+      { method: "POST", path: "/internal/mailbox/drafts/draft-1/claim", body: undefined },
+      { method: "POST", path: "/internal/mailbox/drafts/draft-1/release", body: undefined },
     ]);
+  });
+
+  it("two live approvals on one draft transmit once — the claim dedupes before the wire", async () => {
+    // The mint-before-lock ordering in send_email can mint a second
+    // approval while the first sits pending: approving both must not
+    // put two copies on the wire. The second executor's claim sees the
+    // sibling's `sent` mark and satisfies its payload without sending.
+    const drafts: Record<string, string> = { "draft-1": "queued" };
+    const { instance, env, send, settled } = agentWithMailbox({ drafts });
+    const first = await queueEmailApproval(env as never, {
+      kind: "email_send",
+      mailbox: "agent-a@shiba.dev",
+      payload: { ...SEND_PAYLOAD },
+    });
+    const second = await queueEmailApproval(env as never, {
+      kind: "email_send",
+      mailbox: "agent-a@shiba.dev",
+      payload: { ...SEND_PAYLOAD },
+    });
+    await approve(instance, first.approval_id, true);
+    await settled();
+    await approve(instance, second.approval_id, true);
+    await settled();
+    expect(send).toHaveBeenCalledOnce();
+    expect(drafts["draft-1"]).toBe("sent");
+    // Both records land durable outcomes — the deduped approval is
+    // `executed` (its payload went out), not a misleading failure.
+    const approvals = instance.state.pendingApprovals ?? [];
+    expect(approvals.find((a) => a.approvalId === first.approval_id)?.execution?.status).toBe("executed");
+    expect(approvals.find((a) => a.approvalId === second.approval_id)?.execution?.status).toBe("executed");
+  });
+
+  it("a claim refusal on an unsent draft fails the execution — never a silent dedupe", async () => {
+    // `draft` means the queue lock was reverted — the frozen approval
+    // can no longer be honored, so it fails visibly.
+    const drafts: Record<string, string> = { "draft-1": "draft" };
+    const { instance, env, send, settled } = agentWithMailbox({ drafts });
+    const { approval_id } = await queueEmailApproval(env as never, {
+      kind: "email_send",
+      mailbox: "agent-a@shiba.dev",
+      payload: { ...SEND_PAYLOAD },
+    });
+    await approve(instance, approval_id, true);
+    await settled();
+    expect(send).not.toHaveBeenCalled();
+    const decided = (instance.state.pendingApprovals ?? []).find(
+      (a) => a.approvalId === approval_id,
+    );
+    expect(decided?.execution?.status).toBe("failed");
+    expect(decided?.execution?.error).toContain("draft");
   });
 
   it("a post-transmission failure reconciles the draft to 'sent', never re-queues it", async () => {
@@ -605,5 +694,111 @@ describe("GET /api/approvals", () => {
     const after = await instance.onRequest(new Request("https://internal/api/approvals"));
     const remaining = (await after.json()) as { approvals: Array<{ approvalId: string }> };
     expect(remaining.approvals.map((a) => a.approvalId)).toEqual([second.approval_id]);
+  });
+});
+
+describe("orchestrator restart recovery", () => {
+  const approvedRecord = (over: Partial<PendingApproval>): PendingApproval => ({
+    threadKey: "default",
+    approvalId: "apv-stale",
+    repoUrl: "agent-a@shiba.dev",
+    task: "Send email to person@example.com: Status update",
+    status: "approved" as const,
+    createdAt: 1,
+    decidedBy: "U1",
+    decidedAt: 2,
+    ...over,
+  });
+
+  it("re-drives an approved draft send the lost dispatch never executed", async () => {
+    // approved + no execution = the waitUntil died with the DO. The
+    // draft still sits `queued`, so the claim CAS proves nothing ever
+    // left and the frozen payload sends exactly once.
+    const drafts: Record<string, string> = { "draft-1": "queued" };
+    const { instance, send, settled } = agentWithMailbox({ drafts });
+    instance.state.pendingApprovals = [
+      approvedRecord({ kind: "email_send", payload: { ...SEND_PAYLOAD, mailbox: "agent-a@shiba.dev" } }),
+    ];
+    await instance.onStart();
+    await settled();
+    expect(send).toHaveBeenCalledOnce();
+    expect(drafts["draft-1"]).toBe("sent");
+    const decided = (instance.state.pendingApprovals ?? [])[0];
+    expect(decided?.execution?.status).toBe("executed");
+  });
+
+  it("re-drives an approved email_delete — the delete is idempotent", async () => {
+    const { instance, send, mailboxCalls, settled } = agentWithMailbox();
+    instance.state.pendingApprovals = [
+      approvedRecord({ kind: "email_delete", payload: { ...DELETE_PAYLOAD, mailbox: "agent-a@shiba.dev" } }),
+    ];
+    await instance.onStart();
+    await settled();
+    expect(send).not.toHaveBeenCalled();
+    expect(mailboxCalls).toEqual([
+      { method: "DELETE", path: "/internal/mailbox/emails/email-1", body: undefined },
+    ]);
+    const decided = (instance.state.pendingApprovals ?? [])[0];
+    expect(decided?.execution?.status).toBe("executed");
+  });
+
+  it("stamps an approved composed send outcome-unknown — never risks a second copy", async () => {
+    // A draftless payload gives the restart nothing to adjudicate: the
+    // dead dispatch may already have transmitted, so the record fails
+    // visibly instead of re-sending.
+    const { instance, send } = agentWithMailbox();
+    instance.state.pendingApprovals = [
+      approvedRecord({
+        kind: "email_send",
+        payload: {
+          to_addr: "person@example.com",
+          subject: "Status update",
+          body_text: "Here is the report.",
+          mailbox: "agent-a@shiba.dev",
+        },
+      }),
+    ];
+    await instance.onStart();
+    await flush();
+    expect(send).not.toHaveBeenCalled();
+    const decided = (instance.state.pendingApprovals ?? [])[0];
+    expect(decided?.execution?.status).toBe("failed");
+    expect(decided?.execution?.error).toContain("outcome unknown");
+  });
+
+  it("a draft left `sending` by the dead attempt fails visibly — no silent resend", async () => {
+    // `sending` means the first attempt claimed the row and died
+    // mid-flight: transmit status is unknowable, so the recovery
+    // records a failure rather than deduping or re-sending.
+    const drafts: Record<string, string> = { "draft-1": "sending" };
+    const { instance, send, settled } = agentWithMailbox({ drafts });
+    instance.state.pendingApprovals = [
+      approvedRecord({ kind: "email_send", payload: { ...SEND_PAYLOAD, mailbox: "agent-a@shiba.dev" } }),
+    ];
+    await instance.onStart();
+    await settled();
+    expect(send).not.toHaveBeenCalled();
+    const decided = (instance.state.pendingApprovals ?? [])[0];
+    expect(decided?.execution?.status).toBe("failed");
+    expect(decided?.execution?.error).toContain("sending");
+  });
+
+  it("leaves pending and already-executed approvals alone", async () => {
+    const { instance, send, mailboxCalls } = agentWithMailbox();
+    instance.state.pendingApprovals = [
+      approvedRecord({ kind: "email_delete", status: "pending" }),
+      approvedRecord({
+        approvalId: "apv-done",
+        kind: "email_delete",
+        execution: { status: "executed", executedAt: 5 },
+      }),
+    ];
+    await instance.onStart();
+    await flush();
+    expect(send).not.toHaveBeenCalled();
+    expect(mailboxCalls).toHaveLength(0);
+    const approvals = instance.state.pendingApprovals ?? [];
+    expect(approvals[0]?.execution).toBeUndefined();
+    expect(approvals[1]?.execution?.status).toBe("executed");
   });
 });

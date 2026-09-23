@@ -62,6 +62,7 @@ export const MAILBOX_STATEMENTS: readonly string[] = [
      subject TEXT NOT NULL,
      body_text TEXT NOT NULL,
      status TEXT NOT NULL,
+     in_reply_to_email_id TEXT,
      created_at INTEGER NOT NULL,
      updated_at INTEGER NOT NULL
    )`,
@@ -142,7 +143,7 @@ export type EmailStatus = (typeof EMAIL_STATUSES)[number];
 export const EMAIL_DIRECTIONS = ["inbound", "outbound"] as const;
 export type EmailDirection = (typeof EMAIL_DIRECTIONS)[number];
 
-export const DRAFT_STATUSES = ["draft", "queued", "sent", "discarded"] as const;
+export const DRAFT_STATUSES = ["draft", "queued", "sending", "sent", "discarded"] as const;
 export type DraftStatus = (typeof DRAFT_STATUSES)[number];
 
 /**
@@ -187,6 +188,12 @@ export interface DraftRecord {
   subject: string;
   body_text: string;
   status: DraftStatus;
+  /**
+   * Internal id of the email this draft replies to — carried on the row
+   * so a frozen approval payload keeps wire threading (`In-Reply-To`/
+   * `References`) no matter which send path releases it.
+   */
+  in_reply_to_email_id: string | null;
   created_at: number;
   updated_at: number;
 }
@@ -277,6 +284,8 @@ export interface CreateDraftInput {
   subject: string;
   body_text: string;
   thread_id?: string;
+  /** Internal id of the email being replied to — see DraftRecord. */
+  in_reply_to_email_id?: string;
   nowMs?: number;
 }
 
@@ -407,6 +416,10 @@ function rowToDraft(row: SqlRow): DraftRecord {
     subject: String(row.subject),
     body_text: String(row.body_text),
     status: String(row.status) as DraftStatus,
+    in_reply_to_email_id:
+      row.in_reply_to_email_id === null || row.in_reply_to_email_id === undefined
+        ? null
+        : String(row.in_reply_to_email_id),
     created_at: Number(row.created_at),
     updated_at: Number(row.updated_at),
   };
@@ -439,10 +452,19 @@ function rowToAttachment(row: SqlRow): StoredAttachment {
 export class MailboxStore {
   constructor(private readonly exec: SqlExec) {}
 
-  /** Idempotent — every statement is IF NOT EXISTS. */
+  /**
+   * Idempotent — every statement is IF NOT EXISTS. Column additions
+   * land separately: CREATE TABLE IF NOT EXISTS leaves a pre-existing
+   * table's shape in place, so stores built before a column existed
+   * get it through ALTER TABLE.
+   */
   init(): void {
     for (const statement of MAILBOX_STATEMENTS) {
       this.exec(statement);
+    }
+    const columns = this.exec(`PRAGMA table_info(drafts)`).map((row) => String(row.name));
+    if (!columns.includes("in_reply_to_email_id")) {
+      this.exec(`ALTER TABLE drafts ADD COLUMN in_reply_to_email_id TEXT`);
     }
   }
 
@@ -870,13 +892,14 @@ export class MailboxStore {
     const now = input.nowMs ?? Date.now();
     const id = `drf-${randomHex(8)}`;
     this.exec(
-      `INSERT INTO drafts (id, thread_id, to_addr, subject, body_text, status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 'draft', ?, ?)`,
+      `INSERT INTO drafts (id, thread_id, to_addr, subject, body_text, status, in_reply_to_email_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?)`,
       id,
       input.thread_id ?? null,
       to,
       input.subject,
       input.body_text,
+      input.in_reply_to_email_id ?? null,
       now,
       now,
     );
@@ -974,12 +997,64 @@ export class MailboxStore {
   }
 
   /**
+   * Send-path seam: `queued` → `sending`, the claim the approval
+   * executor takes before anything reaches the wire. Only a live
+   * `"queued"` row may move — two approvals frozen on the same draft
+   * race here, and the loser fails before transmitting rather than
+   * after. `sending` is never caller-settable: it is evidence an
+   * execution attempt owns the row, not a status an editor may pick.
+   */
+  claimDraftSend(id: string, nowMs?: number): DraftRecord | null {
+    const current = this.exec(`SELECT status FROM drafts WHERE id = ?`, id)[0];
+    if (!current) {
+      return null;
+    }
+    if (current.status !== "queued") {
+      throw new InputError(
+        `draft is '${String(current.status)}' — only queued drafts can be claimed for sending.`,
+      );
+    }
+    const row = this.exec(
+      `UPDATE drafts SET status = 'sending', updated_at = ? WHERE id = ? AND status = 'queued' RETURNING *`,
+      nowMs ?? Date.now(),
+      id,
+    )[0];
+    return row ? rowToDraft(row) : null;
+  }
+
+  /**
+   * Compensating seam: `sending` → `draft`, the release the executor
+   * performs when a claimed send never reached the wire. Only a live
+   * `"sending"` row may move — a claim whose send provably did not go
+   * out returns the row to editable `draft`; anything else throws, so
+   * a sent or still-queued draft can never be resurrected or stolen.
+   */
+  releaseDraftClaim(id: string, nowMs?: number): DraftRecord | null {
+    const current = this.exec(`SELECT status FROM drafts WHERE id = ?`, id)[0];
+    if (!current) {
+      return null;
+    }
+    if (current.status !== "sending") {
+      throw new InputError(
+        `draft is '${String(current.status)}' — only claimed ('sending') drafts can be released.`,
+      );
+    }
+    const row = this.exec(
+      `UPDATE drafts SET status = 'draft', updated_at = ? WHERE id = ? AND status = 'sending' RETURNING *`,
+      nowMs ?? Date.now(),
+      id,
+    )[0];
+    return row ? rowToDraft(row) : null;
+  }
+
+  /**
    * Compensating seam: `queued` → `draft`, the transition the approval
    * path performs when a queued send is rejected or the approval itself
    * never materialized (the mint failed after the queue CAS landed, or
-   * the executor failed before the payload went out). Only a live
+   * the executor failed before claiming the row). Only a live
    * `"queued"` row may move — anything else throws, so a sent or
-   * discarded draft can never be resurrected into editing.
+   * discarded draft can never be resurrected into editing, and a
+   * rejection can never steal a sibling executor's claim.
    */
   unqueueDraft(id: string, nowMs?: number): DraftRecord | null {
     const current = this.exec(`SELECT status FROM drafts WHERE id = ?`, id)[0];
@@ -1000,24 +1075,25 @@ export class MailboxStore {
   }
 
   /**
-   * Send-path seam: `queued` → `sent`, the transition the approval
-   * executor performs after the outbound send succeeds. Only a live
-   * `"queued"` row may move — `queued` is evidence an approval froze
-   * this draft, and `"sent"` is evidence the frozen payload actually
-   * went out. Neither is caller-settable through {@link updateDraft}.
+   * Send-path seam: `queued`|`sending` → `sent`, the transition the
+   * approval executor performs after the outbound send succeeds. Only
+   * a row the send path owns may move — `queued` is evidence an
+   * approval froze this draft, `sending` an execution claimed it, and
+   * `"sent"` is evidence the frozen payload actually went out. Neither
+   * is caller-settable through {@link updateDraft}.
    */
   markDraftSent(id: string, nowMs?: number): DraftRecord | null {
     const current = this.exec(`SELECT status FROM drafts WHERE id = ?`, id)[0];
     if (!current) {
       return null;
     }
-    if (current.status !== "queued") {
+    if (current.status !== "queued" && current.status !== "sending") {
       throw new InputError(
-        `draft is '${String(current.status)}' — only queued drafts can be marked sent.`,
+        `draft is '${String(current.status)}' — only queued or claimed drafts can be marked sent.`,
       );
     }
     const row = this.exec(
-      `UPDATE drafts SET status = 'sent', updated_at = ? WHERE id = ? AND status = 'queued' RETURNING *`,
+      `UPDATE drafts SET status = 'sent', updated_at = ? WHERE id = ? AND status IN ('queued', 'sending') RETURNING *`,
       nowMs ?? Date.now(),
       id,
     )[0];
