@@ -395,3 +395,43 @@ describe("combined cancellation signals", () => {
     expect(instance.state.runs).toEqual([]);
   });
 });
+
+describe("slack thread wiring", () => {
+  it("freezes the queued harness and thread into the executed envelope", async () => {
+    const threadKey = "slack:T1:C1:1758217400.000100";
+    const instance = agent();
+    // In production this DO instance is resolved by thread name; the
+    // fabricated test instance gets the same name pinned on directly.
+    Object.assign(instance, { name: threadKey });
+    const queued = await instance.onRequest(new Request("https://internal/api/runs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ repoUrl: "https://github.com/o/r", task: "fix", harness: "claude-code", threadKey }),
+    }));
+    expect(queued.status).toBe(200);
+    const { approvalId } = await queued.json() as { approvalId: string };
+    const approved = await instance.onRequest(new Request("https://internal/api/approvals", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ threadKey: "slack:T1:C1:1758217400.000100", approvalId, approved: true, decidedBy: "U1" }),
+    }));
+    expect(approved.status).toBe(200);
+    await vi.waitFor(() => expect(mocks.execute).toHaveBeenCalled());
+    const calls = mocks.execute.mock.calls as unknown as [[string]];
+    expect(parseAgentToolInput([{ role: "user", text: calls[0]![0]! }])).toMatchObject({
+      harness: "claude-code",
+      slackThread: { channelId: "C1", threadTs: "1758217400.000100" },
+    });
+  });
+
+  it("rejects a queue request naming an unknown harness", async () => {
+    const instance = agent();
+    const queued = await instance.onRequest(new Request("https://internal/api/runs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ repoUrl: "https://github.com/o/r", task: "fix", harness: "bogus-agent" }),
+    }));
+    expect(queued.status).toBe(400);
+    expect(instance.state.pendingApprovals ?? []).toHaveLength(0);
+  });
+});

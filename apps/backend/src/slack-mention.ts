@@ -14,9 +14,16 @@ import {
 } from "./slack-context.js";
 import type { SlackEventCallbackBody } from "./slack-events.js";
 import {
+  slackAck,
+  slackAskForRepo,
+  slackAskForTask,
+  slackQueueFailed,
+} from "./slack-persona.js";
+import {
   buildSlackRunPayload,
   buildSlackThreadName,
   getSlackThreadStub,
+  resolveSlackHarness,
   resolveThreadTs,
 } from "./slack-thread.js";
 
@@ -34,6 +41,7 @@ export interface SlackMentionDeps {
     task: string;
     channelId: string;
     userId: string;
+    harness: string;
   }) => Promise<SlackMentionQueueResult>;
   postMessage?: (input: {
     channel: string;
@@ -47,7 +55,7 @@ export interface SlackMentionDeps {
 }
 
 interface AppMentionEvent {
-  type: "app_mention";
+  type: "app_mention" | "message";
   user?: string;
   text?: string;
   ts?: string;
@@ -59,6 +67,19 @@ function asAppMention(event: unknown): AppMentionEvent | null {
   if (typeof event !== "object" || event === null) return null;
   const candidate = event as { type?: unknown };
   if (candidate.type !== "app_mention") return null;
+  return event as AppMentionEvent;
+}
+
+/**
+ * A DM to the intern is a task request, same as a channel @mention. Only
+ * `message` events in an IM channel with no bot_id and no subtype qualify —
+ * bot echoes and edits/joins/leaves are not tasks.
+ */
+function asDirectMessage(event: unknown): AppMentionEvent | null {
+  if (typeof event !== "object" || event === null) return null;
+  const candidate = event as Record<string, unknown>;
+  if (candidate.type !== "message" || candidate.channel_type !== "im") return null;
+  if (typeof candidate.bot_id === "string" || typeof candidate.subtype === "string") return null;
   return event as AppMentionEvent;
 }
 
@@ -193,7 +214,9 @@ export async function handleSlackEvent(
   env: Env,
   deps: SlackMentionDeps = {},
 ): Promise<void> {
-  const event = asAppMention(body.event);
+  // @mentions in channels and direct messages both start work; everything
+  // else (channel chatter, bot echoes, edits) is ignored.
+  const event = asAppMention(body.event) ?? asDirectMessage(body.event);
   if (!event) return;
 
   const token = env.SLACK_BOT_TOKEN?.trim() ?? "";
@@ -232,7 +255,7 @@ export async function handleSlackEvent(
     channelRepos: parseChannelRepoMap(env.SLACK_CHANNEL_REPOS),
   });
   if (resolution.kind === "ask") {
-    await postMessage({ channel: channelId, threadTs, text: resolution.message });
+    await postMessage({ channel: channelId, threadTs, text: slackAskForRepo() });
     return;
   }
 
@@ -241,7 +264,7 @@ export async function handleSlackEvent(
     await postMessage({
       channel: channelId,
       threadTs,
-      text: "What should I do in that repo? Reply with a short task.",
+      text: slackAskForTask(),
     });
     return;
   }
@@ -266,11 +289,15 @@ export async function handleSlackEvent(
   const taskWithHint = hint ? `${hint}
 ${task}` : task;
 
+  // Slack tasks launch Claude Code by default (resolveSlackHarness) — the
+  // card shows the exact agent the human is approving.
+  const harness = resolveSlackHarness(env);
   const payload = buildSlackRunPayload({
     repoUrl: resolution.repoUrl,
     task: taskWithHint,
     channelId,
     userId,
+    harness,
   });
   const queueRun =
     deps.queueRun ??
@@ -300,16 +327,18 @@ ${task}` : task;
       task: taskWithHint,
       channelId,
       userId,
+      harness,
     });
     await postMessage({
       channel: channelId,
       threadTs,
-      text: `Task queued for ${resolution.repoUrl}`,
+      text: slackAck({ repoUrl: resolution.repoUrl, harness }),
       blocks: buildApprovalBlocks({
         threadKey,
         approvalId,
         repoUrl: resolution.repoUrl,
         task,
+        harness,
       }),
     });
   } catch (error) {
@@ -317,7 +346,7 @@ ${task}` : task;
     await postMessage({
       channel: channelId,
       threadTs,
-      text: "Could not queue that task. Try again or use `/shiba-ai-coworker`.",
+      text: slackQueueFailed(),
     });
   }
 }

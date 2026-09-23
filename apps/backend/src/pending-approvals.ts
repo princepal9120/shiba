@@ -75,6 +75,8 @@ export interface PendingApproval {
   /** Exact delegation input frozen at queue time; executed verbatim on approve. */
   baseBranch?: string;
   publishPullRequest?: boolean;
+  /** Coding agent the human approved (e.g. "claude-code"). */
+  harness?: string;
   /** Approval kind; absent on records written before email kinds landed — treated as `"run"`. */
   kind?: ApprovalKind;
   /** Frozen email send/delete input for email-kind approvals. */
@@ -108,6 +110,7 @@ export interface CreateApprovalInput {
   task: string;
   baseBranch?: string;
   publishPullRequest?: boolean;
+  harness?: string;
   kind?: ApprovalKind;
   payload?: JsonValue;
   createdAt: number;
@@ -129,6 +132,7 @@ export function createPendingApproval(
       task: input.task,
       ...(input.baseBranch !== undefined ? { baseBranch: input.baseBranch } : {}),
       ...(input.publishPullRequest !== undefined ? { publishPullRequest: input.publishPullRequest } : {}),
+      ...(input.harness !== undefined ? { harness: input.harness } : {}),
       ...(input.kind !== undefined ? { kind: input.kind } : {}),
       ...(input.payload !== undefined ? { payload: input.payload } : {}),
       status: "pending",

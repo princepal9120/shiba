@@ -11,6 +11,7 @@ import type { Env } from "./env.js";
 import { parseGitHubRepoUrl } from "./security.js";
 import { buildApprovalBlocks } from "./slack-approval.js";
 import { verifySlackRequest } from "./slack.js";
+import { resolveSlackHarness } from "./slack-thread.js";
 
 export const SLACK_COMMAND_PATH = "/api/slack/command";
 export const SLASH_COMMAND = "/shiba-ai-coworker";
@@ -103,6 +104,7 @@ export async function handleSlackCommand(
   }
   const stub: OrchestratorStub =
     deps.orchestratorStub ?? (await getAgentByName(env.CodingOrchestrator, ORCHESTRATOR_NAME));
+  const harness = resolveSlackHarness(env);
   let queued: Response;
   try {
     queued = await stub.fetch(
@@ -113,6 +115,7 @@ export async function handleSlackCommand(
           repoUrl: parsed.repoUrl,
           task: parsed.task,
           source: "slack",
+          harness,
           channel_id: params.get("channel_id"),
           user_id: params.get("user_id"),
         }),
@@ -137,6 +140,7 @@ export async function handleSlackCommand(
       approvalId: queuedBody.approvalId,
       repoUrl: parsed.repoUrl,
       task: parsed.task,
+      harness,
     }),
   });
 }

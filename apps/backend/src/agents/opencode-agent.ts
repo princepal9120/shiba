@@ -29,6 +29,8 @@ import {
 } from "../runtime.js";
 import { HARNESS_RETRY, withRetry } from "../harness/retry.js";
 import { boundTail, parseGitHubRepoUrl, redactSecrets } from "../security.js";
+import { postSlackMessage } from "../slack.js";
+import { SlackProgressReporter } from "../slack-persona.js";
 import { messageText, renderRunTranscript } from "../transcript.js";
 
 export async function pinSandboxEgress(
@@ -43,6 +45,19 @@ export async function pinSandboxEgress(
   }
   const { owner, repo } = parseGitHubRepoUrl(repoUrl);
   await sandbox.approveRepoScope(`/${owner}/${repo}`);
+}
+
+/**
+ * Progress relay for Slack-originated runs: the thread ids come frozen in
+ * the task envelope, the bot token from env. No thread or no token means
+ * no relay — the run itself is unaffected either way.
+ */
+function createSlackProgress(env: Env, thread?: CodingTaskInput["slackThread"]): SlackProgressReporter | null {
+  const token = env.SLACK_BOT_TOKEN?.trim();
+  if (!thread || !token) return null;
+  return new SlackProgressReporter((text) =>
+    postSlackMessage(token, { channel: thread.channelId, threadTs: thread.threadTs, text }),
+  );
 }
 
 export function createSandboxOps(env: Env, sandboxId: string, egressHosts?: string[]): SandboxOps {
@@ -150,6 +165,7 @@ export class OpenCodeAgent extends AIChatAgent<Env> {
         const write = (text: string) => writer.write({ type: "text-delta", id, delta: `${text}\n` });
         let progressChars = 0;
         let progressCount = 0;
+        let slackProgress: SlackProgressReporter | null = null;
         const emit = async (event: ProgressEvent) => {
           checkCancelled();
           if (progressCount >= 100 || progressChars >= 20_000) return;
@@ -159,6 +175,10 @@ export class OpenCodeAgent extends AIChatAgent<Env> {
           progressCount++;
           write(`[${phase}] ${message}`);
           await this.reportProgress({ message, fraction: event.fraction, phase });
+          // Coworker cadence in the same Slack thread — the reporter
+          // throttles and swallows its own failures, so this can't stall
+          // or fail the run.
+          await slackProgress?.onEvent(event);
         };
         try {
           checkCancelled();
@@ -171,6 +191,7 @@ export class OpenCodeAgent extends AIChatAgent<Env> {
           }
           // The approval froze the harness (and model) for this run. The
           // deployment default is only the fallback for pre-harness inputs.
+          slackProgress = createSlackProgress(this.env, input.slackThread);
           const harness = resolveHarness(input.harness ?? this.env.AGENT_HARNESS);
           const adapter = createRuntimeAdapter(resolveRuntimeName(this.env.RUNTIME), harness);
           const hosts = allowedHostsFor(harness, input.codingModel);

@@ -43,7 +43,9 @@ describe("slack mention dispatch", () => {
     expect(postMessage).toHaveBeenCalledOnce();
     const posted = postMessage.mock.calls.at(0)?.at(0);
     expect(posted?.blocks).toBeDefined();
-    expect(posted?.text).toContain(REPO);
+    // Coworker voice: short repo name in the text, full URL on the card.
+    expect(posted?.text).toContain("owner/repo");
+    expect(JSON.stringify(posted?.blocks)).toContain(REPO);
   });
 
   it("uses SLACK_CHANNEL_REPOS when the mention has no URL", async () => {
@@ -309,3 +311,85 @@ describe("classifySlackMentionIntent wired into handleSlackEvent", () => {
   });
 });
 
+
+describe("coworker voice + harness on the Slack path", () => {
+  it("queues a claude-code run by default and acks like a coworker", async () => {
+    const queueRun = vi.fn<QueueRun>(async () => ({ approvalId: "appr_1" }));
+    const postMessage = vi.fn<PostMessage>(async () => {});
+    await handleSlackEvent(mention(), env(), {
+      queueRun,
+      postMessage,
+      fetchThread: async () => [],
+    });
+    const queued = queueRun.mock.calls.at(0)?.at(0);
+    expect(queued?.harness).toBe("claude-code");
+    const posted = postMessage.mock.calls.at(0)?.at(0);
+    expect(posted?.text).toContain("on it");
+    expect(posted?.text).toContain("claude code");
+    expect(JSON.stringify(posted?.blocks)).toContain("claude-code");
+  });
+
+  it("prefers SLACK_AGENT_HARNESS, then AGENT_HARNESS, then claude-code", async () => {
+    const queueRun = vi.fn<QueueRun>(async () => ({ approvalId: "appr_1" }));
+    const postMessage = vi.fn<PostMessage>(async () => {});
+    for (const [envVars, expected] of [
+      [{ SLACK_AGENT_HARNESS: "codex", AGENT_HARNESS: "opencode" }, "codex"],
+      [{ AGENT_HARNESS: "opencode" }, "opencode"],
+      [{}, "claude-code"],
+    ] as const) {
+      queueRun.mockClear();
+      await handleSlackEvent(mention(), env(envVars), {
+        queueRun,
+        postMessage,
+        fetchThread: async () => [],
+      });
+      expect(queueRun.mock.calls.at(0)?.at(0)?.harness).toBe(expected);
+    }
+  });
+});
+
+describe("slack DM dispatch", () => {
+  function dm(overrides: Record<string, unknown> = {}): SlackEventCallbackBody {
+    return {
+      type: "event_callback",
+      event_id: "EvDm",
+      team_id: "T1",
+      event: {
+        type: "message",
+        channel_type: "im",
+        user: "U9",
+        channel: "D1",
+        ts: "1758217400.000200",
+        text: `fix the tests ${REPO}`,
+        ...overrides,
+      },
+    };
+  }
+
+  it("treats a DM like a mention: coworker ack + queued claude run", async () => {
+    const queueRun = vi.fn<QueueRun>(async () => ({ approvalId: "appr_dm" }));
+    const postMessage = vi.fn<PostMessage>(async () => {});
+    await handleSlackEvent(dm(), env(), {
+      queueRun,
+      postMessage,
+      fetchThread: async () => [],
+    });
+    expect(queueRun).toHaveBeenCalledOnce();
+    const queued = queueRun.mock.calls.at(0)?.at(0);
+    expect(queued).toMatchObject({ repoUrl: REPO, userId: "U9", harness: "claude-code" });
+    expect(queued?.threadKey).toBe("slack:T1:D1:1758217400.000200");
+    const posted = postMessage.mock.calls.at(0)?.at(0);
+    expect(posted?.text).toContain("on it");
+    expect(posted?.blocks).toBeDefined();
+  });
+
+  it("ignores bot echoes and channel messages", async () => {
+    const queueRun = vi.fn<QueueRun>(async () => ({ approvalId: "appr_x" }));
+    const postMessage = vi.fn<PostMessage>(async () => {});
+    await handleSlackEvent(dm({ bot_id: "B1" }), env(), { queueRun, postMessage, fetchThread: async () => [] });
+    await handleSlackEvent(dm({ channel_type: "channel" }), env(), { queueRun, postMessage, fetchThread: async () => [] });
+    await handleSlackEvent(dm({ subtype: "message_changed" }), env(), { queueRun, postMessage, fetchThread: async () => [] });
+    expect(queueRun).not.toHaveBeenCalled();
+    expect(postMessage).not.toHaveBeenCalled();
+  });
+});

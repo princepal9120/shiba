@@ -14,6 +14,7 @@ Non-secret defaults live in apps/backend/wrangler.jsonc. Local overrides and sec
 | CODEX_MODEL | openai/gpt-5.3-codex | Coding model when the codex harness is selected |
 | RUNTIME | sandbox | Default adapter; computer refuses execution |
 | AGENT_HARNESS | opencode | Default harness; a run may override it from the dashboard |
+| SLACK_AGENT_HARNESS | AGENT_HARNESS, then claude-code | Harness for Slack-originated runs (mentions, DMs, /shiba-ai-coworker) |
 
 Provider traffic is intercepted at Sandbox egress. There is no public `/api/provider` callback. Keep provider keys in AI Gateway BYOK; they never enter the container.
 

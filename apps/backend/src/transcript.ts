@@ -22,6 +22,12 @@ export function messageText(value: unknown): string {
   return chunks.join("\n");
 }
 
+/** Pull the `Pull request: <url>` line back out of rendered output. */
+export function extractPullRequestUrl(text: string): string | null {
+  const match = /^Pull request:\s*(https?:\/\/\S+)\s*$/m.exec(text);
+  return match?.[1] ?? null;
+}
+
 /**
  * Build the assistant text for one run: task header, progress lines,
  * changed files, bounded diff, optional pull request URL, or the honest
