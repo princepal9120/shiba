@@ -183,14 +183,20 @@ function cosine(a: number[], b: number[]): number {
 interface Harness {
   stub: (agent: string) => FakeStub;
   registry: FakeStub;
+  /** idFromName inputs instantiated so far — catches unbounded minting. */
+  stubs: Map<string, FakeStub>;
+  /** Per-stub SQLite handle — lets a test vaporize a row to forge an orphan. */
+  dbs: Map<string, DatabaseSync>;
   vectors: Map<string, { values: number[]; metadata?: { agent?: string } }>;
 }
 
 function makeHarness(): Harness {
   const stubs = new Map<string, FakeStub>();
+  const dbs = new Map<string, DatabaseSync>();
   const vectors = new Map<string, { values: number[]; metadata?: { agent?: string } }>();
   const create = (name: string): FakeStub => {
     const db = new DatabaseSync(":memory:");
+    dbs.set(name, db);
     const ctx = {
       id: { name, toString: () => `id:${name}`, equals: () => false },
       storage: {
@@ -256,6 +262,8 @@ function makeHarness(): Harness {
   return {
     stub: (agent) => memoryStub(env, agent) as unknown as FakeStub,
     registry: memoryRegistryStub(env) as unknown as FakeStub,
+    stubs,
+    dbs,
     vectors,
   };
 }
@@ -485,5 +493,118 @@ describe("Memory DO routes", () => {
       summary: "another",
     });
     expect(dup.status).toBe(409);
+  });
+
+  it("answers an unregistered ?agent= scope empty without minting a stub", async () => {
+    const h = makeHarness();
+    await bank(h.stub("intern"), "alpha");
+    const before = h.stubs.size;
+    const res = await get(h.registry, "/facts?agent=nosuch");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { facts: unknown[] };
+    expect(body.facts).toEqual([]);
+    // idFromName would have instantiated a fresh DO for the arbitrary name.
+    expect(h.stubs.size).toBe(before);
+    expect(h.stubs.has("nosuch")).toBe(false);
+  });
+
+  it("conflicts a caller id already banked by another agent, leaving the original intact", async () => {
+    const h = makeHarness();
+    const first = await send(h.stub("intern"), "POST", "/facts", {
+      id: "fact_shared",
+      fact: "intern's fact",
+      source: "run",
+    });
+    expect(first.status).toBe(201);
+    const dup = await send(h.stub("scout"), "POST", "/facts", {
+      id: "fact_shared",
+      fact: "scout's takeover",
+      source: "run",
+    });
+    expect(dup.status).toBe(409);
+    // The conflicting bank never reached the vector upsert — original's
+    // row, vector metadata, and registry row are all untouched.
+    expect(h.vectors.get("fact_shared")?.metadata?.agent).toBe("intern");
+    const fetched = (await (await get(h.registry, "/facts/fact_shared")).json()) as {
+      fact: { fact: string; agent: string };
+    };
+    expect(fetched.fact).toMatchObject({ fact: "intern's fact", agent: "intern" });
+    const scoutFacts = (await (await get(h.stub("scout"), "/facts")).json()) as {
+      facts: unknown[];
+    };
+    expect(scoutFacts.facts).toEqual([]);
+  });
+
+  it("lets an owner replay its registry row but rejects foreign claims", async () => {
+    const h = makeHarness();
+    expect(
+      (await send(h.registry, "POST", "/registry", { fact_id: "fact_x", agent: "intern" })).status,
+    ).toBe(201);
+    expect(
+      (await send(h.registry, "POST", "/registry", { fact_id: "fact_x", agent: "scout" })).status,
+    ).toBe(409);
+    // Same-agent replay stays an idempotent upsert.
+    expect(
+      (await send(h.registry, "POST", "/registry", { fact_id: "fact_x", agent: "intern" })).status,
+    ).toBe(201);
+  });
+
+  it("collects the orphaned vector when a registry GET self-heals a vanished fact", async () => {
+    const h = makeHarness();
+    const { body } = await bank(h.stub("intern"), "doomed");
+    const id = body.fact?.id ?? "";
+    // Vaporize only the fact row — the state a crash between bank's steps
+    // leaves: vector + registry row outlive it.
+    h.dbs.get("intern")?.prepare("DELETE FROM facts WHERE id = ?").run(id);
+    expect(h.vectors.has(id)).toBe(true);
+    expect((await get(h.registry, `/facts/${id}`)).status).toBe(404);
+    expect(h.vectors.has(id)).toBe(false);
+    const agents = (await (await get(h.registry, "/registry")).json()) as { agents: string[] };
+    expect(agents.agents).toEqual([]);
+  });
+
+  it("collects the orphaned vector when a registry DELETE finds the row gone", async () => {
+    const h = makeHarness();
+    const { body } = await bank(h.stub("intern"), "doomed");
+    const id = body.fact?.id ?? "";
+    h.dbs.get("intern")?.prepare("DELETE FROM facts WHERE id = ?").run(id);
+    expect(h.vectors.has(id)).toBe(true);
+    const res = await send(h.registry, "DELETE", `/facts/${id}`);
+    expect(res.status).toBe(404);
+    expect(h.vectors.has(id)).toBe(false);
+    const agents = (await (await get(h.registry, "/registry")).json()) as { agents: string[] };
+    expect(agents.agents).toEqual([]);
+  });
+
+  it("skips a failing agent stub in cross-agent recall instead of failing the call", async () => {
+    const h = makeHarness();
+    await bank(h.stub("intern"), "alpha survives");
+    const { body } = await bank(h.stub("flaky"), "beta unreachable");
+    expect(body.fact?.id).toBeTruthy();
+    const flaky = h.stubs.get("flaky");
+    expect(flaky).toBeDefined();
+    if (flaky) {
+      flaky.fetch = () => Promise.resolve(new Response("boom", { status: 500 }));
+    }
+    const res = await get(h.registry, "/facts/search?q=a%20query");
+    expect(res.status).toBe(200);
+    const facts = ((await res.json()) as { facts: Array<{ agent: string }> }).facts;
+    expect(facts.map((f) => f.agent)).toEqual(["intern"]);
+  });
+
+  it("rejects the reserved registry name and non-string ids on sessions", async () => {
+    const h = makeHarness();
+    expect(
+      (await send(h.registry, "POST", "/sessions", { agent: "global", summary: "x" })).status,
+    ).toBe(400);
+    expect(
+      (await send(h.registry, "POST", "/sessions", { id: 42, agent: "intern", summary: "x" }))
+        .status,
+    ).toBe(400);
+    const ok = await send(h.registry, "POST", "/sessions", {
+      agent: "intern",
+      summary: "did the thing",
+    });
+    expect(ok.status).toBe(201);
   });
 });

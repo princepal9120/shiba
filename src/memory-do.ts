@@ -7,12 +7,16 @@
  * owns that agent's `facts`. The reserved `global` stub
  * (`idFromName(MEMORY_REGISTRY_NAME)`) owns `fact_registry` — one row per
  * fact mapping id → owning agent — and `sessions`, the cross-agent run log.
- * `bank` on an agent stub inserts the fact row, upserts a bge-base 768-dim
- * vector keyed by the fact id, then posts the registry row to `global`.
+ * `bank` on an agent stub inserts the fact row, claims the fact id on
+ * `global` (the single serialization point for cross-agent uniqueness —
+ * a foreign owner conflicts the write before any vector lands), then
+ * upserts a bge-base 768-dim vector keyed by the fact id.
  * `recall` (`GET /facts/search`) embeds the query, queries `MEMORY_VECTORS`,
  * and joins each hit back to its owning agent stub through the registry.
  * Forget and TTL purge drop all three copies — row, vector, registry row —
- * so the index never accumulates un-joinable orphans.
+ * and the registry's self-heal unregisters (a vanished fact behind an
+ * index row) drop the vector too, so the index never accumulates
+ * un-joinable orphans.
  *
  * All routes live under `/internal/memory/*` and are reachable only through
  * `stub.fetch` inside the worker — index.ts returns 404 for external
@@ -62,15 +66,19 @@ function badRequest(message: string): Response {
   return json({ error: message }, { status: 400 });
 }
 
+/** Cross-agent fact-id collision — bank maps this to a 409, not a 500. */
+class ConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ConflictError";
+  }
+}
+
 function requiredString(value: unknown, field: string): string {
   if (typeof value !== "string" || value.trim() === "") {
     throw new InputError(`${field} must be a non-empty string.`);
   }
   return value;
-}
-
-function optString(value: unknown): string | undefined {
-  return typeof value === "string" ? value : undefined;
 }
 
 function optNumber(value: unknown): number | undefined {
@@ -210,6 +218,11 @@ export class Memory {
         body: JSON.stringify({ fact_id: factId, agent }),
       }),
     );
+    // 409 means another agent owns this id — a conflict for the caller,
+    // not a transport failure: bank maps it to a 409 of its own.
+    if (res.status === 409) {
+      throw new ConflictError(`Fact "${factId}" is already banked by another agent.`);
+    }
     if (!res.ok) {
       throw new Error(`Memory registry write failed (${res.status}).`);
     }
@@ -264,9 +277,11 @@ export class Memory {
 
   /**
    * `POST /facts` — bank one fact on this agent's stub: embed the text,
-   * upsert the vector (id = fact id), insert the row, then index the fact
-   * in the global registry. Registry failure rolls the row + vector back
-   * so a retried bank cannot create an unindexed orphan.
+   * insert the row, claim the fact id on the global registry (the single
+   * serialization point for cross-agent uniqueness — a conflict aborts
+   * before the vector upsert can shadow another agent's fact), then
+   * upsert the vector (id = fact id). Failure rolls back whatever was
+   * written so a retried bank cannot create an unindexed orphan.
    */
   private async bank(request: Request): Promise<Response> {
     if (this.isRegistry) {
@@ -314,12 +329,20 @@ export class Memory {
       id: factId,
       embedding_id: factId,
     });
+    // Claim the id on the registry before touching the index: a 409 means
+    // another agent owns it — the local row rolls back and no vector write
+    // happens, so the existing fact's vector is never clobbered.
     try {
-      await this.upsertVector(fact.id, this.agent, vector);
       await this.registerFact(fact.id, this.agent);
     } catch (error) {
       this.store.forgetFact(fact.id);
-      await this.deleteVector(fact.id);
+      throw error;
+    }
+    try {
+      await this.upsertVector(fact.id, this.agent, vector);
+    } catch (error) {
+      this.store.forgetFact(fact.id);
+      await this.dropRegistryEntry(fact.id);
       throw error;
     }
     return json({ fact: factJson(fact, this.agent) }, { status: 201 });
@@ -370,7 +393,23 @@ export class Memory {
         // (or vice versa). Skip rather than fail the whole recall.
         continue;
       }
-      const fact = await this.fetchFact(agent, factId);
+      // One sequential stub fetch per hit — bounded by MAX_RECALL_TOP_K
+      // (≤100 subrequests); the plan deliberately keeps this join simple.
+      let fact: FactRecord | null;
+      try {
+        fact = await this.fetchFact(agent, factId);
+      } catch (error) {
+        // Same skip policy as the orphan above: one unresponsive agent
+        // stub must not turn the whole cross-agent recall into a 500.
+        console.warn(
+          `memory_recall_fetch_failed ${JSON.stringify({
+            factId,
+            agent,
+            error: error instanceof Error ? error.message : String(error),
+          })}`,
+        );
+        continue;
+      }
       if (fact === null) {
         continue;
       }
@@ -388,6 +427,8 @@ export class Memory {
     if (res.status === 404) {
       return null;
     }
+    // Still throws on non-404 — callers decide whether a stub failure is
+    // fatal (single-fact GET) or a skipped hit (cross-agent recall).
     if (!res.ok) {
       throw new Error(`Memory fact lookup failed (${res.status}).`);
     }
@@ -425,8 +466,10 @@ export class Memory {
         }
         const fact = await this.fetchFact(agent, id);
         if (fact === null) {
-          // Registry pointed at a vanished row — drop the stale index entry.
+          // Registry pointed at a vanished row — drop the stale index
+          // entry and the orphaned vector, or both accumulate un-GC'd.
           this.store.unregisterFact(id);
+          await this.deleteVector(id);
           return notFound("Fact not found.");
         }
         return json({ fact: factJson(fact, agent) });
@@ -455,7 +498,13 @@ export class Memory {
     if (scoped === MEMORY_REGISTRY_NAME) {
       throw new InputError(`agent must not be "${MEMORY_REGISTRY_NAME}".`);
     }
-    const agents = scoped ? [scoped] : this.store.listRegisteredAgents();
+    const registered = this.store.listRegisteredAgents();
+    // idFromName instantiates a DO for any string — scoping to a name that
+    // has never banked would mint an empty stub at unbounded cardinality
+    // (the same hazard resolveRegisteredMailbox guards on mailbox routes).
+    // Only registered agents can own facts, so an unknown scope is an
+    // empty result, not a stub probe.
+    const agents = scoped ? (registered.includes(scoped) ? [scoped] : []) : registered;
     const facts: Record<string, unknown>[] = [];
     for (const agent of agents) {
       const res = await memoryStub(this.env, agent).fetch(
@@ -498,6 +547,9 @@ export class Memory {
       // index row so a retry can still find the owner.
       this.store.unregisterFact(id);
       if (res.status === 404) {
+        // The agent-side delete never ran, so its vector cleanup never
+        // happened either — drop it here to keep the index collectable.
+        await this.deleteVector(id);
         return notFound("Fact not found.");
       }
       return json({ ok: true, id });
@@ -522,14 +574,23 @@ export class Memory {
     }
     if (request.method === "POST") {
       const body = await this.jsonBody(request);
-      const id = optString(body.id);
+      // Same contract as bank(): a non-string caller id is a 400, not a
+      // silently auto-generated one.
+      const id = body.id === undefined ? undefined : requiredString(body.id, "id");
+      const agent = requiredString(body.agent, "agent").trim();
+      // The reserved registry name is not a valid session owner — a
+      // "global" row would answer ?agent=global with registry-owned rows
+      // that no agent stub backs.
+      if (agent === MEMORY_REGISTRY_NAME) {
+        throw new InputError(`agent must not be "${MEMORY_REGISTRY_NAME}".`);
+      }
       // Same contract as bank(): a caller id that already exists is a 409,
       // not a UNIQUE-constraint error surfacing as a 500.
       if (id !== undefined && this.store.getSession(id) !== null) {
         return json({ error: `Session "${id}" already exists.` }, { status: 409 });
       }
       const session = this.store.addSession({
-        agent: requiredString(body.agent, "agent"),
+        agent,
         summary: requiredString(body.summary, "summary"),
         started_at: optNumber(body.started_at),
         id,
@@ -561,10 +622,19 @@ export class Memory {
         if (agent === MEMORY_REGISTRY_NAME) {
           throw new InputError(`agent must not be "${MEMORY_REGISTRY_NAME}".`);
         }
-        const entry = this.store.registerFact({
-          fact_id: requiredString(body.fact_id, "fact_id"),
-          agent,
-        });
+        const factId = requiredString(body.fact_id, "fact_id");
+        // Re-registering your own id is the at-least-once bank replay;
+        // a different agent claiming it is a cross-agent collision — the
+        // bare fact id keys the Vectorize vector, so an overwrite would
+        // shadow the original fact in recall and registry-scoped delete.
+        const owner = this.store.factOwner(factId);
+        if (owner !== null && owner !== agent) {
+          return json(
+            { error: `Fact "${factId}" is already banked by another agent.` },
+            { status: 409 },
+          );
+        }
+        const entry = this.store.registerFact({ fact_id: factId, agent });
         return json({ entry }, { status: 201 });
       }
       return json({ error: "Method not allowed." }, { status: 405 });
@@ -602,6 +672,9 @@ export class Memory {
     } catch (error) {
       if (error instanceof InputError) {
         return badRequest(error.message);
+      }
+      if (error instanceof ConflictError) {
+        return json({ error: error.message }, { status: 409 });
       }
       throw error;
     }
