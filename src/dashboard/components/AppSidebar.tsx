@@ -298,7 +298,7 @@ export function AppSidebar({
     >
       {/* Workspace header */}
       <div
-        className={`flex items-center pt-3 pb-2 ${
+        className={`relative flex items-center pt-3 pb-2 ${
           collapsed ? "justify-center px-0" : "gap-2 px-3"
         }`}
       >

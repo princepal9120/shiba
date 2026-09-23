@@ -242,8 +242,6 @@ header.header,
 .header {
   background-color: var(--sl-color-bg-nav) !important;
   background: var(--sl-color-bg-nav) !important;
-  
-  -webkit-
   border-bottom: 1px solid var(--sl-color-hairline) !important;
   z-index: 50 !important;
 }

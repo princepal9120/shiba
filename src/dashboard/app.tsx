@@ -38,16 +38,25 @@ function isEditableTarget(target: EventTarget | null): boolean {
   );
 }
 
+// vite dev serves index.html for /api/* when the worker isn't running —
+// response.ok passes, then .json() throws an opaque parse error.
+async function fetchJson<T>(url: string): Promise<T> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`GET ${url} failed with ${res.status}`);
+  if (!res.headers.get("content-type")?.includes("application/json")) {
+    throw new Error("API unreachable — is `wrangler dev` running alongside vite?");
+  }
+  return (await res.json()) as T;
+}
+
 function useRetainedRuns(refreshToken: number): { runs: RetainedRun[]; error: string | null } {
   const [runs, setRuns] = useState<RetainedRun[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/runs")
-      .then(async (response) => {
-        if (!response.ok) throw new Error(`Runs request failed: ${response.status}`);
-        const body = (await response.json()) as { runs?: RetainedRun[] };
+    fetchJson<{ runs?: RetainedRun[] }>("/api/runs")
+      .then((body) => {
         if (!cancelled) {
           setRuns(Array.isArray(body.runs) ? body.runs : []);
           setError(null);
@@ -196,11 +205,7 @@ export function App(): React.JSX.Element {
   const [identityError, setIdentityError] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/whoami")
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`GET /api/whoami failed with ${res.status}`);
-        return (await res.json()) as { agent?: string };
-      })
+    fetchJson<{ agent?: string }>("/api/whoami")
       .then((body) => {
         if (!cancelled && typeof body.agent === "string" && body.agent !== "") {
           setOrchestratorName(body.agent);
