@@ -21,7 +21,7 @@ approval-gated destructive ops, delivered as one PR. Deploy-time provisioning
 
 ## In progress
 
-PARALLEL LANES: lane A (backend T7-T10) + lane B (UI T11-T13) ran concurrently. T7, T11, T13 DONE w/ controller adjudications; T8 exhausted → adjudicated (bank-race 409 @84d5ab1); T9 impl in flight; T10 next on lane A. T14 (visual-consistency pass) queued for a follow-up run.
+PARALLEL LANES: lane A (backend T7-T10) + lane B (UI T11-T13) ran concurrently. T7, T11, T13 DONE w/ controller adjudications; T8 exhausted → adjudicated (bank-race 409 @84d5ab1); T9 impl in flight; T10 next on lane A. T14 DONE. ALL 14 tasks complete; final whole-branch review in flight before the PR.
 
 ## Phases (SDD task → review → fix loop)
 
@@ -40,7 +40,7 @@ PARALLEL LANES: lane A (backend T7-T10) + lane B (UI T11-T13) ran concurrently. 
 | T11 Inbox + Memory tabs | 5 | DONE (exhausted → adjudicated @bbe78be) |
 | T12 sidebar agents + unified approvals | 5 | DONE |
 | T13 audit view + retention | 5 | DONE |
-| T14 visual-consistency pass (landing + dashboard) | 5 | queued |
+| T14 visual-consistency pass (landing + dashboard) | 5 | DONE (1 fix round) |
 
 ## Verify (cheap signals)
 
