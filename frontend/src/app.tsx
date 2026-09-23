@@ -808,7 +808,7 @@ export function App(): React.JSX.Element {
   ];
 
   return (
-    <div className="min-h-dvh bg-[#f6f4ed] text-[#222320] font-sans selection:bg-[#0000a8] selection:text-white flex">
+    <div className="min-h-dvh bg-[#f8fafc] text-slate-900 font-sans selection:bg-blue-600 selection:text-white flex">
       {/* LEFT: app navigation rail (all views) */}
       <AppNavRail
         activeView={mainView}
@@ -823,31 +823,35 @@ export function App(): React.JSX.Element {
       />
 
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
-      {/* NAVY TOP BAR — bezalel-style breadcrumb + quick actions */}
-      <header className="h-11 shrink-0 bg-[#0000a8] text-white flex items-center gap-2.5 px-4 z-20">
-        <nav aria-label="Breadcrumb" className="flex items-center gap-2 min-w-0">
-          <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.14em] text-white/60">
+      {/* NAVY TOP BAR — modern header with breadcrumb + search + avatar */}
+      <header className="h-16 shrink-0 bg-[#001da5] border-b border-blue-800 text-white flex items-center justify-between px-6 z-20">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-2.5 min-w-0">
+          <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-blue-300">
             AI Coworker
           </span>
-          <span className="text-white/40 text-xs" aria-hidden="true">/</span>
-          <span className="text-[13px] font-medium truncate">
+          <span className="text-blue-500 text-xs" aria-hidden="true">/</span>
+          <span className="text-sm font-semibold tracking-wide text-white uppercase truncate">
             {APP_NAV_ITEMS.find((item) => item.id === mainView)?.label ?? "Tasks"}
           </span>
         </nav>
-        <div className="ml-auto flex items-center gap-1.5">
+        <div className="flex items-center gap-4">
           <Tooltip content="Command menu" shortcut="⌘K" side="bottom">
             <button
               type="button"
               onClick={() => setCommandMenuOpen(true)}
               aria-label="Open command menu"
-              className="h-7 rounded-md border border-white/20 bg-white/10 text-white/90 hover:bg-white/20 hover:text-white flex items-center gap-1.5 px-2 text-[11px] font-medium transition-colors"
+              className="bg-blue-900/40 hover:bg-blue-900/60 border border-blue-700/50 rounded-full py-1.5 pl-9 pr-12 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-400/30 w-56 sm:w-64 transition-all text-left flex items-center relative"
             >
-              <svg className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="size-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-blue-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 10.5a6.5 6.5 0 11-13 0 6.5 6.5 0 0113 0z" />
               </svg>
-              <span className="font-mono text-[10px] text-white/60">⌘K</span>
+              <span className="text-blue-200/80 text-xs">Search commands...</span>
+              <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-mono font-bold text-blue-300/80 bg-blue-800/60 px-1.5 py-0.5 rounded border border-blue-700/40">
+                ⌘K
+              </span>
             </button>
           </Tooltip>
+          <div className="size-8 rounded-full bg-gradient-to-tr from-blue-400 to-indigo-500 border-2 border-blue-800 shrink-0 shadow-xs" title="Connected Operator" />
         </div>
       </header>
 
@@ -920,9 +924,9 @@ export function App(): React.JSX.Element {
         ) : null}
 
         {/* CENTER: conversation timeline + composer */}
-        <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#f6f4ed]" aria-busy={busy}>
+        <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#f8fafc]" aria-busy={busy}>
           {/* SESSION HEADER */}
-          <div className="border-b border-black/[0.08] bg-[#f6f4ed]/60 px-5 xl:px-6 py-2.5 flex items-center justify-between gap-3 shrink-0">
+          <div className="border-b border-slate-200 bg-white/80 backdrop-blur-md px-5 xl:px-6 py-3 flex items-center justify-between gap-3 shrink-0">
             <div className="flex items-center gap-2.5 min-w-0">
               {/* Desktop sidebar toggle button */}
               <Tooltip
@@ -1090,7 +1094,7 @@ export function App(): React.JSX.Element {
           </div>
 
           {/* COMPOSER (sticky bottom) */}
-          <div className="border-t border-black/[0.08] bg-[#f6f4ed]/60 px-5 xl:px-8 py-4 shrink-0">
+          <div className="border-t border-slate-200 bg-white/80 backdrop-blur-md px-5 xl:px-8 py-4 shrink-0">
             <TaskComposer
               repoUrl={repoUrl}
               task={task}

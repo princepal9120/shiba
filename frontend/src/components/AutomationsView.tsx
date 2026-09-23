@@ -153,17 +153,17 @@ export function AutomationsView(): JSX.Element {
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-y-auto bg-[#f6f4ed] text-[#222320] p-4 lg:p-8">
+    <div className="flex-1 flex flex-col h-full overflow-y-auto bg-[#f8fafc] text-slate-900 p-4 lg:p-8">
       <div className="max-w-5xl mx-auto w-full flex flex-col gap-6">
         {/* Header */}
-        <div className="border-b border-[#e0ded5] pb-4">
-          <h2 className="text-base font-semibold text-[#222320] flex items-center gap-2">
+        <div className="border-b border-slate-200 pb-4">
+          <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
             <span>Automations & Inbound Triggers</span>
-            <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-[#0000a8]/10 border border-[#0000a8]/30 text-[#1c1cc8]">
+            <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-blue-600/10 border border-[#0000a8]/30 text-blue-600">
               Autonomous
             </span>
           </h2>
-          <p className="text-xs text-[#6a6f63]">
+          <p className="text-xs text-slate-500">
             AI Coworker triggers tasks automatically from GitHub webhooks, Slack channels, and scheduled cron ticks.
           </p>
         </div>
@@ -175,11 +175,11 @@ export function AutomationsView(): JSX.Element {
         ) : null}
 
         {/* Recipe Gallery — deploy a standing agent in one click */}
-        <div className="border border-[#e0ded5] rounded-xl bg-[#f1efe6] shadow-sm p-5 flex flex-col gap-4">
+        <div className="border border-slate-200 rounded-xl bg-white shadow-sm p-5 flex flex-col gap-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h3 className="text-sm font-semibold text-[#222320]">Recipe Gallery</h3>
-              <p className="text-xs text-[#6a6f63] mt-0.5">
+              <h3 className="text-sm font-semibold text-slate-900">Recipe Gallery</h3>
+              <p className="text-xs text-slate-500 mt-0.5">
                 Each recipe is an agent on a trigger. Point it at a repo and deploy.
               </p>
             </div>
@@ -189,7 +189,7 @@ export function AutomationsView(): JSX.Element {
               value={repoUrl}
               onChange={(e) => setRepoUrl(e.target.value)}
               placeholder="https://github.com/owner/repo"
-              className="bg-[#fffef8] text-xs font-mono text-[#222320] border border-[#e0ded5] rounded-lg px-3 py-1.5 w-72 transition-colors focus:outline-none focus:border-[#0000a8] focus:ring-1 focus:ring-[#0000a8]/30 placeholder:text-[#6a6f63]/50"
+              className="bg-white text-xs font-mono text-slate-900 border border-slate-200 rounded-lg px-3 py-1.5 w-72 transition-colors focus:outline-none focus:border-[#0000a8] focus:ring-1 focus:ring-[#0000a8]/30 placeholder:text-slate-500/50"
             />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
@@ -198,20 +198,20 @@ export function AutomationsView(): JSX.Element {
               return (
                 <div
                   key={recipe.id}
-                  className="bg-[#fffef8] p-4 rounded-lg border border-[#e0ded5] hover:border-[#d3d2c8] flex flex-col gap-2 transition-colors"
+                  className="bg-white p-4 rounded-lg border border-slate-200 hover:border-slate-300 flex flex-col gap-2 transition-colors"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-semibold text-[#222320]">{recipe.name}</span>
-                    <span className="text-[10px] font-mono text-[#1c1cc8] bg-[#0000a8]/10 border border-[#0000a8]/30 px-1.5 py-0.5 rounded whitespace-nowrap">
+                    <span className="text-xs font-semibold text-slate-900">{recipe.name}</span>
+                    <span className="text-[10px] font-mono text-blue-600 bg-blue-600/10 border border-[#0000a8]/30 px-1.5 py-0.5 rounded whitespace-nowrap">
                       {recipe.cadence}
                     </span>
                   </div>
-                  <p className="text-[11px] text-[#6a6f63] leading-relaxed flex-1">{recipe.description}</p>
+                  <p className="text-[11px] text-slate-500 leading-relaxed flex-1">{recipe.description}</p>
                   <button
                     type="button"
                     disabled={busyId === recipe.id || deployed}
                     onClick={() => void deployRecipe(recipe)}
-                    className="text-xs font-semibold self-start border rounded-md px-2.5 py-1 transition-colors disabled:opacity-50 text-[#1c1cc8] border-[#0000a8]/40 bg-[#0000a8]/10 hover:bg-[#0000a8]/20 flex items-center gap-1.5"
+                    className="text-xs font-semibold self-start border rounded-md px-2.5 py-1 transition-colors disabled:opacity-50 text-blue-600 border-[#0000a8]/40 bg-blue-600/10 hover:bg-blue-600/20 flex items-center gap-1.5"
                   >
                     {busyId === recipe.id ? (
                       <>
@@ -231,47 +231,47 @@ export function AutomationsView(): JSX.Element {
         </div>
 
         {/* Live automations from the DO */}
-        <div className="border border-[#e0ded5] rounded-xl bg-[#f1efe6] shadow-sm p-5 flex flex-col gap-3">
+        <div className="border border-slate-200 rounded-xl bg-white shadow-sm p-5 flex flex-col gap-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-[#222320]">Deployed Automations</h3>
+            <h3 className="text-sm font-semibold text-slate-900">Deployed Automations</h3>
             <button
               type="button"
               onClick={refresh}
-              className="text-[11px] text-[#6a6f63] hover:text-[#222320] hover:border-[#d3d2c8] border border-[#e0ded5] rounded-md px-2 py-1 transition-colors"
+              className="text-[11px] text-slate-500 hover:text-slate-900 hover:border-slate-300 border border-slate-200 rounded-md px-2 py-1 transition-colors"
             >
               Refresh
             </button>
           </div>
           {automations === null ? (
-            <div className="flex items-center gap-2 text-xs text-[#6a6f63] font-mono py-2">
+            <div className="flex items-center gap-2 text-xs text-slate-500 font-mono py-2">
               <span className="animate-spin inline-block w-3 h-3 border-2 border-[#6a6f63] border-t-transparent rounded-full" />
               <span>Loading…</span>
             </div>
           ) : automations.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 border border-dashed border-[#e0ded5] rounded-lg bg-[#f6f4ed] text-center px-4">
-              <p className="text-[#6a6f63] text-xs">None yet — deploy a recipe above or POST /api/automations.</p>
+            <div className="flex flex-col items-center justify-center py-10 border border-dashed border-slate-200 rounded-lg bg-[#f8fafc] text-center px-4">
+              <p className="text-slate-500 text-xs">None yet — deploy a recipe above or POST /api/automations.</p>
             </div>
           ) : (
             <div className="flex flex-col divide-y divide-[#e0ded5]">
               {automations.map((a) => (
-                <div key={a.id} className="py-2.5 flex items-center justify-between gap-3 hover:bg-[#fffef8] -mx-2 px-2 rounded-lg transition-colors">
+                <div key={a.id} className="py-2.5 flex items-center justify-between gap-3 hover:bg-white -mx-2 px-2 rounded-lg transition-colors">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono font-semibold text-[#222320] truncate">{a.id}</span>
+                      <span className="text-xs font-mono font-semibold text-slate-900 truncate">{a.id}</span>
                       <span
                         className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${
                           a.enabled
                             ? "text-[#15803d] border-[#15803d]/30 bg-[#15803d]/10"
-                            : "text-[#6a6f63] border-[#e0ded5] bg-[#fffef8]"
+                            : "text-slate-500 border-slate-200 bg-white"
                         }`}
                       >
                         {a.enabled ? "enabled" : "disabled"}
                       </span>
-                      <span className="text-[10px] font-mono text-[#6a6f63]">
+                      <span className="text-[10px] font-mono text-slate-500">
                         {a.triggers.map((t) => t.kind).join(" + ")}
                       </span>
                     </div>
-                    <p className="text-[11px] text-[#6a6f63] truncate mt-0.5">
+                    <p className="text-[11px] text-slate-500 truncate mt-0.5">
                       {a.repoUrl} · runs: {a.runCount ?? 0}
                       {a.lastSkip ? ` · last skip: ${a.lastSkip.reason}` : ""}
                     </p>
@@ -281,7 +281,7 @@ export function AutomationsView(): JSX.Element {
                       type="button"
                       disabled={busyId === `run-${a.id}`}
                       onClick={() => void triggerNow(a.id)}
-                      className="text-xs font-semibold border border-[#0000a8]/40 text-[#1c1cc8] bg-[#0000a8]/10 hover:bg-[#0000a8]/20 rounded-md px-2.5 py-1 shrink-0 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                      className="text-xs font-semibold border border-[#0000a8]/40 text-blue-600 bg-blue-600/10 hover:bg-blue-600/20 rounded-md px-2.5 py-1 shrink-0 transition-colors disabled:opacity-50 flex items-center gap-1.5"
                     >
                       {busyId === `run-${a.id}` ? (
                         <>
@@ -302,10 +302,10 @@ export function AutomationsView(): JSX.Element {
         {/* Integration Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* GitHub Webhook */}
-          <div className="border border-[#e0ded5] rounded-xl bg-[#f1efe6] shadow-sm p-5 flex flex-col gap-3">
+          <div className="border border-slate-200 rounded-xl bg-white shadow-sm p-5 flex flex-col gap-3">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 font-semibold text-sm text-[#222320]">
-                <svg className="w-5 h-5 text-[#1c1cc8]" fill="currentColor" viewBox="0 0 24 24">
+              <div className="flex items-center gap-2 font-semibold text-sm text-slate-900">
+                <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 24 24">
                   <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
                 </svg>
                 <span>GitHub Webhooks</span>
@@ -315,59 +315,59 @@ export function AutomationsView(): JSX.Element {
               </span>
             </div>
 
-            <p className="text-xs text-[#6a6f63] leading-relaxed">
+            <p className="text-xs text-slate-500 leading-relaxed">
               Receives repo events (issues, PRs, comments) and automatically dispatches coding jobs to sandboxes.
             </p>
 
-            <div className="bg-[#fffef8] p-2.5 rounded-lg border border-[#e0ded5] flex items-center justify-between text-xs font-mono">
-              <span className="text-[#222320] truncate">/api/github/webhook</span>
+            <div className="bg-white p-2.5 rounded-lg border border-slate-200 flex items-center justify-between text-xs font-mono">
+              <span className="text-slate-900 truncate">/api/github/webhook</span>
               <button
                 type="button"
                 onClick={() => copyToClipboard("/api/github/webhook", "github")}
-                className="text-[#1c1cc8] hover:text-[#1c1cc8] text-[11px] shrink-0 ml-2 transition-colors"
+                className="text-blue-600 hover:text-blue-600 text-[11px] shrink-0 ml-2 transition-colors"
               >
                 {copiedEndpoint === "github" ? "Copied" : "Copy"}
               </button>
             </div>
-            <div className="text-[11px] font-mono text-[#6a6f63]">
-              Secret: <span className="text-[#222320]">GITHUB_WEBHOOK_SECRET</span> (HMAC-SHA256)
+            <div className="text-[11px] font-mono text-slate-500">
+              Secret: <span className="text-slate-900">GITHUB_WEBHOOK_SECRET</span> (HMAC-SHA256)
             </div>
           </div>
 
           {/* Slack Integration */}
-          <div className="border border-[#e0ded5] rounded-xl bg-[#f1efe6] shadow-sm p-5 flex flex-col gap-3">
+          <div className="border border-slate-200 rounded-xl bg-white shadow-sm p-5 flex flex-col gap-3">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 font-semibold text-sm text-[#222320]">
-                <svg className="w-5 h-5 text-[#1c1cc8]" fill="currentColor" viewBox="0 0 24 24">
+              <div className="flex items-center gap-2 font-semibold text-sm text-slate-900">
+                <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521A2.528 2.528 0 0 1 2.522 8.834a2.528 2.528 0 0 1-2.522 2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1 2.521-2.52 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z" />
                 </svg>
                 <span>Slack Bot & Interactive Gates</span>
               </div>
-              <span className="text-[10px] font-mono uppercase bg-[#0000a8]/10 text-[#1c1cc8] border border-[#0000a8]/30 px-2 py-0.5 rounded-full">
+              <span className="text-[10px] font-mono uppercase bg-blue-600/10 text-blue-600 border border-[#0000a8]/30 px-2 py-0.5 rounded-full">
                 Interactive
               </span>
             </div>
 
-            <p className="text-xs text-[#6a6f63] leading-relaxed">
-              Mention <code className="text-[#222320]">@shiba-ai-coworker</code> or run <code className="text-[#222320]">/shiba-ai-coworker</code>. Approvals are posted as interactive Slack Block Kit cards.
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Mention <code className="text-slate-900">@shiba-ai-coworker</code> or run <code className="text-slate-900">/shiba-ai-coworker</code>. Approvals are posted as interactive Slack Block Kit cards.
             </p>
 
             <div className="flex flex-col gap-1.5 text-xs font-mono">
-              <div className="bg-[#fffef8] p-2 rounded border border-[#e0ded5] flex items-center justify-between">
+              <div className="bg-white p-2 rounded border border-slate-200 flex items-center justify-between">
                 <span>Commands: /api/slack/command</span>
-                <button type="button" onClick={() => copyToClipboard("/api/slack/command", "slack1")} className="text-[#1c1cc8] hover:text-[#1c1cc8] text-[11px] transition-colors">
+                <button type="button" onClick={() => copyToClipboard("/api/slack/command", "slack1")} className="text-blue-600 hover:text-blue-600 text-[11px] transition-colors">
                   {copiedEndpoint === "slack1" ? "Copied" : "Copy"}
                 </button>
               </div>
-              <div className="bg-[#fffef8] p-2 rounded border border-[#e0ded5] flex items-center justify-between">
+              <div className="bg-white p-2 rounded border border-slate-200 flex items-center justify-between">
                 <span>Events: /api/slack/events</span>
-                <button type="button" onClick={() => copyToClipboard("/api/slack/events", "slack2")} className="text-[#1c1cc8] hover:text-[#1c1cc8] text-[11px] transition-colors">
+                <button type="button" onClick={() => copyToClipboard("/api/slack/events", "slack2")} className="text-blue-600 hover:text-blue-600 text-[11px] transition-colors">
                   {copiedEndpoint === "slack2" ? "Copied" : "Copy"}
                 </button>
               </div>
-              <div className="bg-[#fffef8] p-2 rounded border border-[#e0ded5] flex items-center justify-between">
+              <div className="bg-white p-2 rounded border border-slate-200 flex items-center justify-between">
                 <span>Interactivity: /api/slack/interact</span>
-                <button type="button" onClick={() => copyToClipboard("/api/slack/interact", "slack3")} className="text-[#1c1cc8] hover:text-[#1c1cc8] text-[11px] transition-colors">
+                <button type="button" onClick={() => copyToClipboard("/api/slack/interact", "slack3")} className="text-blue-600 hover:text-blue-600 text-[11px] transition-colors">
                   {copiedEndpoint === "slack3" ? "Copied" : "Copy"}
                 </button>
               </div>
@@ -376,10 +376,10 @@ export function AutomationsView(): JSX.Element {
         </div>
 
         {/* Automations DO Engine */}
-        <div className="border border-[#e0ded5] rounded-xl bg-[#f1efe6] shadow-sm p-5 flex flex-col gap-4">
+        <div className="border border-slate-200 rounded-xl bg-white shadow-sm p-5 flex flex-col gap-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-[#222320] flex items-center gap-2">
-              <svg className="w-4 h-4 text-[#1c1cc8]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+              <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <span>Automations Durable Object Engine</span>
@@ -387,22 +387,22 @@ export function AutomationsView(): JSX.Element {
             <span className="text-[11px] font-mono text-[#15803d]">Active & Bound</span>
           </div>
 
-          <p className="text-xs text-[#6a6f63] leading-relaxed">
+          <p className="text-xs text-slate-500 leading-relaxed">
             The Automations Durable Object maintains scheduled task timers, processes incoming event fan-outs, and triggers automated coding workflows with full telemetry and replay receipts.
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 font-mono text-xs">
-            <div className="bg-[#fffef8] p-3 rounded-lg border border-[#e0ded5] flex flex-col gap-1">
-              <span className="text-[#6a6f63] text-[11px]">Cron Scheduler</span>
-              <span className="text-[#222320] font-semibold">Hourly Health Tick</span>
+            <div className="bg-white p-3 rounded-lg border border-slate-200 flex flex-col gap-1">
+              <span className="text-slate-500 text-[11px]">Cron Scheduler</span>
+              <span className="text-slate-900 font-semibold">Hourly Health Tick</span>
             </div>
-            <div className="bg-[#fffef8] p-3 rounded-lg border border-[#e0ded5] flex flex-col gap-1">
-              <span className="text-[#6a6f63] text-[11px]">Evaluation Model</span>
-              <span className="text-[#222320] font-semibold">TypeSafe System One / Llama</span>
+            <div className="bg-white p-3 rounded-lg border border-slate-200 flex flex-col gap-1">
+              <span className="text-slate-500 text-[11px]">Evaluation Model</span>
+              <span className="text-slate-900 font-semibold">TypeSafe System One / Llama</span>
             </div>
-            <div className="bg-[#fffef8] p-3 rounded-lg border border-[#e0ded5] flex flex-col gap-1">
-              <span className="text-[#6a6f63] text-[11px]">Run Capacity</span>
-              <span className="text-[#222320] font-semibold">5 Concurrent Sandboxes</span>
+            <div className="bg-white p-3 rounded-lg border border-slate-200 flex flex-col gap-1">
+              <span className="text-slate-500 text-[11px]">Run Capacity</span>
+              <span className="text-slate-900 font-semibold">5 Concurrent Sandboxes</span>
             </div>
           </div>
         </div>

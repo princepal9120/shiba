@@ -79,30 +79,30 @@ export function GatesView(): JSX.Element {
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-y-auto bg-[#f6f4ed] text-[#222320] p-4 lg:p-8">
+    <div className="flex-1 flex flex-col h-full overflow-y-auto bg-[#f8fafc] text-slate-900 p-4 lg:p-8">
       <div className="max-w-5xl mx-auto w-full flex flex-col gap-6">
-        <div className="border-b border-[#e0ded5] pb-4">
-          <h2 className="text-base font-semibold text-[#222320] flex items-center gap-2">
+        <div className="border-b border-slate-200 pb-4">
+          <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
             <span>Quality Gates</span>
-            <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-[#0000a8]/10 border border-[#0000a8]/30 text-[#1c1cc8]">
+            <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-blue-600/10 border border-[#0000a8]/30 text-blue-600">
               Review · QA · Security
             </span>
           </h2>
-          <p className="text-xs text-[#6a6f63]">
+          <p className="text-xs text-slate-500">
             Typed entry points onto the same approval-gated sandbox pipeline. Every gate queues a run; a human still approves before a container starts.
           </p>
         </div>
 
-        <div className="border border-[#e0ded5] rounded-xl bg-[#f1efe6] shadow-sm p-5 flex flex-wrap items-center gap-3 transition-colors focus-within:border-[#0000a8]/30">
+        <div className="border border-slate-200 rounded-xl bg-white shadow-sm p-5 flex flex-wrap items-center gap-3 transition-colors focus-within:border-[#0000a8]/30">
           <input
             type="text"
             aria-label="Repository URL"
             value={repoUrl}
             onChange={(e) => setRepoUrl(e.target.value)}
             placeholder="https://github.com/owner/repo"
-            className="flex-1 min-w-56 bg-[#fffef8] text-xs font-mono text-[#222320] border border-[#e0ded5] rounded-lg px-3 py-1.5 transition-colors focus:outline-none focus:border-[#0000a8] focus:ring-1 focus:ring-[#0000a8]/30 placeholder:text-[#6a6f63]/50"
+            className="flex-1 min-w-56 bg-white text-xs font-mono text-slate-900 border border-slate-200 rounded-lg px-3 py-1.5 transition-colors focus:outline-none focus:border-[#0000a8] focus:ring-1 focus:ring-[#0000a8]/30 placeholder:text-slate-500/50"
           />
-          <label className="flex items-center gap-2 text-xs text-[#6a6f63] hover:text-[#222320] cursor-pointer select-none transition-colors">
+          <label className="flex items-center gap-2 text-xs text-slate-500 hover:text-slate-900 cursor-pointer select-none transition-colors">
             <input
               type="checkbox"
               checked={publishPr}
@@ -117,10 +117,10 @@ export function GatesView(): JSX.Element {
           {GATES.map((gate) => (
             <div
               key={gate.id}
-              className="border border-[#e0ded5] hover:border-[#d3d2c8] rounded-xl bg-[#f1efe6] shadow-sm p-5 flex flex-col gap-3 transition-colors"
+              className="border border-slate-200 hover:border-slate-300 rounded-xl bg-white shadow-sm p-5 flex flex-col gap-3 transition-colors"
             >
-              <h3 className="text-sm font-semibold text-[#222320]">{gate.name}</h3>
-              <p className="text-[11px] text-[#6a6f63] leading-relaxed flex-1">{gate.description}</p>
+              <h3 className="text-sm font-semibold text-slate-900">{gate.name}</h3>
+              <p className="text-[11px] text-slate-500 leading-relaxed flex-1">{gate.description}</p>
               {gate.extraLabel ? (
                 <input
                   type="text"
@@ -128,7 +128,7 @@ export function GatesView(): JSX.Element {
                   value={extras[gate.id] ?? ""}
                   onChange={(e) => setExtras((x) => ({ ...x, [gate.id]: e.target.value }))}
                   placeholder={gate.extraPlaceholder}
-                  className="w-full bg-[#fffef8] text-xs font-mono text-[#222320] border border-[#e0ded5] rounded-lg px-3 py-1.5 transition-colors focus:outline-none focus:border-[#0000a8] focus:ring-1 focus:ring-[#0000a8]/30 placeholder:text-[#6a6f63]/50"
+                  className="w-full bg-white text-xs font-mono text-slate-900 border border-slate-200 rounded-lg px-3 py-1.5 transition-colors focus:outline-none focus:border-[#0000a8] focus:ring-1 focus:ring-[#0000a8]/30 placeholder:text-slate-500/50"
                 />
               ) : null}
               {notices[gate.id] ? (
@@ -138,7 +138,7 @@ export function GatesView(): JSX.Element {
                 type="button"
                 disabled={busyId === gate.id}
                 onClick={() => void launch(gate)}
-                className="text-xs font-semibold self-start text-[#1c1cc8] border border-[#0000a8]/40 bg-[#0000a8]/10 hover:bg-[#0000a8]/20 rounded-md px-2.5 py-1 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                className="text-xs font-semibold self-start text-blue-600 border border-[#0000a8]/40 bg-blue-600/10 hover:bg-blue-600/20 rounded-md px-2.5 py-1 transition-colors disabled:opacity-50 flex items-center gap-1.5"
               >
                 {busyId === gate.id ? (
                   <>

@@ -38,7 +38,7 @@ import '../styles/theme.css';
   })} />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Bebas+Neue&family=DM+Mono:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500;600;700;800;900&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet" />
   
   <style is:global>
     :root {
@@ -60,86 +60,91 @@ import '../styles/theme.css';
     }
 
     body {
-      background-color: #000000 !important;
-      color: #f3f4f6 !important;
+      background-color: #06080d !important;
+      color: #f1f5f9 !important;
       font-family: 'Inter', system-ui, -apple-system, sans-serif;
       margin: 0;
       padding: 0;
       overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
     }
 
     .font-heading, .font-display {
-      font-family: 'Bebas Neue', Impact, sans-serif !important;
-      letter-spacing: 0.03em;
+      font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif !important;
+      letter-spacing: -0.025em;
     }
 
     .font-manga, .font-comic {
-      font-family: 'Bangers', 'Comic Sans MS', cursive, sans-serif !important;
-      letter-spacing: 0.05em;
+      font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif !important;
+      letter-spacing: -0.01em;
+      font-weight: 700;
     }
 
     .font-dm-mono, .font-tech {
-      font-family: 'DM Mono', 'Geist Mono', monospace !important;
+      font-family: 'JetBrains Mono', 'Geist Mono', monospace !important;
     }
 
-    /* Manga Pattern Backgrounds */
+    /* Modern Dark Grid Background */
     .grid-bg {
-      background-size: 32px 32px;
-      background-image: linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
-                        linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+      background-color: #06080d !important;
+      background-size: 40px 40px;
+      background-image: linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                        linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
     }
 
     .manga-brick-bg {
-      background-image: url('/assets/theme/sidebar-bg-tile-brick.svg');
-      background-size: 2.4rem auto;
-      background-repeat: repeat;
+      background-image: radial-gradient(circle at 50% 50%, rgba(37, 99, 235, 0.08) 0%, transparent 80%);
     }
 
     .manga-tile-bg {
-      background-image: url('/assets/theme/sidebar-bg-tile.svg');
+      background-image: linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
       background-size: 2.4rem;
-      background-repeat: repeat;
     }
 
-    /* Neo-Brutalist Manga Buttons */
+    /* Premium Modern Buttons */
     .manga-btn-primary {
-      background-color: var(--color-teal-300);
-      color: #000000;
-      font-weight: 700;
-      border: 1.5px solid var(--color-primary-dark);
-      box-shadow: -3px 3px 0 0 var(--color-primary-dark);
-      transition: all 0.15s ease-out;
+      background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+      color: #ffffff;
+      font-weight: 600;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      box-shadow: 0 4px 14px 0 rgba(37, 99, 235, 0.35);
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
     .manga-btn-primary:hover {
-      transform: translate(2px, -2px);
-      box-shadow: 0 0 0 0 var(--color-primary-dark);
-      background-color: #72d6cf;
+      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 22px rgba(37, 99, 235, 0.5);
     }
 
     .manga-btn-secondary {
-      background-color: #111317;
-      color: #ffffff;
-      font-weight: 600;
-      border: 1.5px solid #333842;
-      box-shadow: -3px 3px 0 0 #000000;
-      transition: all 0.15s ease-out;
+      background-color: rgba(255, 255, 255, 0.05);
+      color: #f1f5f9;
+      font-weight: 500;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
     .manga-btn-secondary:hover {
-      transform: translate(2px, -2px);
-      box-shadow: 0 0 0 0 #000000;
-      border-color: var(--color-teal-400);
-      color: var(--color-teal-300);
+      background-color: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.25);
+      color: #ffffff;
+      transform: translateY(-1px);
     }
 
-    /* Manga Comic Panel Frames */
+    /* Elevated Modern Panels */
     .manga-panel {
-      border: 2px solid #22262e;
-      background-color: #090a0d;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: linear-gradient(180deg, rgba(15, 23, 42, 0.65) 0%, rgba(9, 12, 20, 0.85) 100%);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
       position: relative;
-      transition: border-color 0.2s ease, transform 0.2s ease;
+      transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+      box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
     }
     .manga-panel:hover {
-      border-color: #404856;
+      border-color: rgba(59, 130, 246, 0.35);
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.7), 0 0 25px rgba(37, 99, 235, 0.15);
     }
 
     /* Infinite Marquee */
@@ -322,8 +327,12 @@ import '../styles/theme.css';
       <div class="max-w-6xl mx-auto px-4 sm:px-6">
         
         <!-- MAIN HEADLINE -->
-        <h1 class="font-heading text-6xl sm:text-7xl md:text-8xl lg:text-[7.5rem] tracking-tight uppercase text-white leading-[0.88] max-w-5xl mx-auto mb-6">
-          <span class="block text-teal-400">THE BEST SELF-HOSTED</span>
+        <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-blue-500/30 bg-blue-500/10 text-xs font-semibold text-blue-300 backdrop-blur-md mb-6 shadow-sm">
+          <span class="size-2 rounded-full bg-blue-400 animate-pulse"></span>
+          <span>Cloudflare Native • Isolated Sandbox MicroVMs • 100% Private</span>
+        </div>
+        <h1 class="font-heading text-5xl sm:text-6xl md:text-7xl lg:text-[6.8rem] font-extrabold tracking-tight uppercase leading-[0.92] max-w-5xl mx-auto mb-6">
+          <span class="block bg-gradient-to-r from-blue-400 via-cyan-300 to-indigo-300 bg-clip-text text-transparent">THE BEST SELF-HOSTED</span>
           <span class="block text-white">AI SOFTWARE ENGINEER</span>
         </h1>
 

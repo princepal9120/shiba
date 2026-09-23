@@ -26,8 +26,8 @@ interface AgentCli {
 function statusChip(configured: boolean | null): JSX.Element {
   if (configured === true) {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-md border border-[#0000a8]/30 bg-[#0000a8]/10 px-2 py-0.5 text-[11px] font-medium text-[#1c1cc8]">
-        <span className="size-1.5 rounded-full bg-[#0000a8]" />
+      <span className="inline-flex items-center gap-1.5 rounded-md border border-[#0000a8]/30 bg-blue-600/10 px-2 py-0.5 text-[11px] font-medium text-blue-600">
+        <span className="size-1.5 rounded-full bg-blue-600" />
         Ready
       </span>
     );
@@ -41,7 +41,7 @@ function statusChip(configured: boolean | null): JSX.Element {
     );
   }
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-md border border-[#d3d2c8] bg-[#e0ded5]/60 px-2 py-0.5 text-[11px] font-medium text-[#6a6f63]">
+    <span className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-[#e0ded5]/60 px-2 py-0.5 text-[11px] font-medium text-slate-500">
       <span className="size-1.5 rounded-full bg-[#6a6f63]" />
       AI Gateway
     </span>
@@ -76,8 +76,8 @@ export function AgentsView(): JSX.Element {
     <div className="flex-1 overflow-y-auto">
       <div className="mx-auto max-w-4xl px-6 py-8">
         <div className="mb-6">
-          <h2 className="text-lg font-bold text-[#222320]">Agents</h2>
-          <p className="mt-1 text-sm text-[#6a6f63] leading-relaxed">
+          <h2 className="text-lg font-bold text-slate-900">Agents</h2>
+          <p className="mt-1 text-sm text-slate-500 leading-relaxed">
             Agent CLIs baked into the sandbox image on this account. Pick one per task in the composer;
             credentials are injected at the egress boundary and never enter the container.
           </p>
@@ -88,35 +88,35 @@ export function AgentsView(): JSX.Element {
             {error}
           </div>
         ) : loading ? (
-          <div className="text-sm text-[#6a6f63]">Loading agent catalog…</div>
+          <div className="text-sm text-slate-500">Loading agent catalog…</div>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             {agents.map((agent) => (
               <div
                 key={agent.id}
-                className="rounded-xl border border-[#e0ded5] bg-[#fffef8] p-4 hover:border-[#d3d2c8] transition-colors"
+                className="rounded-xl border border-slate-200 bg-white p-4 hover:border-slate-300 transition-colors"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-[#222320]">{agent.label}</span>
-                      <span className="rounded-md border border-[#d3d2c8]/60 bg-[#f6f4ed] px-1.5 py-0.5 font-mono text-[10px] text-[#6a6f63]">
+                      <span className="text-sm font-semibold text-slate-900">{agent.label}</span>
+                      <span className="rounded-md border border-slate-300/60 bg-[#f8fafc] px-1.5 py-0.5 font-mono text-[10px] text-slate-500">
                         v{agent.version}
                       </span>
                     </div>
-                    <div className="mt-1 font-mono text-[11px] text-[#6a6f63]">{agent.binary}</div>
+                    <div className="mt-1 font-mono text-[11px] text-slate-500">{agent.binary}</div>
                   </div>
                   {statusChip(agent.credential.configured)}
                 </div>
 
                 <dl className="mt-3 space-y-1.5 text-[12px]">
                   <div className="flex items-baseline gap-2">
-                    <dt className="w-20 shrink-0 text-[#6a6f63]">Model</dt>
-                    <dd className="font-mono text-[#6a6f63] truncate">{agent.defaultModel}</dd>
+                    <dt className="w-20 shrink-0 text-slate-500">Model</dt>
+                    <dd className="font-mono text-slate-500 truncate">{agent.defaultModel}</dd>
                   </div>
                   <div className="flex items-baseline gap-2">
-                    <dt className="w-20 shrink-0 text-[#6a6f63]">Credential</dt>
-                    <dd className="font-mono text-[#6a6f63] truncate">{agent.credential.label}</dd>
+                    <dt className="w-20 shrink-0 text-slate-500">Credential</dt>
+                    <dd className="font-mono text-slate-500 truncate">{agent.credential.label}</dd>
                   </div>
                 </dl>
 
@@ -131,7 +131,7 @@ export function AgentsView(): JSX.Element {
                     href={agent.docsUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-[11px] text-[#0000a8]/80 hover:text-[#1c1cc8] transition-colors"
+                    className="text-[11px] text-blue-600/80 hover:text-blue-600 transition-colors"
                   >
                     Docs →
                   </a>
@@ -141,7 +141,7 @@ export function AgentsView(): JSX.Element {
           </div>
         )}
 
-        <p className="mt-6 text-[11px] leading-relaxed text-[#6a6f63]">
+        <p className="mt-6 text-[11px] leading-relaxed text-slate-500">
           The image is the install surface: containers are ephemeral per run, so CLIs ship pinned in the
           Dockerfile and every run picks one at exec time. Adding a CLI means a Dockerfile entry plus a
           harness adapter — nothing here mutates a live sandbox.
