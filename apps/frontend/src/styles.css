@@ -1,0 +1,132 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+/* ==========================================================================
+   Active Theme Import (Original Theme)
+   To revert to original theme: switch the import below to:
+   @import "./themes/theme-original.css";
+   ========================================================================== */
+@import "./themes/theme-original.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans, 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif);
+  font-size: 14px;
+  line-height: 1.5;
+  letter-spacing: var(--tracking-normal, 0em);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, .font-display, .font-heading {
+  font-family: var(--font-sans, 'Inter', ui-sans-serif, system-ui, sans-serif);
+  letter-spacing: -0.02em;
+}
+
+code, pre, kbd, samp, .font-mono {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+}
+
+/* Apple Liquid Glass Panels & Cards */
+.glass-panel {
+  background: color-mix(in srgb, var(--card) 85%, transparent);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+
+.glass-card {
+  background: color-mix(in srgb, var(--card) 80%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-xs);
+}
+
+/* Stat card hover glow highlights */
+.stat-card-glow-blue:hover { box-shadow: 0 10px 30px -10px color-mix(in srgb, var(--primary) 30%, transparent); }
+.stat-card-glow-green:hover { box-shadow: 0 10px 30px -10px rgba(34, 197, 94, 0.25); }
+.stat-card-glow-red:hover { box-shadow: 0 10px 30px -10px color-mix(in srgb, var(--destructive) 30%, transparent); }
+.stat-card-glow-amber:hover { box-shadow: 0 10px 30px -10px rgba(245, 158, 11, 0.25); }
+
+/* Sidebar active item styling */
+.sidebar-item-active {
+  background: var(--sidebar-primary);
+  color: var(--sidebar-primary-foreground) !important;
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--sidebar-primary) 35%, transparent);
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
+
+/* Focus styles */
+a:focus-visible,
+summary:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+button:focus-visible,
+[tabindex]:focus-visible {
+  outline: var(--focus);
+  outline-offset: 2px;
+}
+
+/* Details summary animation */
+details summary::-webkit-details-marker {
+  display: none;
+}
+
+@keyframes pulse-subtle {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Native dark theme styling without invert filter */
+html.dark {
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
