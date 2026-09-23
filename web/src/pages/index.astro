@@ -255,14 +255,17 @@ import '../styles/tailwind.css';
     }
   </style>
 </head>
-<body class="antialiased selection:bg-[#28a745]/40 selection:text-white">
+<body class="antialiased selection:bg-[#28a745]/40 selection:text-white grid-bg">
 
   <!-- HEADER -->
   <header class="sticky top-0 z-50 w-full border-b border-white/[0.06] bg-[#0b0b0b]/80 backdrop-blur-md">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-      <a href="/" class="flex items-center gap-2.5 shrink-0">
-        <img src="/assets/mascot/pet-logo.png" alt="" width="28" height="28" class="w-7 h-7 rounded-md bg-white object-contain" />
-        <span class="text-[15px] font-semibold tracking-tight text-white">Shiba</span>
+      <a href="/" class="flex items-center gap-2.5 shrink-0 group">
+        <img src="/assets/mascot/pet-logo.png" alt="Shiba AI" width="32" height="32" class="w-8 h-8 rounded-lg bg-white object-contain shadow-xs transition-transform group-hover:scale-105" />
+        <div class="flex flex-col text-left leading-none">
+          <span class="text-[15px] font-bold tracking-tight text-white leading-tight">Shiba AI</span>
+          <span class="text-[11px] font-mono text-neutral-400 font-medium leading-tight">Worker</span>
+        </div>
       </a>
 
       <nav aria-label="Main navigation" class="flex items-center gap-1 text-sm">
@@ -291,8 +294,9 @@ import '../styles/tailwind.css';
           <span class="truncate">Cloudflare native · Isolated Sandbox microVMs · 100% private</span>
         </div>
 
-        <h1 class="text-[2.75rem] leading-[1.04] sm:text-6xl lg:text-[4.75rem] font-semibold tracking-[-0.045em] text-white text-balance mb-6">
-          The best self-hosted AI software engineer
+        <h1 class="text-[2.75rem] leading-[1.04] sm:text-6xl lg:text-[4.75rem] font-semibold tracking-[-0.045em] text-white text-balance mb-6 uppercase">
+          <span class="block text-teal-400">THE BEST SELF-HOSTED</span>
+          <span class="block text-white">AI SOFTWARE ENGINEER</span>
         </h1>
 
         <p class="text-lg sm:text-xl text-neutral-400 max-w-2xl mx-auto mb-10 leading-relaxed text-balance">
@@ -756,7 +760,7 @@ import '../styles/tailwind.css';
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div class="panel-light rounded-2xl p-6">
             <p class="mono text-xs text-[#57534e] mb-3">01</p>
-            <h3 class="text-lg font-semibold tracking-tight text-[#0b0b0b] mb-2">Approval-gated</h3>
+            <h3 class="text-lg font-semibold tracking-tight text-[#0b0b0b] mb-2">01. Approval-Gated</h3>
             <p class="text-sm text-[#57534e] leading-relaxed">
               Every tool execution, file modification, and egress communication passes through strict cryptographically verified approval gates. Zero unauthorized actions.
             </p>
@@ -1230,7 +1234,10 @@ import '../styles/tailwind.css';
         <div class="md:col-span-2 space-y-4">
           <div class="flex items-center gap-2.5">
             <img src="/assets/mascot/pet-logo.png" alt="" width="28" height="28" class="w-7 h-7 rounded-md bg-white object-contain" />
-            <span class="text-[15px] font-semibold tracking-tight text-white">Shiba</span>
+            <div class="flex flex-col text-left leading-none">
+            <span class="text-[15px] font-bold tracking-tight text-white leading-tight">Shiba AI</span>
+            <span class="text-[11px] font-mono text-neutral-400 font-medium leading-tight">Worker</span>
+          </div>
           </div>
           <p class="text-sm text-neutral-400 max-w-xs leading-relaxed">
             Shiba is the best AI software engineer. Orchestrating parallel coding agents that plan, build, and ship from task to merged PR.

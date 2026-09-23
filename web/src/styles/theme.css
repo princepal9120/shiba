@@ -1031,3 +1031,75 @@ a.ai-step-card:hover {
   margin: 0;
 }
 
+
+/* ==========================================================================
+   Starlight Theme Select & Header Spacing (Fixes Icon Overlapping Text)
+   ========================================================================== */
+starlight-theme-select {
+  display: inline-flex !important;
+  align-items: center !important;
+}
+
+starlight-theme-select label {
+  position: relative !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0 !important;
+  margin: 0 !important;
+}
+
+starlight-theme-select .icon.label-icon {
+  position: absolute !important;
+  left: 0.625rem !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  width: 0.875rem !important;
+  height: 0.875rem !important;
+  font-size: 0.875rem !important;
+  color: var(--sl-color-gray-2, #a1a1aa) !important;
+  pointer-events: none !important;
+  z-index: 2 !important;
+}
+
+starlight-theme-select select {
+  position: relative !important;
+  display: inline-block !important;
+  border: 1px solid var(--sl-color-hairline, rgba(255, 255, 255, 0.15)) !important;
+  border-radius: 0.375rem !important;
+  background-color: var(--surface-2, rgba(255, 255, 255, 0.05)) !important;
+  color: var(--sl-color-gray-1, #e4e4e7) !important;
+  font-size: 0.8125rem !important;
+  line-height: 1.4 !important;
+  padding-top: 0.35rem !important;
+  padding-bottom: 0.35rem !important;
+  padding-left: 2rem !important; /* Critical: keeps text "Auto" cleanly clear of the laptop icon */
+  padding-right: 1.75rem !important;
+  margin-inline: 0 !important;
+  cursor: pointer !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  width: auto !important;
+  min-width: 6.25rem !important;
+  box-sizing: border-box !important;
+}
+
+starlight-theme-select select:focus,
+starlight-theme-select select:focus-visible {
+  outline: 2px solid var(--brand-primary, #0B9F95) !important;
+  outline-offset: 2px !important;
+}
+
+starlight-theme-select .icon.caret {
+  position: absolute !important;
+  right: 0.5rem !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  width: 0.875rem !important;
+  height: 0.875rem !important;
+  font-size: 0.875rem !important;
+  color: var(--sl-color-gray-3, #71717a) !important;
+  pointer-events: none !important;
+  z-index: 2 !important;
+}
+

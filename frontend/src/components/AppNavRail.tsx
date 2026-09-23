@@ -1,9 +1,15 @@
 /**
- * AppNavRail — left app sidebar (256px, all views).
- * Clean Superdesign styling: modern logo block on top, grouped nav with navy active
- * state and subtle shadow, setup progress widget and utility cluster at the bottom.
+ * AppNavRail — left app sidebar for the Bezalel paper-dashboard layout.
+ * Features:
+ * - Authentic Bezalel branding: Shiba mascot, Instrument Serif title, 'Beta' badge, 'capability plane' tag
+ * - Grouped sections: Plane & Capabilities using authentic Bezalel PixelIcons
+ * - Collapsible icon rail support (240px expanded vs 60px collapsed) with Tooltips
+ * - Retro paper active states with 2px hard paper drop shadows
+ * - Setup Guide progress card + operator indicator + quick utilities at bottom
  */
-import type { JSX } from "react";
+import type { JSX, ReactNode } from "react";
+import { PixelIcon, type PixelIconName } from "./ui/PixelIcon";
+import { Tooltip } from "./Tooltip";
 
 export type AppNavView =
   | "tasks"
@@ -19,22 +25,23 @@ export interface AppNavItem {
   id: AppNavView;
   label: string;
   description: string;
+  icon: PixelIconName;
 }
 
 export const APP_NAV_ITEMS: AppNavItem[] = [
-  { id: "tasks", label: "Tasks", description: "Tasks & Live Sessions" },
-  { id: "vm", label: "VM", description: "VM Inspector & Terminals" },
-  { id: "runs", label: "Runs", description: "Run Registry & Workspaces" },
-  { id: "agents", label: "Agents", description: "Agent CLIs in the Sandbox Image" },
-  { id: "automations", label: "Automations", description: "Automations & Triggers" },
-  { id: "missions", label: "Missions", description: "Missions & Standing Goals" },
-  { id: "gates", label: "Gates", description: "Review, QA & Security Gates" },
-  { id: "architecture", label: "Architecture", description: "System Architecture & Isolation" },
+  { id: "tasks", label: "Tasks", description: "Tasks & Live Sessions", icon: "Overview" },
+  { id: "runs", label: "Runs", description: "Run Registry & Workspaces", icon: "Activity" },
+  { id: "agents", label: "Agents", description: "Agent CLIs in the Sandbox Image", icon: "Agents" },
+  { id: "missions", label: "Missions", description: "Missions & Standing Goals", icon: "Skills" },
+  { id: "automations", label: "Automations", description: "Automations & Triggers", icon: "Operations" },
+  { id: "vm", label: "VM", description: "VM Inspector & Terminals", icon: "A computer" },
+  { id: "gates", label: "Gates", description: "Review, QA & Security Gates", icon: "Sandboxes" },
+  { id: "architecture", label: "Architecture", description: "System Architecture & Isolation", icon: "Connectors" },
 ];
 
 const NAV_GROUPS: { label: string; items: AppNavView[] }[] = [
-  { label: "Workspace", items: ["tasks", "runs", "missions", "automations"] },
-  { label: "Sandbox", items: ["vm", "agents", "gates", "architecture"] },
+  { label: "Plane", items: ["tasks", "runs", "agents", "missions", "automations"] },
+  { label: "Capabilities", items: ["vm", "gates", "architecture"] },
 ];
 
 export interface AppNavRailProps {
@@ -47,85 +54,72 @@ export interface AppNavRailProps {
   setupTotal: number;
   onOpenSetup: () => void;
   onOpenShortcuts: () => void;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
-const ICONS: Record<AppNavView, JSX.Element> = {
-  tasks: (
-    <svg className="size-4 shrink-0 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-    </svg>
-  ),
-  vm: (
-    <svg className="size-4 shrink-0 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 17l6-6-6-6M12 19h8" />
-    </svg>
-  ),
-  runs: (
-    <svg className="size-4 shrink-0 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  ),
-  agents: (
-    <svg className="size-4 shrink-0 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-    </svg>
-  ),
-  automations: (
-    <svg className="size-4 shrink-0 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-    </svg>
-  ),
-  missions: (
-    <svg className="size-4 shrink-0 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zM4 22v-7" />
-    </svg>
-  ),
-  gates: (
-    <svg className="size-4 shrink-0 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-    </svg>
-  ),
-  architecture: (
-    <svg className="size-4 shrink-0 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z" />
-    </svg>
-  ),
-};
+interface NavItemProps {
+  label: string;
+  description?: string;
+  active?: boolean;
+  collapsed?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+  badge?: ReactNode;
+}
 
 function NavItem({
   label,
+  description,
   active,
+  collapsed,
   onClick,
   children,
   badge,
-}: {
-  label: string;
-  active?: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-  badge?: React.ReactNode;
-}) {
-  return (
+}: NavItemProps) {
+  const button = (
     <button
       type="button"
       onClick={onClick}
       aria-label={label}
       aria-current={active ? "page" : undefined}
       className={
-        "w-full flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-all group " +
+        "w-full flex items-center gap-3 px-2.5 py-1.5 text-[13px] transition-all select-none rounded-none " +
         (active
-          ? "sidebar-item-active text-white"
-          : "text-slate-600 hover:text-blue-600 hover:bg-slate-50")
+          ? "sidebar-item-active"
+          : "text-[var(--sidebar-foreground)] hover:bg-[var(--secondary)] hover:text-[var(--foreground)]") +
+        (collapsed ? " justify-center px-1" : "")
       }
     >
-      <span className={active ? "text-white" : "text-slate-400 group-hover:text-blue-600 transition-colors"} aria-hidden="true">
+      <span
+        className={
+          "shrink-0 " +
+          (active
+            ? "text-white"
+            : "text-[var(--muted-foreground)] group-hover:text-[var(--foreground)] transition-colors")
+        }
+        aria-hidden="true"
+      >
         {children}
       </span>
-      <span className="flex-1 text-left truncate">{label}</span>
-      {badge}
+      {!collapsed ? (
+        <>
+          <span className="flex-1 text-left truncate font-medium">{label}</span>
+          {badge}
+        </>
+      ) : null}
     </button>
   );
+
+  if (collapsed) {
+    return (
+      <Tooltip content={description || label} side="right">
+        {button}
+      </Tooltip>
+    );
+  }
+
+  return button;
 }
 
 export function AppNavRail({
@@ -138,63 +132,110 @@ export function AppNavRail({
   onOpenShortcuts,
   theme,
   onToggleTheme,
+  collapsed = false,
+  onToggleCollapse,
 }: AppNavRailProps): JSX.Element {
   const setupComplete = setupDone !== null && setupDone >= setupTotal;
   const setupRemaining =
     setupDone !== null ? Math.max(0, setupTotal - setupDone) : null;
-  const progressPercent = setupDone !== null ? Math.min(100, Math.round((setupDone / setupTotal) * 100)) : 16;
+  const progressPercent =
+    setupDone !== null ? Math.min(100, Math.round((setupDone / setupTotal) * 100)) : 16;
 
   return (
-    <nav
-      className="w-64 shrink-0 flex flex-col bg-white border-r border-slate-200 py-4 px-4 z-30 select-none overflow-y-auto"
-      aria-label="Primary"
+    <aside
+      className={
+        "shrink-0 flex flex-col bg-[var(--sidebar)] border-r border-[var(--sidebar-border)] transition-[width] duration-200 ease-in-out z-30 select-none " +
+        (collapsed ? "w-16" : "w-60 lg:w-64")
+      }
+      aria-label="Sidebar navigation"
     >
-      {/* Brand */}
-      <a href="/" className="flex items-center gap-3 px-1 pb-4 mb-2 border-b border-slate-100 group focus:outline-none" aria-label="AI Coworker Home">
-        <div className="size-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-md shadow-blue-200 transition-transform duration-200 group-hover:scale-105 shrink-0">
-          <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-          </svg>
-        </div>
-        <div className="min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span className="font-bold text-slate-900 text-base leading-tight tracking-tight">AI Coworker</span>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
-              Beta
-            </span>
-          </div>
-          <span className="block text-[11px] text-slate-400 font-medium">agent plane</span>
-        </div>
-      </a>
-
-      {/* Grouped primary nav */}
-      <div className="flex flex-col gap-5 py-2">
-        {NAV_GROUPS.map((group) => (
-          <div key={group.label}>
-            <div className="px-2 mb-2 text-[11px] font-semibold text-slate-400 uppercase tracking-[0.1em]">
-              {group.label}
+      {/* Brand Header — Bezalel style with Shiba mascot */}
+      <div className="h-14 shrink-0 flex items-center justify-between border-b border-[var(--sidebar-border)] px-3">
+        <a
+          href="/"
+          className={
+            "flex items-center gap-2.5 min-w-0 group focus:outline-none " +
+            (collapsed ? "justify-center w-full" : "")
+          }
+          aria-label="Shiba capability plane home"
+        >
+          <img
+            src="/assets/theme/circle_shiba.svg"
+            alt="Shiba"
+            className="size-8 shrink-0 object-contain [image-rendering:pixelated] group-hover:scale-105 transition-transform"
+            draggable={false}
+          />
+          {!collapsed ? (
+            <div className="flex flex-col min-w-0 leading-tight">
+              <div className="flex items-center gap-1.5">
+                <span className="font-serif text-2xl text-[var(--sidebar-foreground)] tracking-tight">
+                  Shiba
+                </span>
+                <span className="text-[10px] font-mono uppercase tracking-wider text-[var(--muted-foreground)] px-1 py-0.5 border border-[var(--sidebar-border)] bg-[var(--background)]">
+                  Beta
+                </span>
+              </div>
+              <span className="text-[11px] font-mono text-[var(--muted-foreground)] truncate">
+                capability plane
+              </span>
             </div>
-            <div className="flex flex-col gap-1">
+          ) : null}
+        </a>
+
+        {!collapsed && onToggleCollapse ? (
+          <Tooltip content="Collapse sidebar" shortcut="⌘B" side="right">
+            <button
+              type="button"
+              onClick={onToggleCollapse}
+              aria-label="Collapse sidebar"
+              aria-expanded="true"
+              className="size-7 rounded-none border border-transparent hover:border-[var(--sidebar-border)] text-[var(--muted-foreground)] hover:text-[var(--sidebar-foreground)] hover:bg-[var(--secondary)] flex items-center justify-center transition-colors"
+            >
+              <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+              </svg>
+            </button>
+          </Tooltip>
+        ) : null}
+      </div>
+
+      {/* Navigation Groups */}
+      <div className="flex-1 overflow-y-auto py-3 px-2 flex flex-col gap-4">
+        {NAV_GROUPS.map((group) => (
+          <div key={group.label} className="flex flex-col gap-1">
+            {!collapsed ? (
+              <div className="px-2 mb-1 text-[11px] font-mono font-semibold uppercase tracking-[0.1em] text-[var(--muted-foreground)]">
+                {group.label}
+              </div>
+            ) : null}
+            <div className="flex flex-col gap-0.5">
               {group.items.map((id) => {
                 const item = APP_NAV_ITEMS.find((entry) => entry.id === id);
                 if (!item) return null;
+                const isActive = activeView === item.id;
                 return (
                   <NavItem
                     key={item.id}
                     label={item.label}
-                    active={activeView === item.id}
+                    description={item.description}
+                    active={isActive}
+                    collapsed={collapsed}
                     onClick={() => onNavigate(item.id)}
                     badge={
                       item.id === "vm" && activeSandboxCount > 0 ? (
                         <span
-                          className="size-2 rounded-full bg-blue-500 animate-pulse"
+                          className="size-2 rounded-full bg-[#0000a8] dark:bg-[#9cbce2] animate-pulse"
                           aria-hidden="true"
-                          title={`${activeSandboxCount} active`}
+                          title={activeSandboxCount + " active"}
                         />
                       ) : undefined
                     }
                   >
-                    {ICONS[item.id]}
+                    <PixelIcon
+                      name={item.icon}
+                      size={18}
+                      color={isActive ? "#ffffff" : "currentColor"}
+                    />
                   </NavItem>
                 );
               })}
@@ -203,69 +244,81 @@ export function AppNavRail({
         ))}
       </div>
 
-      {/* Utility cluster */}
-      <div className="mt-auto flex flex-col pt-3 border-t border-slate-100">
-        {/* Setup guide card with progress bar */}
-        <div className="p-3 bg-slate-50/90 rounded-xl mb-3 border border-slate-100/80">
-          <button
-            type="button"
-            onClick={onOpenSetup}
-            className="w-full text-left focus:outline-none group"
-            aria-label="Setup Guide"
-          >
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[11px] font-bold text-slate-500 tracking-wider">SETUP GUIDE</span>
-              <span className="text-[11px] font-bold text-blue-600">
-                {setupDone ?? 0}/{setupTotal}
-              </span>
-            </div>
-            <div className="h-1.5 w-full bg-slate-200/80 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-blue-600 rounded-full transition-all duration-300"
-                style={{ width: `${progressPercent}%` }}
-              />
-            </div>
-            {!setupComplete && setupRemaining !== null && (
-              <span className="text-[10px] text-slate-400 mt-1 block">
-                {setupRemaining} step{setupRemaining === 1 ? "" : "s"} remaining
-              </span>
-            )}
-          </button>
-        </div>
+      {/* Footer Cluster */}
+      <div className="mt-auto shrink-0 flex flex-col border-t border-[var(--sidebar-border)] p-2 gap-2 bg-[var(--sidebar)]">
+        {/* Setup guide progress card */}
+        {!collapsed ? (
+          <div className="p-2.5 bg-[var(--card)] border border-[var(--sidebar-border)] shadow-[2px_2px_0_var(--paper-shadow)] mb-1">
+            <button
+              type="button"
+              onClick={onOpenSetup}
+              className="w-full text-left focus:outline-none group"
+              aria-label="Setup Guide"
+            >
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[11px] font-mono font-bold text-[var(--muted-foreground)] tracking-wider">
+                  SETUP GUIDE
+                </span>
+                <span className="text-[11px] font-mono font-bold text-[var(--primary)]">
+                  {(setupDone ?? 0) + "/" + setupTotal}
+                </span>
+              </div>
+              <div className="h-1.5 w-full bg-[var(--sidebar-border)] overflow-hidden">
+                <div
+                  className="h-full bg-[var(--primary)] transition-all duration-300"
+                  style={{ width: progressPercent + "%" }}
+                />
+              </div>
+              {!setupComplete && setupRemaining !== null && (
+                <span className="text-[10px] text-[var(--muted-foreground)] mt-1.5 block">
+                  {setupRemaining + " step" + (setupRemaining === 1 ? "" : "s") + " remaining"}
+                </span>
+              )}
+            </button>
+          </div>
+        ) : null}
 
-        <div className="px-2 mb-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-[0.1em]">
-          System
-        </div>
-        <div className="space-y-0.5">
+        {/* System & Utility Links */}
+        <div className="flex flex-col gap-0.5">
           <NavItem
-            label={setupComplete ? "Setup Guide" : `Setup Guide · ${setupDone ?? 0}/${setupTotal}`}
+            label={setupComplete ? "Setup Guide" : "Setup Guide · " + (setupDone ?? 0) + "/" + setupTotal}
+            collapsed={collapsed}
             onClick={onOpenSetup}
           >
-            <svg className="size-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-            </svg>
+            <PixelIcon name="Admin" size={16} />
           </NavItem>
 
-          <a
-            href="/docs/"
-            aria-label="Documentation"
-            className="w-full flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium text-slate-600 hover:text-blue-600 hover:bg-slate-50 transition-colors"
-          >
-            <span className="text-slate-400 hover:text-blue-600" aria-hidden="true">
-              <svg className="size-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-              </svg>
-            </span>
-            <span className="flex-1 text-left truncate">Documentation</span>
-          </a>
+          {collapsed ? (
+            <Tooltip content="Documentation" side="right">
+              <a
+                href="/docs/"
+                aria-label="Documentation"
+                className="w-full flex items-center justify-center p-2 text-[var(--sidebar-foreground)] hover:bg-[var(--secondary)] transition-colors"
+              >
+                <PixelIcon name="Overview" size={16} />
+              </a>
+            </Tooltip>
+          ) : (
+            <a
+              href="/docs/"
+              aria-label="Documentation"
+              className="w-full flex items-center gap-3 px-2.5 py-1.5 text-[13px] font-medium text-[var(--sidebar-foreground)] hover:bg-[var(--secondary)] hover:text-[var(--foreground)] transition-colors"
+            >
+              <span className="text-[var(--muted-foreground)]" aria-hidden="true">
+                <PixelIcon name="Overview" size={16} />
+              </span>
+              <span className="flex-1 text-left truncate">Documentation</span>
+            </a>
+          )}
 
-          <NavItem label="Keyboard shortcuts" onClick={onOpenShortcuts}>
+          <NavItem label="Keyboard shortcuts" collapsed={collapsed} onClick={onOpenShortcuts}>
             <span className="text-[11px] font-mono font-bold leading-none w-4 text-center">?</span>
           </NavItem>
 
           {onToggleTheme ? (
             <NavItem
               label={theme === "light" ? "Dark theme" : "Light theme"}
+              collapsed={collapsed}
               onClick={onToggleTheme}
             >
               {theme === "light" ? (
@@ -279,9 +332,25 @@ export function AppNavRail({
               )}
             </NavItem>
           ) : null}
+
+          {/* Operator Profile Tile (Bezalel-style) */}
+          {!collapsed ? (
+            <div className="pt-1.5 mt-1 border-t border-[var(--sidebar-border)] flex items-center gap-2 px-1 text-xs">
+              <span className="size-2 rounded-full bg-[#15803d] shrink-0" />
+              <span className="font-mono text-[11px] text-[var(--muted-foreground)] truncate">
+                Operator: Local Dev
+              </span>
+            </div>
+          ) : (
+            <Tooltip content="Operator: Local Dev (Connected)" side="right">
+              <div className="flex items-center justify-center p-1.5">
+                <span className="size-2 rounded-full bg-[#15803d]" />
+              </div>
+            </Tooltip>
+          )}
         </div>
       </div>
-    </nav>
+    </aside>
   );
 }
 
