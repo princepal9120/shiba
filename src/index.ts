@@ -18,7 +18,7 @@ import { handleInboundEmail } from "./email-handler.js";
 import type { Env } from "./env.js";
 import { agentCliCatalog } from "./harness/catalog.js";
 import { Mailbox, mailboxDirectoryStub, mailboxStub } from "./mailbox-do.js";
-import type { PendingApproval } from "./pending-approvals.js";
+import { DECIDED_APPROVALS_LIMIT, type PendingApproval } from "./pending-approvals.js";
 import type {
   DraftRecord,
   MailboxRecord,
@@ -551,19 +551,29 @@ async function handleApprovals(request: Request, env: Env): Promise<Response | n
   );
   if (request.method === "GET") {
     const seen = new Map<string, PendingApproval>();
+    const decidedSeen = new Map<string, PendingApproval>();
     for (const stub of stubs) {
       const response = await stub.fetch(new Request("https://internal/api/approvals"));
       if (!response.ok) {
         console.warn(`GET /api/approvals probe failed (${response.status})`);
         continue;
       }
-      const body = (await response.json().catch(() => ({}))) as { approvals?: PendingApproval[] };
+      const body = (await response.json().catch(() => ({}))) as {
+        approvals?: PendingApproval[];
+        decided?: PendingApproval[];
+      };
       for (const approval of body.approvals ?? []) {
         seen.set(approval.approvalId, approval);
       }
+      for (const approval of body.decided ?? []) {
+        decidedSeen.set(approval.approvalId, approval);
+      }
     }
     const approvals = [...seen.values()].sort((a, b) => a.createdAt - b.createdAt);
-    return Response.json({ approvals }, { headers: { "Cache-Control": "no-store" } });
+    const decided = [...decidedSeen.values()]
+      .sort((a, b) => (b.decidedAt ?? b.createdAt) - (a.decidedAt ?? a.createdAt))
+      .slice(0, DECIDED_APPROVALS_LIMIT);
+    return Response.json({ approvals, decided }, { headers: { "Cache-Control": "no-store" } });
   }
   if (request.method === "POST") {
     let body: Record<string, unknown>;

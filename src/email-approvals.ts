@@ -185,23 +185,38 @@ export async function executeEmailApproval(env: Env, record: PendingApproval): P
 }
 
 /**
+ * The mailbox + draft row an email_send record locks, or null when the
+ * record holds none (composed sends without a draft, email_delete,
+ * malformed payload). Both release paths — the single-shot unqueue and
+ * the stale-queued sweep — key on this so they can keep a lock alive
+ * while a sibling pending approval still needs it.
+ */
+export function emailApprovalDraftRef(record: PendingApproval): { mailbox: string; draftId: string } | null {
+  const payload = record.payload;
+  if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
+    return null;
+  }
+  const fields = payload as Record<string, unknown>;
+  const mailbox = typeof fields.mailbox === "string" ? fields.mailbox.toLowerCase() : "";
+  const draftId = typeof fields.draft_id === "string" ? fields.draft_id.trim() : "";
+  if (draftId === "" || !ADDRESS_RE.test(mailbox)) {
+    return null;
+  }
+  return { mailbox, draftId };
+}
+
+/**
  * A rejected email approval releases its queued draft back to editable
  * `"draft"` — without this the row would sit `queued` behind an
  * approval that can never be re-resolved. Best-effort at the call site:
  * a failure here is logged, never fatal to the resolve.
  */
 export async function unqueueEmailApprovalDraft(env: Env, record: PendingApproval): Promise<void> {
-  const payload = record.payload;
-  if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
+  const ref = emailApprovalDraftRef(record);
+  if (ref === null) {
     return;
   }
-  const fields = payload as Record<string, unknown>;
-  const mailbox = typeof fields.mailbox === "string" ? fields.mailbox : "";
-  const draftId = typeof fields.draft_id === "string" ? fields.draft_id.trim() : "";
-  if (draftId === "" || !ADDRESS_RE.test(mailbox)) {
-    return;
-  }
-  await mailboxCall(mailboxStub(env, mailbox), `/drafts/${encodeURIComponent(draftId)}/unqueue`, {
+  await mailboxCall(mailboxStub(env, ref.mailbox), `/drafts/${encodeURIComponent(ref.draftId)}/unqueue`, {
     method: "POST",
   });
 }

@@ -1071,13 +1071,21 @@ export class MailboxStore {
    * untouched past that horizon belongs to a decided-or-expired
    * approval whose compensating unqueue failed or never ran. Freeing it
    * re-sweeps exactly the rows {@link unqueueDraft}'s single shot can
-   * miss. Returns the rows it freed.
+   * miss. `excludeIds` lists draft ids a live pending approval still
+   * owns — the age check alone cannot see a sibling approval minted
+   * after the row was queued, so the caller names the rows to keep.
+   * Returns the rows it freed.
    */
-  releaseStaleQueuedDrafts(staleBeforeMs: number, nowMs?: number): DraftRecord[] {
+  releaseStaleQueuedDrafts(staleBeforeMs: number, nowMs?: number, excludeIds?: ReadonlySet<string>): DraftRecord[] {
+    const excluded = excludeIds === undefined ? [] : [...excludeIds];
+    const exclusion = excluded.length === 0
+      ? ""
+      : ` AND id NOT IN (${excluded.map(() => "?").join(", ")})`;
     const rows = this.exec(
-      `UPDATE drafts SET status = 'draft', updated_at = ? WHERE status = 'queued' AND updated_at < ? RETURNING *`,
+      `UPDATE drafts SET status = 'draft', updated_at = ? WHERE status = 'queued' AND updated_at < ?${exclusion} RETURNING *`,
       nowMs ?? Date.now(),
       staleBeforeMs,
+      ...excluded,
     );
     return rows.map((row) => rowToDraft(row));
   }

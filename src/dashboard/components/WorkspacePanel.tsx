@@ -34,6 +34,8 @@ export interface WorkspacePanelProps {
   /** Orchestrator DO approval pointers (queued email sends, Slack/run queues). */
   storedApprovals: StoredApproval[];
   storedDecisions: Record<string, boolean>;
+  /** Recently decided DO approvals — the audit tail, incl. execution outcomes. */
+  decidedStoredApprovals: StoredApproval[];
   storedApprovalsError: string | null;
   onDecideStoredApproval: (approval: StoredApproval, ok: boolean) => void;
   /** Name of the orchestrator instance driving this dashboard's chat. */
@@ -182,6 +184,48 @@ function StoredApprovalCard({
   );
 }
 
+/**
+ * Read-only row for a decided DO approval — the audit surface for what
+ * the pending list drops once a pointer resolves. An approved email
+ * approval's execution stamp lands here, so a failed send shows its
+ * error instead of vanishing.
+ */
+function DecidedApprovalRow({ approval }: { approval: StoredApproval }): JSX.Element {
+  const chip =
+    approval.status === "rejected"
+      ? { label: "Rejected", cls: statusChipClass("rejected") }
+      : approval.execution?.status === "failed"
+        ? { label: "Failed", cls: statusChipClass("error") }
+        : approval.execution?.status === "executed"
+          ? { label: "Executed", cls: statusChipClass("completed") }
+          : { label: "Approved", cls: statusChipClass("running") };
+  return (
+    <div className="border border-[#e0ded5] rounded-xl bg-[#f6f4ed] p-3">
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-[#6a6f63]">
+          {storedApprovalKind(approval)}
+        </span>
+        <span
+          className={`text-[10px] font-bold uppercase tracking-wider border rounded-full px-2 py-0.5 shrink-0 ${chip.cls}`}
+        >
+          {chip.label}
+        </span>
+      </div>
+      <p className="text-[10px] font-mono text-[#6a6f63] truncate mb-1">
+        via {storedApprovalAgent(approval)}
+        {approval.decidedBy !== undefined ? ` · ${approval.decidedBy}` : ""}
+      </p>
+      <p className="text-[11px] text-[#222320] font-medium break-words">{approval.task}</p>
+      {approval.execution?.error !== undefined ? (
+        <p className="text-[10px] text-[#fb2c36] mt-1 break-words">{approval.execution.error}</p>
+      ) : null}
+      <p className="text-[10px] text-[#6a6f63] font-mono mt-1">
+        {formatTimeAgo(approval.decidedAt ?? approval.createdAt)}
+      </p>
+    </div>
+  );
+}
+
 export function WorkspacePanel({
   toolRuns,
   retainedRuns,
@@ -191,6 +235,7 @@ export function WorkspacePanel({
   onDecideApproval,
   storedApprovals,
   storedDecisions,
+  decidedStoredApprovals,
   storedApprovalsError,
   onDecideStoredApproval,
   orchestratorName,
@@ -579,6 +624,16 @@ export function WorkspacePanel({
                     decided={storedDecisions[approval.approvalId] !== undefined}
                     onDecide={onDecideStoredApproval}
                   />
+                ))}
+              </div>
+            ) : null}
+            {decidedStoredApprovals.length > 0 ? (
+              <div className="flex flex-col gap-3" role="group" aria-label="Recent outcomes">
+                <h4 className="text-[10px] font-bold uppercase tracking-wider text-[#6a6f63]">
+                  Recent outcomes
+                </h4>
+                {decidedStoredApprovals.map((approval) => (
+                  <DecidedApprovalRow key={approval.approvalId} approval={approval} />
                 ))}
               </div>
             ) : null}

@@ -200,6 +200,7 @@ describe("WorkspacePanel unified Approvals tab", () => {
     onDecideApproval: noop,
     storedApprovals: [],
     storedDecisions: {},
+    decidedStoredApprovals: [],
     storedApprovalsError: null,
     onDecideStoredApproval: noop,
     onRefreshRuns: noop,

@@ -76,9 +76,11 @@ function useRetainedRuns(refreshToken: number): { runs: RetainedRun[]; error: st
  */
 function useStoredApprovals(refreshToken: number): {
   approvals: StoredApproval[];
+  decided: StoredApproval[];
   error: string | null;
 } {
   const [approvals, setApprovals] = useState<StoredApproval[]>([]);
+  const [decided, setDecided] = useState<StoredApproval[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -89,9 +91,13 @@ function useStoredApprovals(refreshToken: number): {
           if (!response.ok) {
             throw new Error(`Approvals request failed: ${response.status}`);
           }
-          const body = (await response.json()) as { approvals?: StoredApproval[] };
+          const body = (await response.json()) as {
+            approvals?: StoredApproval[];
+            decided?: StoredApproval[];
+          };
           if (!cancelled) {
             setApprovals(Array.isArray(body.approvals) ? body.approvals : []);
+            setDecided(Array.isArray(body.decided) ? body.decided : []);
             setError(null);
           }
         })
@@ -109,7 +115,7 @@ function useStoredApprovals(refreshToken: number): {
     };
   }, [refreshToken]);
 
-  return { approvals, error };
+  return { approvals, decided, error };
 }
 
 // Registered MCP-token principals, polled on the same cadence as stored
@@ -313,8 +319,11 @@ export function App(): React.JSX.Element {
   });
   const { runsById } = useAgentToolEvents({ agent });
   const { runs: retainedRuns, error: runsError } = useRetainedRuns(refreshToken);
-  const { approvals: storedApprovals, error: storedApprovalsError } =
-    useStoredApprovals(refreshToken);
+  const {
+    approvals: storedApprovals,
+    decided: decidedStoredApprovals,
+    error: storedApprovalsError,
+  } = useStoredApprovals(refreshToken);
   const agentPrincipals = useAgentPrincipals(refreshToken);
 
   const toolRuns = useMemo(() => Object.values(runsById) as ToolRunRecord[], [runsById]);
@@ -1104,6 +1113,7 @@ export function App(): React.JSX.Element {
           onDecideApproval={decideApproval}
           storedApprovals={visibleStoredApprovals}
           storedDecisions={storedDecisions}
+          decidedStoredApprovals={decidedStoredApprovals}
           storedApprovalsError={storedApprovalsError}
           onDecideStoredApproval={decideStoredApproval}
           orchestratorName={orchestratorName}

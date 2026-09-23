@@ -430,12 +430,21 @@ export class Mailbox {
       // `queued` row older than the approval TTL plus the mint-latency
       // grace belongs to a decided or expired approval whose single-shot
       // release missed. The sweep frees only rows no live path can
-      // still be holding.
+      // still be holding. Optional `{exclude_ids}` names drafts a live
+      // pending approval still owns — the age check cannot see a
+      // sibling approval minted after the row was queued. The body is
+      // parsed tolerantly: legacy callers POST with no body.
+      const rawBody = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+      const excludeIds = optStringList(rawBody.exclude_ids);
       const now = Date.now();
       return json({
         drafts: [
           ...this.store.releaseStaleSendingDrafts(now - STALE_SENDING_MS, now),
-          ...this.store.releaseStaleQueuedDrafts(now - STALE_QUEUED_MS, now),
+          ...this.store.releaseStaleQueuedDrafts(
+            now - STALE_QUEUED_MS,
+            now,
+            excludeIds === undefined ? undefined : new Set(excludeIds),
+          ),
         ],
       });
     }

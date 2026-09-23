@@ -195,6 +195,27 @@ export function pruneExpiredApprovals(approvals: PendingApproval[], now: number)
   return approvals.filter((a) => a.status !== "pending" || !isApprovalExpired(a, now));
 }
 
+/**
+ * Depth of decided history the approvals listing returns — bounded so a
+ * long-lived orchestrator's audit tail cannot grow the wire shape
+ * without limit.
+ */
+export const DECIDED_APPROVALS_LIMIT = 25;
+
+/**
+ * Recent decided records (approved or rejected), newest first — the
+ * readable half of the audit trail: an approved email approval's
+ * `execution` stamp (including a failed send) is visible here, not only
+ * in DO state/logs. Pending pointers never appear, so the two arms of
+ * the listing stay disjoint.
+ */
+export function decidedApprovals(approvals: PendingApproval[]): PendingApproval[] {
+  return approvals
+    .filter((approval) => approval.status !== "pending")
+    .sort((a, b) => (b.decidedAt ?? b.createdAt) - (a.decidedAt ?? a.createdAt))
+    .slice(0, DECIDED_APPROVALS_LIMIT);
+}
+
 /** Approval expiry shares the pointer contract; see resolvePendingApproval. */
 export function isApprovalExpired(record: PendingApproval, now: number): boolean {
   return now - record.createdAt > APPROVAL_TTL_MS;

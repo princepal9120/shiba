@@ -83,6 +83,15 @@ export interface StoredApproval {
   payload?: unknown;
   baseBranch?: string;
   publishPullRequest?: boolean;
+  /** Decision wall-clock — set once the pointer resolves. */
+  decidedAt?: number;
+  decidedBy?: string;
+  /** Executor outcome for email-kind approvals (`executed` / `failed` + error). */
+  execution?: {
+    status: string;
+    error?: string;
+    executedAt: number;
+  };
 }
 
 /**

@@ -110,6 +110,21 @@ export interface ApprovalCardInput extends ApprovalPointer {
 }
 
 /**
+ * Slack mrkdwn escaping for untrusted interpolations: `&`, `<`, `>`
+ * are the characters Slack's parser honors (`<@U…>`/`<!channel>`
+ * mention syntax and entity refs), so escaping them renders attacker
+ * text literally. Email-kind fields carry inbound mail content — the
+ * task phrase embeds to_addr and subject — that an outside sender
+ * controls, unlike the run-kind fields built from dashboard input.
+ */
+export function escapeMrkdwn(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+/**
  * Plain-text mirror of the card headline for the chat.postMessage
  * `text` field — notifications and other block-less surfaces render
  * it, so it carries the same requester the mrkdwn headline does
@@ -118,7 +133,7 @@ export interface ApprovalCardInput extends ApprovalPointer {
 export function approvalCardText(input: ApprovalCardInput): string {
   const isEmail = input.kind === "email_send" || input.kind === "email_delete";
   return isEmail
-    ? `${input.agent ?? input.repoUrl} requests ${input.task}`
+    ? `${escapeMrkdwn(input.agent ?? input.repoUrl)} requests ${escapeMrkdwn(input.task)}`
     : `Approval requested\nRepo: ${input.repoUrl}\nTask: ${input.task}`;
 }
 
@@ -129,13 +144,16 @@ export function approvalCardText(input: ApprovalCardInput): string {
  * Email kinds render the megaplan's copy — "Agent X requests email send
  * to Y: subject" — where X is the mailbox/agent identity and the
  * record's task already carries the action phrase ("email send to
- * Y: subject" / "email delete of id \"subject\"").
+ * Y: subject" / "email delete of id \"subject\""). Those fields are
+ * mrkdwn-escaped: the task phrase embeds an untrusted sender address
+ * and subject, so raw interpolation would let an inbound mail body
+ * inject `<!channel>`-style mentions or mangled formatting.
  */
 export function buildApprovalBlocks(input: ApprovalCardInput): unknown[] {
   const value = buildApprovalValue({ threadKey: input.threadKey, approvalId: input.approvalId });
   const isEmail = input.kind === "email_send" || input.kind === "email_delete";
   const headline = isEmail
-    ? `*${input.agent ?? input.repoUrl}* requests ${input.task}`
+    ? `*${escapeMrkdwn(input.agent ?? input.repoUrl)}* requests ${escapeMrkdwn(input.task)}`
     : `*Approval requested*\n*Repo:* ${input.repoUrl}\n*Task:* ${input.task}`;
   return [
     {

@@ -29,6 +29,7 @@ import {
 import { makeReceipt } from "../receipts.js";
 import {
   createPendingApproval,
+  decidedApprovals,
   isApprovalExpired,
   isJsonObject,
   pruneExpiredApprovals,
@@ -38,7 +39,7 @@ import {
   type ResolveResult,
 } from "../pending-approvals.js";
 import { makeSandboxId, parseGitHubRepoUrl, redactSecrets } from "../security.js";
-import { executeEmailApproval, PostTransmitError, releaseRestartedDraftClaim, unqueueEmailApprovalDraft } from "../email-approvals.js";
+import { emailApprovalDraftRef, executeEmailApproval, PostTransmitError, releaseRestartedDraftClaim, unqueueEmailApprovalDraft } from "../email-approvals.js";
 import { ADDRESS_RE, type MailboxRecord } from "../mailbox-store.js";
 import { mailboxDirectoryStub, mailboxStub, registeredMailbox } from "../mailbox-do.js";
 import { approvalCardText, buildApprovalBlocks, type ApprovalCardInput } from "../slack-approval.js";
@@ -693,15 +694,16 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     if (record && isEmailRecord) {
       this.dispatchApprovedEmail(record);
     }
-    if (rejectedEmail) {
-      // Rejecting frees the queued draft back to `draft` — otherwise the
-      // row strands `queued` behind an approval that can never re-resolve.
-      this.releaseEmailApprovalDrafts([rejectedEmail]);
-    }
-    // Expired email approvals leave their queued drafts the same way —
-    // an approval that aged out can never be resolved, so its draft
-    // would sit `queued` forever without this compensating release.
-    this.releaseEmailApprovalDrafts(expiredSends);
+    // Rejecting frees the queued draft back to `draft`, and expired
+    // email approvals leave their queued drafts the same way — without
+    // the compensating release the row strands `queued` behind an
+    // approval that can never (re-)resolve. Records whose draft a still
+    // live sibling pending approval also locks are skipped: intake
+    // deliberately lets a second approval mint on an already-`queued`
+    // row, and freeing it here would strand that sibling's later
+    // approve at the claim CAS.
+    const releasable = rejectedEmail === undefined ? expiredSends : [rejectedEmail, ...expiredSends];
+    this.releaseEmailApprovalDrafts(releasable, this.liveApprovalDrafts(now));
     this.sweepStaleDrafts(expiredSends.length > 0);
     return Response.json({ result: result.result satisfies ResolveResult });
   }
@@ -836,17 +838,53 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
   }
 
   /**
+   * Draft rows still owned by a resolvable email approval, keyed by
+   * mailbox — pending, unexpired email_send records only: an expired
+   * pointer can never resolve, so it must not hold the lock it once
+   * took, and decided records are already compensated by the release
+   * path. Intake mints sibling approvals on an already-`queued` row
+   * (same draft, same content), so every release path consults this
+   * set before freeing — dropping the lock while a sibling is pending
+   * strands its later approve at the claim CAS.
+   */
+  private liveApprovalDrafts(now: number): Map<string, Set<string>> {
+    const live = new Map<string, Set<string>>();
+    for (const approval of this.approvals) {
+      if (approval.status !== "pending" || approval.kind !== "email_send" || isApprovalExpired(approval, now)) {
+        continue;
+      }
+      const ref = emailApprovalDraftRef(approval);
+      if (ref === null) continue;
+      const ids = live.get(ref.mailbox) ?? new Set<string>();
+      ids.add(ref.draftId);
+      live.set(ref.mailbox, ids);
+    }
+    return live;
+  }
+
+  /**
    * Release each record's queued draft through the same unqueue seam a
    * rejection uses. `queued` rows are immutable to every other surface
    * (`updateDraft`/`markDraftQueued` refuse non-`draft` rows), so a
    * draft locked behind an approval that can no longer resolve is
-   * stranded forever without this. Best-effort: a failure is logged,
-   * never fatal to the pointer path that triggered it.
+   * stranded forever without this. `liveDrafts` names rows a still
+   * resolvable sibling approval also locks — those stay `queued` for
+   * the sibling to claim. Best-effort: a failure is logged, never
+   * fatal to the pointer path that triggered it.
    */
-  private releaseEmailApprovalDrafts(records: PendingApproval[]): void {
-    if (records.length === 0) return;
+  private releaseEmailApprovalDrafts(records: PendingApproval[], liveDrafts: Map<string, Set<string>>): void {
+    const released = new Set<string>();
+    const releasable = records.filter((record) => {
+      const ref = emailApprovalDraftRef(record);
+      if (ref === null) return false;
+      const key = `${ref.mailbox}\0${ref.draftId}`;
+      if (released.has(key)) return false;
+      released.add(key);
+      return liveDrafts.get(ref.mailbox)?.has(ref.draftId) !== true;
+    });
+    if (releasable.length === 0) return;
     const releases = Promise.all(
-      records.map((record) =>
+      releasable.map((record) =>
         unqueueEmailApprovalDraft(this.env, record).catch((error) => {
           console.error(
             `Email approval ${record.approvalId} draft release failed`,
@@ -884,6 +922,12 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       return;
     }
     this.lastStaleSweepAt = now;
+    // Captured synchronously, before the async sweep: rows a live
+    // pending approval still owns are named to the mailbox as
+    // `exclude_ids` so the backstop frees only provably-dead locks and
+    // can never strand a sibling approval minted on an already-`queued`
+    // row. No body when the set is empty — the legacy wire shape.
+    const liveDrafts = this.liveApprovalDrafts(now);
     const sweep = (async () => {
       const listing = await mailboxDirectoryStub(this.env).fetch(
         new Request("https://internal/internal/mailbox/mailboxes"),
@@ -895,10 +939,17 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       const { mailboxes } = (await listing.json()) as { mailboxes?: MailboxRecord[] };
       await Promise.all(
         (mailboxes ?? []).map(async (record) => {
+          const exclude = liveDrafts.get(record.address.toLowerCase());
           try {
             const swept = await mailboxStub(this.env, record.address).fetch(
               new Request("https://internal/internal/mailbox/drafts/release-stale", {
                 method: "POST",
+                ...(exclude !== undefined && exclude.size > 0
+                  ? {
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ exclude_ids: [...exclude] }),
+                    }
+                  : {}),
               }),
             );
             if (!swept.ok) {
@@ -934,11 +985,15 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     const pruned = pruneExpiredApprovals(this.approvals, now);
     if (pruned.length !== this.approvals.length) {
       this.writeApprovals(pruned);
-      this.releaseEmailApprovalDrafts(expiredSends);
+      this.releaseEmailApprovalDrafts(expiredSends, this.liveApprovalDrafts(now));
     }
     this.sweepStaleDrafts(expiredSends.length > 0);
     return Response.json({
       approvals: pruned.filter((approval) => approval.status === "pending"),
+      // Decided records leave the pending arm but stay listed — the
+      // execution stamp (including a failed send) is durable state no
+      // other surface renders, so the listing returns recent ones.
+      decided: decidedApprovals(pruned),
     });
   }
 

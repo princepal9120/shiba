@@ -56,13 +56,14 @@ function agentWithMailbox(opts: {
   const mailboxStub = {
     fetch: async (request: Request) => {
       const url = new URL(request.url);
+      // A bodiless POST (e.g. /drafts/:id/sent) yields undefined rather than throwing.
+      const posted = request.method === "POST"
+        ? ((await request.json().catch(() => undefined)) as Record<string, unknown> | undefined)
+        : undefined;
       mailboxCalls.push({
         method: request.method,
         path: url.pathname,
-        // A bodiless POST (e.g. /drafts/:id/sent) yields undefined rather than throwing.
-        body: request.method === "POST"
-          ? ((await request.json().catch(() => undefined)) as Record<string, unknown> | undefined)
-          : undefined,
+        body: posted,
       });
       if (opts.failingMailboxPaths?.test(url.pathname)) {
         return new Response("fail", { status: 500 });
@@ -74,12 +75,17 @@ function agentWithMailbox(opts: {
       }
       // Checked before the draft-id match — "release-stale" would
       // otherwise read as a draft id. Stateless age stand-in: frees
-      // every locked row the test opted into (`queued`/`sending`).
+      // every locked row the test opted into (`queued`/`sending`),
+      // honoring the caller's `exclude_ids` on `queued` rows like the
+      // real store does (exclusions never reach `sending` claims).
       if (request.method === "POST" && url.pathname === "/internal/mailbox/drafts/release-stale") {
+        const excluded = new Set(
+          Array.isArray(posted?.exclude_ids) ? posted.exclude_ids : [],
+        );
         const freed: string[] = [];
         if (drafts !== undefined) {
           for (const [id, status] of Object.entries(drafts)) {
-            if (status === "queued" || status === "sending") {
+            if (status === "sending" || (status === "queued" && !excluded.has(id))) {
               drafts[id] = "draft";
               freed.push(id);
             }
@@ -663,6 +669,55 @@ describe("email approval execution", () => {
     expect(approvals.find((a) => a.approvalId === second.approval_id)?.execution?.status).toBe("executed");
   });
 
+  it("rejecting one approval keeps the sibling's queued draft claimable", async () => {
+    // Two pending approvals can share one queued draft — intake mints a
+    // sibling on an already-`queued` row with matching content. The
+    // reject path's compensating unqueue must skip a row a live sibling
+    // still locks, and the stale sweep must name it in `exclude_ids`
+    // too: freeing it either way strands the sibling's later approve at
+    // the claim CAS.
+    const drafts: Record<string, string> = { "draft-1": "queued" };
+    const { instance, env, send, mailboxCalls, settled } = agentWithMailbox({
+      drafts,
+      registeredMailboxes: ["agent-a@shiba.dev"],
+    });
+    const first = await queueEmailApproval(env as never, {
+      kind: "email_send",
+      mailbox: "agent-a@shiba.dev",
+      payload: { ...SEND_PAYLOAD },
+    });
+    const second = await queueEmailApproval(env as never, {
+      kind: "email_send",
+      mailbox: "agent-a@shiba.dev",
+      payload: { ...SEND_PAYLOAD },
+    });
+    await approve(instance, first.approval_id, false);
+    await settled();
+    // No unqueue, and the sweep named the live sibling's draft — the
+    // row stays `queued` for the approval that can still resolve.
+    expect(mailboxCalls.some((call) => call.path.endsWith("/unqueue"))).toBe(false);
+    const sweeps = mailboxCalls.filter(
+      (call) => call.path === "/internal/mailbox/drafts/release-stale",
+    );
+    expect(sweeps).toEqual([
+      {
+        method: "POST",
+        path: "/internal/mailbox/drafts/release-stale",
+        body: { exclude_ids: ["draft-1"] },
+      },
+    ]);
+    expect(drafts["draft-1"]).toBe("queued");
+    await approve(instance, second.approval_id, true);
+    await settled();
+    expect(send).toHaveBeenCalledOnce();
+    expect(drafts["draft-1"]).toBe("sent");
+    expect(
+      (instance.state.pendingApprovals ?? []).find(
+        (a) => a.approvalId === second.approval_id,
+      )?.execution?.status,
+    ).toBe("executed");
+  });
+
   it("a claim refusal on an unsent draft fails the execution — never a silent dedupe", async () => {
     // `draft` means the queue lock was reverted — the frozen approval
     // can no longer be honored, so it fails visibly. Intake now refuses
@@ -1053,6 +1108,70 @@ describe("GET /api/approvals", () => {
       (call) => call.path === "/internal/mailbox/drafts/release-stale",
     );
     expect(staleSweeps).toHaveLength(2);
+  });
+
+  it("a poll's sweep keeps a live approval's draft locked while freeing orphans", async () => {
+    // The age check alone cannot see a sibling approval minted after
+    // the row was queued — the sweep names live approvals' drafts as
+    // `exclude_ids` so the backstop frees only unowned rows.
+    const drafts: Record<string, string> = { "draft-1": "queued", "draft-orphan": "queued" };
+    const { instance, env, send, mailboxCalls, settled } = agentWithMailbox({
+      drafts,
+      registeredMailboxes: ["agent-a@shiba.dev"],
+    });
+    await queueEmailApproval(env as never, {
+      kind: "email_send",
+      mailbox: "agent-a@shiba.dev",
+      payload: { ...SEND_PAYLOAD },
+    });
+    await instance.onRequest(new Request("https://internal/api/approvals"));
+    await settled();
+    const sweeps = mailboxCalls.filter(
+      (call) => call.path === "/internal/mailbox/drafts/release-stale",
+    );
+    expect(sweeps).toEqual([
+      {
+        method: "POST",
+        path: "/internal/mailbox/drafts/release-stale",
+        body: { exclude_ids: ["draft-1"] },
+      },
+    ]);
+    expect(drafts["draft-1"]).toBe("queued");
+    expect(drafts["draft-orphan"]).toBe("draft");
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("decided records stay listed with their execution stamp", async () => {
+    // Approving drops the pointer from the pending arm, but the outcome
+    // — including a failed send — is the only durable account of a
+    // runless execution. The `decided` arm returns it instead of
+    // letting the card just vanish.
+    const drafts: Record<string, string> = { "draft-1": "queued" };
+    const { instance, env, send, settled } = agentWithMailbox({ drafts });
+    const { approval_id } = await queueEmailApproval(env as never, {
+      kind: "email_send",
+      mailbox: "agent-a@shiba.dev",
+      payload: { ...SEND_PAYLOAD },
+    });
+    await approve(instance, approval_id, true);
+    await settled();
+    expect(send).toHaveBeenCalledOnce();
+
+    const list = await instance.onRequest(new Request("https://internal/api/approvals"));
+    const body = (await list.json()) as {
+      approvals: Array<{ approvalId: string }>;
+      decided: Array<{
+        approvalId: string;
+        status: string;
+        decidedBy?: string;
+        execution?: { status: string };
+      }>;
+    };
+    expect(body.approvals.map((a) => a.approvalId)).not.toContain(approval_id);
+    const decided = body.decided.find((a) => a.approvalId === approval_id);
+    expect(decided?.status).toBe("approved");
+    expect(decided?.decidedBy).toBe("U1");
+    expect(decided?.execution?.status).toBe("executed");
   });
 });
 
