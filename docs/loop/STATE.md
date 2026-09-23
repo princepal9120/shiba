@@ -35,8 +35,8 @@ PARALLEL LANES: lane A (backend T7-T10) + lane B (UI T11-T13) ran concurrently. 
 | T6 email MCP tools (13) | 3 | DONE |
 | T7 email approval bridge | 3 | DONE (exhausted → adjudicated @395fcaf) |
 | T8 MemoryDO + Vectorize | 4 | DONE (exhausted → adjudicated @9e89c15) |
-| T9 memory MCP tools (4) | 4 | in flight |
-| T10 session distillation | 4 | pending |
+| T9 memory MCP tools (4) | 4 | DONE |
+| T10 session distillation | 4 | DONE (2 fix rounds) |
 | T11 Inbox + Memory tabs | 5 | DONE (exhausted → adjudicated @bbe78be) |
 | T12 sidebar agents + unified approvals | 5 | DONE |
 | T13 audit view + retention | 5 | DONE |
