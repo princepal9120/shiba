@@ -11,7 +11,7 @@
  */
 import { getAgentByName } from "agents/routing";
 import type { Env } from "./env.js";
-import { mailboxStub } from "./mailbox-do.js";
+import { mailboxStub, registeredMailbox } from "./mailbox-do.js";
 import { ADDRESS_RE } from "./mailbox-store.js";
 import type { PendingApproval } from "./pending-approvals.js";
 import { InputError } from "./security.js";
@@ -129,11 +129,23 @@ export async function executeEmailApproval(env: Env, record: PendingApproval): P
   if (!ADDRESS_RE.test(mailbox)) {
     throw new InputError(`Email approval ${record.approvalId} carries no valid mailbox.`);
   }
-  const stub = mailboxStub(env, mailbox);
+  // The same registry invariant intake enforces (orchestrator queue +
+  // MCP requireMailbox): a well-formed but unregistered address must
+  // never reach the send binding or instantiate a mailbox stub —
+  // `idFromName` would otherwise mint DOs at unbounded cardinality.
+  // The record's canonical address, not the caller's casing, names the
+  // stub and the wire From.
+  const registration = await registeredMailbox(env, mailbox);
+  if (registration === null) {
+    throw new InputError(
+      `Email approval ${record.approvalId} mailbox "${mailbox}" is not registered.`,
+    );
+  }
+  const stub = mailboxStub(env, registration.address);
   if (record.kind === "email_send") {
     const progress = { transmitted: false };
     try {
-      await sendApprovedEmail(env, stub, mailbox, fields, progress);
+      await sendApprovedEmail(env, stub, registration.address, fields, progress);
     } catch (error) {
       await reconcileQueuedDraft(stub, fields, progress.transmitted);
       throw error;

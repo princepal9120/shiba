@@ -568,6 +568,7 @@ async function handleApprovals(request: Request, env: Env): Promise<Response | n
     }
     const decidedBy = getUserId(request) ?? "default";
     let unknown: Response | null = null;
+    let probeFailure: Response | null = null;
     for (const stub of stubs) {
       const response = await stub.fetch(
         new Request("https://internal/api/approvals", {
@@ -582,8 +583,12 @@ async function handleApprovals(request: Request, env: Env): Promise<Response | n
           }),
         }),
       );
+      // A stub's transport failure is not a verdict — the pointer may
+      // live on the next stub, so keep probing like the GET fan-out.
       if (!response.ok) {
-        return response;
+        console.warn(`POST /api/approvals probe failed (${response.status})`);
+        probeFailure ??= response;
+        continue;
       }
       const result = (await response.json().catch(() => ({}))) as { result?: string };
       if (result.result !== "unknown") {
@@ -591,7 +596,9 @@ async function handleApprovals(request: Request, env: Env): Promise<Response | n
       }
       unknown = response;
     }
-    return unknown ?? Response.json({ result: "unknown" });
+    // No decisive answer: a probe failure means "retry", never the
+    // misleading "unknown" a healthy-but-uninvolved stub would imply.
+    return probeFailure ?? unknown ?? Response.json({ result: "unknown" });
   }
   return Response.json({ error: "Method not allowed." }, { status: 405 });
 }

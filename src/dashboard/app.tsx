@@ -291,6 +291,14 @@ export function App(): React.JSX.Element {
     [chat.messages],
   );
 
+  // A chat-queued approval's DO pointer is the same record — the chat
+  // card is the decision surface, so stored pointers already shown as
+  // chat cards must not double-render or double-count in badges.
+  const visibleStoredApprovals = useMemo(() => {
+    const chatIds = new Set(pendingApprovals.map((approval) => approval.approvalId));
+    return storedApprovals.filter((approval) => !chatIds.has(approval.approvalId));
+  }, [storedApprovals, pendingApprovals]);
+
   const decidedRef = useRef<Set<string>>(new Set());
   const decidedStoredRef = useRef<Set<string>>(new Set());
 
@@ -927,8 +935,8 @@ export function App(): React.JSX.Element {
               <Tooltip content="Actions waiting for human approval" side="bottom">
               <span className="cursor-default">
                 <span className="text-[#6a6f63]">Approvals</span>{" "}
-                <span className={pendingApprovals.length + storedApprovals.length > 0 ? "font-bold text-[#f99c00]" : "font-bold text-[#6a6f63]"}>
-                  {pendingApprovals.length + storedApprovals.length}
+                <span className={pendingApprovals.length + visibleStoredApprovals.length > 0 ? "font-bold text-[#f99c00]" : "font-bold text-[#6a6f63]"}>
+                  {pendingApprovals.length + visibleStoredApprovals.length}
                 </span>
               </span>
               </Tooltip>
@@ -963,13 +971,13 @@ export function App(): React.JSX.Element {
           </div>
 
           {/* PENDING APPROVALS STRIP */}
-          {(pendingApprovals.length + storedApprovals.length > 0 || approvalAnnouncement) ? (
+          {(pendingApprovals.length + visibleStoredApprovals.length > 0 || approvalAnnouncement) ? (
             <div className="bg-[#fffef8] border-b border-[#eae8e1] px-5 xl:px-6 py-3 flex items-center justify-between shadow-sm z-10 shrink-0">
               <p className="text-sm font-medium text-[#222320]" role="status" aria-live="polite">
-                {pendingApprovals.length + storedApprovals.length > 0 ? (
+                {pendingApprovals.length + visibleStoredApprovals.length > 0 ? (
                   <span className="flex items-center gap-2 text-[#b45309]">
                     <span className="w-2.5 h-2.5 rounded-full bg-[#b45309] animate-pulse shadow-[0_0_8px_rgba(249,156,0,0.6)]" />
-                    {pendingApprovals.length + storedApprovals.length} task{pendingApprovals.length + storedApprovals.length === 1 ? "" : "s"} waiting for your approval.
+                    {pendingApprovals.length + visibleStoredApprovals.length} task{pendingApprovals.length + visibleStoredApprovals.length === 1 ? "" : "s"} waiting for your approval.
                   </span>
                 ) : (
                   <span className="text-[#15803d] flex items-center gap-2">
@@ -1059,7 +1067,7 @@ export function App(): React.JSX.Element {
           pendingApprovals={pendingApprovals}
           decisions={decisions}
           onDecideApproval={decideApproval}
-          storedApprovals={storedApprovals}
+          storedApprovals={visibleStoredApprovals}
           storedDecisions={storedDecisions}
           storedApprovalsError={storedApprovalsError}
           onDecideStoredApproval={decideStoredApproval}

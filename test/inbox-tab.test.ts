@@ -759,6 +759,40 @@ describe("dashboard approval routes", () => {
     }
   });
 
+  it("POST /api/approvals keeps probing past a stub's non-ok response", async () => {
+    orchestratorCalls.calls.length = 0;
+    orchestratorCalls.handlers = {
+      "dev@example.com": async () => new Response("boom", { status: 500 }),
+      default: async () => Response.json({ result: "approved" }),
+    };
+    try {
+      const { env } = makeEnvWithTwoMailboxes();
+      const response = await worker.fetch(
+        new Request("https://worker/api/approvals", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "CF-Access-Authenticated-User-Email": "dev@example.com",
+          },
+          body: JSON.stringify({
+            threadKey: "default",
+            approvalId: "apv-default-1",
+            approved: true,
+          }),
+        }),
+        env,
+        ctx,
+      );
+      // A transient failure on the caller's DO must not block a decision
+      // that lives on "default".
+      expect(response.status).toBe(200);
+      expect((await response.json()) as { result: string }).toEqual({ result: "approved" });
+      expect(orchestratorCalls.calls.map((c) => c.name)).toEqual(["dev@example.com", "default"]);
+    } finally {
+      orchestratorCalls.handlers = {};
+    }
+  });
+
   it("POST /api/approvals answers 400 on a malformed decision body", async () => {
     const { env } = makeEnvWithTwoMailboxes();
     const response = await worker.fetch(

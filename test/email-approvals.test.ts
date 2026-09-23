@@ -514,6 +514,42 @@ describe("executeEmailApproval guardrails", () => {
     ).rejects.toThrow(/no frozen payload/i);
   });
 
+  it("refuses a well-formed but unregistered mailbox before touching a stub or the binding", async () => {
+    const { env, send, mailboxCalls } = agentWithMailbox();
+    await expect(
+      executeEmailApproval(env as never, {
+        threadKey: "default",
+        approvalId: "a-unregistered",
+        repoUrl: "x",
+        task: "t",
+        status: "approved",
+        createdAt: 1,
+        kind: "email_send",
+        payload: { to_addr: "x@y.z", subject: "s", body_text: "b", mailbox: "ghost@example.com" },
+      }),
+    ).rejects.toThrow(InputError);
+    // No stub call, no send — the registry gate ran before any side effect.
+    expect(send).not.toHaveBeenCalled();
+    expect(mailboxCalls).toHaveLength(0);
+  });
+
+  it("executes against the registry's canonical address, not the caller's casing", async () => {
+    const { instance, env, send, settled } = agentWithMailbox();
+    const { approval_id } = await queueEmailApproval(env as never, {
+      kind: "email_send",
+      mailbox: "Agent-A@Shiba.dev",
+      payload: { ...SEND_PAYLOAD },
+    });
+    expect((await approve(instance, approval_id, true)).status).toBe(200);
+    await settled();
+    expect(send).toHaveBeenCalledWith({
+      from: "agent-a@shiba.dev",
+      to: "person@example.com",
+      subject: "Status update",
+      text: "Here is the report.",
+    });
+  });
+
   it("throws when SEND_EMAIL is unset rather than recording an unsent copy", async () => {
     const { env } = agentWithMailbox();
     delete (env as { SEND_EMAIL?: unknown }).SEND_EMAIL;
