@@ -38,6 +38,8 @@ function agentWithMailbox(opts: {
   messageIds?: Record<string, string[]>;
   /** Opt-in stateful draft rows (id → status) exercising the real CAS seams. */
   drafts?: Record<string, string>;
+  /** Content fields served on draft rows (matches SEND_PAYLOAD by default). */
+  draftContent?: { to_addr?: string; subject?: string; body_text?: string };
   /** Opt-in registered addresses the directory's mailboxes list returns. */
   registeredMailboxes?: string[];
   /** Opt-in Slack approval-card target (SLACK_APPROVALS_CHANNEL + token). */
@@ -46,6 +48,11 @@ function agentWithMailbox(opts: {
   const mailboxCalls: MailboxCall[] = [];
   const send = vi.fn(async (_message: unknown) => ({ status: "ok" }));
   const drafts = opts.drafts;
+  const draftContent = opts.draftContent ?? {
+    to_addr: "person@example.com",
+    subject: "Status update",
+    body_text: "Here is the report.",
+  };
   const mailboxStub = {
     fetch: async (request: Request) => {
       const url = new URL(request.url);
@@ -81,35 +88,42 @@ function agentWithMailbox(opts: {
         return Response.json({ drafts: freed.map((id) => ({ id, status: "draft" })) });
       }
       const draftMatch = url.pathname.match(/^\/internal\/mailbox\/drafts\/([^/]+)(?:\/(claim|release|unqueue|sent))?$/);
-      if (drafts !== undefined && draftMatch) {
+      if (draftMatch) {
         const id = decodeURIComponent(draftMatch[1]!);
         const seam = draftMatch[2];
-        const status = drafts[id];
         if (seam === undefined) {
+          // Untracked mode stands in a `queued` row carrying the default
+          // content — intake's draft binding sees a consistent row for
+          // tests that don't exercise draft states; tracked mode serves
+          // the opted-in status.
+          const status = drafts?.[id] ?? (drafts === undefined ? "queued" : undefined);
           return status === undefined
             ? new Response("{}", { status: 404 })
-            : Response.json({ draft: { id, status } });
+            : Response.json({ draft: { id, status, ...draftContent } });
         }
-        const from: Record<string, string[]> = {
-          claim: ["queued"],
-          release: ["sending"],
-          unqueue: ["queued"],
-          sent: ["queued", "sending"],
-        };
-        const to: Record<string, string> = {
-          claim: "sending",
-          release: "draft",
-          unqueue: "draft",
-          sent: "sent",
-        };
-        if (status === undefined) {
-          return new Response("{}", { status: 404 });
+        if (drafts !== undefined) {
+          const status = drafts[id];
+          const from: Record<string, string[]> = {
+            claim: ["queued"],
+            release: ["sending"],
+            unqueue: ["queued"],
+            sent: ["queued", "sending"],
+          };
+          const to: Record<string, string> = {
+            claim: "sending",
+            release: "draft",
+            unqueue: "draft",
+            sent: "sent",
+          };
+          if (status === undefined) {
+            return new Response("{}", { status: 404 });
+          }
+          if (!from[seam]!.includes(status)) {
+            return Response.json({ error: `draft is '${status}'` }, { status: 400 });
+          }
+          drafts[id] = to[seam]!;
+          return Response.json({ draft: { id, status: drafts[id] } });
         }
-        if (!from[seam]!.includes(status)) {
-          return Response.json({ error: `draft is '${status}'` }, { status: 400 });
-        }
-        drafts[id] = to[seam]!;
-        return Response.json({ draft: { id, status: drafts[id] } });
       }
       return new Response("{}", { status: 200 });
     },
@@ -302,6 +316,90 @@ describe("queueEmailApproval", () => {
     ).toBe(400);
     expect(instance.state.pendingApprovals ?? []).toHaveLength(0);
   });
+
+  it("freezes to_addr trimmed — a padded address can't slide past intake onto the wire", async () => {
+    const { instance, env, send, settled } = agentWithMailbox();
+    const { approval_id } = await queueEmailApproval(env as never, {
+      kind: "email_send",
+      mailbox: "agent-a@shiba.dev",
+      payload: { ...SEND_PAYLOAD, to_addr: "  person@example.com  " },
+    });
+    const record = (instance.state.pendingApprovals ?? [])[0]!;
+    // The canonical address is what the approver saw and what ships.
+    expect(record.payload).toMatchObject({ to_addr: "person@example.com" });
+    await approve(instance, approval_id, true);
+    await settled();
+    expect(send).toHaveBeenCalledWith({
+      from: "agent-a@shiba.dev",
+      to: "person@example.com",
+      subject: "Status update",
+      text: "Here is the report.",
+    });
+  });
+
+  it("binds a draft-backed send to the row it names — wrong content, wrong state, or missing all refuse at intake", async () => {
+    // The two-approvals-one-draft mis-stamp vector closed at the source:
+    // the payload must equal the named draft's own row content, and the
+    // row must sit `queued` (the lock CAS every legit mint follows).
+    const drafts: Record<string, string> = {
+      "draft-1": "queued",
+      "draft-plain": "draft",
+      "draft-done": "sent",
+    };
+    const { instance } = agentWithMailbox({ drafts });
+    const post = (body: unknown) =>
+      instance.onRequest(
+        new Request("https://internal/api/runs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }),
+      );
+    // Same queued draft, different frozen content — a parasite approval
+    // riding another's draft_id can no longer mint.
+    expect(
+      (
+        await post({
+          kind: "email_send",
+          mailbox: "agent-a@shiba.dev",
+          payload: { ...SEND_PAYLOAD, body_text: "content the draft never held" },
+        })
+      ).status,
+    ).toBe(400);
+    // A draft never locked (`draft`) can't back an approval either —
+    // nothing would claim it.
+    expect(
+      (
+        await post({
+          kind: "email_send",
+          mailbox: "agent-a@shiba.dev",
+          payload: { ...SEND_PAYLOAD, draft_id: "draft-plain" },
+        })
+      ).status,
+    ).toBe(400);
+    // Already-sent rows refuse — an approval can't claim a send that
+    // already happened.
+    expect(
+      (
+        await post({
+          kind: "email_send",
+          mailbox: "agent-a@shiba.dev",
+          payload: { ...SEND_PAYLOAD, draft_id: "draft-done" },
+        })
+      ).status,
+    ).toBe(400);
+    // A draft id that exists in no mailbox.
+    expect(
+      (
+        await post({
+          kind: "email_send",
+          mailbox: "agent-a@shiba.dev",
+          payload: { ...SEND_PAYLOAD, draft_id: "draft-ghost" },
+        })
+      ).status,
+    ).toBe(400);
+    expect(instance.state.pendingApprovals ?? []).toHaveLength(0);
+  });
 });
 
 describe("email approval execution", () => {
@@ -458,8 +556,11 @@ describe("email approval execution", () => {
     await settled();
     expect(send).not.toHaveBeenCalled();
     // The compensating unqueue frees the row — otherwise the draft strands
-    // `queued` behind a pointer that can never be re-resolved.
+    // `queued` behind a pointer that can never be re-resolved. (The GET
+    // first is intake's draft binding: row exists, `queued`, content
+    // matching the frozen payload.)
     expect(mailboxCalls).toEqual([
+      { method: "GET", path: "/internal/mailbox/drafts/draft-1", body: undefined },
       { method: "POST", path: "/internal/mailbox/drafts/draft-1/unqueue", body: undefined },
     ]);
     // The spent pointer cannot later send the payload either.
@@ -468,7 +569,7 @@ describe("email approval execution", () => {
     await settled();
     await flush();
     expect(send).not.toHaveBeenCalled();
-    expect(mailboxCalls).toHaveLength(1);
+    expect(mailboxCalls).toHaveLength(2);
   });
 
   it("rejection of an email_delete does not touch the mailbox", async () => {
@@ -526,6 +627,7 @@ describe("email approval execution", () => {
     // The payload never left — the executor's own claim is released
     // (sending → draft), not marked sent and not left claimed.
     expect(mailboxCalls).toEqual([
+      { method: "GET", path: "/internal/mailbox/drafts/draft-1", body: undefined },
       { method: "POST", path: "/internal/mailbox/drafts/draft-1/claim", body: undefined },
       { method: "POST", path: "/internal/mailbox/drafts/draft-1/release", body: undefined },
     ]);
@@ -563,22 +665,64 @@ describe("email approval execution", () => {
 
   it("a claim refusal on an unsent draft fails the execution — never a silent dedupe", async () => {
     // `draft` means the queue lock was reverted — the frozen approval
-    // can no longer be honored, so it fails visibly.
+    // can no longer be honored, so it fails visibly. Intake now refuses
+    // non-`queued` drafts, so this state only exists for a record whose
+    // draft was unqueued after mint — planted approved directly.
     const drafts: Record<string, string> = { "draft-1": "draft" };
-    const { instance, env, send, settled } = agentWithMailbox({ drafts });
-    const { approval_id } = await queueEmailApproval(env as never, {
-      kind: "email_send",
-      mailbox: "agent-a@shiba.dev",
-      payload: { ...SEND_PAYLOAD },
-    });
-    await approve(instance, approval_id, true);
+    const { instance, send, settled } = agentWithMailbox({ drafts });
+    instance.state.pendingApprovals = [
+      {
+        threadKey: "default",
+        approvalId: "apv-claim-refused",
+        repoUrl: "agent-a@shiba.dev",
+        task: "email send to person@example.com: Status update",
+        status: "approved",
+        kind: "email_send",
+        payload: { ...SEND_PAYLOAD, mailbox: "agent-a@shiba.dev" },
+        createdAt: Date.now(),
+        decidedBy: "U1",
+      },
+    ];
+    (instance as unknown as { dispatchApprovedEmail(record: PendingApproval): void })
+      .dispatchApprovedEmail(instance.state.pendingApprovals[0]!);
     await settled();
     expect(send).not.toHaveBeenCalled();
-    const decided = (instance.state.pendingApprovals ?? []).find(
-      (a) => a.approvalId === approval_id,
-    );
+    const decided = (instance.state.pendingApprovals ?? [])[0];
     expect(decided?.execution?.status).toBe("failed");
     expect(decided?.execution?.error).toContain("draft");
+  });
+
+  it("a deduped record whose frozen content never went out stamps failed — not 'executed'", async () => {
+    // Guard for records minted before the intake binding (or raced past
+    // it): a `sent` row carrying DIFFERENT content means the sibling's
+    // payload transmitted, not this one's — resolving `executed` would
+    // mis-stamp the record with a send that never carried its content.
+    const drafts: Record<string, string> = { "draft-1": "sent" };
+    const { instance, send, settled } = agentWithMailbox({ drafts });
+    instance.state.pendingApprovals = [
+      {
+        threadKey: "default",
+        approvalId: "apv-parasite",
+        repoUrl: "agent-a@shiba.dev",
+        task: "email send to person@example.com: Status update",
+        status: "approved",
+        kind: "email_send",
+        payload: {
+          ...SEND_PAYLOAD,
+          body_text: "content only this approval froze — never sent",
+          mailbox: "agent-a@shiba.dev",
+        },
+        createdAt: Date.now(),
+        decidedBy: "U1",
+      },
+    ];
+    (instance as unknown as { dispatchApprovedEmail(record: PendingApproval): void })
+      .dispatchApprovedEmail(instance.state.pendingApprovals[0]!);
+    await settled();
+    expect(send).not.toHaveBeenCalled();
+    const decided = (instance.state.pendingApprovals ?? [])[0];
+    expect(decided?.execution?.status).toBe("failed");
+    expect(decided?.execution?.error).toContain("different content");
   });
 
   it("a post-transmission failure reconciles the draft to 'sent', never re-queues it", async () => {
@@ -600,6 +744,14 @@ describe("email approval execution", () => {
     expect(paths).toContain("POST /internal/mailbox/emails");
     expect(paths).toContain("POST /internal/mailbox/drafts/draft-1/sent");
     expect(paths).not.toContain("POST /internal/mailbox/drafts/draft-1/unqueue");
+    // The mail provably left, so the record agrees with the draft's
+    // `sent` mark: `executed` with the copy failure noted — `failed`
+    // would contradict the mailbox and invite a double-sending retry.
+    const decided = (instance.state.pendingApprovals ?? []).find(
+      (a) => a.approvalId === approval_id,
+    );
+    expect(decided?.execution?.status).toBe("executed");
+    expect(decided?.execution?.error).toContain("transmitted");
   });
 
   it("an expired email_send releases its queued draft when a resolve sweeps it", async () => {
@@ -650,6 +802,7 @@ describe("email approval execution", () => {
     // released, and nothing ever sent.
     expect(send).not.toHaveBeenCalled();
     expect(mailboxCalls).toEqual([
+      { method: "GET", path: "/internal/mailbox/drafts/draft-1", body: undefined },
       { method: "POST", path: "/internal/mailbox/drafts/draft-1/unqueue", body: undefined },
     ]);
     expect(instance.state.pendingApprovals ?? []).toHaveLength(0);
@@ -825,6 +978,7 @@ describe("GET /api/approvals", () => {
     // approval ages out.
     expect(instance.state.pendingApprovals ?? []).toHaveLength(0);
     expect(mailboxCalls).toEqual([
+      { method: "GET", path: "/internal/mailbox/drafts/draft-1", body: undefined },
       { method: "POST", path: "/internal/mailbox/drafts/draft-1/unqueue", body: undefined },
     ]);
     expect(send).not.toHaveBeenCalled();

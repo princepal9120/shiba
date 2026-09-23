@@ -530,6 +530,11 @@ async function handleInbox(request: Request, env: Env): Promise<Response | null>
  * runs mint on the caller's instance. Listing fans out to both stubs and
  * merges; resolving probes the caller's DO first, then `"default"` — an
  * `"unknown"` reply means "try the next stub", never a verdict.
+ *
+ * Decider gate: any Access-authenticated identity — the megaplan's "same
+ * Access-auth gate as /api/runs" for every dashboard surface. The Slack
+ * surface is deliberately stricter (SLACK_APPROVERS allowlist) because a
+ * Slack workspace admits people the Access policy never vetted.
  */
 async function handleApprovals(request: Request, env: Env): Promise<Response | null> {
   const url = new URL(request.url);

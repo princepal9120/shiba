@@ -38,7 +38,7 @@ import {
   type ResolveResult,
 } from "../pending-approvals.js";
 import { makeSandboxId, parseGitHubRepoUrl, redactSecrets } from "../security.js";
-import { executeEmailApproval, releaseRestartedDraftClaim, unqueueEmailApprovalDraft } from "../email-approvals.js";
+import { executeEmailApproval, PostTransmitError, releaseRestartedDraftClaim, unqueueEmailApprovalDraft } from "../email-approvals.js";
 import { ADDRESS_RE, type MailboxRecord } from "../mailbox-store.js";
 import { mailboxDirectoryStub, mailboxStub, registeredMailbox } from "../mailbox-do.js";
 import { buildApprovalBlocks, type ApprovalCardInput } from "../slack-approval.js";
@@ -467,15 +467,52 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         return Response.json({ error: `payload.${field} must be a non-empty string.` }, { status: 400 });
       }
     }
-    // Address-format check fails at intake, not post-approval at the binding.
-    if (kind === "email_send" && !ADDRESS_RE.test((fields.to_addr as string).trim())) {
-      return Response.json({ error: "payload.to_addr must be a valid email address." }, { status: 400 });
+    // Address-format check fails at intake, not post-approval at the
+    // binding — and the value freezes trimmed, so a padded address like
+    // " user@x.com " can't slide through the check and hit the wire.
+    if (kind === "email_send") {
+      const toAddr = (fields.to_addr as string).trim();
+      if (!ADDRESS_RE.test(toAddr)) {
+        return Response.json({ error: "payload.to_addr must be a valid email address." }, { status: 400 });
+      }
+      fields.to_addr = toAddr;
     }
     // The same registration invariant the MCP path enforces via
     // requireMailbox: an approval's From must be a registered mailbox.
     const registration = await registeredMailbox(this.env, mailbox);
     if (registration === null) {
       return Response.json({ error: `mailbox is not registered: ${mailbox}` }, { status: 400 });
+    }
+    // Bind a draft-backed send to the row it names: the draft must
+    // exist in this mailbox, sit `queued` (the CAS every legit mint
+    // follows — MCP send_email and the dashboard both lock-then-mint),
+    // and carry exactly the content the payload freezes. Without this a
+    // caller could mint an approval on another approval's draft with
+    // different content: the first-approved payload sends, and the
+    // parasite dedupes `executed` on mail it never wrote.
+    if (kind === "email_send") {
+      const draftId = typeof fields.draft_id === "string" ? fields.draft_id.trim() : "";
+      if (draftId !== "") {
+        const draftRes = await mailboxStub(this.env, registration.address).fetch(
+          new Request(`https://internal/internal/mailbox/drafts/${encodeURIComponent(draftId)}`),
+        );
+        const draftRow = draftRes.ok
+          ? ((((await draftRes.json().catch(() => ({}))) as { draft?: Record<string, unknown> }).draft) ?? null)
+          : null;
+        if (draftRow === null) {
+          return Response.json({ error: `payload.draft_id "${draftId}" was not found in ${registration.address}.` }, { status: 400 });
+        }
+        if (draftRow.status !== "queued") {
+          return Response.json({ error: `draft "${draftId}" is "${String(draftRow.status)}" — only a queued draft can back an email_send approval.` }, { status: 400 });
+        }
+        if (
+          draftRow.to_addr !== fields.to_addr ||
+          draftRow.subject !== fields.subject ||
+          draftRow.body_text !== fields.body_text
+        ) {
+          return Response.json({ error: `payload does not match draft "${draftId}" — a draft-backed send must freeze the draft's own content.` }, { status: 400 });
+        }
+      }
     }
     const approvalId = crypto.randomUUID();
     const threadKey = typeof input.threadKey === "string" && input.threadKey.trim() ? input.threadKey.trim() : "default";
@@ -676,10 +713,17 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         // delete leaves durable state, not a misleading "recorded" reply.
         const message = redactSecrets(String(error)).slice(0, 4000);
         console.error(`Email approval ${approvalId} execution failed`, message);
+        // PostTransmitError = the mail already left; `failed` here would
+        // contradict the draft's `sent` mark and invite a re-approval
+        // double-send, so the record reads `executed` with the
+        // bookkeeping failure noted.
+        const transmitted = error instanceof PostTransmitError;
         this.writeApprovals(recordApprovalExecution(this.approvals, {
           threadKey,
           approvalId,
-          execution: { status: "failed", error: message, executedAt: Date.now() },
+          execution: transmitted
+            ? { status: "executed", error: `transmitted — post-send record failed: ${message}`, executedAt: Date.now() }
+            : { status: "failed", error: message, executedAt: Date.now() },
         }));
       }
     };

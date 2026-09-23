@@ -44,6 +44,20 @@ export interface EmailApprovalResult {
 }
 
 /**
+ * Thrown when the send binding transmitted but the bookkeeping after it
+ * (outbound copy insert, draft `sent` mark) failed. Callers stamp the
+ * record `executed` with the copy failure noted — never `failed`: the
+ * mail provably went out, and `failed` would contradict the draft's
+ * `sent` mark and invite a re-approval double-send.
+ */
+export class PostTransmitError extends Error {
+  constructor(cause: Error) {
+    super(cause.message);
+    this.name = "PostTransmitError";
+  }
+}
+
+/**
  * Whether the approval bridge is live for outbound sends. The queue
  * path itself is always wired; the only optional piece is the
  * `send_email` binding — callers that lock state behind a queued send
@@ -153,7 +167,7 @@ export async function executeEmailApproval(env: Env, record: PendingApproval): P
     return;
   }
   if (record.kind === "email_delete") {
-    const emailId = requirePayloadField(fields, "email_id");
+    const emailId = requirePayloadField(fields, "email_id").trim();
     const response = await stub.fetch(
       new Request(`https://internal/internal/mailbox/emails/${encodeURIComponent(emailId)}`, {
         method: "DELETE",
@@ -285,7 +299,7 @@ async function sendApprovedEmail(
   fields: Record<string, unknown>,
   progress: { transmitted: boolean; claimed: boolean },
 ): Promise<void> {
-  const toAddr = requirePayloadField(fields, "to_addr");
+  const toAddr = requirePayloadField(fields, "to_addr").trim();
   const subject = requirePayloadField(fields, "subject");
   const bodyText = requirePayloadField(fields, "body_text");
   if (!env.SEND_EMAIL) {
@@ -296,10 +310,11 @@ async function sendApprovedEmail(
     // Claim the draft before anything reaches the wire: the `queued` →
     // `sending` CAS dedupes the live-approval race a post-send mark
     // cannot — two approvals frozen on one draft stop competing here.
-    const claimed = await claimDraftForSend(stub, draftId);
+    const claimed = await claimDraftForSend(stub, draftId, fields);
     if (!claimed) {
-      // The draft already carries `sent`: a sibling approval sent this
-      // payload, so this record resolves executed without a second copy.
+      // The draft already carries `sent` AND its row matches this
+      // payload byte-for-byte — a sibling approval sent exactly this
+      // content, so `executed` is truthful without a second copy.
       return;
     }
     progress.claimed = true;
@@ -318,42 +333,60 @@ async function sendApprovedEmail(
     ...(threading !== undefined ? { headers: threading.headers } : {}),
   });
   progress.transmitted = true;
-  // The outbound copy lands next to the conversation it answers — the
-  // wire-level in_reply_to re-derives the parent thread when the frozen
-  // payload carried no thread_id.
-  const threadId =
-    typeof fields.thread_id === "string" && fields.thread_id.trim() !== ""
-      ? fields.thread_id
-      : undefined;
-  await mailboxCall(stub, "/emails", {
-    method: "POST",
-    body: JSON.stringify({
-      direction: "outbound",
-      from_addr: mailbox,
-      to_addr: toAddr,
-      subject,
-      body_text: bodyText,
-      status: "sent",
-      ...(threadId !== undefined ? { thread_id: threadId } : {}),
-      ...(threading !== undefined ? { in_reply_to: threading.inReplyTo } : {}),
-    }),
-  });
-  // The sent mark proves the send happened only through this seam —
-  // `/drafts/:id/sent` refuses anything but a queued or claimed row.
-  if (draftId !== "") {
-    await mailboxCall(stub, `/drafts/${encodeURIComponent(draftId)}/sent`, { method: "POST" });
+  // Everything below is bookkeeping over a mail that already left: a
+  // failure here must not read as "send failed" upstream (the draft
+  // reconciles to `sent`, so `failed` would leave two durable stores
+  // disagreeing on whether the mail went out).
+  try {
+    // The outbound copy lands next to the conversation it answers — the
+    // wire-level in_reply_to re-derives the parent thread when the frozen
+    // payload carried no thread_id.
+    const threadId =
+      typeof fields.thread_id === "string" && fields.thread_id.trim() !== ""
+        ? fields.thread_id
+        : undefined;
+    await mailboxCall(stub, "/emails", {
+      method: "POST",
+      body: JSON.stringify({
+        direction: "outbound",
+        from_addr: mailbox,
+        to_addr: toAddr,
+        subject,
+        body_text: bodyText,
+        status: "sent",
+        ...(threadId !== undefined ? { thread_id: threadId } : {}),
+        ...(threading !== undefined ? { in_reply_to: threading.inReplyTo } : {}),
+      }),
+    });
+    // The sent mark proves the send happened only through this seam —
+    // `/drafts/:id/sent` refuses anything but a queued or claimed row.
+    if (draftId !== "") {
+      await mailboxCall(stub, `/drafts/${encodeURIComponent(draftId)}/sent`, { method: "POST" });
+    }
+  } catch (error) {
+    throw new PostTransmitError(error instanceof Error ? error : new Error(String(error)));
   }
 }
 
 /**
  * `queued` → `sending` claim inside the mailbox DO. Returns false only
- * when the draft already carries `sent` — proof a sibling approval
- * already satisfied this payload, so the record resolves `executed`
- * without a second copy on the wire. Every other non-queued state
- * (still `draft`, a live sibling's `sending`, `discarded`, a missing
- * row) means this approval can no longer be honored and throws.
+ * when the draft already carries `sent` AND its row content matches
+ * this payload — proof the sent copy is exactly what this approval
+ * froze, so the record resolves `executed` without a second copy on
+ * the wire. A `sent` row carrying DIFFERENT content means a sibling
+ * approval sent its own payload, not this one: `executed` would be a
+ * mis-stamp, so the record fails instead. Intake already refuses mints
+ * whose payload diverges from the named draft — this check is the
+ * durable guard for records minted before that binding or raced past
+ * it. Every other non-queued state (still `draft`, a live sibling's
+ * `sending`, `discarded`, a missing row) means this approval can no
+ * longer be honored and throws.
  */
-async function claimDraftForSend(stub: MailboxFetch, draftId: string): Promise<boolean> {
+async function claimDraftForSend(
+  stub: MailboxFetch,
+  draftId: string,
+  fields: Record<string, unknown>,
+): Promise<boolean> {
   try {
     await mailboxCall(stub, `/drafts/${encodeURIComponent(draftId)}/claim`, {
       method: "POST",
@@ -365,13 +398,22 @@ async function claimDraftForSend(stub: MailboxFetch, draftId: string): Promise<b
         `https://internal/internal/mailbox/drafts/${encodeURIComponent(draftId)}`,
       ),
     );
-    const status = response.ok
-      ? (((await response.json()) as { draft?: { status?: unknown } }).draft?.status as
-          | string
-          | undefined)
+    const draft = response.ok
+      ? (((await response.json()) as { draft?: Record<string, unknown> }).draft ?? undefined)
       : undefined;
+    const status = draft?.status as string | undefined;
     if (status === "sent") {
-      return false;
+      const same =
+        typeof draft?.to_addr === "string" &&
+        draft.to_addr.trim() === String(fields.to_addr ?? "").trim() &&
+        draft.subject === fields.subject &&
+        draft.body_text === fields.body_text;
+      if (same) {
+        return false;
+      }
+      throw new InputError(
+        `Draft ${draftId} was already sent with different content — this approval's payload never went out.`,
+      );
     }
     throw new InputError(
       `Draft ${draftId} is ${JSON.stringify(status ?? "unknown")} — only a queued draft can be claimed for sending.`,
