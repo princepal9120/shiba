@@ -679,6 +679,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     });
     if (run) {
       const dispatch = async () => {
+        const generation = this.store.get(run.runId)?.generation;
         try {
           const delegate = this.getTools()["delegate_coding_task"] as {
             execute: (input: unknown, options?: unknown) => Promise<unknown>;
@@ -690,11 +691,20 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
             publishPullRequest: run.publishPullRequest,
           }, { toolCallId: approvalId });
         } catch (error) {
+          // delegate.execute can throw before its inner `finish` seam ran;
+          // this fallback is the terminal transition then. Fence on the
+          // pre-dispatch generation so a terminal state that already landed
+          // (cancel, reclaim, or `finish` itself) is never overwritten —
+          // the dropped write means this catch also distills nothing.
           const failure = classifyRunError(error);
-          this.store.transition(run.runId, terminalStatusFor(failure.code), {
+          const status = terminalStatusFor(failure.code);
+          const updated = this.store.transition(run.runId, status, {
             error: redactSecrets(failure.message).slice(0, 4000),
             errorCode: failure.code,
-          });
+          }, generation);
+          if (updated !== null && (status === "completed" || status === "error")) {
+            this.dispatchSessionDistill(updated);
+          }
         }
       };
       void dispatch();

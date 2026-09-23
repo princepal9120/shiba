@@ -11,6 +11,7 @@ import type { Env } from "../src/env.js";
 import { Memory } from "../src/memory-do.js";
 import type { FactRecord, SessionRecord, SqlRow } from "../src/memory-store.js";
 import { formatAgentResult, type CodingTaskResult } from "../src/opencode-input.js";
+import { createPendingApproval } from "../src/pending-approvals.js";
 import { createRun } from "../src/runs.js";
 import {
   distillSession,
@@ -191,6 +192,17 @@ describe("T10 parseDistilled", () => {
     expect(parseDistilled({})).toBeNull();
     expect(parseDistilled(null)).toBeNull();
   });
+
+  it("redacts secret-shaped strings the model echoes back", () => {
+    const parsed = parseDistilled({
+      response: JSON.stringify({
+        summary: "Pushed with token ghp_ABCDEFGH1234.",
+        facts: ["Used api_key='supersecret123' for auth.", "safe fact"],
+      }),
+    });
+    expect(parsed?.facts).toEqual(["Used [redacted] for auth.", "safe fact"]);
+    expect(parsed?.summary).toBe("Pushed with token [redacted].");
+  });
 });
 
 describe("T10 distillSession", () => {
@@ -289,6 +301,25 @@ describe("T10 distillSession", () => {
     expect(await listFacts(env, "intern")).toHaveLength(1);
     expect(await listSessions(env)).toHaveLength(1);
   });
+
+  it("persists redacted text when the model echoes secrets back", async () => {
+    const { env } = makeEnv({
+      distill: () => ({
+        response: JSON.stringify({
+          summary: "Pushed with token ghp_ABCDEFGH1234.",
+          facts: ["Used api_key='supersecret123' for auth."],
+        }),
+      }),
+    });
+    const result = await distillSession(env, completedRun(), { agent: "intern" });
+    expect(result).toEqual({ distilled: true, factsBanked: 1, sessionRecorded: true });
+    const facts = await listFacts(env, "intern");
+    expect(facts[0]?.fact).toBe("Used [redacted] for auth.");
+    expect(JSON.stringify(facts)).not.toContain("supersecret123");
+    const sessions = await listSessions(env);
+    expect(sessions[0]?.summary).toBe("Pushed with token [redacted].");
+    expect(JSON.stringify(sessions)).not.toContain("ghp_ABCDEFGH1234");
+  });
 });
 
 describe("T10 orchestrator wiring", () => {
@@ -349,5 +380,79 @@ describe("T10 orchestrator wiring", () => {
     await Promise.allSettled(pending);
     expect(aiCalls.some((c) => c.input.messages !== undefined)).toBe(true);
     expect(instance.state.runs[0]?.status).toBe("error");
+  });
+
+  function queueRunApproval(instance: any, approvalId: string) {
+    instance.state.pendingApprovals = createPendingApproval([], {
+      threadKey: "default",
+      approvalId,
+      repoUrl: "https://github.com/owner/repo",
+      task: "Fix the login redirect.",
+      createdAt: Date.now(),
+    });
+  }
+
+  it("the approval-resolve fallback distills when it is the transition that lands 'error'", async () => {
+    const { env, aiCalls } = makeEnv({});
+    const { instance, pending } = makeOrchestrator(env);
+    // delegate.execute throws before its inner `finish` seam ran, so the
+    // dispatch fallback is the terminal transition.
+    instance.getTools = () => ({
+      delegate_coding_task: {
+        execute: async () => {
+          throw new Error("tool dispatch failed");
+        },
+      },
+    });
+    queueRunApproval(instance, "ap-fallback");
+    const res = await instance.resolveApproval({
+      threadKey: "default",
+      approvalId: "ap-fallback",
+      approved: true,
+      decidedBy: "test",
+    });
+    expect(res.status).toBe(200);
+    await new Promise((resolve) => setImmediate(resolve));
+    await Promise.allSettled(pending);
+    const run = instance.state.runs[0];
+    expect(run?.status).toBe("error");
+    expect(run?.errorCode).toBeDefined();
+    expect(aiCalls.some((c) => c.input.messages !== undefined)).toBe(true);
+    expect(await listFacts(env, "intern")).toHaveLength(1);
+    expect(await listSessions(env)).toHaveLength(1);
+  });
+
+  it("the approval-resolve fallback drops its write when a terminal state already landed", async () => {
+    const { env, aiCalls } = makeEnv({});
+    const { instance, pending } = makeOrchestrator(env);
+    // delegate.execute lands a terminal transition itself (the inner
+    // `finish` seam's job), then throws — the fallback's fenced write must
+    // drop instead of overwriting, and must not distill twice.
+    instance.getTools = () => ({
+      delegate_coding_task: {
+        execute: async (_input: unknown, options?: { toolCallId?: string }) => {
+          const runId = `agent-tool:${options?.toolCallId}`;
+          instance.store.transition(runId, "error", {
+            error: "inner finish landed",
+            errorCode: "internal_error",
+          });
+          throw new Error("dispatch failed after finish");
+        },
+      },
+    });
+    queueRunApproval(instance, "ap-fenced");
+    const res = await instance.resolveApproval({
+      threadKey: "default",
+      approvalId: "ap-fenced",
+      approved: true,
+      decidedBy: "test",
+    });
+    expect(res.status).toBe(200);
+    await new Promise((resolve) => setImmediate(resolve));
+    await Promise.allSettled(pending);
+    const run = instance.state.runs[0];
+    expect(run?.status).toBe("error");
+    expect(run?.error).toBe("inner finish landed");
+    expect(aiCalls.some((c) => c.input.messages !== undefined)).toBe(false);
   });
 });

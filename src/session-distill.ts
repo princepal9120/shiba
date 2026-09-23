@@ -89,7 +89,9 @@ function responseText(result: unknown): string {
 /**
  * Parse the model's JSON out of whatever it actually returned — tolerates
  * prose around the object, markdown fences, missing fields, and non-string
- * entries. Returns null when no usable object is present.
+ * entries. Secret-shaped strings are redacted here so a token the model
+ * echoed back never reaches persisted memory. Returns null when no usable
+ * object is present.
  */
 export function parseDistilled(result: unknown): DistilledMemory | null {
   const text = responseText(result);
@@ -111,10 +113,10 @@ export function parseDistilled(result: unknown): DistilledMemory | null {
     .map((fact) => fact.trim())
     .filter((fact) => fact !== "")
     .slice(0, MAX_DISTILL_FACTS)
-    .map((fact) => boundHead(fact, MAX_FACT_CHARS));
+    .map((fact) => boundHead(redactSecrets(fact), MAX_FACT_CHARS));
   const summary =
     typeof body.summary === "string" && body.summary.trim() !== ""
-      ? boundHead(body.summary.trim(), MAX_SUMMARY_CHARS)
+      ? boundHead(redactSecrets(body.summary.trim()), MAX_SUMMARY_CHARS)
       : "";
   if (facts.length === 0 && summary === "") return null;
   return { facts, summary: summary || facts.join(" ") };
