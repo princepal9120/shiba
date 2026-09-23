@@ -830,7 +830,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
           if (updated !== null) {
             // A pre-start failure never reaches `finish`'s slackText seam —
             // post here or the thread sees ack + card + approved, then silence.
-            this.postToSlackThread(slackRunFailed({
+            this.postToThread(slackRunFailed({
               repoUrl: run.repoUrl,
               userMessage: runErrorWire(failure.code).userMessage,
               detail: redactSecrets(failure.message).slice(0, 1000),
@@ -1025,7 +1025,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         this.runControllers.get(run.runId)?.abort();
         // Reclaimed runs go terminal without ever reaching `finish`'s
         // slackText seam — the thread deserves the same honest ending.
-        this.postToSlackThread(slackRunFailed({
+        this.postToThread(slackRunFailed({
           repoUrl: run.repoUrl,
           userMessage: runErrorWire("outcome_unknown").userMessage,
           unknown: true,
