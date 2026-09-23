@@ -5,7 +5,7 @@
  * - Grouped sections: Plane & Capabilities using authentic Bezalel PixelIcons
  * - Collapsible icon rail support (240px expanded vs 60px collapsed) with Tooltips
  * - Retro paper active states with 2px hard paper drop shadows
- * - Setup Guide progress card + operator indicator + quick utilities at bottom
+ * - Setup Guide progress card + docs/theme utilities at bottom
  */
 import type { JSX, ReactNode } from "react";
 import { PixelIcon, type PixelIconName } from "./ui/PixelIcon";
@@ -53,7 +53,6 @@ export interface AppNavRailProps {
   setupDone: number | null;
   setupTotal: number;
   onOpenSetup: () => void;
-  onOpenShortcuts: () => void;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
 }
@@ -129,7 +128,6 @@ export function AppNavRail({
   setupDone,
   setupTotal,
   onOpenSetup,
-  onOpenShortcuts,
   theme,
   onToggleTheme,
   collapsed = false,
@@ -280,13 +278,16 @@ export function AppNavRail({
 
         {/* System & Utility Links */}
         <div className="flex flex-col gap-0.5">
-          <NavItem
-            label={setupComplete ? "Setup Guide" : "Setup Guide · " + (setupDone ?? 0) + "/" + setupTotal}
-            collapsed={collapsed}
-            onClick={onOpenSetup}
-          >
-            <PixelIcon name="Admin" size={16} />
-          </NavItem>
+          {/* Expanded rail already shows the progress card above. */}
+          {collapsed ? (
+            <NavItem
+              label={setupComplete ? "Setup Guide" : "Setup Guide · " + (setupDone ?? 0) + "/" + setupTotal}
+              collapsed={collapsed}
+              onClick={onOpenSetup}
+            >
+              <PixelIcon name="Admin" size={16} />
+            </NavItem>
+          ) : null}
 
           {collapsed ? (
             <Tooltip content="Documentation" side="right">
@@ -311,10 +312,6 @@ export function AppNavRail({
             </a>
           )}
 
-          <NavItem label="Keyboard shortcuts" collapsed={collapsed} onClick={onOpenShortcuts}>
-            <span className="text-[11px] font-mono font-bold leading-none w-4 text-center">?</span>
-          </NavItem>
-
           {onToggleTheme ? (
             <NavItem
               label={theme === "light" ? "Dark theme" : "Light theme"}
@@ -332,22 +329,6 @@ export function AppNavRail({
               )}
             </NavItem>
           ) : null}
-
-          {/* Operator Profile Tile (Bezalel-style) */}
-          {!collapsed ? (
-            <div className="pt-1.5 mt-1 border-t border-[var(--sidebar-border)] flex items-center gap-2 px-1 text-xs">
-              <span className="size-2 rounded-full bg-[#15803d] shrink-0" />
-              <span className="font-mono text-[11px] text-[var(--muted-foreground)] truncate">
-                Operator: Local Dev
-              </span>
-            </div>
-          ) : (
-            <Tooltip content="Operator: Local Dev (Connected)" side="right">
-              <div className="flex items-center justify-center p-1.5">
-                <span className="size-2 rounded-full bg-[#15803d]" />
-              </div>
-            </Tooltip>
-          )}
         </div>
       </div>
     </aside>

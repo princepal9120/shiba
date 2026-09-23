@@ -819,7 +819,6 @@ export function App(): React.JSX.Element {
         setupDone={setupDone}
         setupTotal={SETUP_TOTAL_STEPS}
         onOpenSetup={() => setShowOnboardingModal(true)}
-        onOpenShortcuts={() => setShowShortcutsModal(true)}
       />
 
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
