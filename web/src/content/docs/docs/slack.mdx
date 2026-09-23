@@ -46,8 +46,8 @@ The Slack integration is powered by the Orchestrator Worker and Durable Objects:
 5. **Store Secrets with Wrangler**
    Set the secrets in your Cloudflare environment:
    ```bash
-   pnpm wrangler secret put SLACK_BOT_TOKEN
-   pnpm wrangler secret put SLACK_SIGNING_SECRET
+   pnpm wrangler secret put SLACK_BOT_TOKEN --config backend/wrangler.jsonc
+   pnpm wrangler secret put SLACK_SIGNING_SECRET --config backend/wrangler.jsonc
    ```
    Mentions need `SLACK_BOT_TOKEN`. Map channels to repos with the `SLACK_CHANNEL_REPOS` var (`{"C123":"https://github.com/owner/repo"}`). `SLACK_APPROVERS` is a comma-separated list of Slack user ids; unset means nobody can approve.
 

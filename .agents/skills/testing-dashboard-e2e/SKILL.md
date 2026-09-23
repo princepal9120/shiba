@@ -21,7 +21,7 @@ the worker API + local Durable Objects on :8787:
 
 ```bash
 pnpm build:dashboard        # emits public/ (bundle must contain new CSS classes)
-npx wrangler dev --port 8787
+npx wrangler dev --port 8787 --config backend/wrangler.jsonc
 ```
 
 - `REQUIRE_ACCESS` is unset → all routes are unauthenticated; identity = `"default"`.
@@ -43,7 +43,7 @@ worker edge. The reliable seam is the agents-SDK state row in the DO sqlite.
 ```bash
 node -e '
 const {DatabaseSync} = require("node:sqlite");
-const f = ".wrangler/state/v3/do/shiba-ai-coworker-CodingOrchestrator/<hash>.sqlite"; // the non-metadata .sqlite
+const f = "backend/.wrangler/state/v3/do/shiba-ai-coworker-CodingOrchestrator/<hash>.sqlite"; // the non-metadata .sqlite
 const db = new DatabaseSync(f);
 const row = db.prepare("SELECT state FROM cf_agents_state WHERE id=\"cf_state_row_id\"").get();
 const state = JSON.parse(row.state);
@@ -53,7 +53,7 @@ db.prepare("UPDATE cf_agents_state SET state=? WHERE id=\"cf_state_row_id\"").ru
 '
 ```
 
-4. Restart `npx wrangler dev --port 8787`.
+4. Restart `npx wrangler dev --port 8787 --config backend/wrangler.jsonc`.
 
 ### Tricks that hit real code paths
 

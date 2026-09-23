@@ -646,7 +646,7 @@ Both are **API-key** harnesses here, not subscription — §3 explains why that 
 ### T25 · Deploy button and prerequisites
 
 ```markdown
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/princepal9120/shiba-ai-coworker)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/princepal9120/shiba)
 ```
 
 1. Workers Paid (DOs + Containers require it) — §8 for what $5 covers.

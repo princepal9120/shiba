@@ -2,20 +2,24 @@
   "$schema": "https://turbo.build/schema.json",
   "tasks": {
     "build": {
-      "dependsOn": ["^build"],
-      "outputs": ["dist/**", "public/**", ".astro/**", "../public/**"]
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        "dist/**",
+        "public/**",
+        ".astro/**",
+        "../public/**"
+      ]
     },
     "test": {
-      "dependsOn": ["build"],
-      "outputs": ["coverage/**"]
+      "cache": false,
+      "outputs": [
+        "coverage/**"
+      ]
     },
     "lint": {
-      "outputs": []
-    },
-    "typecheck": {
-      "outputs": []
-    },
-    "check": {
+      "cache": false,
       "outputs": []
     },
     "dev": {

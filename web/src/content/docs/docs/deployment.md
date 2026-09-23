@@ -28,7 +28,7 @@ pnpm lint
 pnpm test
 pnpm docs:check
 pnpm build
-npx wrangler deploy --dry-run
+npx wrangler deploy --dry-run --config backend/wrangler.jsonc
 ~~~
 
 The dry run is packaging validation, not deployment. Record missing Docker, image, or runtime limitations honestly. Building the docs does not require live coding credentials.

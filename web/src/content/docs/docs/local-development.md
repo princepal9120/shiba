@@ -18,7 +18,7 @@ Vite serves the dashboard at `http://localhost:5173`. It does not start the Work
 ```sh
 cp backend/.dev.vars.example backend/.dev.vars
 pnpm build
-npx wrangler dev
+npx wrangler dev --config backend/wrangler.jsonc
 ```
 
 Use the URL printed by Wrangler (normally port 8787). A compatible local Docker engine is required by the container configuration; startup itself may fail without it. Cloudflare bindings and model calls can also require account configuration and network access.
@@ -44,7 +44,7 @@ pnpm lint
 pnpm test
 pnpm docs:check
 pnpm build
-npx wrangler deploy --dry-run
+npx wrangler deploy --dry-run --config backend/wrangler.jsonc
 ```
 
 Do not claim real model execution, browser interactions, or deployment success from a static build or mocked unit tests.

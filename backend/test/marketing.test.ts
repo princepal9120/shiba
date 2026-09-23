@@ -6,7 +6,7 @@ import { describe, expect, test } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-const indexPath = join(process.cwd(), "public", "index.html");
+const indexPath = join(import.meta.dirname, "..", "..", "public", "index.html");
 // Skipping is honest here; passing on a missing artifact would not be.
 const built = existsSync(indexPath);
 
@@ -25,7 +25,7 @@ describe.skipIf(!built)("marketing landing page", () => {
   test("every referenced asset exists in the build output", () => {
     const refs = [...html().matchAll(/\/assets\/[\w-]+\/[\w.-]+/g)].map((m) => m[0]);
     expect(refs.length).toBeGreaterThan(0);
-    const missing = refs.filter((ref) => !existsSync(join(process.cwd(), "public", ref)));
+    const missing = refs.filter((ref) => !existsSync(join(import.meta.dirname, "..", "..", "public", ref)));
     expect(missing).toEqual([]);
   });
 

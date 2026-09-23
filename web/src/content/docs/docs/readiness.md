@@ -29,7 +29,7 @@ pnpm test
 pnpm docs:check
 pnpm build
 pnpm docs:verify
-npx wrangler deploy --dry-run
+npx wrangler deploy --dry-run --config backend/wrangler.jsonc
 ~~~
 
 Record actual failures, including missing container runtime/image support. Do not replace a dry run with a real deployment to get a green result. Review package audit findings separately; do not force dependency upgrades without compatibility review.

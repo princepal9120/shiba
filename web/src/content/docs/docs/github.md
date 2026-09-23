@@ -14,7 +14,7 @@ Use an HTTPS GitHub repository URL and its actual base branch (default main). Em
 Publishing is off by default. The parent checks for GITHUB_TOKEN before a requested publish run starts. Use a least-privilege fine-grained token with Contents write and Pull requests write permissions on an owned test repository, subject to organization policies. See [GitHub token documentation](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens).
 
 ~~~sh
-npx wrangler secret put GITHUB_TOKEN
+npx wrangler secret put GITHUB_TOKEN --config backend/wrangler.jsonc
 ~~~
 
 The Worker creates blobs, a tree, a commit, an shiba-ai-coworker/<sandboxId> branch, and a PR via REST. It does not merge the PR or put the token in the container. API failures can leave branches/commits behind; inspect the repository before retrying.
@@ -27,5 +27,5 @@ The publisher accepts captured contents, not a complete Git patch. Capture is bo
 
 Set GITHUB_WEBHOOK_SECRET and configure /api/github/webhook with the same secret, subject to deployment authentication. The handler verifies HMAC-SHA256 and acknowledges valid JSON. It does **not** create tasks, respond to issues, or auto-approve work.
 
-Source: src/github.ts, src/agents/opencode-agent.ts, src/index.ts.
+Source: backend/src/github.ts, backend/src/agents/opencode-agent.ts, backend/src/index.ts.
 

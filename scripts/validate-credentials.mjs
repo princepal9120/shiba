@@ -5,7 +5,7 @@
  * prints secret values (only binding and variable NAMES).
  *
  *  (a) every Durable Object class named in wrangler.jsonc (including
- *      `env.<name>` sections) is exported somewhere under src/ —
+ *      `env.<name>` sections) is exported somewhere under backend/src/ —
  *      `export class <name>` — or is declared external via `script_name`
  *  (b) every wrangler.jsonc `vars` key exists as a field on `Env`
  *  (c) secret-bearing OPTIONAL Env fields — names matching
@@ -38,7 +38,7 @@ Options:
   --wrangler=<path>   wrangler config (default: backend/wrangler.jsonc)
   --env=<path>        env types file (default: backend/src/env.ts)
   --dev-vars=<path>   .dev.vars path (default: backend/.dev.vars; absent = ok)
-  --src=<dir>         source dir for export-class checks (default: src)
+  --src=<dir>         source dir for export-class checks (default: backend/src)
   --offline           skip wrangler secret list (no network/auth)
   --help              show this text
 
@@ -51,7 +51,7 @@ external, not missing exports.`);
 const wranglerPath = resolve(root, arg("wrangler") ?? "backend/wrangler.jsonc");
 const envPath = resolve(root, arg("env") ?? "backend/src/env.ts");
 const devVarsPath = resolve(root, arg("dev-vars") ?? "backend/.dev.vars");
-const srcDir = resolve(root, arg("src") ?? "src");
+const srcDir = resolve(root, arg("src") ?? "backend/src");
 const offline = flag("offline");
 
 // --- JSONC: two string-aware passes — strip comments BEFORE trailing commas.
@@ -223,7 +223,7 @@ function collectDevVarKeys(path) {
 }
 
 function listWranglerSecrets() {
-  const res = spawnSync("npx", ["wrangler", "secret", "list"], {
+  const res = spawnSync("npx", ["wrangler", "secret", "list", "--config", wranglerPath], {
     cwd: root,
     encoding: "utf8",
     timeout: 60_000,

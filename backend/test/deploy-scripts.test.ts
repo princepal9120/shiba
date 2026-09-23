@@ -80,7 +80,7 @@ describe("ephemeral-stack", () => {
     expect(out.stdout).toContain(".wrangler-ephemeral-ci7.jsonc");
     expect(out.stdout).toContain("wrangler deploy --config");
     expect(out.stdout).toContain("wrangler delete");
-    expect(existsSync(join(ROOT, ".wrangler-ephemeral-ci7.jsonc"))).toBe(false);
+    expect(existsSync(join(ROOT, "backend", ".wrangler-ephemeral-ci7.jsonc"))).toBe(false);
   });
 
   it("defaults the prefix to test-<unix-ts>", () => {
@@ -103,7 +103,7 @@ describe("ephemeral-stack", () => {
     expect(out.stdout).toContain("ALCHEMY_STAGE=ci7");
     expect(out.stdout).toContain("alchemy deploy --stage ci7 --yes");
     expect(out.stdout).toContain("alchemy destroy --stage ci7 --yes");
-    expect(existsSync(join(ROOT, ".wrangler-ephemeral-ci7.jsonc"))).toBe(false);
+    expect(existsSync(join(ROOT, "backend", ".wrangler-ephemeral-ci7.jsonc"))).toBe(false);
   });
 
   it("--alchemy honors --keep and rejects bad prefixes", () => {

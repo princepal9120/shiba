@@ -248,7 +248,7 @@ if (fixturePath) {
   }
 } else {
   const outdir = arg("outdir") ?? "./.wrangler/deploy-preview";
-  const cmd = ["wrangler", "deploy", "--dry-run", `--outdir=${outdir}`];
+  const cmd = ["wrangler", "deploy", "--dry-run", `--config=${wranglerPath}`, `--outdir=${outdir}`];
   const res = spawnSync("npx", cmd, { cwd: root, encoding: "utf8", timeout: 600_000 });
   if (res.error || res.status !== 0) {
     console.error("plan-deploy: `npx wrangler deploy --dry-run` failed");

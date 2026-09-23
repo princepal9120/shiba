@@ -21,7 +21,7 @@ import { classifySlackMentionIntent } from "../src/slack-mention.js";
 
 function keyFromDevVars(): string | null {
   try {
-    const raw = readFileSync(join(process.cwd(), "backend", ".dev.vars"), "utf8");
+    const raw = readFileSync(join(import.meta.dirname, "..", ".dev.vars"), "utf8");
     const line = raw.split("\n").find((entry) => entry.startsWith("TYPESAFE_API_KEY="));
     return line ? line.slice("TYPESAFE_API_KEY=".length).trim() : null;
   } catch {

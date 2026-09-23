@@ -38,8 +38,8 @@ cp backend/.dev.vars.example backend/.dev.vars
 After resolving [readiness blockers](/docs/readiness/), production operators may configure:
 
 ~~~sh
-npx wrangler secret put GITHUB_TOKEN
-npx wrangler secret put GITHUB_WEBHOOK_SECRET
+npx wrangler secret put GITHUB_TOKEN --config backend/wrangler.jsonc
+npx wrangler secret put GITHUB_WEBHOOK_SECRET --config backend/wrangler.jsonc
 ~~~
 
 These commands modify your Cloudflare account. They are not local validation steps. Keep actual provider keys in the supported gateway credential store, never in container configuration. See [Deployment](/docs/deployment/#ai-gateway-setup).
