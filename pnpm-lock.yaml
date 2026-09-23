@@ -28,6 +28,9 @@ importers:
       '@eslint/js':
         specifier: ^9.39.5
         version: 9.39.5
+      '@types/react':
+        specifier: 19.2.18
+        version: 19.2.18
       alchemy:
         specifier: 2.0.0-beta.79
         version: 2.0.0-beta.79(@effect/platform-bun@4.0.0-rc.117(effect@4.0.0-rc.117))(@effect/platform-node@4.0.0-rc.117(effect@4.0.0-rc.117)(redis@6.2.1))(@types/node@26.6.2)(@types/react@19.2.18)(effect@4.0.0-rc.117)(typescript@5.9.3)(vite@8.3.0(@types/node@26.6.2)(esbuild@0.28.2)(jiti@1.21.7)(yaml@2.9.1))(vitest@5.0.1(@types/node@26.6.2)(vite@8.3.0(@types/node@26.6.2)(esbuild@0.28.2)(jiti@1.21.7)(yaml@2.9.1)))(ws@8.21.3)
@@ -53,7 +56,7 @@ importers:
         specifier: 4.118.0
         version: 4.118.0(@cloudflare/workers-types@5.20260923.1)
 
-  backend:
+  apps/backend:
     dependencies:
       '@cloudflare/ai-chat':
         specifier: 0.12.0
@@ -111,7 +114,7 @@ importers:
         specifier: 4.118.0
         version: 4.118.0(@cloudflare/workers-types@5.20260923.1)
 
-  frontend:
+  apps/frontend:
     dependencies:
       '@ai-sdk/react':
         specifier: ^4.0.105
@@ -166,7 +169,7 @@ importers:
         specifier: 8.3.0
         version: 8.3.0(@types/node@26.6.2)(esbuild@0.28.2)(jiti@1.21.7)(yaml@2.9.1)
 
-  web:
+  apps/web:
     dependencies:
       '@astrojs/starlight':
         specifier: ^0.42.1
@@ -7957,7 +7960,7 @@ snapshots:
 
   '@types/sax@1.2.7':
     dependencies:
-      '@types/node': 24.13.6
+      '@types/node': 26.6.2
 
   '@types/unist@2.0.11': {}
 

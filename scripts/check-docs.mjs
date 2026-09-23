@@ -64,7 +64,7 @@ const staleClaims = [
   { re: /only google/gi, note: "provider-lock claim" },
   { re: /provider callback/gi, note: "deleted 503 callback path", allow: negated },
 ];
-const docsRoot = resolve("web/src/content/docs");
+const docsRoot = resolve("apps/web/src/content/docs");
 const markdown = (await walk(docsRoot)).filter(file => /\.(md|mdx)$/.test(file));
 const stale = [];
 for (const file of markdown) {

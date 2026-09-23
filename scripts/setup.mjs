@@ -39,7 +39,7 @@ ok(`wrangler authenticated${accountId ? ` (account ${accountId.slice(0, 8)}…)`
 
 // 2. deploy
 if ((await ask("Deploy now with `wrangler deploy`? (y/n)", "y")).toLowerCase() === "y") {
-  const deploy = run("npx", ["wrangler", "deploy", "--config", "backend/wrangler.jsonc"]);
+  const deploy = run("npx", ["wrangler", "deploy", "--config", "apps/backend/wrangler.jsonc"]);
   if (deploy.status !== 0) { console.log("Deploy failed — fix the error above and re-run."); process.exit(1); }
   ok("deployed");
 }
@@ -61,14 +61,14 @@ const collected = {};
 for (const [name, hint] of secrets) {
   const value = await askSecret(`${name} — ${hint}`);
   if (!value) { note(`${name} skipped`); continue; }
-  const r = run("npx", ["wrangler", "secret", "put", name, "--config", "backend/wrangler.jsonc"], value + "\n");
+  const r = run("npx", ["wrangler", "secret", "put", name, "--config", "apps/backend/wrangler.jsonc"], value + "\n");
   if (r.status === 0) { ok(`${name} set`); collected[name] = value; }
-  else note(`${name} failed — set later with: npx wrangler secret put ${name} --config backend/wrangler.jsonc`);
+  else note(`${name} failed — set later with: npx wrangler secret put ${name} --config apps/backend/wrangler.jsonc`);
 }
 if (await ask("Require Cloudflare Access on the dashboard/API? (y/n)", "y") === "y") {
   collected.REQUIRE_ACCESS = "1";
   // Plain var, not a secret — wrangler secret put cannot set it.
-  note('add "REQUIRE_ACCESS": "1" under "vars" in backend/wrangler.jsonc and re-run wrangler deploy --config backend/wrangler.jsonc');
+  note('add "REQUIRE_ACCESS": "1" under "vars" in apps/backend/wrangler.jsonc and re-run wrangler deploy --config apps/backend/wrangler.jsonc');
 }
 
 // 4. optional CF API automation
@@ -96,9 +96,9 @@ if (apiToken && accountId) {
 // 5. local dev vars
 if (Object.keys(collected).length && await ask("Write secrets to .dev.vars for `wrangler dev`? (y/n)", "n") === "y") {
   const lines = Object.entries(collected).map(([k, v]) => `${k}=${v}`).join("\n") + "\n";
-  const existing = existsSync("backend/.dev.vars") ? readFileSync("backend/.dev.vars", "utf8") : "";
-  writeFileSync("backend/.dev.vars", existing + lines);
-  ok("backend/.dev.vars appended (gitignored)");
+  const existing = existsSync("apps/backend/.dev.vars") ? readFileSync("apps/backend/.dev.vars", "utf8") : "";
+  writeFileSync("apps/backend/.dev.vars", existing + lines);
+  ok("apps/backend/.dev.vars appended (gitignored)");
 }
 
 // 6. manual steps

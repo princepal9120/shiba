@@ -34,7 +34,7 @@ if (process.argv.includes("--help") || process.argv.includes("-h")) {
   console.log(`Usage: node scripts/check-alchemy-drift.mjs [options]
 
 Options:
-  --wrangler=<path>  wrangler config (default: backend/wrangler.jsonc)
+  --wrangler=<path>  wrangler config (default: apps/backend/wrangler.jsonc)
   --alchemy=<path>   alchemy stack file (default: alchemy.run.ts)
   --help             show this text
 
@@ -46,7 +46,7 @@ env name is reported as drift.`);
   process.exit(0);
 }
 
-const wranglerPath = resolve(root, arg("wrangler") ?? "backend/wrangler.jsonc");
+const wranglerPath = resolve(root, arg("wrangler") ?? "apps/backend/wrangler.jsonc");
 const alchemyPath = resolve(root, arg("alchemy") ?? "alchemy.run.ts");
 
 // --- JSONC: two string-aware passes — strip comments BEFORE trailing commas,

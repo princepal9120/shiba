@@ -29,7 +29,7 @@ A user must be able to:
 13. Use the /shiba-ai-coworker slash command to start a task from Slack without an existing thread.
 14. Create automations with schedule (cron), GitHub event, Slack, webhook, or manual triggers. Each automation has an optional run_when plain-language condition (evaluated by TypeSafe Noul when TYPESAFE_API_KEY is set, else Workers AI). Automated runs require approval by default; opt-in unattended mode is available only for pull-request-only mutations on an explicit repo allowlist.
 
-The dashboard is one inbound surface of two. Slack (`@shiba-ai-coworker` mentions and `/shiba-ai-coworker`) is a supported entry point: thread prose is turned into structured `delegate_coding_task` by the orchestrator LLM. Prose never crosses the child boundary (`parseAgentToolInput`). Slack approvals require `SLACK_APPROVERS`; an empty list means nobody can approve from Slack.
+The dashboard is one inbound surface of two. Slack (`@shiba-ai-coworker` mentions and `/shiba-ai-coworker`) is a supported entry point: thread prose is turned into structured `delegate_coding_task` by the orchestrator LLM. Prose never crosses the child boundary (`parseAgentToolInput`). The mention → card → approve → run flow gates on two settings: `SLACK_CHANNEL_REPOS` maps a channel to its repository so a mention resolves `repoUrl` without the user typing one, and `SLACK_APPROVERS` gates who may approve the card; an empty approver list means nobody can approve from Slack, and a channel missing from the map means the task must state the repository explicitly.
 
 
 ## Required architecture
@@ -146,7 +146,7 @@ Delete obsolete Python backend, Docker Compose, Postgres, Redis, Celery, legacy 
 Add:
 
 - Root `package.json` and lockfile
-- `backend/wrangler.jsonc`
+- `apps/backend/wrangler.jsonc`
 - Sandbox `Dockerfile`
 - Vite and TypeScript config
 - Worker and dashboard source

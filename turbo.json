@@ -9,7 +9,7 @@
         "dist/**",
         "public/**",
         ".astro/**",
-        "../public/**"
+        "../../public/**"
       ]
     },
     "test": {

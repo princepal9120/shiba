@@ -2,9 +2,7 @@ overrides:
   chat: "4.40.0"
 
 packages:
-  - backend
-  - frontend
-  - web
+  - apps/*
 
 onlyBuiltDependencies:
   - "@mongodb-js/zstd"

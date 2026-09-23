@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "targets": {
+    "/": {
+      "targetKind": "existing-ui",
+      "projectId": "f4cafc46-23fa-4cc3-aa81-535de82b083b",
+      "baselineDraftId": "0b06cd1b-e33b-4f15-affe-6bd82ecded79",
+      "activeDraftId": "0b06cd1b-e33b-4f15-affe-6bd82ecded79",
+      "designSystemPath": ".superdesign/design-system.md",
+      "referenceIds": ["assets-mascot-pet-logo.png"],
+      "brandAssets": {
+        "logo": {
+          "assetKey": "assets-mascot-pet-logo.png",
+          "url": "https://vgbujcuwptvheqijyjbe.supabase.co/storage/v1/object/public/hmac-uploads/projects/f4cafc46-23fa-4cc3-aa81-535de82b083b/brand-assets/assets-mascot-pet-logo.png/pet-logo.png",
+          "sourcePath": "web/public/assets/mascot/pet-logo.png"
+        }
+      },
+      "contextFiles": [
+        ".superdesign/design-system.md",
+        ".superdesign/tmp/landing-style.css",
+        ".superdesign/tmp/landing-a.html",
+        ".superdesign/tmp/landing-b.html",
+        "web/tailwind.config.js"
+      ],
+      "fingerprints": {
+        ".superdesign/design-system.md": "b242cf8bdcda93e8d38137b9f9075ca786ee6b0101f441943f54e5f765a626b1",
+        "web/src/pages/index.astro": "04872c8e02b6c3e10b976fe8d72e3dc82100409d5b931a40427cbeebbadee4bd",
+        "web/tailwind.config.js": "0d405f661b1a4c891c214d2d5a194dcea76368944ca578ebd131ad979f176516",
+        "web/src/styles/theme.css": "817c7890b0cef7d296f992cbfa90621a6f3ef6f086b8d727e40d499a3081ef02"
+      },
+      "drafts": {
+        "0b06cd1b-e33b-4f15-affe-6bd82ecded79": {
+          "title": "tryshiba.dev — Current Landing (Baseline)",
+          "visualDirection": "pixel-perfect reproduction of current neo-brutalist manga landing",
+          "currentVersion": 1
+        },
+        "e86c4bda-c39b-41ce-87b0-7ffd28729dd8": {
+          "title": "Refined Neo-Brutalist Manga Landing Page",
+          "visualDirection": "refined manga polish — tighter rhythm, cleaner hierarchy, subtle teal glow",
+          "parentDraftId": "0b06cd1b-e33b-4f15-affe-6bd82ecded79",
+          "currentVersion": 1
+        },
+        "3e6aa9cd-4ea8-4fcd-beea-2f2d7553a697": {
+          "title": "Shiba — The Boldest AI Software Engineer",
+          "visualDirection": "bolder manga impact — bigger display type, dramatic editorial, amplified SFX",
+          "parentDraftId": "0b06cd1b-e33b-4f15-affe-6bd82ecded79",
+          "currentVersion": 1
+        },
+        "7f5d1574-f07f-475f-97ab-f50f47e1f5b8": {
+          "title": "Shiba — Redesigned Neo-Brutalist Dashboard Landing",
+          "visualDirection": "manga x workbench fusion — navy #1e3a8a/#2563eb + teal, JetBrains Mono data, status chips, terminal/console, glass panels",
+          "parentDraftId": "0b06cd1b-e33b-4f15-affe-6bd82ecded79",
+          "currentVersion": 1
+        },
+        "3a9c7563-6630-42eb-8f41-66fee9303dcf": {
+          "title": "Shiba — AI Software Engineer (Light Workbench Redesign)",
+          "visualDirection": "light theme manga x workbench — #f8fafc bg, white panels, navy/blue accents, JetBrains Mono, status chips",
+          "parentDraftId": "7f5d1574-f07f-475f-97ab-f50f47e1f5b8",
+          "currentVersion": 1
+        }
+      },
+      "updatedAt": "2026-09-23T00:00:00Z"
+    },
+    "AI Intern - Run Registry Redesign": {
+      "targetKind": "existing-ui",
+      "projectId": "f4cafc46-23fa-4cc3-aa81-535de82b083b",
+      "activeDraftId": "8d741bb1-35e6-4304-a409-963adb5cab60"
+    }
+  }
+}

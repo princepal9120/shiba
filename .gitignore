@@ -1,7 +1,7 @@
 node_modules/
 public/
-!web/public/
-!web/public/**
+!apps/web/public/
+!apps/web/public/**
 dist/
 .wrangler/
 .wrangler-ephemeral-*.jsonc
@@ -21,3 +21,6 @@ shiba-ai-coworker-docs/
 .playwright-mcp/
 .reticle/
 .alchemy/
+.superdesign/tmp/
+.agents/
+.claude/
