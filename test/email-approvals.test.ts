@@ -1034,6 +1034,10 @@ describe("GET /api/approvals", () => {
     await settled();
     expect(mailboxCalls).toHaveLength(1);
 
+    // The first poll's sweep freed the orphan; re-lock the row so the
+    // mint's draft-binding gate sees the lock-then-queue invariant a
+    // real queue leaves behind.
+    drafts["draft-orphan"] = "queued";
     const stale = await queueEmailApproval(env as never, {
       kind: "email_send",
       mailbox: "agent-a@shiba.dev",
