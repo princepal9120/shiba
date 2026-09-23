@@ -6,7 +6,6 @@ import {
   executeEmailApproval,
   queueEmailApproval,
 } from "../src/email-approvals.js";
-import { emailApprovalRequestLine } from "../src/slack-approval.js";
 import { InputError } from "../src/security.js";
 
 const mocks = vi.hoisted(() => ({ execute: vi.fn(), getAgentByName: vi.fn(), destroy: vi.fn() }));
@@ -32,7 +31,7 @@ interface MailboxCall {
  * executions run against a fake `env.Mailbox` stub + `env.SEND_EMAIL`
  * binding that record every call the frozen payload produces.
  */
-function agentWithMailbox() {
+function agentWithMailbox(opts: { failingMailboxPaths?: RegExp } = {}) {
   const mailboxCalls: MailboxCall[] = [];
   const send = vi.fn(async (_message: unknown) => ({ status: "ok" }));
   const mailboxStub = {
@@ -46,6 +45,9 @@ function agentWithMailbox() {
           ? ((await request.json().catch(() => undefined)) as Record<string, unknown> | undefined)
           : undefined,
       });
+      if (opts.failingMailboxPaths?.test(url.pathname)) {
+        return new Response("fail", { status: 500 });
+      }
       return new Response("{}", { status: 200 });
     },
   };
@@ -219,8 +221,8 @@ describe("email approval execution", () => {
     expect(mailboxCalls).toHaveLength(callsAfterFirst);
   });
 
-  it("rejection leaves the draft unsent: nothing is sent, recorded, or transitioned", async () => {
-    const { instance, env, send, mailboxCalls } = agentWithMailbox();
+  it("rejection releases the queued draft back to 'draft' and sends nothing", async () => {
+    const { instance, env, send, mailboxCalls, settled } = agentWithMailbox();
     const { approval_id } = await queueEmailApproval(env as never, {
       kind: "email_send",
       mailbox: "agent-a@shiba.dev",
@@ -228,14 +230,73 @@ describe("email approval execution", () => {
     });
     const response = await approve(instance, approval_id, false);
     expect((await response.json() as { result: string }).result).toBe("rejected");
-    await flush();
+    await settled();
     expect(send).not.toHaveBeenCalled();
-    expect(mailboxCalls).toHaveLength(0);
+    // The compensating unqueue frees the row — otherwise the draft strands
+    // `queued` behind a pointer that can never be re-resolved.
+    expect(mailboxCalls).toEqual([
+      { method: "POST", path: "/internal/mailbox/drafts/draft-1/unqueue", body: undefined },
+    ]);
     // The spent pointer cannot later send the payload either.
     const replay = await approve(instance, approval_id, true);
     expect((await replay.json() as { result: string }).result).toBe("unknown");
+    await settled();
     await flush();
     expect(send).not.toHaveBeenCalled();
+    expect(mailboxCalls).toHaveLength(1);
+  });
+
+  it("rejection of an email_delete does not touch the mailbox", async () => {
+    const { instance, env, send, mailboxCalls } = agentWithMailbox();
+    const { approval_id } = await queueEmailApproval(env as never, {
+      kind: "email_delete",
+      mailbox: "agent-a@shiba.dev",
+      payload: { ...DELETE_PAYLOAD },
+    });
+    const response = await approve(instance, approval_id, false);
+    expect((await response.json() as { result: string }).result).toBe("rejected");
+    await flush();
+    expect(send).not.toHaveBeenCalled();
+    expect(mailboxCalls).toHaveLength(0);
+  });
+
+  it("a send failure before transmission unqueues the draft so it can be re-queued", async () => {
+    const { instance, env, send, mailboxCalls, settled } = agentWithMailbox();
+    send.mockRejectedValue(new Error("smtp down"));
+    const { approval_id } = await queueEmailApproval(env as never, {
+      kind: "email_send",
+      mailbox: "agent-a@shiba.dev",
+      payload: { ...SEND_PAYLOAD },
+    });
+    const response = await approve(instance, approval_id, true);
+    expect((await response.json() as { result: string }).result).toBe("approved");
+    await settled();
+    // The payload never left — the draft goes back to editable `draft`,
+    // not to `sent`.
+    expect(mailboxCalls).toEqual([
+      { method: "POST", path: "/internal/mailbox/drafts/draft-1/unqueue", body: undefined },
+    ]);
+  });
+
+  it("a post-transmission failure reconciles the draft to 'sent', never re-queues it", async () => {
+    // The outbound copy insert fails after the mail already went out —
+    // the truth is 'sent', and re-queueing would double-send.
+    const { instance, env, send, mailboxCalls, settled } = agentWithMailbox({
+      failingMailboxPaths: /^\/internal\/mailbox\/emails$/,
+    });
+    const { approval_id } = await queueEmailApproval(env as never, {
+      kind: "email_send",
+      mailbox: "agent-a@shiba.dev",
+      payload: { ...SEND_PAYLOAD },
+    });
+    const response = await approve(instance, approval_id, true);
+    expect((await response.json() as { result: string }).result).toBe("approved");
+    await settled();
+    expect(send).toHaveBeenCalledOnce();
+    const paths = mailboxCalls.map((call) => `${call.method} ${call.path}`);
+    expect(paths).toContain("POST /internal/mailbox/emails");
+    expect(paths).toContain("POST /internal/mailbox/drafts/draft-1/sent");
+    expect(paths).not.toContain("POST /internal/mailbox/drafts/draft-1/unqueue");
   });
 
   it("approve on email_delete issues the mailbox DELETE exactly once", async () => {
@@ -324,22 +385,33 @@ describe("emailApprovalBridgeReady", () => {
   });
 });
 
-describe("email Slack card copy", () => {
-  it("reads 'Agent X requests email send to Y: subject'", () => {
-    expect(
-      emailApprovalRequestLine({
-        kind: "email_send",
-        agent: "agent-a@shiba.dev",
-        toAddr: "person@example.com",
-        subject: "Status update",
-      }),
-    ).toBe("Agent agent-a@shiba.dev requests email send to person@example.com: Status update");
-    expect(
-      emailApprovalRequestLine({
-        kind: "email_delete",
-        agent: "agent-a@shiba.dev",
-        subject: "Old thread",
-      }),
-    ).toBe("Agent agent-a@shiba.dev requests email delete of Old thread");
+describe("GET /api/approvals", () => {
+  it("lists only live pending pointers — decided records leave the list", async () => {
+    const { instance, env, settled } = agentWithMailbox();
+    const first = await queueEmailApproval(env as never, {
+      kind: "email_send",
+      mailbox: "agent-a@shiba.dev",
+      payload: { ...SEND_PAYLOAD },
+    });
+    const second = await queueEmailApproval(env as never, {
+      kind: "email_delete",
+      mailbox: "agent-a@shiba.dev",
+      payload: { ...DELETE_PAYLOAD },
+    });
+    const list = await instance.onRequest(new Request("https://internal/api/approvals"));
+    expect(list.status).toBe(200);
+    const body = (await list.json()) as {
+      approvals: Array<{ approvalId: string; kind?: string; task: string; status: string }>;
+    };
+    expect(body.approvals.map((a) => a.approvalId).sort()).toEqual(
+      [first.approval_id, second.approval_id].sort(),
+    );
+    expect(body.approvals.every((a) => a.status === "pending")).toBe(true);
+    const resolved = await approve(instance, first.approval_id, false);
+    expect((await resolved.json() as { result: string }).result).toBe("rejected");
+    await settled();
+    const after = await instance.onRequest(new Request("https://internal/api/approvals"));
+    const remaining = (await after.json()) as { approvals: Array<{ approvalId: string }> };
+    expect(remaining.approvals.map((a) => a.approvalId)).toEqual([second.approval_id]);
   });
 });

@@ -29,6 +29,7 @@ import {
 import { makeReceipt } from "../receipts.js";
 import {
   createPendingApproval,
+  isApprovalExpired,
   isJsonObject,
   pruneExpiredApprovals,
   resolvePendingApproval,
@@ -36,7 +37,7 @@ import {
   type ResolveResult,
 } from "../pending-approvals.js";
 import { makeSandboxId, parseGitHubRepoUrl, redactSecrets } from "../security.js";
-import { executeEmailApproval } from "../email-approvals.js";
+import { executeEmailApproval, unqueueEmailApprovalDraft } from "../email-approvals.js";
 import { ADDRESS_RE } from "../mailbox-store.js";
 import { classifyExecutorError, classifyRunError, runErrorWire, type RunErrorCode, type RunErrorWire } from "../run-errors.js";
 import { parseSlackThreadName } from "../slack-thread.js";
@@ -460,6 +461,10 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     const record = result.result === "approved"
       ? approvals.find((approval) => approval.approvalId === approvalId)
       : undefined;
+    const rejectedEmail =
+      result.result === "rejected"
+        ? approvals.find((approval) => approval.approvalId === approvalId && approval.kind === "email_send")
+        : undefined;
     const isEmailRecord = record !== undefined && (record.kind === "email_send" || record.kind === "email_delete");
     const run = record && !isEmailRecord ? createRun({
       runId: `agent-tool:${approvalId}`,
@@ -518,6 +523,22 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         this.ctx.waitUntil(pending);
       } else {
         void pending;
+      }
+    }
+    if (rejectedEmail) {
+      // Rejecting frees the queued draft back to `draft` — otherwise the
+      // row strands `queued` behind an approval that can never re-resolve.
+      const emailRecord = rejectedEmail;
+      const release = unqueueEmailApprovalDraft(this.env, emailRecord).catch((error) => {
+        console.error(
+          `Email approval ${approvalId} draft release failed`,
+          redactSecrets(String(error)),
+        );
+      });
+      if (typeof this.ctx === "object" && this.ctx !== null && "waitUntil" in this.ctx) {
+        this.ctx.waitUntil(release);
+      } else {
+        void release;
       }
     }
     return Response.json({ result: result.result satisfies ResolveResult });
@@ -594,8 +615,26 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     this.setState({ ...this.state, runs: this.store.list().filter((run) => !removed.has(run.runId)) });
   }
 
+  /**
+   * GET the live approval pointers — the dashboard's Approvals surface
+   * lists them to a human who decides via POST. Expired pendings are
+   * hidden (resolve would call them "unknown" anyway); decided records
+   * are dropped too — a resolved pointer must never be re-listed.
+   */
+  private listApprovals(): Response {
+    const now = Date.now();
+    return Response.json({
+      approvals: this.approvals.filter(
+        (approval) => approval.status === "pending" && !isApprovalExpired(approval, now),
+      ),
+    });
+  }
+
   override async onRequest(request: Request): Promise<Response> {
     const url = new URL(request.url);
+    if (url.pathname === "/api/approvals" && request.method === "GET") {
+      return this.listApprovals();
+    }
     if (request.method === "POST" && url.pathname === "/api/approvals") {
       let approvalBody: unknown;
       try {
@@ -607,6 +646,9 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         return Response.json({ error: "Request body must be a JSON object." }, { status: 400 });
       }
       return this.resolveApproval(approvalBody as Record<string, unknown>);
+    }
+    if (url.pathname === "/api/approvals") {
+      return Response.json({ error: "Method not allowed." }, { status: 405 });
     }
     const match = url.pathname.match(/^\/api\/runs(?:\/([^/]+))?$/);
     if (!match) {

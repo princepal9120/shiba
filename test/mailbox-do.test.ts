@@ -387,6 +387,26 @@ describe("draft routes", () => {
     expect((await send(stub, "POST", "/drafts/drf-nope/queue", {})).status).toBe(404);
     expect((await get(stub, `/drafts/${draft.id}/queue`)).status).toBe(405);
   });
+
+  it("POST /drafts/:id/unqueue releases a queued draft back to 'draft'", async () => {
+    const h = makeHarness();
+    const stub = h.stub("agent@shiba.dev");
+    const created = await send(stub, "POST", "/drafts", {
+      to_addr: "sender@example.com",
+      subject: "s",
+      body_text: "b",
+    });
+    const { draft } = await asJson(created);
+    // Non-queued rows reject the release seam.
+    expect((await send(stub, "POST", `/drafts/${draft.id}/unqueue`, {})).status).toBe(400);
+    await send(stub, "POST", `/drafts/${draft.id}/queue`, {});
+    const released = await asJson(await send(stub, "POST", `/drafts/${draft.id}/unqueue`, {}));
+    expect(released.draft.status).toBe("draft");
+    // Released rows can be queued again — the gate owns them only while queued.
+    expect((await send(stub, "POST", `/drafts/${draft.id}/queue`, {})).status).toBe(200);
+    expect((await send(stub, "POST", "/drafts/drf-nope/unqueue", {})).status).toBe(404);
+    expect((await get(stub, `/drafts/${draft.id}/unqueue`)).status).toBe(405);
+  });
 });
 
 describe("mailbox meta", () => {

@@ -390,6 +390,28 @@ describe("drafts", () => {
     store.updateDraft(gone.id, { status: "discarded" });
     expect(() => store.markDraftQueued(gone.id)).toThrow(InputError);
   });
+
+  it("unqueueDraft releases queued→draft once, editable and re-queueable", () => {
+    const store = makeStore();
+    const draft = store.createDraft({
+      to_addr: "sender@example.com",
+      subject: "x",
+      body_text: "y",
+    });
+    // Only `queued` rows may leave through the release seam — a live
+    // `draft` and a `sent` row both reject it.
+    expect(() => store.unqueueDraft(draft.id)).toThrow(InputError);
+    store.markDraftQueued(draft.id, 40);
+    const released = store.unqueueDraft(draft.id, 50);
+    expect(released?.status).toBe("draft");
+    expect(released?.updated_at).toBe(50);
+    // Back in `draft`, the row is editable and can be queued again.
+    expect(store.updateDraft(draft.id, { body_text: "edited" })?.body_text).toBe("edited");
+    expect(store.markDraftQueued(draft.id, 60)?.status).toBe("queued");
+    expect(store.unqueueDraft("drf-nope")).toBeNull();
+    store.markDraftSent(draft.id);
+    expect(() => store.unqueueDraft(draft.id)).toThrow(InputError);
+  });
 });
 
 describe("mailboxes", () => {

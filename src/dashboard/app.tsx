@@ -27,7 +27,7 @@ import {
   extractCompletedDiff,
   parseRepoName,
 } from "./ui-helpers";
-import type { RetainedRun, ToolRunRecord } from "./types";
+import type { RetainedRun, StoredApproval, ToolRunRecord } from "./types";
 
 const ORCHESTRATOR_AGENT = "coding-orchestrator";
 
@@ -65,6 +65,51 @@ function useRetainedRuns(refreshToken: number): { runs: RetainedRun[]; error: st
   }, [refreshToken]);
 
   return { runs, error };
+}
+
+/**
+ * Live approval pointers from the orchestrator DO (`GET /api/approvals`).
+ * These are the records Slack-card and queued-email approvals write —
+ * separate from chat tool-part approvals, and the only surface where a
+ * queued email send can be decided. Polls so cards disappear the moment
+ * another surface (or a peer) resolves them.
+ */
+function useStoredApprovals(refreshToken: number): {
+  approvals: StoredApproval[];
+  error: string | null;
+} {
+  const [approvals, setApprovals] = useState<StoredApproval[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = () => {
+      fetch("/api/approvals")
+        .then(async (response) => {
+          if (!response.ok) {
+            throw new Error(`Approvals request failed: ${response.status}`);
+          }
+          const body = (await response.json()) as { approvals?: StoredApproval[] };
+          if (!cancelled) {
+            setApprovals(Array.isArray(body.approvals) ? body.approvals : []);
+            setError(null);
+          }
+        })
+        .catch((fetchError: unknown) => {
+          if (!cancelled) {
+            setError(fetchError instanceof Error ? fetchError.message : String(fetchError));
+          }
+        });
+    };
+    load();
+    const timer = window.setInterval(load, 10_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [refreshToken]);
+
+  return { approvals, error };
 }
 
 type MainView = AppNavView;
@@ -236,6 +281,8 @@ export function App(): React.JSX.Element {
   });
   const { runsById } = useAgentToolEvents({ agent });
   const { runs: retainedRuns, error: runsError } = useRetainedRuns(refreshToken);
+  const { approvals: storedApprovals, error: storedApprovalsError } =
+    useStoredApprovals(refreshToken);
 
   const toolRuns = useMemo(() => Object.values(runsById) as ToolRunRecord[], [runsById]);
 
@@ -245,6 +292,7 @@ export function App(): React.JSX.Element {
   );
 
   const decidedRef = useRef<Set<string>>(new Set());
+  const decidedStoredRef = useRef<Set<string>>(new Set());
 
   const refreshRuns = useCallback(() => setRefreshToken((token) => token + 1), []);
 
@@ -299,6 +347,82 @@ export function App(): React.JSX.Element {
       }
     },
     [chat],
+  );
+
+  const [storedDecisions, setStoredDecisions] = useState<Record<string, boolean>>({});
+
+  // Drop decision bookkeeping for stored approvals that left the list.
+  useEffect(() => {
+    const waiting = new Set(storedApprovals.map((approval) => approval.approvalId));
+    for (const id of Array.from(decidedStoredRef.current)) {
+      if (!waiting.has(id)) decidedStoredRef.current.delete(id);
+    }
+    setStoredDecisions((current) => {
+      const next: Record<string, boolean> = {};
+      let changed = false;
+      for (const [id, approved] of Object.entries(current)) {
+        if (waiting.has(id)) {
+          next[id] = approved;
+        } else {
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+  }, [storedApprovals]);
+
+  // Decide a DO-state approval pointer: POST resolves it in place — the
+  // frozen payload executes or the queued draft is released.
+  const decideStoredApproval = useCallback(
+    async (approval: StoredApproval, approved: boolean) => {
+      const approvalId = approval.approvalId;
+      if (decidedStoredRef.current.has(approvalId)) return;
+      decidedStoredRef.current.add(approvalId);
+      setStoredDecisions((current) => ({ ...current, [approvalId]: approved }));
+      try {
+        const response = await fetch("/api/approvals", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            threadKey: approval.threadKey,
+            approvalId,
+            approved,
+          }),
+        });
+        const body = (await response.json().catch(() => ({}))) as {
+          result?: string;
+          error?: string;
+        };
+        if (!response.ok) {
+          throw new Error(body.error ?? `Approval request failed: ${response.status}`);
+        }
+        if (body.result === "unknown") {
+          throw new Error(
+            "The approval is gone — it expired or was already decided elsewhere.",
+          );
+        }
+        setApprovalAnnouncement(
+          approved
+            ? "Approved — the request is executing."
+            : "Rejected — nothing will execute.",
+        );
+        setNotice(null);
+      } catch (decisionError) {
+        decidedStoredRef.current.delete(approvalId);
+        setStoredDecisions((current) => {
+          const next = { ...current };
+          delete next[approvalId];
+          return next;
+        });
+        setNotice(
+          `${approved ? "Approval" : "Rejection"} could not be recorded: ${
+            decisionError instanceof Error ? decisionError.message : String(decisionError)
+          }`,
+        );
+      }
+      refreshRuns();
+    },
+    [refreshRuns],
   );
 
   useEffect(() => {
@@ -803,8 +927,8 @@ export function App(): React.JSX.Element {
               <Tooltip content="Actions waiting for human approval" side="bottom">
               <span className="cursor-default">
                 <span className="text-[#6a6f63]">Approvals</span>{" "}
-                <span className={pendingApprovals.length > 0 ? "font-bold text-[#f99c00]" : "font-bold text-[#6a6f63]"}>
-                  {pendingApprovals.length}
+                <span className={pendingApprovals.length + storedApprovals.length > 0 ? "font-bold text-[#f99c00]" : "font-bold text-[#6a6f63]"}>
+                  {pendingApprovals.length + storedApprovals.length}
                 </span>
               </span>
               </Tooltip>
@@ -839,13 +963,13 @@ export function App(): React.JSX.Element {
           </div>
 
           {/* PENDING APPROVALS STRIP */}
-          {(pendingApprovals.length > 0 || approvalAnnouncement) ? (
+          {(pendingApprovals.length + storedApprovals.length > 0 || approvalAnnouncement) ? (
             <div className="bg-[#fffef8] border-b border-[#eae8e1] px-5 xl:px-6 py-3 flex items-center justify-between shadow-sm z-10 shrink-0">
               <p className="text-sm font-medium text-[#222320]" role="status" aria-live="polite">
-                {pendingApprovals.length > 0 ? (
+                {pendingApprovals.length + storedApprovals.length > 0 ? (
                   <span className="flex items-center gap-2 text-[#b45309]">
                     <span className="w-2.5 h-2.5 rounded-full bg-[#b45309] animate-pulse shadow-[0_0_8px_rgba(249,156,0,0.6)]" />
-                    {pendingApprovals.length} task{pendingApprovals.length === 1 ? "" : "s"} waiting for your approval.
+                    {pendingApprovals.length + storedApprovals.length} task{pendingApprovals.length + storedApprovals.length === 1 ? "" : "s"} waiting for your approval.
                   </span>
                 ) : (
                   <span className="text-[#15803d] flex items-center gap-2">
@@ -935,6 +1059,10 @@ export function App(): React.JSX.Element {
           pendingApprovals={pendingApprovals}
           decisions={decisions}
           onDecideApproval={decideApproval}
+          storedApprovals={storedApprovals}
+          storedDecisions={storedDecisions}
+          storedApprovalsError={storedApprovalsError}
+          onDecideStoredApproval={decideStoredApproval}
           onRefreshRuns={refreshRuns}
           onInspectVM={(id) => {
             setSelectedRunId(id);

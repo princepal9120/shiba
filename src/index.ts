@@ -17,6 +17,7 @@ import { handleInboundEmail } from "./email-handler.js";
 import type { Env } from "./env.js";
 import { agentCliCatalog } from "./harness/catalog.js";
 import { Mailbox, mailboxDirectoryStub, mailboxStub } from "./mailbox-do.js";
+import type { PendingApproval } from "./pending-approvals.js";
 import type {
   DraftRecord,
   MailboxRecord,
@@ -26,7 +27,7 @@ import type {
 } from "./mailbox-store.js";
 import { encodePrincipal, McpGateway, MCP_PRINCIPAL_HEADER } from "./mcp-gateway.js";
 import { Sandbox } from "./sandbox.js";
-import { InputError, redactSecrets, verifyGitHubWebhookSignature } from "./security.js";
+import { InputError, NotFoundError, redactSecrets, verifyGitHubWebhookSignature } from "./security.js";
 import { handleSlackInteract } from "./slack-approval.js";
 import { handleSlackEvents } from "./slack-events.js";
 import { handleSlackEvent } from "./slack-mention.js";
@@ -118,7 +119,10 @@ async function mailboxDoJson<T>(
     const text = (await response.text()).trim();
     const message =
       text === "" ? `Mailbox request failed (HTTP ${response.status})` : text;
-    if (response.status === 400 || response.status === 404) {
+    if (response.status === 404) {
+      throw new NotFoundError(message);
+    }
+    if (response.status === 400) {
       throw new InputError(message);
     }
     throw new Error(message);
@@ -262,17 +266,34 @@ async function queueDraftSend(env: Env, draftId: string): Promise<Response> {
     `/drafts/${encodeURIComponent(draftId)}/queue`,
     { method: "POST" },
   );
-  const approval = await queueEmailApproval(env, {
-    kind: "email_send",
-    mailbox,
-    payload: {
-      to_addr: queued.to_addr,
-      subject: queued.subject,
-      body_text: queued.body_text,
-      ...(queued.thread_id !== null ? { thread_id: queued.thread_id } : {}),
-      draft_id: queued.id,
-    },
-  });
+  let approval: { approval_id: string };
+  try {
+    approval = await queueEmailApproval(env, {
+      kind: "email_send",
+      mailbox,
+      payload: {
+        to_addr: queued.to_addr,
+        subject: queued.subject,
+        body_text: queued.body_text,
+        ...(queued.thread_id !== null ? { thread_id: queued.thread_id } : {}),
+        draft_id: queued.id,
+      },
+    });
+  } catch (error) {
+    // The queue CAS already landed — without this compensating unqueue the
+    // draft strands in `queued` behind an approval that does not exist.
+    await mailboxDoJson(mailboxStub(env, mailbox), `/drafts/${encodeURIComponent(draftId)}/unqueue`, {
+      method: "POST",
+    }).catch((unqueueError) => {
+      console.warn(
+        `draft unqueue failed after approval mint error ${JSON.stringify({
+          draft_id: draftId,
+          error: unqueueError instanceof Error ? unqueueError.message : String(unqueueError),
+        })}`,
+      );
+    });
+    throw error;
+  }
   return Response.json({
     status: "pending_approval",
     kind: "email_send",
@@ -487,11 +508,92 @@ async function handleInbox(request: Request, env: Env): Promise<Response | null>
     }
     return Response.json({ error: "Not found." }, { status: 404 });
   } catch (error) {
+    if (error instanceof NotFoundError) {
+      return Response.json({ error: error.message }, { status: 404 });
+    }
     if (error instanceof InputError) {
       return Response.json({ error: error.message }, { status: 400 });
     }
     throw error;
   }
+}
+
+/**
+ * Approval pointers live on the orchestrator Durable Object, not the
+ * worker: every email approval mints on `"default"` and dashboard-queued
+ * runs mint on the caller's instance. Listing fans out to both stubs and
+ * merges; resolving probes the caller's DO first, then `"default"` — an
+ * `"unknown"` reply means "try the next stub", never a verdict.
+ */
+async function handleApprovals(request: Request, env: Env): Promise<Response | null> {
+  const url = new URL(request.url);
+  if (url.pathname !== "/api/approvals") {
+    return null;
+  }
+  if (!isAuthenticated(request, env)) {
+    return Response.json({ error: "Authentication required." }, { status: 401 });
+  }
+  const names = [...new Set([getUserId(request) ?? ORCHESTRATOR_NAME, ORCHESTRATOR_NAME])];
+  const stubs = await Promise.all(
+    names.map((name) => getAgentByName(env.CodingOrchestrator, name)),
+  );
+  if (request.method === "GET") {
+    const seen = new Map<string, PendingApproval>();
+    for (const stub of stubs) {
+      const response = await stub.fetch(new Request("https://internal/api/approvals"));
+      if (!response.ok) {
+        console.warn(`GET /api/approvals probe failed (${response.status})`);
+        continue;
+      }
+      const body = (await response.json().catch(() => ({}))) as { approvals?: PendingApproval[] };
+      for (const approval of body.approvals ?? []) {
+        seen.set(approval.approvalId, approval);
+      }
+    }
+    const approvals = [...seen.values()].sort((a, b) => a.createdAt - b.createdAt);
+    return Response.json({ approvals }, { headers: { "Cache-Control": "no-store" } });
+  }
+  if (request.method === "POST") {
+    let body: Record<string, unknown>;
+    try {
+      body = await jsonObjectBody(request);
+    } catch (error) {
+      return Response.json(
+        { error: error instanceof Error ? error.message : "Invalid request body." },
+        { status: 400 },
+      );
+    }
+    if (typeof body.threadKey !== "string" || typeof body.approvalId !== "string" || typeof body.approved !== "boolean") {
+      return Response.json({ error: "Invalid approval payload." }, { status: 400 });
+    }
+    const decidedBy = getUserId(request) ?? "default";
+    let unknown: Response | null = null;
+    for (const stub of stubs) {
+      const response = await stub.fetch(
+        new Request("https://internal/api/approvals", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            threadKey: body.threadKey,
+            approvalId: body.approvalId,
+            approved: body.approved,
+            decidedBy,
+            source: "dashboard",
+          }),
+        }),
+      );
+      if (!response.ok) {
+        return response;
+      }
+      const result = (await response.json().catch(() => ({}))) as { result?: string };
+      if (result.result !== "unknown") {
+        return Response.json({ result: result.result });
+      }
+      unknown = response;
+    }
+    return unknown ?? Response.json({ result: "unknown" });
+  }
+  return Response.json({ error: "Method not allowed." }, { status: 405 });
 }
 
 /** Shared registry stub — cross-agent reads all route through "global" (T8). */
@@ -749,8 +851,12 @@ export default {
       // `/internal/*` paths exist only inside DO stub fetches (Automations
       // tick/dedupe, the Mailbox JSON API under `/internal/mailbox/`) — the
       // worker never serves them to the outside.
-      if (url.pathname === "/api/approvals" || url.pathname.startsWith("/internal/")) {
+      if (url.pathname.startsWith("/internal/")) {
         return Response.json({ error: "Not found." }, { status: 404 });
+      }
+      const approvalsResponse = await handleApprovals(request, env);
+      if (approvalsResponse) {
+        return approvalsResponse;
       }
       assertLiveCodingModel(env);
       // proxyToSandbox only needs the Sandbox binding; adapt the type.

@@ -57,12 +57,11 @@ export function emailApprovalBridgeReady(env: Env): boolean {
 
 /**
  * Queue the frozen request as a pending approval on the shared
- * orchestrator — the same `/api/runs` route the automations use, so
- * Slack cards and the dashboard's Approvals surface pick it up like any
- * other approval. `threadKey` stays `"default"`: the Slack resolver
- * (`resolveOrchestrator` in index.ts) maps a card's threadKey back onto
- * the orchestrator DO by name, so the pointer must name the instance
- * that holds the record.
+ * orchestrator — the same `/api/runs` route the automations use, so the
+ * dashboard's Approvals tab lists it like any other approval through
+ * `GET /api/approvals`. `threadKey` stays `"default"`: the resolve
+ * surface probes the shared DO by that name, so the pointer must name
+ * the instance that holds the record.
  */
 export async function queueEmailApproval(
   env: Env,
@@ -132,7 +131,13 @@ export async function executeEmailApproval(env: Env, record: PendingApproval): P
   }
   const stub = mailboxStub(env, mailbox);
   if (record.kind === "email_send") {
-    await sendApprovedEmail(env, stub, mailbox, fields);
+    const progress = { transmitted: false };
+    try {
+      await sendApprovedEmail(env, stub, mailbox, fields, progress);
+    } catch (error) {
+      await reconcileQueuedDraft(stub, fields, progress.transmitted);
+      throw error;
+    }
     return;
   }
   if (record.kind === "email_delete") {
@@ -153,12 +158,73 @@ export async function executeEmailApproval(env: Env, record: PendingApproval): P
   );
 }
 
-/** Send the frozen payload, then record the evidence trail it leaves. */
+/**
+ * A rejected email approval releases its queued draft back to editable
+ * `"draft"` — without this the row would sit `queued` behind an
+ * approval that can never be re-resolved. Best-effort at the call site:
+ * a failure here is logged, never fatal to the resolve.
+ */
+export async function unqueueEmailApprovalDraft(env: Env, record: PendingApproval): Promise<void> {
+  const payload = record.payload;
+  if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
+    return;
+  }
+  const fields = payload as Record<string, unknown>;
+  const mailbox = typeof fields.mailbox === "string" ? fields.mailbox : "";
+  const draftId = typeof fields.draft_id === "string" ? fields.draft_id.trim() : "";
+  if (draftId === "" || !ADDRESS_RE.test(mailbox)) {
+    return;
+  }
+  await mailboxCall(mailboxStub(env, mailbox), `/drafts/${encodeURIComponent(draftId)}/unqueue`, {
+    method: "POST",
+  });
+}
+
+/**
+ * Reconcile the queued draft after a failed send. If the send never
+ * left, the draft goes back to `"draft"` so the user can edit and
+ * re-queue; if it went out, reconcile it to `"sent"` — re-queueing
+ * would double-send. Best-effort: the original error propagates either
+ * way, so a failed reconcile is logged, not thrown.
+ */
+async function reconcileQueuedDraft(
+  stub: MailboxFetch,
+  fields: Record<string, unknown>,
+  transmitted: boolean,
+): Promise<void> {
+  const draftId = typeof fields.draft_id === "string" ? fields.draft_id.trim() : "";
+  if (draftId === "") {
+    return;
+  }
+  try {
+    await mailboxCall(
+      stub,
+      `/drafts/${encodeURIComponent(draftId)}/${transmitted ? "sent" : "unqueue"}`,
+      { method: "POST" },
+    );
+  } catch (error) {
+    console.warn(
+      `email draft reconcile failed ${JSON.stringify({
+        draft_id: draftId,
+        transmitted,
+        error: error instanceof Error ? error.message : String(error),
+      })}`,
+    );
+  }
+}
+
+/**
+ * Send the frozen payload, then record the evidence trail it leaves.
+ * `progress.transmitted` flips once `SEND_EMAIL.send` resolves — the
+ * caller reconciles the draft to `"sent"` on post-transmit failures and
+ * back to `"draft"` when the payload never left.
+ */
 async function sendApprovedEmail(
   env: Env,
   stub: MailboxFetch,
   mailbox: string,
   fields: Record<string, unknown>,
+  progress: { transmitted: boolean },
 ): Promise<void> {
   const toAddr = requirePayloadField(fields, "to_addr");
   const subject = requirePayloadField(fields, "subject");
@@ -169,6 +235,7 @@ async function sendApprovedEmail(
   // The frozen payload is authoritative: the send input is exactly what
   // the approver reviewed; no draft row is re-read at release time.
   await env.SEND_EMAIL.send({ from: mailbox, to: toAddr, subject, text: bodyText });
+  progress.transmitted = true;
   // The outbound copy lands next to the conversation it answers.
   const threadId =
     typeof fields.thread_id === "string" && fields.thread_id.trim() !== ""

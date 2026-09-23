@@ -56,8 +56,9 @@ function draftChipClass(status: string): string {
   }
 }
 
-function replyAddress(email: InboxEmail): string {
-  return email.direction === "in" ? email.from_addr : email.to_addr;
+/** Where a reply to this email goes: inbound mail answers its sender. */
+export function replyAddress(email: InboxEmail): string {
+  return email.direction === "inbound" ? email.from_addr : email.to_addr;
 }
 
 /**

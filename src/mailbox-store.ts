@@ -961,6 +961,32 @@ export class MailboxStore {
   }
 
   /**
+   * Compensating seam: `queued` → `draft`, the transition the approval
+   * path performs when a queued send is rejected or the approval itself
+   * never materialized (the mint failed after the queue CAS landed, or
+   * the executor failed before the payload went out). Only a live
+   * `"queued"` row may move — anything else throws, so a sent or
+   * discarded draft can never be resurrected into editing.
+   */
+  unqueueDraft(id: string, nowMs?: number): DraftRecord | null {
+    const current = this.exec(`SELECT status FROM drafts WHERE id = ?`, id)[0];
+    if (!current) {
+      return null;
+    }
+    if (current.status !== "queued") {
+      throw new InputError(
+        `draft is '${String(current.status)}' — only queued drafts can be unqueued.`,
+      );
+    }
+    const row = this.exec(
+      `UPDATE drafts SET status = 'draft', updated_at = ? WHERE id = ? AND status = 'queued' RETURNING *`,
+      nowMs ?? Date.now(),
+      id,
+    )[0];
+    return row ? rowToDraft(row) : null;
+  }
+
+  /**
    * Send-path seam: `queued` → `sent`, the transition the approval
    * executor performs after the outbound send succeeds. Only a live
    * `"queued"` row may move — `queued` is evidence an approval froze

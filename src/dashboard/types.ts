@@ -48,10 +48,13 @@ export interface InboxMailbox {
   created_at: number;
 }
 
+/** Wire values of `StoredEmail.direction` — mirrors EMAIL_DIRECTIONS. */
+export type EmailDirection = "inbound" | "outbound";
+
 export interface InboxEmail {
   id: string;
   thread_id: string;
-  direction: string;
+  direction: EmailDirection;
   from_addr: string;
   to_addr: string;
   subject: string;
@@ -61,6 +64,23 @@ export interface InboxEmail {
   mailbox?: string;
   body_text?: string | null;
   body_html?: string | null;
+}
+
+/**
+ * Pending-approval record from `GET /api/approvals` — the orchestrator
+ * DO's live pointer list (Slack-card approvals, queued email sends,
+ * dashboard run approvals). `payload` is the frozen input that executes
+ * on approve; `repoUrl`/`task` carry the human-readable summary.
+ */
+export interface StoredApproval {
+  threadKey: string;
+  approvalId: string;
+  repoUrl: string;
+  task: string;
+  status: string;
+  createdAt: number;
+  kind?: string;
+  payload?: unknown;
 }
 
 export interface InboxAttachment {

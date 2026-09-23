@@ -8,8 +8,26 @@ vi.mock("@cloudflare/sandbox", () => ({
   proxyToSandbox: async () => null,
   getSandbox: () => ({ destroy: async () => {} }),
 }));
+// Orchestrator stub registry: /api/approvals tests plug per-name
+// responders in; the default no-op keeps every other route unaffected.
+const orchestratorCalls = vi.hoisted(() => ({
+  calls: [] as Array<{ name: string; url: string; method: string; body: string | undefined }>,
+  handlers: {} as Record<string, (request: Request) => Promise<Response>>,
+}));
 vi.mock("agents/routing", () => ({
-  getAgentByName: async () => ({ fetch: async () => new Response("{}", { status: 404 }) }),
+  getAgentByName: async (_ns: unknown, name: string) => ({
+    fetch: async (input: Request | string | URL, init?: RequestInit) => {
+      const url = input instanceof Request ? input.url : String(input);
+      const method = init?.method ?? (input instanceof Request ? input.method : "GET");
+      let body: string | undefined;
+      if (init?.body !== undefined) body = String(init.body);
+      else if (input instanceof Request && input.method !== "GET") body = await input.text();
+      orchestratorCalls.calls.push({ name, url, method, body });
+      const handler = orchestratorCalls.handlers[name];
+      if (!handler) return new Response("{}", { status: 404 });
+      return handler(input instanceof Request ? input : new Request(url, init));
+    },
+  }),
   routeAgentRequest: async () => null,
 }));
 vi.mock("@cloudflare/think", () => ({
@@ -38,9 +56,11 @@ vi.mock("agents/mcp", () => ({
 const queuedApprovals = vi.hoisted(() => ({
   calls: [] as Array<{ kind: string; mailbox: string; payload: Record<string, unknown> }>,
   bridgeReady: true,
+  error: null as Error | null,
 }));
 vi.mock("../src/email-approvals.js", () => ({
   queueEmailApproval: async (_env: unknown, request: { kind: string; mailbox: string; payload: Record<string, unknown> }) => {
+    if (queuedApprovals.error) throw queuedApprovals.error;
     queuedApprovals.calls.push(request);
     return { approval_id: "apv-test-1" };
   },
@@ -49,7 +69,7 @@ vi.mock("../src/email-approvals.js", () => ({
 
 import worker from "../src/index.js";
 import type { Env } from "../src/env.js";
-import { InboxTab, replyMailbox } from "../src/dashboard/components/InboxTab";
+import { InboxTab, replyAddress, replyMailbox } from "../src/dashboard/components/InboxTab";
 import { MemoryTab } from "../src/dashboard/components/MemoryTab";
 
 interface FakeStub {
@@ -113,7 +133,7 @@ const ctx = { waitUntil: (p: Promise<unknown>) => p } as unknown as ExecutionCon
 const emailA = {
   id: "eml-a1",
   thread_id: "thr-1",
-  direction: "in",
+  direction: "inbound" as const,
   from_addr: "alice@example.com",
   to_addr: "agent-a@shiba.dev",
   subject: "Deploy request",
@@ -125,7 +145,7 @@ const emailA = {
 const emailB = {
   id: "eml-b1",
   thread_id: "thr-9",
-  direction: "in",
+  direction: "inbound" as const,
   from_addr: "bob@example.com",
   to_addr: "agent-b@shiba.dev",
   subject: "Newer mail",
@@ -483,6 +503,59 @@ describe("dashboard inbox routes", () => {
     expect(queuedApprovals.calls).toHaveLength(0);
   });
 
+  it("POST /api/drafts/:id/send surfaces a queue-CAS 404 as 404, not 400", async () => {
+    queuedApprovals.calls.length = 0;
+    const directory = makeStub([
+      { match: "/internal/mailbox/mailboxes", body: { mailboxes: [{ address: "agent-a@shiba.dev", label: null, agent: null, created_at: 1 }] } },
+    ]);
+    const stubA = makeStub([
+      { match: "/internal/mailbox/drafts/drf-1", body: { draft: draftA } },
+      // The draft was deleted between the probe and the CAS — the DO's 404
+      // must reach the caller as a 404.
+      { method: "POST", match: "/internal/mailbox/drafts/drf-1/queue", body: { error: "Draft not found." }, status: 404 },
+    ]);
+    const env = makeEnv({ [DIRECTORY]: directory, "agent-a@shiba.dev": stubA });
+    const response = await worker.fetch(
+      new Request("https://worker/api/drafts/drf-1/send", { method: "POST" }),
+      env,
+      ctx,
+    );
+    expect(response.status).toBe(404);
+    expect(queuedApprovals.calls).toHaveLength(0);
+  });
+
+  it("POST /api/drafts/:id/send unqueues the draft when the approval mint fails", async () => {
+    queuedApprovals.calls.length = 0;
+    queuedApprovals.bridgeReady = true;
+    queuedApprovals.error = new Error("orchestrator unreachable");
+    const directory = makeStub([
+      { match: "/internal/mailbox/mailboxes", body: { mailboxes: [{ address: "agent-a@shiba.dev", label: null, agent: null, created_at: 1 }] } },
+    ]);
+    const stubA = makeStub([
+      { match: "/internal/mailbox/drafts/drf-1", body: { draft: draftA } },
+      { method: "POST", match: "/internal/mailbox/drafts/drf-1/queue", body: { draft: { ...draftA, status: "queued" } } },
+      { method: "POST", match: "/internal/mailbox/drafts/drf-1/unqueue", body: { draft: draftA } },
+    ]);
+    const env = makeEnv({ [DIRECTORY]: directory, "agent-a@shiba.dev": stubA });
+    try {
+      const response = await worker.fetch(
+        new Request("https://worker/api/drafts/drf-1/send", { method: "POST" }),
+        env,
+        ctx,
+      );
+      expect(response.status).toBe(500);
+      // The compensating unqueue returned the row to `draft` — nothing may
+      // strand `queued` behind an approval that does not exist.
+      expect(
+        stubA.calls.some(
+          (c) => c.method === "POST" && c.url.endsWith("/internal/mailbox/drafts/drf-1/unqueue"),
+        ),
+      ).toBe(true);
+    } finally {
+      queuedApprovals.error = null;
+    }
+  });
+
   it("POST /api/drafts/:id/send rejects a non-draft row and unknown ids", async () => {
     queuedApprovals.calls.length = 0;
     queuedApprovals.bridgeReady = true;
@@ -587,6 +660,120 @@ describe("dashboard memory routes", () => {
   });
 });
 
+describe("dashboard approval routes", () => {
+  const approvalA = {
+    threadKey: "default",
+    approvalId: "apv-default-1",
+    repoUrl: "agent-a@shiba.dev",
+    task: "Send email to person@example.com: Status update",
+    status: "pending",
+    createdAt: 10,
+    kind: "email_send",
+    payload: { to_addr: "person@example.com", mailbox: "agent-a@shiba.dev" },
+  };
+
+  it("GET /api/approvals merges the caller's orchestrator with the default one", async () => {
+    orchestratorCalls.calls.length = 0;
+    orchestratorCalls.handlers = {
+      "dev@example.com": async () =>
+        Response.json({
+          approvals: [
+            { ...approvalA, approvalId: "apv-user-1", threadKey: "dev@example.com", kind: "run" },
+          ],
+        }),
+      default: async () => Response.json({ approvals: [approvalA] }),
+    };
+    try {
+      const { env } = makeEnvWithTwoMailboxes();
+      const response = await worker.fetch(
+        new Request("https://worker/api/approvals", {
+          headers: { "CF-Access-Authenticated-User-Email": "dev@example.com" },
+        }),
+        env,
+        ctx,
+      );
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as { approvals: Array<{ approvalId: string }> };
+      expect(body.approvals.map((a) => a.approvalId).sort()).toEqual(
+        ["apv-user-1", "apv-default-1"].sort(),
+      );
+      // Both instances were probed, caller first.
+      expect(orchestratorCalls.calls.map((c) => c.name)).toEqual(["dev@example.com", "default"]);
+    } finally {
+      orchestratorCalls.handlers = {};
+    }
+  });
+
+  it("GET /api/approvals without an identity probes only the shared 'default' orchestrator", async () => {
+    orchestratorCalls.calls.length = 0;
+    orchestratorCalls.handlers = {
+      default: async () => Response.json({ approvals: [approvalA] }),
+    };
+    try {
+      const { env } = makeEnvWithTwoMailboxes();
+      const response = await worker.fetch(new Request("https://worker/api/approvals"), env, ctx);
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as { approvals: Array<{ approvalId: string }> };
+      expect(body.approvals.map((a) => a.approvalId)).toEqual(["apv-default-1"]);
+      expect(orchestratorCalls.calls.map((c) => c.name)).toEqual(["default"]);
+    } finally {
+      orchestratorCalls.handlers = {};
+    }
+  });
+
+  it("POST /api/approvals probes the caller's DO then 'default' until one resolves", async () => {
+    orchestratorCalls.calls.length = 0;
+    orchestratorCalls.handlers = {
+      "dev@example.com": async () => Response.json({ result: "unknown" }),
+      default: async () => Response.json({ result: "rejected" }),
+    };
+    try {
+      const { env } = makeEnvWithTwoMailboxes();
+      const response = await worker.fetch(
+        new Request("https://worker/api/approvals", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "CF-Access-Authenticated-User-Email": "dev@example.com",
+          },
+          body: JSON.stringify({
+            threadKey: "default",
+            approvalId: "apv-default-1",
+            approved: false,
+          }),
+        }),
+        env,
+        ctx,
+      );
+      expect(response.status).toBe(200);
+      expect((await response.json()) as { result: string }).toEqual({ result: "rejected" });
+      expect(orchestratorCalls.calls.map((c) => c.name)).toEqual(["dev@example.com", "default"]);
+      const decided = JSON.parse(orchestratorCalls.calls[1]!.body!) as {
+        decidedBy: string;
+        approved: boolean;
+        threadKey: string;
+      };
+      expect(decided).toMatchObject({ decidedBy: "dev@example.com", approved: false, threadKey: "default" });
+    } finally {
+      orchestratorCalls.handlers = {};
+    }
+  });
+
+  it("POST /api/approvals answers 400 on a malformed decision body", async () => {
+    const { env } = makeEnvWithTwoMailboxes();
+    const response = await worker.fetch(
+      new Request("https://worker/api/approvals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ threadKey: "default" }),
+      }),
+      env,
+      ctx,
+    );
+    expect(response.status).toBe(400);
+  });
+});
+
 describe("InboxTab + MemoryTab SSR", () => {
   it("renders the loading state without a live backend", () => {
     const inbox = renderToStaticMarkup(
@@ -595,6 +782,13 @@ describe("InboxTab + MemoryTab SSR", () => {
     expect(inbox).toContain("Loading mail");
     const memory = renderToStaticMarkup(React.createElement(MemoryTab));
     expect(memory).toContain("Loading memory");
+  });
+});
+
+describe("replyAddress", () => {
+  it("answers the sender for inbound mail and the recipient for outbound", () => {
+    expect(replyAddress({ ...emailA, direction: "inbound" })).toBe("alice@example.com");
+    expect(replyAddress({ ...emailA, direction: "outbound" })).toBe("agent-a@shiba.dev");
   });
 });
 

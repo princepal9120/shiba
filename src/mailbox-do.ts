@@ -410,6 +410,16 @@ export class Mailbox {
       const draft = this.store.markDraftSent(id);
       return draft ? json({ draft }) : notFound("Draft not found.");
     }
+    if (seg.length === 3 && seg[2] === "unqueue") {
+      const id = pathParam(seg[1]);
+      if (request.method !== "POST") {
+        return json({ error: "Method not allowed." }, { status: 405 });
+      }
+      // Compensating seam: rejection or a failed mint/execute returns the
+      // draft to editable `draft` instead of stranding it behind `queued`.
+      const draft = this.store.unqueueDraft(id);
+      return draft ? json({ draft }) : notFound("Draft not found.");
+    }
     return notFound();
   }
 

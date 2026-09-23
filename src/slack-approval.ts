@@ -98,34 +98,6 @@ export function parseApprovalValue(value: string): ApprovalPointer {
 export interface ApprovalCardInput extends ApprovalPointer {
   repoUrl: string;
   task: string;
-  /** Email-kind cards render the request line instead of repo/task fields. */
-  email?: EmailApprovalCardInfo;
-}
-
-/** What an email-kind card asks the approver to release. */
-export interface EmailApprovalCardInfo {
-  kind: "email_send" | "email_delete";
-  /** Agent or principal the request is attributed to (mailbox if unnamed). */
-  agent: string;
-  /** Send recipient (email_send only). */
-  toAddr?: string;
-  /** Subject line — the send's subject, or the deleted email's. */
-  subject?: string;
-}
-
-/**
- * The one-line request an email-kind card leads with:
- * "Agent X requests email send to Y: subject".
- */
-export function emailApprovalRequestLine(email: EmailApprovalCardInfo): string {
-  const agent = email.agent.trim() === "" ? "An agent" : `Agent ${email.agent}`;
-  if (email.kind === "email_send") {
-    const to = email.toAddr?.trim() || "the recipient";
-    const subject = email.subject?.trim() || "(no subject)";
-    return `${agent} requests email send to ${to}: ${subject}`;
-  }
-  const subject = email.subject?.trim() || "an email";
-  return `${agent} requests email delete of ${subject}`;
 }
 
 /**
@@ -135,13 +107,13 @@ export function emailApprovalRequestLine(email: EmailApprovalCardInfo): string {
  */
 export function buildApprovalBlocks(input: ApprovalCardInput): unknown[] {
   const value = buildApprovalValue({ threadKey: input.threadKey, approvalId: input.approvalId });
-  const headline = input.email === undefined
-    ? `*Approval requested*\n*Repo:* ${input.repoUrl}\n*Task:* ${input.task}`
-    : `*Approval requested*\n${emailApprovalRequestLine(input.email)}`;
   return [
     {
       type: "section",
-      text: { type: "mrkdwn", text: headline },
+      text: {
+        type: "mrkdwn",
+        text: `*Approval requested*\n*Repo:* ${input.repoUrl}\n*Task:* ${input.task}`,
+      },
     },
     {
       type: "context",

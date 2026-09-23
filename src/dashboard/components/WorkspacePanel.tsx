@@ -18,7 +18,7 @@ import {
   statusLabel,
   type PendingApproval,
 } from "../ui-helpers";
-import type { RetainedRun, ToolRunRecord } from "../types";
+import type { RetainedRun, StoredApproval, ToolRunRecord } from "../types";
 
 export type WorkspaceTab = "runs" | "inbox" | "memory" | "vm" | "diff" | "approvals";
 
@@ -30,6 +30,11 @@ export interface WorkspacePanelProps {
   pendingApprovals: PendingApproval[];
   decisions: Record<string, boolean>;
   onDecideApproval: (id: string, ok: boolean) => void;
+  /** Orchestrator DO approval pointers (queued email sends, Slack/run queues). */
+  storedApprovals: StoredApproval[];
+  storedDecisions: Record<string, boolean>;
+  storedApprovalsError: string | null;
+  onDecideStoredApproval: (approval: StoredApproval, ok: boolean) => void;
   onRefreshRuns: () => void;
   onInspectVM: (runId: string) => void;
   onCancelRun?: (runId: string) => void;
@@ -84,6 +89,67 @@ const TEAL_BUTTON =
 const DANGER_BUTTON =
   "text-[11px] bg-transparent hover:bg-[#fb2c36]/10 border border-[#fb2c36]/50 text-[#fb2c36] font-medium py-1 px-2.5 rounded-md transition-colors";
 
+/** Kind-aware label for a stored approval pointer. */
+function storedApprovalKind(approval: StoredApproval): string {
+  if (approval.kind === "email_send") return "Email send";
+  if (approval.kind === "email_delete") return "Email delete";
+  return "Run task";
+}
+
+/**
+ * Card for an orchestrator-DO approval pointer: the frozen payload is
+ * what executes on approve — shown verbatim, same discipline as the
+ * chat-part ApprovalCard. Rejecting an email_send releases its queued
+ * draft back to editing.
+ */
+function StoredApprovalCard({
+  approval,
+  decided,
+  onDecide,
+}: {
+  approval: StoredApproval;
+  decided: boolean;
+  onDecide: (approval: StoredApproval, ok: boolean) => void;
+}): JSX.Element {
+  const frozen =
+    approval.payload ??
+    ({ repoUrl: approval.repoUrl, task: approval.task } satisfies Record<string, unknown>);
+  return (
+    <div className="border border-[#e0ded5] border-l-2 border-l-[#b45309] rounded-xl bg-[#f6f4ed] p-3">
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-[#b45309]">
+          {storedApprovalKind(approval)}
+        </span>
+        <span className="text-[10px] text-[#6a6f63] font-mono">
+          {formatTimeAgo(approval.createdAt)}
+        </span>
+      </div>
+      <p className="text-[11px] text-[#222320] font-medium break-words mb-1">{approval.task}</p>
+      <pre className="font-mono text-[10px] text-[#6a6f63] bg-[#fffef8] p-2 rounded-lg border border-[#e0ded5] whitespace-pre-wrap break-words max-h-32 overflow-auto mb-2">
+        {JSON.stringify(frozen, null, 2)}
+      </pre>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          className={TEAL_BUTTON}
+          disabled={decided}
+          onClick={() => onDecide(approval, true)}
+        >
+          {decided ? "Decided" : "Approve"}
+        </button>
+        <button
+          type="button"
+          className={DANGER_BUTTON}
+          disabled={decided}
+          onClick={() => onDecide(approval, false)}
+        >
+          Reject
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function WorkspacePanel({
   toolRuns,
   retainedRuns,
@@ -91,6 +157,10 @@ export function WorkspacePanel({
   pendingApprovals,
   decisions,
   onDecideApproval,
+  storedApprovals,
+  storedDecisions,
+  storedApprovalsError,
+  onDecideStoredApproval,
   onRefreshRuns,
   onInspectVM,
   onCancelRun,
@@ -135,7 +205,7 @@ export function WorkspacePanel({
     memory: null,
     vm: null,
     diff: null,
-    approvals: pendingApprovals.length,
+    approvals: pendingApprovals.length + storedApprovals.length,
   };
 
   // Collapsed: 40px icon rail — always rendered, even below lg.
@@ -153,10 +223,10 @@ export function WorkspacePanel({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
-        {pendingApprovals.length > 0 ? (
+        {pendingApprovals.length + storedApprovals.length > 0 ? (
           <span
             className="w-2 h-2 rounded-full bg-[#b45309] animate-pulse"
-            title={`${pendingApprovals.length} pending approval(s)`}
+            title={`${pendingApprovals.length + storedApprovals.length} pending approval(s)`}
           />
         ) : null}
       </aside>
@@ -443,26 +513,50 @@ export function WorkspacePanel({
         ) : null}
 
         {tab === "approvals" ? (
-          pendingApprovals.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8 border border-dashed border-[#e0ded5] rounded-xl bg-[#f6f4ed] px-4 text-center">
-              <p className="text-[#6a6f63] text-xs">No pending approvals.</p>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-3" role="group" aria-label="Pending approvals">
-              <h4 className="text-[10px] font-bold uppercase tracking-wider text-[#b45309] flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-[#b45309] animate-pulse" />
-                Waiting for your approval
-              </h4>
-              {pendingApprovals.map((approval) => (
-                <ApprovalCard
-                  key={approval.approvalId}
-                  approval={approval}
-                  decided={decisions[approval.approvalId] !== undefined}
-                  onDecideApproval={onDecideApproval}
-                />
-              ))}
-            </div>
-          )
+          <div className="flex flex-col gap-4">
+            {storedApprovalsError !== null ? (
+              <p className="text-[11px] text-[#fb2c36] bg-[#fb2c36]/10 border border-[#fb2c36]/20 rounded-lg px-2.5 py-2">
+                Approval queue: {storedApprovalsError}
+              </p>
+            ) : null}
+            {pendingApprovals.length === 0 && storedApprovals.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 border border-dashed border-[#e0ded5] rounded-xl bg-[#f6f4ed] px-4 text-center">
+                <p className="text-[#6a6f63] text-xs">No pending approvals.</p>
+              </div>
+            ) : null}
+            {pendingApprovals.length > 0 ? (
+              <div className="flex flex-col gap-3" role="group" aria-label="Pending approvals">
+                <h4 className="text-[10px] font-bold uppercase tracking-wider text-[#b45309] flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-[#b45309] animate-pulse" />
+                  Waiting for your approval
+                </h4>
+                {pendingApprovals.map((approval) => (
+                  <ApprovalCard
+                    key={approval.approvalId}
+                    approval={approval}
+                    decided={decisions[approval.approvalId] !== undefined}
+                    onDecideApproval={onDecideApproval}
+                  />
+                ))}
+              </div>
+            ) : null}
+            {storedApprovals.length > 0 ? (
+              <div className="flex flex-col gap-3" role="group" aria-label="Queued approvals">
+                <h4 className="text-[10px] font-bold uppercase tracking-wider text-[#b45309] flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-[#b45309] animate-pulse" />
+                  Queued approvals
+                </h4>
+                {storedApprovals.map((approval) => (
+                  <StoredApprovalCard
+                    key={approval.approvalId}
+                    approval={approval}
+                    decided={storedDecisions[approval.approvalId] !== undefined}
+                    onDecide={onDecideStoredApproval}
+                  />
+                ))}
+              </div>
+            ) : null}
+          </div>
         ) : null}
       </div>
     </aside>
