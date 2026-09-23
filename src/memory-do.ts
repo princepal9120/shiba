@@ -343,13 +343,24 @@ export class Memory {
       factId = `fact_${randomHex(12)}`;
     }
     const vector = await this.embed(factText);
-    const fact = this.store.bankFact({
-      fact: factText,
-      source,
-      ttl,
-      id: factId,
-      embedding_id: factId,
-    });
+    // The `await this.embed` between the existence check and this insert
+    // lets a concurrent same-id bank race in first — the loser must still
+    // get the 409 contract, not a surfaced UNIQUE-constraint 500.
+    let fact;
+    try {
+      fact = this.store.bankFact({
+        fact: factText,
+        source,
+        ttl,
+        id: factId,
+        embedding_id: factId,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("UNIQUE constraint failed")) {
+        return json({ error: `Fact "${factId}" already exists.` }, { status: 409 });
+      }
+      throw error;
+    }
     // Claim the id on the registry before touching the index: a 409 means
     // another agent owns it — the local row rolls back and no vector write
     // happens, so the existing fact's vector is never clobbered.
