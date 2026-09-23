@@ -1,14 +1,33 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
-/* ==========================================================================
-   Active Theme Import (Original Theme)
-   To revert to original theme: switch the import below to:
-   @import "./themes/theme-original.css";
-   ========================================================================== */
-@import "./themes/theme-original.css";
-
+/* Bezalel-style · cream + navy · serif display · designed-as-app */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  --font-display: 'Instrument Serif', 'Georgia', serif;
+  --font-body: 'Geist', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Geist Mono', 'DM Mono', ui-monospace, SFMono-Regular, monospace;
+  --bg: #f6f4ed;
+  --panel: #fffef8;
+  --panel-elevated: #f1efe6;
+  --line: #e0ded5;
+  --line-light: #d3d2c8;
+  --text: #222320;
+  --muted: #6a6f63;
+  --accent: #0000a8;
+  --accent-light: #1c1cc8;
+  --accent-ink: #fffef8;
+  --brand: #0000a8;
+  --brand-light: #1c1cc8;
+  --danger: #fb2c36;
+  --ok: #15803d;
+  --pending: #f99c00;
+  --running: #0000a8;
+  --radius: 10px;
+  --space: 8px;
+  --gutter: 16px;
+  --focus: 2px solid var(--accent);
+}
 
 * {
   box-sizing: border-box;
@@ -16,60 +35,38 @@
 
 body {
   margin: 0;
-  background-color: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans, 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif);
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
   font-size: 14px;
   line-height: 1.5;
-  letter-spacing: var(--tracking-normal, 0em);
   overflow-x: hidden;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
-h1, h2, h3, .font-display, .font-heading {
-  font-family: var(--font-sans, 'Inter', ui-sans-serif, system-ui, sans-serif);
-  letter-spacing: -0.02em;
+h1, h2, h3, .font-display {
+  font-family: var(--font-display);
+  font-style: normal;
+  font-weight: 400;
+  letter-spacing: -0.01em;
 }
 
 code, pre, kbd, samp, .font-mono {
-  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-family: var(--font-mono);
 }
 
-/* Apple Liquid Glass Panels & Cards */
+/* Faint paper panel */
 .glass-panel {
-  background: color-mix(in srgb, var(--card) 85%, transparent);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-sm);
-}
-
-.glass-card {
-  background: color-mix(in srgb, var(--card) 80%, transparent);
+  background: rgba(255, 254, 248, 0.9);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-xs);
-}
-
-/* Stat card hover glow highlights */
-.stat-card-glow-blue:hover { box-shadow: 0 10px 30px -10px color-mix(in srgb, var(--primary) 30%, transparent); }
-.stat-card-glow-green:hover { box-shadow: 0 10px 30px -10px rgba(34, 197, 94, 0.25); }
-.stat-card-glow-red:hover { box-shadow: 0 10px 30px -10px color-mix(in srgb, var(--destructive) 30%, transparent); }
-.stat-card-glow-amber:hover { box-shadow: 0 10px 30px -10px rgba(245, 158, 11, 0.25); }
-
-/* Sidebar active item styling */
-.sidebar-item-active {
-  background: var(--sidebar-primary);
-  color: var(--sidebar-primary-foreground) !important;
-  box-shadow: 0 4px 14px color-mix(in srgb, var(--sidebar-primary) 35%, transparent);
+  border: 1px solid rgba(34, 35, 32, 0.08);
+  box-shadow: 0px 1px 2px rgba(34, 35, 32, 0.04);
 }
 
 /* Custom Scrollbars */
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -77,12 +74,12 @@ code, pre, kbd, samp, .font-mono {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--border);
+  background: #d3d2c8;
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--muted);
+  background: #b8b5a8;
 }
 
 /* Focus styles */
@@ -114,10 +111,16 @@ details summary::-webkit-details-marker {
   animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-/* Native dark theme styling without invert filter */
+/* Dark theme via invert filter — the UI is light-first like bezalel.sh;
+   inverting the root keeps fixed positioning intact; media is re-inverted. */
 html.dark {
-  background-color: var(--background);
-  color: var(--foreground);
+  filter: invert(1) hue-rotate(180deg);
+  background: #121008;
+}
+html.dark img,
+html.dark video,
+html.dark canvas {
+  filter: invert(1) hue-rotate(180deg);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -129,4 +132,3 @@ html.dark {
     scroll-behavior: auto !important;
   }
 }
-

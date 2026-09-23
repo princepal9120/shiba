@@ -98,16 +98,16 @@ export function MissionsView(): JSX.Element {
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-y-auto bg-[var(--background)] text-slate-900 p-4 lg:p-8">
+    <div className="flex-1 flex flex-col h-full overflow-y-auto bg-[#f6f4ed] text-[#222320] p-4 lg:p-8">
       <div className="max-w-5xl mx-auto w-full flex flex-col gap-6">
-        <div className="border-b border-[var(--border)] pb-4">
-          <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+        <div className="border-b border-[#e0ded5] pb-4">
+          <h2 className="text-base font-semibold text-[#222320] flex items-center gap-2">
             <span>Missions</span>
-            <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-blue-600/10 border border-[#0000a8]/30 text-blue-600">
+            <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-[#0000a8]/10 border border-[#0000a8]/30 text-[#1c1cc8]">
               Standing goals
             </span>
           </h2>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-[#6a6f63]">
             A mission is a goal that persists across days: each cadence, a gate judges whether work remains and queues a run only while it does. Every run stays approval-gated.
           </p>
         </div>
@@ -119,15 +119,15 @@ export function MissionsView(): JSX.Element {
         ) : null}
 
         {/* New mission */}
-        <div className="border border-[var(--border)] rounded-xl bg-white shadow-sm p-5 flex flex-col gap-3">
-          <h3 className="text-sm font-semibold text-slate-900">New Mission</h3>
+        <div className="border border-[#e0ded5] rounded-xl bg-[#f1efe6] shadow-sm p-5 flex flex-col gap-3">
+          <h3 className="text-sm font-semibold text-[#222320]">New Mission</h3>
           <textarea
             aria-label="Mission goal"
             value={goal}
             onChange={(e) => setGoal(e.target.value)}
             placeholder="e.g. Keep dependency vulnerabilities at zero and the test suite green on main"
             rows={3}
-            className="w-full bg-white text-xs text-slate-900 border border-[var(--border)] rounded-lg p-3 transition-colors focus:outline-none focus:border-[#0000a8] focus:ring-1 focus:ring-[#0000a8]/30 placeholder:text-slate-500/50 resize-y"
+            className="w-full bg-[#fffef8] text-xs text-[#222320] border border-[#e0ded5] rounded-lg p-3 transition-colors focus:outline-none focus:border-[#0000a8] focus:ring-1 focus:ring-[#0000a8]/30 placeholder:text-[#6a6f63]/50 resize-y"
           />
           <div className="flex flex-wrap items-center gap-3">
             <input
@@ -136,13 +136,13 @@ export function MissionsView(): JSX.Element {
               value={repoUrl}
               onChange={(e) => setRepoUrl(e.target.value)}
               placeholder="https://github.com/owner/repo"
-              className="flex-1 min-w-56 bg-white text-xs font-mono text-slate-900 border border-[var(--border)] rounded-lg px-3 py-1.5 transition-colors focus:outline-none focus:border-[#0000a8] focus:ring-1 focus:ring-[#0000a8]/30 placeholder:text-slate-500/50"
+              className="flex-1 min-w-56 bg-[#fffef8] text-xs font-mono text-[#222320] border border-[#e0ded5] rounded-lg px-3 py-1.5 transition-colors focus:outline-none focus:border-[#0000a8] focus:ring-1 focus:ring-[#0000a8]/30 placeholder:text-[#6a6f63]/50"
             />
             <select
               aria-label="Run cadence"
               value={cron}
               onChange={(e) => setCron(e.target.value)}
-              className="bg-white text-xs text-slate-900 border border-[var(--border)] rounded-lg px-2.5 py-1.5 transition-colors focus:outline-none focus:border-[#0000a8] focus:ring-1 focus:ring-[#0000a8]/30"
+              className="bg-[#fffef8] text-xs text-[#222320] border border-[#e0ded5] rounded-lg px-2.5 py-1.5 transition-colors focus:outline-none focus:border-[#0000a8] focus:ring-1 focus:ring-[#0000a8]/30"
             >
               {CADENCES.map((c) => (
                 <option key={c.cron} value={c.cron}>{c.label}</option>
@@ -152,7 +152,7 @@ export function MissionsView(): JSX.Element {
               type="button"
               disabled={busy}
               onClick={() => void deployMission()}
-              className="text-xs font-semibold text-blue-600 border border-[#0000a8]/40 bg-blue-600/10 hover:bg-blue-600/20 rounded-md px-3 py-1.5 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+              className="text-xs font-semibold text-[#1c1cc8] border border-[#0000a8]/40 bg-[#0000a8]/10 hover:bg-[#0000a8]/20 rounded-md px-3 py-1.5 transition-colors disabled:opacity-50 flex items-center gap-1.5"
             >
               {busy ? (
                 <>
@@ -167,50 +167,50 @@ export function MissionsView(): JSX.Element {
         </div>
 
         {/* Active missions */}
-        <div className="border border-[var(--border)] rounded-xl bg-white shadow-sm p-5 flex flex-col gap-3">
+        <div className="border border-[#e0ded5] rounded-xl bg-[#f1efe6] shadow-sm p-5 flex flex-col gap-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-slate-900">Active Missions</h3>
+            <h3 className="text-sm font-semibold text-[#222320]">Active Missions</h3>
             <button
               type="button"
               onClick={refresh}
-              className="text-[11px] text-slate-500 hover:text-slate-900 hover:border-[var(--border)] border border-[var(--border)] rounded-md px-2 py-1 transition-colors"
+              className="text-[11px] text-[#6a6f63] hover:text-[#222320] hover:border-[#d3d2c8] border border-[#e0ded5] rounded-md px-2 py-1 transition-colors"
             >
               Refresh
             </button>
           </div>
           {missions === null ? (
-            <div className="flex items-center gap-2 text-xs text-slate-500 font-mono py-2">
-              <span className="animate-spin inline-block w-3 h-3 border-2 border-[var(--muted)] border-t-transparent rounded-full" />
+            <div className="flex items-center gap-2 text-xs text-[#6a6f63] font-mono py-2">
+              <span className="animate-spin inline-block w-3 h-3 border-2 border-[#6a6f63] border-t-transparent rounded-full" />
               <span>Loading…</span>
             </div>
           ) : missions.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 border border-dashed border-[var(--border)] rounded-lg bg-[var(--background)] text-center px-4">
-              <p className="text-slate-500 text-xs">No missions yet — deploy one above.</p>
+            <div className="flex flex-col items-center justify-center py-10 border border-dashed border-[#e0ded5] rounded-lg bg-[#f6f4ed] text-center px-4">
+              <p className="text-[#6a6f63] text-xs">No missions yet — deploy one above.</p>
             </div>
           ) : (
-            <div className="flex flex-col divide-y divide-[var(--line)]">
+            <div className="flex flex-col divide-y divide-[#e0ded5]">
               {missions.map((m) => (
-                <div key={m.id} className="py-3 flex items-start justify-between gap-3 hover:bg-white -mx-2 px-2 rounded-lg transition-colors">
+                <div key={m.id} className="py-3 flex items-start justify-between gap-3 hover:bg-[#fffef8] -mx-2 px-2 rounded-lg transition-colors">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-mono font-semibold text-slate-900">{m.id}</span>
-                      <span className="text-[10px] font-mono text-blue-600 bg-blue-600/10 border border-[#0000a8]/30 px-1.5 py-0.5 rounded">
+                      <span className="text-xs font-mono font-semibold text-[#222320]">{m.id}</span>
+                      <span className="text-[10px] font-mono text-[#1c1cc8] bg-[#0000a8]/10 border border-[#0000a8]/30 px-1.5 py-0.5 rounded">
                         {m.triggers.find((t) => t.kind === "schedule")?.cron ?? "manual"}
                       </span>
                       <span
                         className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${
                           m.enabled
                             ? "text-[#15803d] border-[#15803d]/30 bg-[#15803d]/10"
-                            : "text-slate-500 border-[var(--border)] bg-white"
+                            : "text-[#6a6f63] border-[#e0ded5] bg-[#fffef8]"
                         }`}
                       >
                         {m.enabled ? "active" : "paused"}
                       </span>
                     </div>
-                    <p className="text-xs text-slate-900 mt-1 leading-relaxed">
+                    <p className="text-xs text-[#222320] mt-1 leading-relaxed">
                       {m.prompt.replace(/^Standing goal: /, "").split("\n")[0]}
                     </p>
-                    <p className="text-[11px] font-mono text-slate-500 mt-1">
+                    <p className="text-[11px] font-mono text-[#6a6f63] mt-1">
                       {m.repoUrl} · check-ins: {m.runCount ?? 0}
                       {m.lastSkip ? ` · last gate: ${m.lastSkip.reason}` : ""}
                     </p>
@@ -219,7 +219,7 @@ export function MissionsView(): JSX.Element {
                     type="button"
                     disabled={busy}
                     onClick={() => void runNow(m.id)}
-                    className="text-xs font-semibold border border-[#0000a8]/40 text-blue-600 bg-blue-600/10 hover:bg-blue-600/20 rounded-md px-2.5 py-1 shrink-0 transition-colors disabled:opacity-50"
+                    className="text-xs font-semibold border border-[#0000a8]/40 text-[#1c1cc8] bg-[#0000a8]/10 hover:bg-[#0000a8]/20 rounded-md px-2.5 py-1 shrink-0 transition-colors disabled:opacity-50"
                   >
                     Check in now
                   </button>

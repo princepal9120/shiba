@@ -89,7 +89,7 @@ export const STATUS_CHIP_CLASSES: Record<string, string> = {
 };
 
 export function statusChipClass(status: string): string {
-  return STATUS_CHIP_CLASSES[status] ?? "text-[var(--muted)] border-[var(--line)] bg-[var(--panel)]";
+  return STATUS_CHIP_CLASSES[status] ?? "text-[#6a6f63] border-[#e0ded5] bg-[#fffef8]";
 }
 
 export function emptyDiffText(): string {

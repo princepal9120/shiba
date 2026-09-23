@@ -9,9 +9,9 @@ import type { MemoryFact, MemorySession } from "../types";
 import { formatTimeAgo } from "../ui-helpers";
 
 const GHOST_BUTTON =
-  "text-[11px] bg-transparent hover:bg-white border border-[var(--border)] hover:border-[var(--border)] text-slate-500 hover:text-slate-900 font-medium py-1 px-2.5 rounded-md transition-colors";
+  "text-[11px] bg-transparent hover:bg-[#fffef8] border border-[#e0ded5] hover:border-[#d3d2c8] text-[#6a6f63] hover:text-[#222320] font-medium py-1 px-2.5 rounded-md transition-colors";
 const ACCENT_BUTTON =
-  "text-[11px] bg-blue-600/10 hover:bg-blue-600/15 border border-[#0000a8]/15 text-blue-600 font-medium py-1 px-2.5 rounded-md transition-colors";
+  "text-[11px] bg-[#0000a8]/10 hover:bg-[#0000a8]/15 border border-[#0000a8]/15 text-[#1c1cc8] font-medium py-1 px-2.5 rounded-md transition-colors";
 const DANGER_BUTTON =
   "text-[11px] bg-transparent hover:bg-[#fb2c36]/10 border border-[#fb2c36]/50 text-[#fb2c36] font-medium py-1 px-2.5 rounded-md transition-colors";
 
@@ -28,11 +28,11 @@ async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
 function sourceChipClass(source: string): string {
   switch (source) {
     case "run":
-      return "text-blue-600 border-[#0000a8]/30 bg-blue-600/10";
+      return "text-[#1c1cc8] border-[#0000a8]/30 bg-[#0000a8]/10";
     case "email":
       return "text-[#b45309] border-[#f99c00]/40 bg-[#f99c00]/10";
     default:
-      return "text-slate-500 border-[var(--border)] bg-white";
+      return "text-[#6a6f63] border-[#e0ded5] bg-[#fffef8]";
   }
 }
 
@@ -116,7 +116,7 @@ export function MemoryTab(): JSX.Element {
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Recall a fact…"
-          className="flex-1 min-w-0 text-[11px] font-mono bg-white border border-[var(--border)] rounded-md px-2 py-1.5 text-slate-900 placeholder:text-slate-500 focus:outline-none focus:border-[#0000a8]/50"
+          className="flex-1 min-w-0 text-[11px] font-mono bg-[#fffef8] border border-[#e0ded5] rounded-md px-2 py-1.5 text-[#222320] placeholder:text-[#6a6f63] focus:outline-none focus:border-[#0000a8]/50"
         />
         <button type="submit" disabled={searching} className={ACCENT_BUTTON}>
           {searching ? "Recalling…" : "Recall"}
@@ -128,7 +128,7 @@ export function MemoryTab(): JSX.Element {
               setQuery("");
               void load();
             }}
-            className="text-[11px] text-slate-500 hover:text-slate-900"
+            className="text-[11px] text-[#6a6f63] hover:text-[#222320]"
           >
             Clear
           </button>
@@ -142,16 +142,16 @@ export function MemoryTab(): JSX.Element {
       ) : null}
 
       <div className="flex flex-col gap-2">
-        <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+        <h4 className="text-[10px] font-bold uppercase tracking-wider text-[#6a6f63]">
           {searchActive ? "Recall results" : "Facts"}
         </h4>
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-8 border border-dashed border-[var(--border)] rounded-xl bg-[var(--background)] px-4 text-center">
-            <p className="text-slate-500 text-xs">Loading memory…</p>
+          <div className="flex flex-col items-center justify-center py-8 border border-dashed border-[#e0ded5] rounded-xl bg-[#f6f4ed] px-4 text-center">
+            <p className="text-[#6a6f63] text-xs">Loading memory…</p>
           </div>
         ) : facts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-8 border border-dashed border-[var(--border)] rounded-xl bg-[var(--background)] px-4 text-center">
-            <p className="text-slate-500 text-xs">
+          <div className="flex flex-col items-center justify-center py-8 border border-dashed border-[#e0ded5] rounded-xl bg-[#f6f4ed] px-4 text-center">
+            <p className="text-[#6a6f63] text-xs">
               {searchActive ? "Nothing recalled." : "No facts banked yet."}
             </p>
           </div>
@@ -160,9 +160,9 @@ export function MemoryTab(): JSX.Element {
             {facts.map((fact) => (
               <li
                 key={fact.id}
-                className="border border-[var(--border)] rounded-xl bg-[var(--background)] p-3"
+                className="border border-[#e0ded5] rounded-xl bg-[#f6f4ed] p-3"
               >
-                <pre className="font-mono text-[11px] text-slate-900 whitespace-pre-wrap break-words mb-2">
+                <pre className="font-mono text-[11px] text-[#222320] whitespace-pre-wrap break-words mb-2">
                   {fact.fact}
                 </pre>
                 <div className="flex items-center gap-2 flex-wrap">
@@ -171,12 +171,12 @@ export function MemoryTab(): JSX.Element {
                   >
                     {fact.source}
                   </span>
-                  <span className="text-[10px] font-mono text-slate-500">{fact.agent}</span>
-                  <span className="text-[10px] font-mono text-slate-500">
+                  <span className="text-[10px] font-mono text-[#6a6f63]">{fact.agent}</span>
+                  <span className="text-[10px] font-mono text-[#6a6f63]">
                     {formatTimeAgo(fact.created_at)}
                   </span>
                   {typeof fact.score === "number" ? (
-                    <span className="text-[10px] font-mono text-blue-600">
+                    <span className="text-[10px] font-mono text-[#1c1cc8]">
                       {fact.score.toFixed(2)}
                     </span>
                   ) : null}
@@ -216,12 +216,12 @@ export function MemoryTab(): JSX.Element {
       </div>
 
       <div className="flex flex-col gap-2">
-        <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-500 border-t border-[var(--border)] pt-3">
+        <h4 className="text-[10px] font-bold uppercase tracking-wider text-[#6a6f63] border-t border-[#e0ded5] pt-3">
           Sessions
         </h4>
         {!loading && sessions.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-6 border border-dashed border-[var(--border)] rounded-xl bg-[var(--background)] px-4 text-center">
-            <p className="text-slate-500 text-xs">No sessions recorded.</p>
+          <div className="flex flex-col items-center justify-center py-6 border border-dashed border-[#e0ded5] rounded-xl bg-[#f6f4ed] px-4 text-center">
+            <p className="text-[#6a6f63] text-xs">No sessions recorded.</p>
           </div>
         ) : (
           <ol className="flex flex-col gap-2">
@@ -230,30 +230,30 @@ export function MemoryTab(): JSX.Element {
               return (
                 <li
                   key={session.id}
-                  className={`border rounded-xl bg-[var(--background)] overflow-hidden transition-colors ${
-                    expanded ? "border-[#0000a8]/50" : "border-[var(--border)] hover:border-[var(--border)]"
+                  className={`border rounded-xl bg-[#f6f4ed] overflow-hidden transition-colors ${
+                    expanded ? "border-[#0000a8]/50" : "border-[#e0ded5] hover:border-[#d3d2c8]"
                   }`}
                 >
                   <button
                     type="button"
                     onClick={() => setExpandedSession(expanded ? null : session.id)}
-                    className="w-full text-left p-3 hover:bg-white transition-colors flex items-center gap-2"
+                    className="w-full text-left p-3 hover:bg-[#fffef8] transition-colors flex items-center gap-2"
                   >
                     <svg
-                      className={`w-3.5 h-3.5 text-slate-500 transition-transform shrink-0 ${expanded ? "rotate-90" : ""}`}
+                      className={`w-3.5 h-3.5 text-[#6a6f63] transition-transform shrink-0 ${expanded ? "rotate-90" : ""}`}
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
                     >
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
-                    <span className="font-mono text-[11px] text-slate-900 truncate">{session.agent}</span>
-                    <span className="text-[10px] font-mono text-slate-500 shrink-0 ml-auto">
+                    <span className="font-mono text-[11px] text-[#222320] truncate">{session.agent}</span>
+                    <span className="text-[10px] font-mono text-[#6a6f63] shrink-0 ml-auto">
                       {formatTimeAgo(session.started_at)}
                     </span>
                   </button>
                   {expanded ? (
-                    <pre className="mx-3 mb-3 font-mono text-[11px] text-slate-900 bg-white p-2.5 rounded-lg border border-[var(--border)] whitespace-pre-wrap break-words max-h-40 overflow-auto">
+                    <pre className="mx-3 mb-3 font-mono text-[11px] text-[#222320] bg-[#fffef8] p-2.5 rounded-lg border border-[#e0ded5] whitespace-pre-wrap break-words max-h-40 overflow-auto">
                       {session.summary}
                     </pre>
                   ) : null}

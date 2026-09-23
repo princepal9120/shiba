@@ -43,10 +43,10 @@ export function TaskForm({
   onSubmit,
   onClear,
 }: TaskFormProps = {}) {
-  const inputClass = "bg-[#101013] border border-white/[0.07] rounded-md text-zinc-200 px-3 py-2 text-sm focus:outline-none focus:border-[#2dd4bf] focus:ring-1 focus:ring-[#2dd4bf] placeholder-zinc-500 w-full transition-colors";
-  const labelClass = "text-xs font-medium text-zinc-400";
-  const buttonPrimary = "bg-zinc-100 hover:bg-white text-zinc-900 font-medium py-2 px-4 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm";
-  const buttonSecondary = "bg-transparent border border-white/10 hover:bg-white/5 text-zinc-300 font-medium py-2 px-4 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm";
+  const inputClass = "bg-[#0f1419] border border-[#2a3441] rounded-lg text-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#4f9cf0] placeholder-gray-600 w-full";
+  const labelClass = "text-sm font-medium text-gray-400";
+  const buttonPrimary = "bg-[#4f9cf0] hover:bg-[#3b82f6] text-[#06121f] font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm";
+  const buttonSecondary = "bg-transparent border border-[#2a3441] hover:bg-[#2a3441] text-gray-300 font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm";
 
   return createElement(
     "form",
@@ -121,7 +121,7 @@ export function TaskForm({
       ),
       createElement(
         "span",
-        { className: "text-xs text-zinc-500" },
+        { className: "text-xs text-gray-500" },
         HARNESS_OPTIONS.find((option) => option.value === harness)?.hint ?? "",
       ),
     ),
@@ -132,13 +132,13 @@ export function TaskForm({
         type: "checkbox",
         name: "publishPullRequest",
         checked: publishPullRequest,
-        className: "mt-0.5 h-4 w-4 rounded border-white/10 bg-[#101013] text-[#2dd4bf] focus:ring-[#2dd4bf] focus:ring-offset-[#0a0a0b]",
+        className: "mt-0.5 h-4 w-4 rounded border-gray-600 bg-[#0f1419] text-[#4f9cf0] focus:ring-[#4f9cf0] focus:ring-offset-[#182028]",
         onChange: (event: { target: { checked: boolean } }) =>
           onPublishPullRequestChange?.(event.target.checked),
       }),
       createElement(
         "span",
-        { className: "text-sm text-zinc-400 select-none" },
+        { className: "text-sm text-gray-400 select-none" },
         "Open a pull request with the result (requires GITHUB_TOKEN)",
       ),
     ),
@@ -163,4 +163,3 @@ export function TaskForm({
     ),
   );
 }
-

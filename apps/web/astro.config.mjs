@@ -17,15 +17,12 @@ export default defineConfig({
 	integrations: [
 		tailwind(),
 		starlight({
-			title: 'Shiba AI Worker',
-			components: {
-				SiteTitle: './src/components/SiteTitle.astro',
-			},
+			title: 'AI Coworker',
 			description:
 				'Open-source, self-hosted coding workspace for approval-gated tasks in Cloudflare Sandbox.',
 			logo: {
 				src: './src/assets/logo.png',
-				alt: 'Shiba AI Worker Logo',
+				alt: 'AI Coworker Logo',
 			},
 			favicon: '/favicon.ico',
 			customCss: ['./src/styles/theme.css'],

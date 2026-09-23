@@ -31,7 +31,7 @@ function CommandDialog({
         role="dialog"
         aria-modal="true"
         aria-label="Command menu"
-        className="relative bg-[var(--panel)] border border-[var(--line)] rounded-xl max-w-md w-full shadow-2xl overflow-hidden"
+        className="relative bg-[#fffef8] border border-[#e0ded5] rounded-xl max-w-md w-full shadow-2xl overflow-hidden"
       >
         {children}
       </div>
@@ -54,10 +54,10 @@ export function CommandMenu({
         <Command.Input
           autoFocus
           placeholder="Type a command or search…"
-          className="w-full bg-transparent px-4 py-3 text-sm text-[var(--text)] placeholder:text-[var(--muted)] border-b border-[var(--line)] focus:outline-none"
+          className="w-full bg-transparent px-4 py-3 text-sm text-[#222320] placeholder:text-[#6a6f63] border-b border-[#e0ded5] focus:outline-none"
         />
         <Command.List className="max-h-72 overflow-y-auto py-1.5">
-          <Command.Empty className="px-4 py-6 text-center text-xs text-[var(--muted)]">
+          <Command.Empty className="px-4 py-6 text-center text-xs text-[#6a6f63]">
             No matching commands.
           </Command.Empty>
           {commands.map((item) => (
@@ -68,11 +68,11 @@ export function CommandMenu({
                 onClose();
                 item.run();
               }}
-              className="w-full flex items-center justify-between px-4 py-2 text-left text-sm text-[var(--muted)] cursor-pointer data-[selected=true]:bg-[#0000a8]/15 data-[selected=true]:text-[var(--text)]"
+              className="w-full flex items-center justify-between px-4 py-2 text-left text-sm text-[#6a6f63] cursor-pointer data-[selected=true]:bg-[#0000a8]/15 data-[selected=true]:text-[#222320]"
             >
               <span>{item.label}</span>
               {item.hint ? (
-                <span className="font-mono text-[10px] text-[var(--muted)]">
+                <span className="font-mono text-[10px] text-[#6a6f63]">
                   {item.hint}
                 </span>
               ) : null}

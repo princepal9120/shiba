@@ -88,9 +88,9 @@ const TABS: { id: WorkspaceTab; label: string }[] = [
 ];
 
 const GHOST_BUTTON =
-  "text-[11px] bg-transparent hover:bg-white border border-[var(--border)] hover:border-[var(--border)] text-slate-500 hover:text-slate-900 font-medium py-1 px-2.5 rounded-md transition-colors";
+  "text-[11px] bg-transparent hover:bg-[#fffef8] border border-[#e0ded5] hover:border-[#d3d2c8] text-[#6a6f63] hover:text-[#222320] font-medium py-1 px-2.5 rounded-md transition-colors";
 const ACCENT_BUTTON =
-  "text-[11px] bg-blue-600/10 hover:bg-blue-600/15 border border-[#0000a8]/15 text-blue-600 font-medium py-1 px-2.5 rounded-md transition-colors";
+  "text-[11px] bg-[#0000a8]/10 hover:bg-[#0000a8]/15 border border-[#0000a8]/15 text-[#1c1cc8] font-medium py-1 px-2.5 rounded-md transition-colors";
 const DANGER_BUTTON =
   "text-[11px] bg-transparent hover:bg-[#fb2c36]/10 border border-[#fb2c36]/50 text-[#fb2c36] font-medium py-1 px-2.5 rounded-md transition-colors";
 
@@ -146,20 +146,20 @@ function StoredApprovalCard({
         : {}),
     } satisfies Record<string, unknown>);
   return (
-    <div className="border border-[var(--border)] border-l-2 border-l-[#b45309] rounded-xl bg-[var(--background)] p-3">
+    <div className="border border-[#e0ded5] border-l-2 border-l-[#b45309] rounded-xl bg-[#f6f4ed] p-3">
       <div className="flex items-center justify-between gap-2 mb-1.5">
         <span className="text-[10px] font-bold uppercase tracking-wider text-[#b45309]">
           {storedApprovalKind(approval)}
         </span>
-        <span className="text-[10px] text-slate-500 font-mono">
+        <span className="text-[10px] text-[#6a6f63] font-mono">
           {formatTimeAgo(approval.createdAt)}
         </span>
       </div>
-      <p className="text-[10px] font-mono text-slate-500 truncate mb-1">
+      <p className="text-[10px] font-mono text-[#6a6f63] truncate mb-1">
         via {storedApprovalAgent(approval)}
       </p>
-      <p className="text-[11px] text-slate-900 font-medium break-words mb-1">{approval.task}</p>
-      <pre className="font-mono text-[10px] text-slate-500 bg-white p-2 rounded-lg border border-[var(--border)] whitespace-pre-wrap break-words max-h-32 overflow-auto mb-2">
+      <p className="text-[11px] text-[#222320] font-medium break-words mb-1">{approval.task}</p>
+      <pre className="font-mono text-[10px] text-[#6a6f63] bg-[#fffef8] p-2 rounded-lg border border-[#e0ded5] whitespace-pre-wrap break-words max-h-32 overflow-auto mb-2">
         {JSON.stringify(frozen, null, 2)}
       </pre>
       <div className="flex items-center gap-2">
@@ -200,9 +200,9 @@ function DecidedApprovalRow({ approval }: { approval: StoredApproval }): JSX.Ele
           ? { label: "Executed", cls: statusChipClass("completed") }
           : { label: "Approved", cls: statusChipClass("running") };
   return (
-    <div className="border border-[var(--border)] rounded-xl bg-[var(--background)] p-3">
+    <div className="border border-[#e0ded5] rounded-xl bg-[#f6f4ed] p-3">
       <div className="flex items-center justify-between gap-2 mb-1.5">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-[#6a6f63]">
           {storedApprovalKind(approval)}
         </span>
         <span
@@ -211,15 +211,15 @@ function DecidedApprovalRow({ approval }: { approval: StoredApproval }): JSX.Ele
           {chip.label}
         </span>
       </div>
-      <p className="text-[10px] font-mono text-slate-500 truncate mb-1">
+      <p className="text-[10px] font-mono text-[#6a6f63] truncate mb-1">
         via {storedApprovalAgent(approval)}
         {approval.decidedBy !== undefined ? ` · ${approval.decidedBy}` : ""}
       </p>
-      <p className="text-[11px] text-slate-900 font-medium break-words">{approval.task}</p>
+      <p className="text-[11px] text-[#222320] font-medium break-words">{approval.task}</p>
       {approval.execution?.error !== undefined ? (
         <p className="text-[10px] text-[#fb2c36] mt-1 break-words">{approval.execution.error}</p>
       ) : null}
-      <p className="text-[10px] text-slate-500 font-mono mt-1">
+      <p className="text-[10px] text-[#6a6f63] font-mono mt-1">
         {formatTimeAgo(approval.decidedAt ?? approval.createdAt)}
       </p>
     </div>
@@ -297,13 +297,13 @@ export function WorkspacePanel({
   // Collapsed: 40px icon rail — always rendered, even below lg.
   if (collapsed) {
     return (
-      <aside className="w-10 shrink-0 border-l border-[var(--border)] bg-white flex flex-col items-center py-2 gap-2">
+      <aside className="w-10 shrink-0 border-l border-[#e0ded5] bg-[#f1efe6] flex flex-col items-center py-2 gap-2">
         <button
           type="button"
           onClick={onToggleCollapsed}
           aria-label="Expand workspace panel"
           title="Expand workspace panel"
-          className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-white transition-colors"
+          className="w-7 h-7 rounded-lg flex items-center justify-center text-[#6a6f63] hover:text-[#222320] hover:bg-[#fffef8] transition-colors"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -320,9 +320,9 @@ export function WorkspacePanel({
   }
 
   return (
-    <aside className="w-[400px] max-w-[88vw] shrink-0 border-l border-[var(--border)] bg-white flex flex-col min-h-0 fixed top-14 bottom-0 right-0 z-40 shadow-2xl lg:static lg:z-auto lg:shadow-none">
+    <aside className="w-[400px] max-w-[88vw] shrink-0 border-l border-[#e0ded5] bg-[#f1efe6] flex flex-col min-h-0 fixed top-14 bottom-0 right-0 z-40 shadow-2xl lg:static lg:z-auto lg:shadow-none">
       {/* Tab bar */}
-      <div className="flex items-center gap-1 px-3 pt-2 pb-0 border-b border-[var(--border)]">
+      <div className="flex items-center gap-1 px-3 pt-2 pb-0 border-b border-[#e0ded5]">
         {TABS.map((t) => {
           const active = tab === t.id;
           const count = badgeCounts[t.id];
@@ -333,8 +333,8 @@ export function WorkspacePanel({
               onClick={() => setTab(t.id)}
               className={`text-xs font-medium px-2.5 py-1.5 rounded-t-lg border-b-2 transition-colors flex items-center gap-1.5 ${
                 active
-                  ? "text-slate-900 border-[#0000a8] bg-white"
-                  : "text-slate-500 border-transparent hover:text-slate-900 hover:bg-white"
+                  ? "text-[#222320] border-[#0000a8] bg-[#fffef8]"
+                  : "text-[#6a6f63] border-transparent hover:text-[#222320] hover:bg-[#fffef8]"
               }`}
             >
               {t.label}
@@ -343,7 +343,7 @@ export function WorkspacePanel({
                   className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full border ${
                     t.id === "approvals"
                       ? "text-[#b45309] border-[#b45309]/40 bg-[#b45309]/10"
-                      : "text-slate-500 border-[var(--border)] bg-white"
+                      : "text-[#6a6f63] border-[#e0ded5] bg-[#fffef8]"
                   }`}
                 >
                   {count}
@@ -358,7 +358,7 @@ export function WorkspacePanel({
           onClick={onToggleCollapsed}
           aria-label="Collapse workspace panel"
           title="Collapse workspace panel"
-          className="w-7 h-7 mb-1 rounded-lg flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-white transition-colors"
+          className="w-7 h-7 mb-1 rounded-lg flex items-center justify-center text-[#6a6f63] hover:text-[#222320] hover:bg-[#fffef8] transition-colors"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -378,8 +378,8 @@ export function WorkspacePanel({
                     onClick={() => setRunsFilter(f)}
                     className={`text-[11px] font-medium px-2 py-1 rounded-full border transition-colors capitalize ${
                       runsFilter === f
-                        ? "text-slate-900 border-[#0000a8]/50 bg-blue-600/10"
-                        : "text-slate-500 border-[var(--border)] hover:border-[var(--border)] hover:text-slate-900"
+                        ? "text-[#222320] border-[#0000a8]/50 bg-[#0000a8]/10"
+                        : "text-[#6a6f63] border-[#e0ded5] hover:border-[#d3d2c8] hover:text-[#222320]"
                     }`}
                   >
                     {f}
@@ -390,7 +390,7 @@ export function WorkspacePanel({
                 type="button"
                 onClick={onRefreshRuns}
                 title="Refresh runs"
-                className="text-[11px] text-slate-500 hover:text-slate-900 border border-[var(--border)] hover:border-[var(--border)] rounded-md px-2 py-1 transition-colors flex items-center gap-1"
+                className="text-[11px] text-[#6a6f63] hover:text-[#222320] border border-[#e0ded5] hover:border-[#d3d2c8] rounded-md px-2 py-1 transition-colors flex items-center gap-1"
               >
                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -400,8 +400,8 @@ export function WorkspacePanel({
             </div>
 
             {filteredToolRuns.length === 0 && filteredRetainedRuns.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 border border-dashed border-[var(--border)] rounded-xl bg-[var(--background)] px-4 text-center">
-                <p className="text-slate-500 text-xs">No runs. Approved tasks appear here while they execute.</p>
+              <div className="flex flex-col items-center justify-center py-8 border border-dashed border-[#e0ded5] rounded-xl bg-[#f6f4ed] px-4 text-center">
+                <p className="text-[#6a6f63] text-xs">No runs. Approved tasks appear here while they execute.</p>
               </div>
             ) : null}
 
@@ -413,15 +413,15 @@ export function WorkspacePanel({
                   return (
                     <li
                       key={run.runId}
-                      className={`border rounded-xl p-3 bg-[var(--background)] transition-colors ${
-                        selected ? "border-[#0000a8]/50" : "border-[var(--border)]"
+                      className={`border rounded-xl p-3 bg-[#f6f4ed] transition-colors ${
+                        selected ? "border-[#0000a8]/50" : "border-[#e0ded5]"
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2 mb-1.5">
                         <button
                           type="button"
                           onClick={() => onSelectRun(run.runId)}
-                          className="font-mono text-[11px] text-slate-900 break-all text-left hover:text-blue-600 transition-colors min-w-0"
+                          className="font-mono text-[11px] text-[#222320] break-all text-left hover:text-[#1c1cc8] transition-colors min-w-0"
                         >
                           {run.runId}
                         </button>
@@ -429,17 +429,17 @@ export function WorkspacePanel({
                           {statusLabel(run.status)}
                         </span>
                       </div>
-                      <div className="text-[11px] text-slate-500 font-mono flex flex-wrap gap-x-2 mb-2">
+                      <div className="text-[11px] text-[#6a6f63] font-mono flex flex-wrap gap-x-2 mb-2">
                         {run.agentType ? <span>{run.agentType}</span> : null}
                         {run.parentToolCallId ? <span>· tool call {run.parentToolCallId}</span> : null}
                       </div>
                       {run.parts.length > 0 ? (
-                        <pre className="font-mono text-[11px] text-slate-500 bg-white p-2.5 rounded-lg border border-[var(--border)] max-h-40 overflow-auto whitespace-pre-wrap break-words mb-2">
+                        <pre className="font-mono text-[11px] text-[#6a6f63] bg-[#fffef8] p-2.5 rounded-lg border border-[#e0ded5] max-h-40 overflow-auto whitespace-pre-wrap break-words mb-2">
                           {run.parts.map(runPartText).join("\n")}
                         </pre>
                       ) : null}
                       {run.summary ? (
-                        <pre className="font-mono text-[11px] text-slate-900 bg-white p-2.5 rounded-lg border border-[var(--border)] max-h-40 overflow-auto whitespace-pre-wrap break-words mb-2">
+                        <pre className="font-mono text-[11px] text-[#222320] bg-[#fffef8] p-2.5 rounded-lg border border-[#e0ded5] max-h-40 overflow-auto whitespace-pre-wrap break-words mb-2">
                           {run.summary}
                         </pre>
                       ) : null}
@@ -475,7 +475,7 @@ export function WorkspacePanel({
 
             {filteredRetainedRuns.length > 0 ? (
               <>
-                <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-500 border-t border-[var(--border)] pt-3 flex items-center justify-between">
+                <h4 className="text-[10px] font-bold uppercase tracking-wider text-[#6a6f63] border-t border-[#e0ded5] pt-3 flex items-center justify-between">
                   <span>Retained Runs</span>
                   <span className="font-mono lowercase">{filteredRetainedRuns.length} total</span>
                 </h4>
@@ -485,23 +485,23 @@ export function WorkspacePanel({
                     return (
                       <li
                         key={run.runId}
-                        className={`border rounded-xl bg-[var(--background)] overflow-hidden hover:border-[var(--border)] transition-colors ${
-                          selected ? "border-[#0000a8]/50" : "border-[var(--border)]"
+                        className={`border rounded-xl bg-[#f6f4ed] overflow-hidden hover:border-[#d3d2c8] transition-colors ${
+                          selected ? "border-[#0000a8]/50" : "border-[#e0ded5]"
                         }`}
                       >
                         <details className="group">
                           <summary
-                            className="flex items-center justify-between p-3 cursor-pointer hover:bg-white transition-colors select-none"
+                            className="flex items-center justify-between p-3 cursor-pointer hover:bg-[#fffef8] transition-colors select-none"
                             aria-label={`${run.task} — ${run.repoUrl} — ${run.status}`}
                           >
                             <div className="flex items-center gap-2 overflow-hidden">
-                              <svg className="w-3.5 h-3.5 text-slate-500 transform group-open:rotate-90 transition-transform shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <svg className="w-3.5 h-3.5 text-[#6a6f63] transform group-open:rotate-90 transition-transform shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                               </svg>
-                              <span className="font-mono text-[11px] text-slate-900 truncate font-medium">
+                              <span className="font-mono text-[11px] text-[#222320] truncate font-medium">
                                 {parseRepoName(run.repoUrl)}
                               </span>
-                              <span className="text-[10px] text-slate-500 font-mono shrink-0">
+                              <span className="text-[10px] text-[#6a6f63] font-mono shrink-0">
                                 {formatTimeAgo(run.createdAt)}
                               </span>
                             </div>
@@ -509,17 +509,17 @@ export function WorkspacePanel({
                               {statusLabel(run.status)}
                             </span>
                           </summary>
-                          <div className="p-3 pt-0 border-t border-[var(--border)]/60 mt-1 flex flex-col gap-2">
-                            <div className="text-[10px] text-slate-500 font-mono flex flex-wrap gap-x-3 gap-y-1">
+                          <div className="p-3 pt-0 border-t border-[#e0ded5]/60 mt-1 flex flex-col gap-2">
+                            <div className="text-[10px] text-[#6a6f63] font-mono flex flex-wrap gap-x-3 gap-y-1">
                               <span>Sandbox: {run.sandboxId}</span>
                               <span>Branch: {run.baseBranch}</span>
-                              {run.publishPullRequest ? <span className="text-blue-600">· pull request requested</span> : null}
+                              {run.publishPullRequest ? <span className="text-[#0000a8]">· pull request requested</span> : null}
                             </div>
-                            <pre className="text-xs text-slate-900 whitespace-pre-wrap break-words bg-[var(--background)] p-2.5 rounded-lg border border-[var(--border)]/60">
+                            <pre className="text-xs text-[#222320] whitespace-pre-wrap break-words bg-[#f6f4ed] p-2.5 rounded-lg border border-[#e0ded5]/60">
                               {run.task}
                             </pre>
                             {run.summary ? (
-                              <pre className="font-mono text-[11px] text-slate-900 bg-white p-2.5 rounded-lg border border-[var(--border)] whitespace-pre-wrap break-words max-h-40 overflow-auto">
+                              <pre className="font-mono text-[11px] text-[#222320] bg-[#fffef8] p-2.5 rounded-lg border border-[#e0ded5] whitespace-pre-wrap break-words max-h-40 overflow-auto">
                                 {run.summary}
                               </pre>
                             ) : null}
@@ -592,8 +592,8 @@ export function WorkspacePanel({
           selectedRun && selectedDiff ? (
             <DiffViewer diff={selectedDiff} runId={selectedRun.runId} />
           ) : (
-            <div className="flex flex-col items-center justify-center py-8 border border-dashed border-[var(--border)] rounded-xl bg-[var(--background)] px-4 text-center">
-              <p className="text-slate-500 text-xs">
+            <div className="flex flex-col items-center justify-center py-8 border border-dashed border-[#e0ded5] rounded-xl bg-[#f6f4ed] px-4 text-center">
+              <p className="text-[#6a6f63] text-xs">
                 {selectedRunId
                   ? "No diff available for the selected run."
                   : "Select a completed run to view its diff."}
@@ -610,8 +610,8 @@ export function WorkspacePanel({
               </p>
             ) : null}
             {pendingApprovals.length === 0 && storedApprovals.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 border border-dashed border-[var(--border)] rounded-xl bg-[var(--background)] px-4 text-center">
-                <p className="text-slate-500 text-xs">No pending approvals.</p>
+              <div className="flex flex-col items-center justify-center py-8 border border-dashed border-[#e0ded5] rounded-xl bg-[#f6f4ed] px-4 text-center">
+                <p className="text-[#6a6f63] text-xs">No pending approvals.</p>
               </div>
             ) : null}
             {pendingApprovals.length > 0 || storedApprovals.length > 0 ? (
@@ -641,7 +641,7 @@ export function WorkspacePanel({
             ) : null}
             {decidedStoredApprovals.length > 0 ? (
               <div className="flex flex-col gap-3" role="group" aria-label="Recent outcomes">
-                <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                <h4 className="text-[10px] font-bold uppercase tracking-wider text-[#6a6f63]">
                   Recent outcomes
                 </h4>
                 {decidedStoredApprovals.map((approval) => (

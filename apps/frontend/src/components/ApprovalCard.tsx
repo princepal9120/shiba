@@ -15,9 +15,9 @@ export interface ApprovalCardProps {
 
 export function ApprovalCard({ approval, decided, onDecideApproval, agentName }: ApprovalCardProps): JSX.Element {
   return (
-    <div className="border border-[#b45309]/60 bg-white rounded-xl p-4 shadow-lg shadow-[#b45309]/5 flex flex-col gap-3">
+    <div className="border border-[#b45309]/60 bg-[#f1efe6] rounded-xl p-4 shadow-lg shadow-[#b45309]/5 flex flex-col gap-3">
       <div className="flex items-center justify-between gap-3">
-        <div className="font-mono font-bold text-sm text-slate-900 flex items-center gap-2 min-w-0">
+        <div className="font-mono font-bold text-sm text-[#222320] flex items-center gap-2 min-w-0">
           <Tooltip content="Sacred Approval Gate — Zero Trust Security" side="bottom">
             <img
               src="/assets/mascot/pet-logo.png"
@@ -33,16 +33,16 @@ export function ApprovalCard({ approval, decided, onDecideApproval, agentName }:
       </div>
 
       {agentName !== undefined ? (
-        <p className="text-[10px] font-mono text-slate-500 truncate -mt-1">via {agentName}</p>
+        <p className="text-[10px] font-mono text-[#6a6f63] truncate -mt-1">via {agentName}</p>
       ) : null}
 
-      <pre className="whitespace-pre-wrap font-mono text-xs text-slate-500 bg-white p-3 rounded-lg border border-slate-200 max-h-56 overflow-auto">
+      <pre className="whitespace-pre-wrap font-mono text-xs text-[#6a6f63] bg-[#fffef8] p-3 rounded-lg border border-[#e0ded5] max-h-56 overflow-auto">
         {typeof approval.input === "string"
           ? approval.input
           : JSON.stringify(approval.input, null, 2)}
       </pre>
 
-      <p className="text-xs text-slate-500 leading-relaxed">
+      <p className="text-xs text-[#6a6f63] leading-relaxed">
         Approving starts an isolated sandbox run. Rejecting stops the tool call.
       </p>
 
@@ -50,7 +50,7 @@ export function ApprovalCard({ approval, decided, onDecideApproval, agentName }:
         <Tooltip content="Approve tool execution inside isolated container" side="top">
           <button
             type="button"
-            className="bg-[#15803d] hover:bg-[#166534] text-[var(--panel)] font-semibold py-2 px-5 rounded-lg transition-all disabled:opacity-50 text-sm shadow-sm flex items-center gap-1.5 active:scale-[0.98]"
+            className="bg-[#15803d] hover:bg-[#166534] text-[#fffef8] font-semibold py-2 px-5 rounded-lg transition-all disabled:opacity-50 text-sm shadow-sm flex items-center gap-1.5 active:scale-[0.98]"
             disabled={decided}
             onClick={() => onDecideApproval(approval.approvalId, true)}
           >
