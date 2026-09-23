@@ -146,7 +146,7 @@ Delete obsolete Python backend, Docker Compose, Postgres, Redis, Celery, legacy 
 Add:
 
 - Root `package.json` and lockfile
-- `backend/wrangler.jsonc`
+- `apps/backend/wrangler.jsonc`
 - Sandbox `Dockerfile`
 - Vite and TypeScript config
 - Worker and dashboard source

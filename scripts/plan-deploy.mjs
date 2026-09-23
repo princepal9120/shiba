@@ -37,7 +37,7 @@ Options:
                      instead of invoking wrangler (unit-testable, offline)
   --strict           exit 1 when the plan differs from wrangler.jsonc
   --wrangler=<path>  wrangler config for the expectation set
-                     (default: backend/wrangler.jsonc)
+                     (default: apps/backend/wrangler.jsonc)
   --outdir=<dir>     dry-run output dir (default: ./.wrangler/deploy-preview)
   --help             show this text
 
@@ -47,7 +47,7 @@ or re-kinded. Default exit 0 with warnings; a wrangler failure exits 1.`);
   process.exit(0);
 }
 
-const wranglerPath = resolve(root, arg("wrangler") ?? "backend/wrangler.jsonc");
+const wranglerPath = resolve(root, arg("wrangler") ?? "apps/backend/wrangler.jsonc");
 const fixturePath = arg("fixture");
 const strict = flag("strict");
 

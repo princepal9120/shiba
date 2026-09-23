@@ -175,14 +175,14 @@ The parent uses Workers AI for planning. Real model-provider and GitHub credenti
 
 | Path | Responsibility |
 | --- | --- |
-| backend/src/index.ts | Assets, SDK routes, run API, provider forwarding, webhook |
-| backend/src/agents/orchestrator.ts | Planning, approval, delegation, retained registry |
-| backend/src/agents/opencode-agent.ts | Sandbox SDK operations, progress and publishing |
+| apps/backend/src/index.ts | Assets, SDK routes, run API, provider forwarding, webhook |
+| apps/backend/src/agents/orchestrator.ts | Planning, approval, delegation, retained registry |
+| apps/backend/src/agents/opencode-agent.ts | Sandbox SDK operations, progress and publishing |
 | src/runtime.ts | Clone, OpenCode execution, bounded file/diff collection |
 | src/provider-gateway.ts | Server-side provider forwarding |
-| backend/src/github.ts | GitHub REST publication |
+| apps/backend/src/github.ts | GitHub REST publication |
 | src/runs.ts and src/transcript.ts | State and transcript helpers |
-| frontend/src/main.tsx and frontend/src/app.tsx | Mounted dashboard |
+| apps/frontend/src/main.tsx and apps/frontend/src/app.tsx | Mounted dashboard |
 | docs/ and scripts/ | Static documentation and build checks |
 
 No D1, KV, Queues, R2, Postgres, Redis, or separate frontend service is required. State resides in Agents/Sandbox Durable Objects.

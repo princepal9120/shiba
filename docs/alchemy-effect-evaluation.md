@@ -4,7 +4,7 @@ Structured evaluation, not a migration plan. Both repos were read, not just home
 
 > **Update:** this was the pattern-port analysis. The project has since adopted both —
 > `effect` as a worker dependency (v3 stable) and `alchemy` as a deploy-time devDependency.
-> See `backend/src/effect/runtime.ts` and `alchemy.run.ts`; the verdicts below are preserved as
+> See `apps/backend/src/effect/runtime.ts` and `alchemy.run.ts`; the verdicts below are preserved as
 > the evaluation record.
 
 Sources read:
@@ -27,7 +27,7 @@ Question per feature: can we port the pattern in plain TypeScript without the li
 | Effect feature | Verdict | Rationale |
 | --- | --- | --- |
 | `Effect.gen` / `yield*` (generators as do-notation) | PORT | Plain `async`/`await` already covers sequential composition; the extra layer buys typed error channels we cover with `RunErrorCode` instead. |
-| `TaggedError` / `catchTag` | PORT | `RunErrorCode` union + `classifyRunError` + `RUN_ERROR_DEFS` (`backend/src/run-errors.ts`) is the plain-TS equivalent: closed vocabulary, exhaustive table, one wire projection. |
+| `TaggedError` / `catchTag` | PORT | `RunErrorCode` union + `classifyRunError` + `RUN_ERROR_DEFS` (`apps/backend/src/run-errors.ts`) is the plain-TS equivalent: closed vocabulary, exhaustive table, one wire projection. |
 | `Layer` (dependency injection) | PORT | Constructor injection in `CodingOrchestrator`/`OpenCodeAgent` plus the `Env` object covers wiring; we have ~4 seams, not 40 services. |
 | `Scope` (acquire → use → release) | PORT | DO lifecycle + `finally` cleanup + `reclaimStaleRuns` cover the acquire/release contract at our granularity. |
 | `Fiber` + interruption | PORT | `AbortSignal` propagation + `AbortController` registry + the D5 uninterruptible-write rule is the equivalent at our scale. Flip: a loop needing interruption *inside* arbitrary awaits (fibers can preempt; signal checks are cooperative). |
@@ -51,7 +51,7 @@ Effect `Context.Service` (`Stage.ts`), `InferEnv<W>` infers env types from the
 Worker resource (`Workers/InferEnv.ts`), and Effect is used inside the core
 (`Worker.ts` imports `effect/Effect`).
 
-- **Replaces:** `backend/wrangler.jsonc`, `wrangler deploy`, `scripts/setup.mjs`,
+- **Replaces:** `apps/backend/wrangler.jsonc`, `wrangler deploy`, `scripts/setup.mjs`,
   `.dev.vars` + `wrangler secret put` juggling.
 - **Adds:** typed `alchemy.run.ts` program, `plan`/`deploy`/`destroy` lifecycle,
   `InferEnv<typeof Worker>` replacing our hand-maintained env types,
@@ -85,8 +85,8 @@ Adopt Effect-TS the library? **No** (superseded — see the update note above).
 The durability semantics it was carrying in the reference implementation — fenced
 identities, `outcome_unknown`, tagged error
 vocabulary, uninterruptible writes, sync transactions, boundary squashing —
-are now ported in plain TypeScript (`backend/src/run-errors.ts`, `backend/src/runs.ts`,
-`backend/src/agents/orchestrator.ts`, `backend/src/agents/opencode-agent.ts`), and the features
+are now ported in plain TypeScript (`apps/backend/src/run-errors.ts`, `apps/backend/src/runs.ts`,
+`apps/backend/src/agents/orchestrator.ts`, `apps/backend/src/agents/opencode-agent.ts`), and the features
 we have not needed (`Layer`, `Ref`, `Stream`) are covered by the DO execution
 model. The named flip trigger is a reconciler/progress loop that needs
 interruption inside arbitrary awaits. Adopt Alchemy.run? **WATCH** — track the

@@ -5,7 +5,7 @@
  * prints secret values (only binding and variable NAMES).
  *
  *  (a) every Durable Object class named in wrangler.jsonc (including
- *      `env.<name>` sections) is exported somewhere under backend/src/ —
+ *      `env.<name>` sections) is exported somewhere under apps/backend/src/ —
  *      `export class <name>` — or is declared external via `script_name`
  *  (b) every wrangler.jsonc `vars` key exists as a field on `Env`
  *  (c) secret-bearing OPTIONAL Env fields — names matching
@@ -35,10 +35,10 @@ if (flag("help") || flag("h")) {
   console.log(`Usage: node scripts/validate-credentials.mjs [options]
 
 Options:
-  --wrangler=<path>   wrangler config (default: backend/wrangler.jsonc)
-  --env=<path>        env types file (default: backend/src/env.ts)
-  --dev-vars=<path>   .dev.vars path (default: backend/.dev.vars; absent = ok)
-  --src=<dir>         source dir for export-class checks (default: backend/src)
+  --wrangler=<path>   wrangler config (default: apps/backend/wrangler.jsonc)
+  --env=<path>        env types file (default: apps/backend/src/env.ts)
+  --dev-vars=<path>   .dev.vars path (default: apps/backend/.dev.vars; absent = ok)
+  --src=<dir>         source dir for export-class checks (default: apps/backend/src)
   --offline           skip wrangler secret list (no network/auth)
   --help              show this text
 
@@ -48,10 +48,10 @@ external, not missing exports.`);
   process.exit(0);
 }
 
-const wranglerPath = resolve(root, arg("wrangler") ?? "backend/wrangler.jsonc");
-const envPath = resolve(root, arg("env") ?? "backend/src/env.ts");
-const devVarsPath = resolve(root, arg("dev-vars") ?? "backend/.dev.vars");
-const srcDir = resolve(root, arg("src") ?? "backend/src");
+const wranglerPath = resolve(root, arg("wrangler") ?? "apps/backend/wrangler.jsonc");
+const envPath = resolve(root, arg("env") ?? "apps/backend/src/env.ts");
+const devVarsPath = resolve(root, arg("dev-vars") ?? "apps/backend/.dev.vars");
+const srcDir = resolve(root, arg("src") ?? "apps/backend/src");
 const offline = flag("offline");
 
 // --- JSONC: two string-aware passes — strip comments BEFORE trailing commas.
@@ -295,7 +295,7 @@ for (const [scope, section] of sections) {
   const suffix = scope ? ` [${scope}]` : "";
   for (const key of Object.keys(section.vars ?? {})) {
     if (envFields.has(key)) ok(`var ${key} has Env field${envFields.get(key) ? " (optional)" : ""}${suffix}`);
-    else fail(`var ${key} missing from Env interface${suffix}`, "add it to backend/src/env.ts");
+    else fail(`var ${key} missing from Env interface${suffix}`, "add it to apps/backend/src/env.ts");
   }
 }
 
@@ -310,7 +310,7 @@ if (!offline) remoteSecrets = listWranglerSecrets();
 
 results.push("secrets (optional Env fields — unset disables the feature):");
 if (!devVarsPresent) {
-  results.push(`  (no ${devVarsPath === resolve(root, "backend/.dev.vars") ? "backend/.dev.vars" : devVarsPath} file — checking wrangler only)`);
+  results.push(`  (no ${devVarsPath === resolve(root, "apps/backend/.dev.vars") ? "apps/backend/.dev.vars" : devVarsPath} file — checking wrangler only)`);
 }
 if (remoteSecrets === null) {
   results.push(

@@ -43,5 +43,5 @@ There is no public `/api/provider` route. The coding model is called from inside
 
 POST /api/github/webhook requires GITHUB_WEBHOOK_SECRET and valid x-hub-signature-256. Missing configuration returns 503, invalid signatures 401, and invalid JSON 400. Valid payloads return ok, event name, and optional action. This handler acknowledges events only; it does not create coding tasks.
 
-Source: backend/src/index.ts and backend/src/agents/orchestrator.ts.
+Source: apps/backend/src/index.ts and apps/backend/src/agents/orchestrator.ts.
 

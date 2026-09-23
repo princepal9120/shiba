@@ -36,7 +36,7 @@ const rows = text
 const problems = [];
 if (rows.length === 0) problems.push("no decision-table rows parsed");
 
-const PATH_TOKEN = /`?((?:backend\/)?(?:src|test|docs|scripts)\/[^\s`)]*?\.(?:ts|tsx|mjs|md))`?/g;
+const PATH_TOKEN = /`?((?:apps\/backend\/)?(?:src|test|docs|scripts)\/[^\s`)]*?\.(?:ts|tsx|mjs|md))`?/g;
 
 for (const cells of rows) {
   const [pattern, verdict, rationale, flip] = cells;

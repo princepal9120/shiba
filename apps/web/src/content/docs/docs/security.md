@@ -13,7 +13,7 @@ Set `REQUIRE_ACCESS` so the Worker fails closed: `/api/runs`, the agent WebSocke
 
 ## The credential boundary
 
-No real credential ever enters a container. Egress is intercepted in the Worker (`backend/src/egress.ts`), where the real key is swapped in:
+No real credential ever enters a container. Egress is intercepted in the Worker (`apps/backend/src/egress.ts`), where the real key is swapped in:
 
 - **Model traffic.** The container is given a dummy key and calls `generativelanguage.googleapis.com` directly. The Worker forwards it through the account owner's AI Gateway binding, which injects the stored BYOK credential. There is no provider callback route.
 - **Repository traffic.** `GITHUB_TOKEN` is attached in the Worker, never in the container.
@@ -58,4 +58,4 @@ Treat generated code as untrusted. Review changes and run tests. Use least-privi
 
 Sources: [Access](https://developers.cloudflare.com/cloudflare-one/access-controls/), [service tokens](https://developers.cloudflare.com/cloudflare-one/identity/service-tokens/), [Sandbox outbound traffic](https://developers.cloudflare.com/sandbox/guides/outbound-traffic/), [AI Gateway](https://developers.cloudflare.com/ai-gateway/).
 
-Local implementation: `backend/src/index.ts`, `backend/src/egress.ts`, `backend/src/sandbox.ts`, `backend/src/security.ts`, `backend/src/automations.ts`, and `backend/src/agents/orchestrator.ts`. See [Readiness](/docs/readiness/).
+Local implementation: `apps/backend/src/index.ts`, `apps/backend/src/egress.ts`, `apps/backend/src/sandbox.ts`, `apps/backend/src/security.ts`, `apps/backend/src/automations.ts`, and `apps/backend/src/agents/orchestrator.ts`. See [Readiness](/docs/readiness/).

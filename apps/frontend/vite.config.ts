@@ -9,7 +9,7 @@ export default defineConfig({
   // outDir is also named public/, so default publicDir would self-collide.
   publicDir: resolve(rootDir, "../web/public"),
   build: {
-    outDir: resolve(rootDir, "../public"),
+    outDir: resolve(rootDir, "../../public"),
     emptyOutDir: true,
     target: "es2022",
     sourcemap: false,

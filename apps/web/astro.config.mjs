@@ -34,7 +34,7 @@ export default defineConfig({
 				{ icon: 'x.com', label: 'Twitter / X', href: 'https://x.com/prince_twets' },
 			],
 			editLink: {
-				baseUrl: 'https://github.com/princepal9120/shiba/edit/main/web/',
+				baseUrl: 'https://github.com/princepal9120/shiba/edit/main/apps/web/',
 			},
 			sidebar: [
 				{

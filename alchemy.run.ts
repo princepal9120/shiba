@@ -43,12 +43,12 @@
 import { Effect, Redacted } from "effect";
 import * as Alchemy from "alchemy";
 import * as Cloudflare from "alchemy/Cloudflare";
-import type { CodingOrchestrator } from "./backend/src/agents/orchestrator.js";
-import type { OpenCodeAgent } from "./backend/src/agents/opencode-agent.js";
-import type { Mailbox } from "./backend/src/mailbox-do.js";
-import type { McpGateway } from "./backend/src/mcp-gateway.js";
-import type { Memory } from "./backend/src/memory-do.js";
-import type { Sandbox } from "./backend/src/sandbox.js";
+import type { CodingOrchestrator } from "./apps/backend/src/agents/orchestrator.js";
+import type { OpenCodeAgent } from "./apps/backend/src/agents/opencode-agent.js";
+import type { Mailbox } from "./apps/backend/src/mailbox-do.js";
+import type { McpGateway } from "./apps/backend/src/mcp-gateway.js";
+import type { Memory } from "./apps/backend/src/memory-do.js";
+import type { Sandbox } from "./apps/backend/src/sandbox.js";
 
 const secrets = (names: readonly string[]) => {
   const entries: Record<string, ReturnType<typeof Redacted.make>> = {};
@@ -88,7 +88,7 @@ if (!/^[a-z][a-z0-9-]{0,62}$/.test(workerName) || !/^[a-z][a-z0-9-]{0,62}$/.test
 
 export const Worker = Cloudflare.Worker("Worker", {
   name: workerName,
-  main: new URL("./backend/src/index.ts", import.meta.url).href,
+  main: new URL("./apps/backend/src/index.ts", import.meta.url).href,
   compatibility: {
     date: "2026-06-01",
     flags: ["nodejs_compat"],
@@ -154,8 +154,8 @@ export const Worker = Cloudflare.Worker("Worker", {
     // Container decl is the DO namespace binding plus its container app.
     Sandbox: Cloudflare.Container<Sandbox>("Sandbox", {
       name: containerName,
-      context: "./backend",
-      dockerfile: "./backend/Dockerfile",
+      context: "./apps/backend",
+      dockerfile: "./apps/backend/Dockerfile",
       instanceType: "standard-1",
       maxInstances: 5,
     }),

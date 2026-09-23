@@ -533,7 +533,7 @@ Render the **exact** structured input that will execute — same discipline as `
 
 **`spec/GOAL.md` is now wrong** and it is what the next reader treats as authoritative. Add Slack as a supported entry point; note the dashboard is one surface of two.
 
-New `web/src/content/docs/docs/slack.md`: app manifest and scopes · Request URLs · **the Access bypass policy** (most likely first-deploy failure) · `SLACK_SIGNING_SECRET` / `SLACK_BOT_TOKEN` / `SLACK_APPROVERS` · `SLACK_CHANNEL_REPOS` · the note that workspace admins may need to approve the app.
+New `apps/web/src/content/docs/docs/slack.md`: app manifest and scopes · Request URLs · **the Access bypass policy** (most likely first-deploy failure) · `SLACK_SIGNING_SECRET` / `SLACK_BOT_TOKEN` / `SLACK_APPROVERS` · `SLACK_CHANNEL_REPOS` · the note that workspace admins may need to approve the app.
 
 ---
 
@@ -758,4 +758,4 @@ T5–T8 are independent of each other. Within P3, T12 gates everything; T13/T14 
 
 **Competitors** — [Capy docs](https://docs.capy.ai/welcome) · [Hoplite docs](https://hoplite.sh/docs) · [vibesdk](https://github.com/cloudflare/vibesdk) · [weft](https://github.com/jonesphillip/weft) · [cloudsail](https://github.com/nkzw-tech/cloudsail) · [codra](https://github.com/devarshishimpi/codra) · [cloudbox](https://cloudbox.coey.dev/docs) · [leo-ars/cloudflare-sandbox-coding-agent](https://github.com/leo-ars/cloudflare-sandbox-coding-agent) · [awesome-cloudflare-selfhosted](https://github.com/theoephraim/awesome-cloudflare-selfhosted)
 
-**Local** — `spec/GOAL.md` (**stale as of rev 2 — T17**) · `web/src/content/docs/docs/readiness.md`
+**Local** — `spec/GOAL.md` (**stale as of rev 2 — T17**) · `apps/web/src/content/docs/docs/readiness.md`

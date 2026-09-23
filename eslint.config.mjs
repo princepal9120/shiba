@@ -2,7 +2,7 @@ import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["node_modules/**", "public/**", "web/public/**", "dashboard/public/**", "web/dist/**", "dist/**", "scripts/**", ".wrangler/**", ".astro/**", "web/.astro/**"] },
+  { ignores: ["node_modules/**", "public/**", "apps/web/public/**", "apps/web/dist/**", "dist/**", "scripts/**", ".wrangler/**", ".astro/**", "apps/web/.astro/**"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

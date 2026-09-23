@@ -12,7 +12,7 @@ Every claim below carries a command or a file:line so you can confirm it without
 | # | PLAN claim | Reality | Evidence |
 |---|---|---|---|
 | G1 | T3 "live model id" done | Orchestrator fallback still names the model shut down 2026-06-01. Fires whenever `CODING_MODEL` is unset (e.g. `wrangler dev` with a trimmed `.dev.vars`). VERIFICATION.md line 40 says this was removed; it was not. | `src/agents/orchestrator.ts:50`, `:131` |
-| G2 | T3 startup assertion | None exists. Contributing doc still says "Add a startup assertion". | `grep -n assert src/index.ts` → empty; `web/src/content/docs/docs/contributing.md:72` |
+| G2 | T3 startup assertion | None exists. Contributing doc still says "Add a startup assertion". | `grep -n assert src/index.ts` → empty; `apps/web/src/content/docs/docs/contributing.md:72` |
 | G3 | T4 step 8 / T24 "docs describe shipped state" | Six docs pages still lead with "provider callback returns 503", `WORKER_ORIGIN remains required`, "only google/* accepted", default `gemini-2.0-flash`. README was fixed; the docs site was not. | `overview.md:48`, `api.md:40`, `troubleshooting.md:16`, `readiness.md:12`, `deployment.md:18`, `configuration.md:12,16` |
 | G4 | T17 "GOAL.md updated for Slack" | `spec/GOAL.md` contains zero mentions of Slack. | `grep -ci slack spec/GOAL.md` → `0` |
 | G5 | §4 "cost-estimate UI cut; no invented prices" | `src/costs.ts` hardcodes `$2.50/hr` and `$0.00001/token`. Dead code (only its test imports it) but it is exactly what GOAL.md forbids. | `src/costs.ts:7,10`; `grep -rn estimateRunCost src dashboard` → only the definition |
@@ -20,9 +20,9 @@ Every claim below carries a command or a file:line so you can confirm it without
 | G7 | — (not in PLAN) | Docs site documents features that do not exist in `src/`: a PR review agent (`review.md`), Jira integration (`jira.mdx`), a Planner/Executor/Reviewer hierarchy (`multi-agent.mdx`), and Claude Code "installing npm/pip packages" (`claude-code.mdx`; `registry.npmjs.org` is deliberately blocked). PLAN §4 cuts review and Linear-class integrations. | `grep -rniE "jira|review_pull|planner" src` → empty |
 | G8 | Test count | PLAN says 269, VERIFICATION.md says 270, actual is 272. Cosmetic, but it means neither document was regenerated from a run. | `pnpm test` |
 
-| G9 | GOAL.md "single-tenant; do not claim multi-tenant isolation" | Landing docs claim "Multi-Tenant Isolation". | `web/src/content/docs/welcome.mdx:51-52` |
-| G10 | — | All 7 landing-page images live under `web/public/assets/**`, which `.gitignore:3` ignores. Fresh clone renders broken images; `test/marketing.test.ts` passes only on this machine. | `git ls-tree -r HEAD -- web/public` → empty |
-| G11 | — | Duplicated files: `theme.css` ≡ `capy-theme.css` (same blob); root and `web/` copies of `postcss.config.js` and `tailwind.config.js`. | `git diff --no-index web/src/styles/theme.css web/src/styles/capy-theme.css` |
+| G9 | GOAL.md "single-tenant; do not claim multi-tenant isolation" | Landing docs claim "Multi-Tenant Isolation". | `apps/web/src/content/docs/welcome.mdx:51-52` |
+| G10 | — | All 7 landing-page images live under `apps/web/public/assets/**`, which `.gitignore:3` ignores. Fresh clone renders broken images; `test/marketing.test.ts` passes only on this machine. | `git ls-tree -r HEAD -- apps/web/public` → empty |
+| G11 | — | Duplicated files: `theme.css` ≡ `capy-theme.css` (same blob); root and `web/` copies of `postcss.config.js` and `tailwind.config.js`. | `git diff --no-index apps/web/src/styles/theme.css apps/web/src/styles/capy-theme.css` |
 
 **Honest ones, unchanged:** T10 live run not attempted · Claude Code / Codex CLIs absent from the image (`Dockerfile:7` installs only `opencode-ai`) · `agents` SDK hibernation still unverified · peak memory and cold start unmeasured.
 
@@ -40,8 +40,8 @@ Expected: all green, 272 tests. Anything else is a regression, not an environmen
 Then the greps from §1. Each must come back empty (or the count must be 0) once G1–G7 are fixed:
 
 ```bash
-grep -rn "gemini-2.0" src test web/src/content
-grep -rnE "503|WORKER_ORIGIN|only google" web/src/content/docs/docs
+grep -rn "gemini-2.0" src test apps/web/src/content
+grep -rnE "503|WORKER_ORIGIN|only google" apps/web/src/content/docs/docs
 grep -ci slack spec/GOAL.md            # want >= 1
 ls src/costs.ts spec/COMPLETION.md     # want: No such file
 ```
@@ -57,7 +57,7 @@ Independent check: the log at `~/.wrangler/logs/` shows the image tag and the `s
 
 ### Stage C — T10 live run on a throwaway repo, needs Workers Paid + AI Gateway, ~2 h
 
-Follow `web/src/content/docs/docs/readiness.md` steps as written. For each bar, the *independent* check is something other than the UI:
+Follow `apps/web/src/content/docs/docs/readiness.md` steps as written. For each bar, the *independent* check is something other than the UI:
 
 | Bar | How to verify without trusting the dashboard |
 |---|---|

@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-const README = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "..", "README.md"), "utf8");
+const README = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "README.md"), "utf8");
 
 describe("README structure (T24 honest-ship contract)", () => {
   it("keeps the deploy button pointing at this repo", () => {

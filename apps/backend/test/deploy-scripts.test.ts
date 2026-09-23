@@ -4,8 +4,8 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 
-const ROOT = join(__dirname, "..", "..");
-const FIXTURES = join(ROOT, "backend", "test", "fixtures");
+const ROOT = join(__dirname, "..", "..", "..");
+const FIXTURES = join(ROOT, "apps", "backend", "test", "fixtures");
 
 function run(script: string, args: string[] = []) {
   return spawnSync("node", [`scripts/${script}`, ...args], {
@@ -80,7 +80,7 @@ describe("ephemeral-stack", () => {
     expect(out.stdout).toContain(".wrangler-ephemeral-ci7.jsonc");
     expect(out.stdout).toContain("wrangler deploy --config");
     expect(out.stdout).toContain("wrangler delete");
-    expect(existsSync(join(ROOT, "backend", ".wrangler-ephemeral-ci7.jsonc"))).toBe(false);
+    expect(existsSync(join(ROOT, "apps", "backend", ".wrangler-ephemeral-ci7.jsonc"))).toBe(false);
   });
 
   it("defaults the prefix to test-<unix-ts>", () => {
@@ -103,7 +103,7 @@ describe("ephemeral-stack", () => {
     expect(out.stdout).toContain("ALCHEMY_STAGE=ci7");
     expect(out.stdout).toContain("alchemy deploy --stage ci7 --yes");
     expect(out.stdout).toContain("alchemy destroy --stage ci7 --yes");
-    expect(existsSync(join(ROOT, "backend", ".wrangler-ephemeral-ci7.jsonc"))).toBe(false);
+    expect(existsSync(join(ROOT, "apps", "backend", ".wrangler-ephemeral-ci7.jsonc"))).toBe(false);
   });
 
   it("--alchemy honors --keep and rejects bad prefixes", () => {
@@ -318,7 +318,7 @@ describe("alchemy adoption guards", () => {
       readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
         e.isDirectory() ? walk(join(dir, e.name)) : [join(dir, e.name)],
       );
-    const offenders = walk(join(ROOT, "backend", "src")).filter((f) =>
+    const offenders = walk(join(ROOT, "apps", "backend", "src")).filter((f) =>
       /from\s+["']alchemy|import\s*\(\s*["']alchemy|require\s*\(\s*["']alchemy/.test(
         readFileSync(f, "utf8"),
       ),

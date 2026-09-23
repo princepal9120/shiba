@@ -10,7 +10,7 @@
  *     `shiba-ai-coworker-<prefix>` — a pinned `name` is used verbatim by alchemy,
  *     so without that suffix the stage would overwrite the live worker.
  *   default (rollback): writes a TEMPORARY override config
- *     `backend/.wrangler-ephemeral-<prefix>.jsonc` (backend/wrangler.jsonc with the worker
+ *     `apps/backend/.wrangler-ephemeral-<prefix>.jsonc` (apps/backend/wrangler.jsonc with the worker
  *     name suffixed `-<prefix>` and preview_urls forced off), then
  *     `wrangler deploy --config` + `wrangler delete --config`.
  *
@@ -49,7 +49,7 @@ Options:
                            smoke, then destroy --stage <prefix> (primary)
   --prefix=<name>          stage/worker suffix (default: test-<unix-ts>)
   --wrangler=<path>        base wrangler config (wrangler mode only;
-                           default: backend/wrangler.jsonc)
+                           default: apps/backend/wrangler.jsonc)
   --smoke-timeout-ms=<n>   smoke-test fetch timeout (default: 15000)
   --keep                   skip teardown (leave the ephemeral stage live)
   --dry-run                print the plan without executing anything
@@ -58,7 +58,7 @@ Options:
 Alchemy mode runs alchemy deploy --stage <prefix> --yes with
 ALCHEMY_STAGE=<prefix> in the child env (the stage-suffixed worker name
 shiba-ai-coworker-<prefix> comes from alchemy.run.ts). Wrangler mode writes
-backend/.wrangler-ephemeral-<prefix>.jsonc, runs wrangler deploy --config <tmp>,
+apps/backend/.wrangler-ephemeral-<prefix>.jsonc, runs wrangler deploy --config <tmp>,
 then wrangler delete --config <tmp>. Both smoke-test GET / — the worker
 has no /healthz; any HTTP status (incl. the Access-gate 401) counts.`);
   process.exit(0);
@@ -151,7 +151,7 @@ if (!/^[a-z0-9][a-z0-9-]*$/.test(prefix)) {
   console.error(`ephemeral-stack: invalid --prefix "${prefix}" (lowercase dns-safe required)`);
   process.exit(1);
 }
-const wranglerPath = resolve(root, arg("wrangler") ?? "backend/wrangler.jsonc");
+const wranglerPath = resolve(root, arg("wrangler") ?? "apps/backend/wrangler.jsonc");
 const smokeTimeoutMs = Number(arg("smoke-timeout-ms") ?? 15_000);
 const dryRun = flag("dry-run");
 const keep = flag("keep");
@@ -168,9 +168,9 @@ try {
 
 const baseName = cfg.name;
 const workerName = `${baseName}-${prefix}`;
-// Lives in backend/ — wrangler resolves main/assets/image relative to the
+// Lives in apps/backend/ — wrangler resolves main/assets/image relative to the
 // config file's own directory.
-const tmpConfig = resolve(root, "backend", `.wrangler-ephemeral-${prefix}.jsonc`);
+const tmpConfig = resolve(root, "apps", "backend", `.wrangler-ephemeral-${prefix}.jsonc`);
 
 // Alchemy mode: --stage <prefix> drives alchemy.run.ts; ALCHEMY_STAGE in
 // the child env makes the config's stage-conditional name resolve to the

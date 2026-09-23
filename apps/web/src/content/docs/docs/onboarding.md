@@ -29,7 +29,7 @@ Before provisioning resources or writing configuration, ensure you have:
 ### Durable Objects SQLite Storage
 AI Coworker requires SQLite-backed storage for both the parent orchestrator (`CodingOrchestrator`) and the container sandbox (`Sandbox`).
 
-In `backend/wrangler.jsonc`, verify the migration definition uses `new_sqlite_classes`:
+In `apps/backend/wrangler.jsonc`, verify the migration definition uses `new_sqlite_classes`:
 
 ```jsonc
 "migrations": [
@@ -123,7 +123,7 @@ AI Coworker needs permission to clone target repositories, commit changes, and o
    - **Pull requests**: `Read and write`
 4. Store the secret in Cloudflare:
    ```sh
-   npx wrangler secret put GITHUB_TOKEN --config backend/wrangler.jsonc
+   npx wrangler secret put GITHUB_TOKEN --config apps/backend/wrangler.jsonc
    ```
 
 ### Egress Isolation Invariant:
@@ -159,11 +159,11 @@ A Block Kit button in a public Slack channel can be clicked by any channel membe
 
 Configure your secrets:
 ```sh
-npx wrangler secret put SLACK_BOT_TOKEN --config backend/wrangler.jsonc
-npx wrangler secret put SLACK_SIGNING_SECRET --config backend/wrangler.jsonc
+npx wrangler secret put SLACK_BOT_TOKEN --config apps/backend/wrangler.jsonc
+npx wrangler secret put SLACK_SIGNING_SECRET --config apps/backend/wrangler.jsonc
 
 # Comma-separated Slack User IDs permitted to click Approve:
-npx wrangler secret put SLACK_APPROVERS --config backend/wrangler.jsonc
+npx wrangler secret put SLACK_APPROVERS --config apps/backend/wrangler.jsonc
 # e.g., U01234567,U09876543
 ```
 
