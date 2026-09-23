@@ -52,6 +52,14 @@ const MAX_RECALL_TOP_K = 100;
  */
 const MAX_MERGE_FANOUT = 50;
 
+// Unguarded text fields flow straight into SQLite and the embedding
+// model — an oversized fact, query, or session summary is a 400 at the
+// boundary like an empty one, not a downstream provider error.
+const MAX_FACT_CHARS = 8_000;
+const MAX_QUERY_CHARS = 2_000;
+const MAX_SUMMARY_CHARS = 16_000;
+const MAX_ID_CHARS = 200;
+
 /** Per-agent stub — the unit every fact write/scoped read goes through. */
 export function memoryStub(env: Env, agent: string): DurableObjectStub {
   return env.Memory.get(env.Memory.idFromName(agent.trim()));
@@ -146,6 +154,45 @@ function topKParam(raw: string | null): number | undefined {
     );
   }
   return value;
+}
+
+/**
+ * `?agent=` — a present-but-blank scope is a caller error (400), not the
+ * widen-to-all-agents an empty value would silently become after trim.
+ */
+function agentParam(url: URL): string | undefined {
+  const raw = url.searchParams.get("agent");
+  if (raw === null) {
+    return undefined;
+  }
+  const trimmed = raw.trim();
+  if (trimmed === "") {
+    throw new InputError("agent must be a non-empty string.");
+  }
+  return trimmed;
+}
+
+/**
+ * A caller-chosen id doubles as a `/…/:id` path segment everywhere it is
+ * fetchable — dot segments and "/" break that route, and an unbounded id
+ * has nowhere valid to live.
+ */
+function assertRouteSafeId(id: string): void {
+  if (id === "." || id === ".." || id.includes("/")) {
+    throw new InputError(`id "${id}" is not a safe route segment.`);
+  }
+  if (id.length > MAX_ID_CHARS) {
+    throw new InputError(`id must be ${MAX_ID_CHARS} characters or fewer.`);
+  }
+}
+
+/** Body text field with a length ceiling — oversized input is a 400. */
+function boundedString(value: unknown, field: string, maxChars: number): string {
+  const text = requiredString(value, field);
+  if (text.length > maxChars) {
+    throw new InputError(`${field} must be ${maxChars} characters or fewer.`);
+  }
+  return text;
 }
 
 /** Fact JSON carries the owning agent — facts rows have no column for it. */
@@ -279,18 +326,35 @@ export class Memory {
 
   /**
    * `purgeExpiredFacts` deletes TTL-dead rows inside every store read and
-   * returns their ids — each purged fact still owns a Vectorize vector and
-   * a registry row on `global`. Drop both so the index and
-   * `listRegisteredAgents` never accumulate orphans.
+   * returns a bounded slice of the `purge_pending` backlog — each purged
+   * fact still owns a Vectorize vector and a registry row on `global`.
+   * The vector delete is one batched call, and each id dequeues only after
+   * both cleanups land: a failed batch leaves the whole slice pending so
+   * the next read retries it instead of stranding the ids with the deleted
+   * rows.
    */
   private async collectPurged(ids: string[]): Promise<void> {
+    if (ids.length === 0) {
+      return;
+    }
+    try {
+      await this.env.MEMORY_VECTORS.deleteByIds(ids);
+    } catch (error) {
+      console.warn(
+        `memory_vector_delete_failed ${JSON.stringify({
+          count: ids.length,
+          error: error instanceof Error ? error.message : String(error),
+        })}`,
+      );
+      return;
+    }
     for (const id of ids) {
-      await this.deleteVector(id);
       if (this.isRegistry) {
         this.store.unregisterFact(id);
       } else {
         await this.dropRegistryEntry(id);
       }
+      this.store.markPurged(id);
     }
   }
 
@@ -311,8 +375,8 @@ export class Memory {
       );
     }
     const body = await this.jsonBody(request);
-    const factText = requiredString(body.fact, "fact");
-    const source = requiredString(body.source, "source");
+    const factText = boundedString(body.fact, "fact", MAX_FACT_CHARS);
+    const source = boundedString(body.source, "source", MAX_ID_CHARS);
     // `ttl` is the spec's epoch-ms deadline; `ttl_ms` is the caller-friendly
     // duration form — a deadline of `now + ttl_ms`.
     let ttl = optNumber(body.ttl, "ttl") ?? null;
@@ -331,9 +395,10 @@ export class Memory {
     let factId: string;
     if (body.id !== undefined) {
       const id = requiredString(body.id, "id");
-      if (id === "search" || id.includes("/")) {
+      if (id === "search") {
         throw new InputError(`id "${id}" collides with the /facts/:id route.`);
       }
+      assertRouteSafeId(id);
       await this.collectPurged(this.store.purgeExpiredFacts());
       if (this.store.getFact(id) !== null) {
         return json({ error: `Fact "${id}" already exists.` }, { status: 409 });
@@ -397,8 +462,11 @@ export class Memory {
     if (query === "") {
       throw new InputError("q must be a non-empty string.");
     }
+    if (query.length > MAX_QUERY_CHARS) {
+      throw new InputError(`q must be ${MAX_QUERY_CHARS} characters or fewer.`);
+    }
     const topK = topKParam(url.searchParams.get("limit"));
-    const scopedAgent = this.isRegistry ? url.searchParams.get("agent")?.trim() || undefined : this.agent;
+    const scopedAgent = this.isRegistry ? agentParam(url) : this.agent;
     // The reserved name can never own facts — scoping recall to it is a
     // 400 like on `GET /facts`, not an empty page.
     if (scopedAgent === MEMORY_REGISTRY_NAME) {
@@ -541,7 +609,7 @@ export class Memory {
    */
   private async listFactsFor(url: URL): Promise<Response> {
     const limit = limitParam(url.searchParams.get("limit"));
-    const scoped = url.searchParams.get("agent")?.trim();
+    const scoped = agentParam(url);
     if (!this.isRegistry) {
       return this.listFacts(url);
     }
@@ -636,7 +704,7 @@ export class Memory {
       return notFound();
     }
     if (request.method === "GET") {
-      const agent = url.searchParams.get("agent")?.trim() || undefined;
+      const agent = agentParam(url);
       // Same reserved-name guard as the fact routes and the write path —
       // the registry can never own sessions either.
       if (agent === MEMORY_REGISTRY_NAME) {
@@ -650,7 +718,11 @@ export class Memory {
       // Same contract as bank(): a non-string caller id is a 400, not a
       // silently auto-generated one.
       const id = body.id === undefined ? undefined : requiredString(body.id, "id");
-      const agent = requiredString(body.agent, "agent").trim();
+      if (id !== undefined) {
+        // The id doubles as the `GET /sessions/:id` path segment.
+        assertRouteSafeId(id);
+      }
+      const agent = boundedString(body.agent, "agent", MAX_ID_CHARS).trim();
       // The reserved registry name is not a valid session owner — a
       // "global" row would answer ?agent=global with registry-owned rows
       // that no agent stub backs.
@@ -664,7 +736,7 @@ export class Memory {
       }
       const session = this.store.addSession({
         agent,
-        summary: requiredString(body.summary, "summary"),
+        summary: boundedString(body.summary, "summary", MAX_SUMMARY_CHARS),
         started_at: optNumber(body.started_at, "started_at"),
         id,
       });
@@ -689,13 +761,15 @@ export class Memory {
       }
       if (request.method === "POST") {
         const body = await this.jsonBody(request);
-        const agent = requiredString(body.agent, "agent").trim();
+        const agent = boundedString(body.agent, "agent", MAX_ID_CHARS).trim();
         // The reserved registry name as an owner routes /facts?agent= and
         // DELETE /facts/:id back to this stub — self-recursive fetches.
         if (agent === MEMORY_REGISTRY_NAME) {
           throw new InputError(`agent must not be "${MEMORY_REGISTRY_NAME}".`);
         }
         const factId = requiredString(body.fact_id, "fact_id");
+        // The id re-enters URLs on /facts/:id and /registry/:id fetches.
+        assertRouteSafeId(factId);
         // Re-registering your own id is the at-least-once bank replay;
         // a different agent claiming it is a cross-agent collision — the
         // bare fact id keys the Vectorize vector, so an overwrite would

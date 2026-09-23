@@ -178,6 +178,8 @@ export const Worker = Cloudflare.Worker("Worker", {
       "CLAUDE_CODE_MODEL",
       "CODEX_MODEL",
       "DEVIN_MODEL",
+      "SLACK_APPROVALS_CHANNEL",
+      "MEMORY_ENABLED",
     ]),
   },
 });

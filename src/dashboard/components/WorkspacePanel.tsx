@@ -257,6 +257,14 @@ export function WorkspacePanel({
     onTabChange?.(next);
   };
   const [runsFilter, setRunsFilter] = useState<RunsFilter>("all");
+  // The inbox stays mounted after its first visit — an in-progress reply
+  // draft lives only in component state, and unmounting on a tab switch
+  // would silently drop it. The flag sets during render so the same pass
+  // mounts the tab before paint (React's derived-state adjustment).
+  const [inboxMounted, setInboxMounted] = useState(tab === "inbox");
+  if (tab === "inbox" && !inboxMounted) {
+    setInboxMounted(true);
+  }
 
   const filteredToolRuns = useMemo(
     () => toolRuns.filter((run) => matchesFilter(run.status, runsFilter)),
@@ -568,7 +576,11 @@ export function WorkspacePanel({
           </div>
         ) : null}
 
-        {tab === "inbox" ? <InboxTab onOpenApprovals={() => setTab("approvals")} /> : null}
+        {inboxMounted ? (
+          <div className={tab === "inbox" ? undefined : "hidden"}>
+            <InboxTab onOpenApprovals={() => setTab("approvals")} />
+          </div>
+        ) : null}
 
         {tab === "memory" ? <MemoryTab /> : null}
 

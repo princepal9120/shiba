@@ -33,6 +33,7 @@ import PostalMime, { type Address, type Attachment } from "postal-mime";
 import type { Env } from "./env.js";
 import { mailboxDirectoryStub, mailboxStub } from "./mailbox-do.js";
 import {
+  EMPTY_SUBJECT,
   randomHex,
   type AddEmailInput,
   type EmailAttachmentInput,
@@ -43,8 +44,6 @@ const ROUTE_BASE = "https://internal/internal/mailbox";
 
 /** Marker at the head of `body_text` on records stored from unparseable mail. */
 export const PARSE_FAILED_FLAG = "[parse_failed]";
-
-const EMPTY_SUBJECT = "(no subject)";
 
 /** Same shape the store enforces — checked locally so a fallback is chosen
  * before a bad sender value ever reaches the DO. */
@@ -137,32 +136,39 @@ async function isRegistered(env: Env, address: string): Promise<boolean | "error
   return body.registered === true;
 }
 
-/** POST one email record into the mailbox's DO; returns the stored id. */
+/**
+ * POST one email record into the mailbox's DO; returns the stored id.
+ * `null` is the fatal case (a 4xx retry can't fix) and routes to
+ * {@link reconcileStoreResult}'s reject. Thrown fetches and 5xx are
+ * transient — they propagate so the delivery fails transiently and Email
+ * Routing redelivers, the same contract the directory lookup keeps:
+ * a bounced-then-redelivered mail folds into the `message_id` dedup
+ * (its second store returns the first row's id → duplicate → cleanup).
+ */
 async function storeEmail(env: Env, to: string, input: AddEmailInput): Promise<string | null> {
+  let res: Response;
   try {
-    const res = await mailboxStub(env, to).fetch(
+    res = await mailboxStub(env, to).fetch(
       new Request(`${ROUTE_BASE}/emails`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(input),
       }),
     );
-    if (!res.ok) {
-      logWarn("inbound_email_store_failed", { to, status: res.status });
-      return null;
-    }
-    const body = (await res.json()) as { email?: { id?: string } };
-    return body.email?.id ?? null;
   } catch (error) {
-    // A thrown fetch (unreachable DO, dead stub) is the same store failure
-    // as a non-ok response: `null` routes it through reconcileStoreResult,
-    // which cleans up bodies already written and rejects the delivery.
-    logWarn("inbound_email_store_failed", {
-      to,
-      error: error instanceof Error ? error.message : String(error),
-    });
+    const detail = error instanceof Error ? error.message : String(error);
+    logWarn("inbound_email_store_failed", { to, error: detail });
+    throw new Error(`Mailbox store unreachable for ${to}: ${detail}`);
+  }
+  if (!res.ok) {
+    logWarn("inbound_email_store_failed", { to, status: res.status });
+    if (res.status >= 500) {
+      throw new Error(`Mailbox store failed for ${to} (HTTP ${res.status}).`);
+    }
     return null;
   }
+  const body = (await res.json()) as { email?: { id?: string } };
+  return body.email?.id ?? null;
 }
 
 /** RFC3339/Date header → epoch ms; unparseable/absent → undefined (store defaults now). */
@@ -403,7 +409,16 @@ export async function handleInboundEmail(
       created_at: messageDateMs(parsed.date),
       attachments: attachmentManifest(id, landed),
     };
-    const emailId = await storeEmail(env, to, input);
+    let emailId: string | null;
+    try {
+      emailId = await storeEmail(env, to, input);
+    } catch (error) {
+      // Transient store fault — clean the bodies before the throw turns
+      // the delivery into a redelivery, or they'd orphan once the dedup
+      // path folds the replay into the row this attempt never committed.
+      await deleteObjects(env, landed.map((part) => `${id}/${part.partId}`));
+      throw error;
+    }
     const outcome = await reconcileStoreResult(
       env,
       message,
@@ -471,20 +486,28 @@ export async function handleInboundEmail(
           },
         ]
       : undefined;
-  const emailId = await storeEmail(env, to, {
-    id,
-    direction: "inbound",
-    from_addr: from,
-    to_addr: to,
-    subject: rawSubject,
-    body_text: rawStored
-      ? `${PARSE_FAILED_FLAG} postal-mime could not parse this message; raw source preserved in the attachments bucket as raw-source.`
-      : `${PARSE_FAILED_FLAG} postal-mime could not parse this message; raw source could not be recovered to the attachments bucket.`,
-    message_id: message.headers?.get("message-id") ?? undefined,
-    in_reply_to: message.headers?.get("in-reply-to") ?? undefined,
-    references: splitMessageIds(message.headers?.get("references") ?? undefined),
-    attachments,
-  });
+  let emailId: string | null;
+  try {
+    emailId = await storeEmail(env, to, {
+      id,
+      direction: "inbound",
+      from_addr: from,
+      to_addr: to,
+      subject: rawSubject,
+      body_text: rawStored
+        ? `${PARSE_FAILED_FLAG} postal-mime could not parse this message; raw source preserved in the attachments bucket as raw-source.`
+        : `${PARSE_FAILED_FLAG} postal-mime could not parse this message; raw source could not be recovered to the attachments bucket.`,
+      message_id: message.headers?.get("message-id") ?? undefined,
+      in_reply_to: message.headers?.get("in-reply-to") ?? undefined,
+      references: splitMessageIds(message.headers?.get("references") ?? undefined),
+      attachments,
+    });
+  } catch (error) {
+    if (rawStored) {
+      await deleteObjects(env, [`${id}/raw-source`]);
+    }
+    throw error;
+  }
   const outcome = await reconcileStoreResult(
     env,
     message,

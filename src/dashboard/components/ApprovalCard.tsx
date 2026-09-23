@@ -50,7 +50,7 @@ export function ApprovalCard({ approval, decided, onDecideApproval, agentName }:
         <Tooltip content="Approve tool execution inside isolated container" side="top">
           <button
             type="button"
-            className="bg-[#15803d] hover:bg-[#15803d] text-[#222320] font-semibold py-2 px-5 rounded-lg transition-all disabled:opacity-50 text-sm shadow-sm flex items-center gap-1.5 active:scale-[0.98]"
+            className="bg-[#15803d] hover:bg-[#166534] text-[#fffef8] font-semibold py-2 px-5 rounded-lg transition-all disabled:opacity-50 text-sm shadow-sm flex items-center gap-1.5 active:scale-[0.98]"
             disabled={decided}
             onClick={() => onDecideApproval(approval.approvalId, true)}
           >

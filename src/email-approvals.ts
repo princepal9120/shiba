@@ -12,7 +12,7 @@
 import { getAgentByName } from "agents/routing";
 import type { Env } from "./env.js";
 import { mailboxStub, registeredMailbox } from "./mailbox-do.js";
-import { ADDRESS_RE } from "./mailbox-store.js";
+import { ADDRESS_RE, randomHex } from "./mailbox-store.js";
 import type { PendingApproval } from "./pending-approvals.js";
 import { InputError } from "./security.js";
 
@@ -133,7 +133,11 @@ async function mailboxCall(stub: MailboxFetch, path: string, init: RequestInit):
  * after the pointer resolves — replay-guarded there, so each approved
  * approval executes once.
  */
-export async function executeEmailApproval(env: Env, record: PendingApproval): Promise<void> {
+export async function executeEmailApproval(
+  env: Env,
+  record: PendingApproval,
+  opts?: { excludeDraftIds?: string[] },
+): Promise<void> {
   const payload = record.payload;
   if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
     throw new InputError(`Email approval ${record.approvalId} has no frozen payload.`);
@@ -161,7 +165,7 @@ export async function executeEmailApproval(env: Env, record: PendingApproval): P
     try {
       await sendApprovedEmail(env, stub, registration.address, fields, progress);
     } catch (error) {
-      await reconcileQueuedDraft(stub, fields, progress);
+      await reconcileQueuedDraft(stub, fields, progress, opts?.excludeDraftIds);
       throw error;
     }
     return;
@@ -273,6 +277,7 @@ async function reconcileQueuedDraft(
   stub: MailboxFetch,
   fields: Record<string, unknown>,
   progress: { transmitted: boolean; claimed: boolean },
+  excludeDraftIds?: string[],
 ): Promise<void> {
   const draftId = typeof fields.draft_id === "string" ? fields.draft_id.trim() : "";
   if (draftId === "") {
@@ -283,9 +288,15 @@ async function reconcileQueuedDraft(
     if (!progress.transmitted && !progress.claimed) {
       // Claim refused: the row may sit `sending` behind a dead attempt
       // (restart between claim and wire) that `unqueue` cannot reach.
-      // The sweep frees only provably-dead claims, so a live sibling's
-      // `sending` stays untouched; `unqueue` still covers `queued`.
-      await mailboxCall(stub, `/drafts/release-stale`, { method: "POST" });
+      // The sweep frees only provably-dead claims — but its age check
+      // cannot see a live sibling approval minted after the row queued,
+      // so the caller's live-approval ids must ride along or the sweep
+      // frees a lock a pending sibling still owns.
+      await mailboxCall(stub, `/drafts/release-stale`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ exclude_ids: excludeDraftIds ?? [] }),
+      });
     }
     await mailboxCall(stub, `/drafts/${encodeURIComponent(draftId)}/${seam}`, {
       method: "POST",
@@ -351,8 +362,11 @@ async function sendApprovedEmail(
   // Everything below is bookkeeping over a mail that already left: a
   // failure here must not read as "send failed" upstream (the draft
   // reconciles to `sent`, so `failed` would leave two durable stores
-  // disagreeing on whether the mail went out).
-  try {
+  // disagreeing on whether the mail went out). The copy carries a
+  // deterministic dedup key — one retry of the block is safe because a
+  // repeated insert folds onto the first copy rather than duplicating.
+  const copyMessageId = `shiba-send:${draftId !== "" ? draftId : randomHex(12)}`;
+  const recordSend = async (): Promise<void> => {
     // The outbound copy lands next to the conversation it answers — the
     // wire-level in_reply_to re-derives the parent thread when the frozen
     // payload carried no thread_id.
@@ -369,6 +383,7 @@ async function sendApprovedEmail(
         subject,
         body_text: bodyText,
         status: "sent",
+        message_id: copyMessageId,
         ...(threadId !== undefined ? { thread_id: threadId } : {}),
         ...(threading !== undefined ? { in_reply_to: threading.inReplyTo } : {}),
       }),
@@ -378,8 +393,20 @@ async function sendApprovedEmail(
     if (draftId !== "") {
       await mailboxCall(stub, `/drafts/${encodeURIComponent(draftId)}/sent`, { method: "POST" });
     }
-  } catch (error) {
-    throw new PostTransmitError(error instanceof Error ? error : new Error(String(error)));
+  };
+  try {
+    await recordSend();
+  } catch (firstError) {
+    try {
+      // One immediate retry: a transient stub error here loses the sent
+      // copy for good — the draft still reconciles to `sent`, so the only
+      // evidence the mail ever left would be the provider's own log.
+      await recordSend();
+    } catch {
+      throw new PostTransmitError(
+        firstError instanceof Error ? firstError : new Error(String(firstError)),
+      );
+    }
   }
 }
 

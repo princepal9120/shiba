@@ -91,7 +91,20 @@ async function handleRuns(request: Request, env: Env): Promise<Response | null> 
     return Response.json({ error: "Method not allowed." }, { status: 405 });
   }
   // Local development shares the same fallback as the dashboard identity endpoint.
-  const userId = getUserId(request) ?? "default";
+  let userId = getUserId(request) ?? "default";
+  // Email-kind approvals freeze draft claims + mailbox payloads, and claim
+  // recovery (releaseRestartedDraftClaim, sweepStaleDrafts, Slack resolve)
+  // assumes they live on the one shared instance queueEmailApproval pins —
+  // minting them on a per-user DO leaves a record no sweep can see.
+  if (request.method === "POST") {
+    const kind = await request.clone().json().then(
+      (body) => (typeof body === "object" && body !== null ? (body as { kind?: unknown }).kind : undefined),
+      () => undefined,
+    );
+    if (kind === "email_send" || kind === "email_delete") {
+      userId = ORCHESTRATOR_NAME;
+    }
+  }
   const stub = await getAgentByName(env.CodingOrchestrator, userId);
   const rewritten = new Request(new URL(url.pathname + url.search, request.url), request);
   return stub.fetch(rewritten);
@@ -891,6 +904,24 @@ export default {
         .then((response) => {
           if (!response.ok) {
             console.error(`automation tick failed: ${response.status}`);
+          }
+        })
+        .catch((error: unknown) => {
+          console.error(redactSecrets(error instanceof Error ? error.message : String(error)));
+        }),
+    );
+    // Stale-draft sweep: the approvals-poll and restart paths only run it
+    // when a human is watching — the cron is the backstop that frees a
+    // `sending`-locked draft in an idle system (review finding). Same
+    // shared "default" instance the email-kind mints pin to.
+    ctx.waitUntil(
+      getAgentByName(env.CodingOrchestrator, ORCHESTRATOR_NAME)
+        .then((stub) =>
+          stub.fetch(new Request("https://internal/internal/sweep-drafts", { method: "POST" })),
+        )
+        .then((response) => {
+          if (!response.ok) {
+            console.error(`stale draft sweep failed: ${response.status}`);
           }
         })
         .catch((error: unknown) => {

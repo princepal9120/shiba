@@ -308,8 +308,10 @@ export function App(): React.JSX.Element {
 
   const agent = useAgent({
     agent: ORCHESTRATOR_AGENT,
-    // Undefined until identity resolves; never fall back to a shared name.
-    name: orchestratorName ?? undefined,
+    // Until /api/whoami resolves, bind to a private placeholder DO — `agents`
+    // defaults a missing name to the shared "default" instance, where chat
+    // approvals would be decidable by any other pending dashboard.
+    name: orchestratorName ?? "identity-pending",
   });
   const chat = useAgentChat({
     agent,
@@ -495,6 +497,12 @@ export function App(): React.JSX.Element {
         setNotice("Repository URL must be a GitHub URL like https://github.com/owner/repo.");
         return;
       }
+      if (!orchestratorName) {
+        setNotice(identityError
+          ? `Task not sent: agent identity failed to resolve (${identityError}).`
+          : "Task not sent: still resolving your agent identity.");
+        return;
+      }
       // Without a live agent connection sendMessage resolves silently, so the
       // task would vanish as if it had been accepted.
       if (agent.connectionError || !agent.identified) {
@@ -533,7 +541,7 @@ export function App(): React.JSX.Element {
         setIsSubmitting(false);
       }
     },
-    [repoUrl, baseBranch, task, publishPullRequest, harness, chat, agent, refreshRuns],
+    [repoUrl, baseBranch, task, publishPullRequest, harness, chat, agent, orchestratorName, identityError, refreshRuns],
   );
 
   const confirmClearAll = useCallback(async () => {

@@ -57,6 +57,13 @@ export const MEMORY_STATEMENTS: readonly string[] = [
      created_at INTEGER NOT NULL
    )`,
   `CREATE INDEX IF NOT EXISTS fact_registry_agent ON fact_registry(agent)`,
+  // Purge bookkeeping: a TTL-expired row is dequeued only after its
+  // vector + registry cleanup lands, so a cleanup that outlives the row
+  // delete is retried by the next read instead of lost with it.
+  `CREATE TABLE IF NOT EXISTS purge_pending (
+     fact_id TEXT PRIMARY KEY,
+     enqueued_at INTEGER NOT NULL
+   )`,
 ];
 
 /**
@@ -130,6 +137,8 @@ export interface AddSessionInput {
 
 const DEFAULT_LIST_LIMIT = 50;
 export const MAX_LIST_LIMIT = 500;
+/** One batched vector delete + at most this many registry drops per read. */
+const MAX_PURGE_BACKLOG = 50;
 
 export function randomHex(bytes: number): string {
   const raw = crypto.getRandomValues(new Uint8Array(bytes));
@@ -243,13 +252,30 @@ export class MemoryStore {
   /**
    * Delete fact rows whose `ttl` deadline has passed. Runs lazily inside
    * every read — there is no sweeper, so "purge on read" is the only GC.
-   * Returns the purged ids so the DO can drop their vectors too.
+   * Expired ids are enqueued into `purge_pending` BEFORE their rows delete,
+   * and this returns a bounded slice of that backlog (oldest first): the
+   * vector/registry cleanup runs against the returned ids and each one is
+   * dequeued only after it lands, so a cleanup that outlives its request
+   * is resumed by the next read rather than lost with the deleted row.
    */
   purgeExpiredFacts(nowMs?: number): string[] {
+    const now = nowMs ?? Date.now();
+    this.exec(
+      `INSERT OR IGNORE INTO purge_pending (fact_id, enqueued_at)
+       SELECT id, ? FROM facts WHERE ttl IS NOT NULL AND ttl <= ?`,
+      now,
+      now,
+    );
+    this.exec(`DELETE FROM facts WHERE ttl IS NOT NULL AND ttl <= ?`, now);
     return this.exec(
-      `DELETE FROM facts WHERE ttl IS NOT NULL AND ttl <= ? RETURNING id`,
-      nowMs ?? Date.now(),
-    ).map((row) => String(row.id));
+      `SELECT fact_id FROM purge_pending ORDER BY enqueued_at LIMIT ?`,
+      MAX_PURGE_BACKLOG,
+    ).map((row) => String(row.fact_id));
+  }
+
+  /** Dequeue a purged fact once its vector + registry cleanup has landed. */
+  markPurged(factId: string): void {
+    this.exec(`DELETE FROM purge_pending WHERE fact_id = ?`, factId);
   }
 
   /** Live fact by id — an expired row is purged and reads as absent. */

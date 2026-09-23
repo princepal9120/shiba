@@ -341,6 +341,14 @@ const REPLY_PREFIX_RE =
 
 
 /**
+ * Display placeholder the handler stores when inbound mail has no subject.
+ * It lives in the store (not the handler) because threading must recognize
+ * it: it normalizes to a real key, so without a guard every subject-less
+ * email would collapse into one shared thread.
+ */
+export const EMPTY_SUBJECT = "(no subject)";
+
+/**
  * Reply threading normalization: drops leading reply/forward prefixes (any
  * mix, any case — see {@link REPLY_PREFIX_RE}), mailing-list `[tag]` blocks,
  * then collapses whitespace and lowercases. Two messages normalize equal iff
@@ -559,8 +567,9 @@ export class MailboxStore {
     }
     const normalized = normalizeSubject(input.subject);
     // `Re:`/`Fwd:`-only subjects normalize to "" — matching on the empty
-    // key would merge unrelated mail into one thread.
-    if (normalized === "") {
+    // key would merge unrelated mail into one thread; the display
+    // placeholder merges every subject-less email for the same reason.
+    if (normalized === "" || input.subject.trim() === EMPTY_SUBJECT) {
       return null;
     }
     const bySubject = this.exec(
@@ -673,22 +682,24 @@ export class MailboxStore {
         throw new InputError("attachments.r2_key must be a non-empty string.");
       }
     }
-    let threadId: string;
-    let createdThread = false;
-    if (input.thread_id !== undefined) {
-      this.requireThread(input.thread_id);
-      threadId = input.thread_id;
-    } else {
-      const resolved = this.resolveThread({
-        subject: input.subject,
-        inReplyTo: input.in_reply_to,
-        references: input.references,
-        nowMs: now,
-      });
-      threadId = resolved.id;
-      createdThread = resolved.created;
-    }
+    // The email row, its Message-ID mapping, the attachment manifest, and
+    // the thread bump commit as one unit: a mid-write failure must not
+    // strand an email row pointing at a half-written manifest.
+    this.exec(`BEGIN IMMEDIATE`);
     try {
+      let threadId: string;
+      if (input.thread_id !== undefined) {
+        this.requireThread(input.thread_id);
+        threadId = input.thread_id;
+      } else {
+        const resolved = this.resolveThread({
+          subject: input.subject,
+          inReplyTo: input.in_reply_to,
+          references: input.references,
+          nowMs: now,
+        });
+        threadId = resolved.id;
+      }
       this.exec(
         `INSERT INTO emails
            (id, thread_id, direction, from_addr, to_addr, subject, body_text, body_html, status, created_at)
@@ -704,39 +715,36 @@ export class MailboxStore {
         status,
         now,
       );
-    } catch (error) {
-      if (createdThread) {
-        // The fresh thread belongs to this email only — remove it so a failed
-        // insert never leaves an empty thread behind.
-        this.exec(`DELETE FROM threads WHERE id = ?`, threadId);
+      if (input.message_id) {
+        this.exec(
+          `INSERT OR IGNORE INTO email_ids (message_id, email_id) VALUES (?, ?)`,
+          input.message_id,
+          id,
+        );
       }
+      for (const attachment of attachments) {
+        this.exec(
+          `INSERT INTO email_attachments (email_id, part_id, filename, mime_type, size, content_id, r2_key)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          id,
+          attachment.part_id,
+          attachment.filename ?? null,
+          attachment.mime_type ?? null,
+          attachment.size,
+          attachment.content_id ?? null,
+          attachment.r2_key,
+        );
+      }
+      this.exec(
+        `UPDATE threads SET last_message_at = MAX(last_message_at, ?) WHERE id = ?`,
+        now,
+        threadId,
+      );
+      this.exec(`COMMIT`);
+    } catch (error) {
+      this.exec(`ROLLBACK`);
       throw error;
     }
-    if (input.message_id) {
-      this.exec(
-        `INSERT OR IGNORE INTO email_ids (message_id, email_id) VALUES (?, ?)`,
-        input.message_id,
-        id,
-      );
-    }
-    for (const attachment of attachments) {
-      this.exec(
-        `INSERT INTO email_attachments (email_id, part_id, filename, mime_type, size, content_id, r2_key)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        id,
-        attachment.part_id,
-        attachment.filename ?? null,
-        attachment.mime_type ?? null,
-        attachment.size,
-        attachment.content_id ?? null,
-        attachment.r2_key,
-      );
-    }
-    this.exec(
-      `UPDATE threads SET last_message_at = MAX(last_message_at, ?) WHERE id = ?`,
-      now,
-      threadId,
-    );
     const stored = this.getEmail(id);
     if (!stored) {
       throw new Error("email insert did not produce a row");

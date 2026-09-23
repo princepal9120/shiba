@@ -16,9 +16,10 @@
  *   so one call searches every agent's bankings. The tool projects each
  *   hit to the brief's join shape `{id, fact, source, agent, score}` and
  *   keeps the DO's score-descending order.
- * - `memory_forget` deletes through `global`: the registry resolves the
- *   owner, delegates the row delete, and drops its own index row — row,
- *   vector, and registry entry all go away.
+ * - `memory_forget` deletes on the caller's own stub (same ownership pin
+ *   as `memory_bank`): a fact the caller doesn't own is a 404, so a
+ *   `memory:write` token can never erase another agent's bankings. The
+ *   agent-stub path still drops the vector and registry entry.
  * - `memory_sessions` reads `global`'s sessions table, optionally
  *   `?agent=` scoped.
  */
@@ -224,10 +225,12 @@ export function registerMemoryTools(registry: ToolRegistry, env: Env): void {
   registry.registerTool(
     "memory_forget",
     WRITE,
-    async (args) => {
+    async (args, ctx) => {
       const { fact_id } = parseArgs(forgetSchema, args);
-      const body = await registryJson<{ ok: boolean; id: string }>(
-        env,
+      // Own-stub delete: a foreign-owned fact ids to a 404 the same way a
+      // missing one does — no cross-agent forgets and no owner disclosure.
+      const body = await stubJson<{ ok: boolean; id: string }>(
+        memoryStub(env, ctx.principal.principal),
         `/facts/${encodeURIComponent(fact_id)}`,
         { method: "DELETE" },
       );

@@ -808,7 +808,14 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     const { approvalId, threadKey } = record;
     const dispatch = async () => {
       try {
-        await executeEmailApproval(this.env, record);
+        // Pre-claim failures run a stale-sweep on the mailbox — the sweep's
+        // age check can't see sibling approvals minted after a row queued,
+        // so live pending drafts ride along as exclusions.
+        const ref = emailApprovalDraftRef(record);
+        const live = ref === null ? undefined : this.liveApprovalDrafts(Date.now()).get(ref.mailbox);
+        await executeEmailApproval(this.env, record, {
+          excludeDraftIds: live === undefined ? undefined : [...live],
+        });
         // The record is the only durable account of this runless
         // execution — the outcome lands on it, not only in logs.
         this.writeApprovals(recordApprovalExecution(this.approvals, {
@@ -1141,6 +1148,13 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
 
   override async onRequest(request: Request): Promise<Response> {
     const url = new URL(request.url);
+    // Cron backstop for the poll-driven stale-draft sweep — in a quiet
+    // system no approvals fetch or DO restart ever calls it, so a human
+    // who stops polling would leave `sending`-locked drafts held forever.
+    if (request.method === "POST" && url.pathname === "/internal/sweep-drafts") {
+      this.sweepStaleDrafts(true);
+      return Response.json({ ok: true });
+    }
     if (url.pathname === "/api/approvals" && request.method === "GET") {
       return this.listApprovals();
     }

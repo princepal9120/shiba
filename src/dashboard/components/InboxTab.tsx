@@ -5,7 +5,7 @@
  * Mailbox Durable Objects; "Send for approval" queues an approval rather
  * than transmitting anything.
  */
-import { useCallback, useEffect, useState, type JSX } from "react";
+import { useCallback, useEffect, useRef, useState, type JSX } from "react";
 import type {
   InboxAttachment,
   InboxDraft,
@@ -101,6 +101,10 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
   const [replyOpen, setReplyOpen] = useState(false);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // The email id the in-flight detail fetch belongs to — a slower reply
+  // landing after a newer expand would otherwise paint A's body on B's row
+  // and aim B's reply draft at A's sender.
+  const detailRequestRef = useRef<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -161,12 +165,14 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
   const toggleExpanded = useCallback(
     async (email: InboxEmail) => {
       if (expandedId === email.id) {
+        detailRequestRef.current = null;
         setExpandedId(null);
         setDetail(null);
         setThread(null);
         setReplyOpen(false);
         return;
       }
+      detailRequestRef.current = email.id;
       setExpandedId(email.id);
       setDetail(null);
       setThread(null);
@@ -177,6 +183,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
         const body = await apiJson<{ mailbox?: string; email: InboxEmail; attachments?: InboxAttachment[] }>(
           `/api/emails/${encodeURIComponent(email.id)}`,
         );
+        if (detailRequestRef.current !== email.id) return;
         setDetail({ mailbox: body.mailbox ?? null, email: body.email, attachments: body.attachments ?? [] });
         if (email.status === "unread") {
           setEmails((prev) =>
@@ -187,9 +194,13 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
           );
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
+        if (detailRequestRef.current === email.id) {
+          setError(err instanceof Error ? err.message : String(err));
+        }
       } finally {
-        setDetailLoading(false);
+        if (detailRequestRef.current === email.id) {
+          setDetailLoading(false);
+        }
       }
     },
     [expandedId],
@@ -201,14 +212,19 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
       return;
     }
     if (detail === null || !detail.email.thread_id) return;
+    const detailFor = detail.email.id;
     setThreadLoading(true);
     try {
       const body = await apiJson<{ thread: InboxThread }>(
         `/api/threads/${encodeURIComponent(detail.email.thread_id)}`,
       );
-      setThread(body.thread);
+      if (detailRequestRef.current === detailFor) {
+        setThread(body.thread);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (detailRequestRef.current === detailFor) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
     } finally {
       setThreadLoading(false);
     }

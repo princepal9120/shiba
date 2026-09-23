@@ -309,14 +309,32 @@ describe("handleInboundEmail", () => {
     expect([...env.r2.keys()]).toEqual([`${emails[0]!.id}/part-0`]);
   });
 
-  it("rejects a registered recipient when the store write fails", async () => {
+  it("throws on a 5xx store write so the delivery is retried, not bounced", async () => {
     resetInboundEmailStats();
     const env = makeEnv();
     await registerMailbox(env);
     // The directory answers normally (registered) but the per-address mail
-    // stub errors — the message clears the gate then dies at the store.
+    // stub 500s — transient faults fail the delivery transiently so Email
+    // Routing redelivers instead of bouncing a deliverable recipient.
     env.stubs.set(REGISTERED, {
       fetch: async () => new Response("broken", { status: 500 }),
+    });
+    const { message, rejectReason } = makeMessage(
+      rfc822({ From: "a@example.com", To: REGISTERED, Subject: "x" }),
+    );
+    await expect(handleInboundEmail(message, env)).rejects.toThrow("Mailbox store failed");
+    expect(rejectReason()).toBeUndefined();
+    expect(inboundEmailStats().stored).toBe(0);
+  });
+
+  it("rejects a registered recipient when the store write fails fatally", async () => {
+    resetInboundEmailStats();
+    const env = makeEnv();
+    await registerMailbox(env);
+    // A 4xx means the record itself was refused — redelivery returns the
+    // same verdict, so the bounce reports the drop to the sender's MTA.
+    env.stubs.set(REGISTERED, {
+      fetch: async () => new Response("bad input", { status: 400 }),
     });
     const { message, rejectReason } = makeMessage(
       rfc822({ From: "a@example.com", To: REGISTERED, Subject: "x" }),
@@ -326,14 +344,14 @@ describe("handleInboundEmail", () => {
     expect(inboundEmailStats().stored).toBe(0);
   });
 
-  it("treats a thrown store fetch like a failed write: reject + orphan cleanup", async () => {
+  it("throws on a dead store stub for redelivery — and still cleans the orphan bodies", async () => {
     resetInboundEmailStats();
     const env = makeEnv();
     await registerMailbox(env);
-    // The stub throws rather than answering — without a catch in storeEmail
-    // the exception would escape before reconcileStoreResult ran, leaving
-    // the bodies below orphaned with no manifest row to find them. The real
-    // stub is kept so the store's emptiness can be checked afterward.
+    // The stub throws rather than answering — a transient fault that must
+    // redeliver, and the written part body still gets cleaned before the
+    // throw, or it would orphan once the replay dedups away. The real stub
+    // is kept so the store's emptiness can be checked afterward.
     const realStub = env.Mailbox.get(env.Mailbox.idFromName(REGISTERED));
     env.stubs.set(REGISTERED, {
       fetch: async () => {
@@ -348,8 +366,10 @@ describe("handleInboundEmail", () => {
         `--y\nContent-Type: text/plain; charset=utf-8\n\nsee attached\n\n` +
         `--y\nContent-Type: text/csv; name="data.csv"\nContent-Disposition: attachment; filename="data.csv"\nContent-Transfer-Encoding: base64\n\nY29sMSxjbGwyCjEsMgo=\n\n--y--\n`;
       const { message, rejectReason } = makeMessage(raw);
-      await handleInboundEmail(message, env);
-      expect(rejectReason()).toBe("Mailbox storage failed");
+      await expect(handleInboundEmail(message, env)).rejects.toThrow(
+        "Mailbox store unreachable",
+      );
+      expect(rejectReason()).toBeUndefined();
       expect(inboundEmailStats().stored).toBe(0);
       // The part body was written, then deleted once the store failed —
       // nothing is left under an id no manifest row enumerates.
