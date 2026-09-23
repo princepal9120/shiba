@@ -7,7 +7,7 @@ import {
   queueEmailApproval,
 } from "../src/email-approvals.js";
 import { MAILBOX_DIRECTORY_NAME } from "../src/mailbox-do.js";
-import type { PendingApproval } from "../src/pending-approvals.js";
+import { APPROVAL_TTL_MS, type PendingApproval } from "../src/pending-approvals.js";
 import { InputError } from "../src/security.js";
 
 const mocks = vi.hoisted(() => ({ execute: vi.fn(), getAgentByName: vi.fn(), destroy: vi.fn() }));
@@ -127,14 +127,15 @@ function agentWithMailbox(opts: {
     state: { runs: [] } as OrchestratorState,
     setState(state: OrchestratorState) { Object.assign(this, { state }); },
   });
-  // The resolver hands the executor promise to ctx.waitUntil — capture it
-  // so assertions run only after the frozen payload fully executes.
-  let dispatched: Promise<unknown> | undefined;
+  // The resolver hands background work to ctx.waitUntil — capture every
+  // dispatch (executor + draft releases) so assertions run only after
+  // the frozen payload and any sweeps fully settle.
+  const dispatched: Promise<unknown>[] = [];
   Object.assign(instance, {
-    ctx: { waitUntil: (pending: Promise<unknown>) => { dispatched = pending; } },
+    ctx: { waitUntil: (pending: Promise<unknown>) => { dispatched.push(pending); } },
   });
   mocks.getAgentByName.mockResolvedValue({ fetch: (request: Request) => instance.onRequest(request) });
-  return { instance, env, send, mailboxCalls, settled: async () => dispatched };
+  return { instance, env, send, mailboxCalls, settled: async () => { await Promise.all(dispatched); } };
 }
 
 function approve(instance: CodingOrchestrator, approvalId: string, approved: boolean) {
@@ -544,6 +545,59 @@ describe("email approval execution", () => {
     expect(paths).not.toContain("POST /internal/mailbox/drafts/draft-1/unqueue");
   });
 
+  it("an expired email_send releases its queued draft when a resolve sweeps it", async () => {
+    const { instance, env, send, mailboxCalls, settled } = agentWithMailbox();
+    const expired = await queueEmailApproval(env as never, {
+      kind: "email_send",
+      mailbox: "agent-a@shiba.dev",
+      payload: { ...SEND_PAYLOAD, draft_id: "draft-stale" },
+    });
+    // Age the pointer past TTL — the human never clicked it.
+    const staleRecord = (instance.state.pendingApprovals ?? []).find(
+      (a) => a.approvalId === expired.approval_id,
+    )!;
+    staleRecord.createdAt = Date.now() - APPROVAL_TTL_MS - 1;
+    const live = await queueEmailApproval(env as never, {
+      kind: "email_send",
+      mailbox: "agent-a@shiba.dev",
+      payload: { ...SEND_PAYLOAD, draft_id: "draft-live" },
+    });
+
+    const response = await approve(instance, live.approval_id, true);
+    expect((await response.json() as { result: string }).result).toBe("approved");
+    await settled();
+    // The unrelated resolve swept the expired pointer out of state AND
+    // freed its draft — otherwise the row would strand `queued` forever.
+    const paths = mailboxCalls.map((call) => `${call.method} ${call.path}`);
+    expect(paths).toContain("POST /internal/mailbox/drafts/draft-stale/unqueue");
+    expect(paths).toContain("POST /internal/mailbox/drafts/draft-live/sent");
+    expect(send).toHaveBeenCalledOnce();
+    const remaining = instance.state.pendingApprovals ?? [];
+    expect(remaining.some((a) => a.approvalId === expired.approval_id)).toBe(false);
+    expect(remaining.find((a) => a.approvalId === live.approval_id)?.status).toBe("approved");
+  });
+
+  it("a stale click on an expired email_send pointer frees its draft", async () => {
+    const { instance, env, send, mailboxCalls, settled } = agentWithMailbox();
+    const { approval_id } = await queueEmailApproval(env as never, {
+      kind: "email_send",
+      mailbox: "agent-a@shiba.dev",
+      payload: { ...SEND_PAYLOAD },
+    });
+    (instance.state.pendingApprovals ?? [])[0]!.createdAt = Date.now() - APPROVAL_TTL_MS - 1;
+
+    const response = await approve(instance, approval_id, true);
+    expect((await response.json() as { result: string }).result).toBe("unknown");
+    await settled();
+    // The expired pointer resolves nothing — but the draft it owned is
+    // released, and nothing ever sent.
+    expect(send).not.toHaveBeenCalled();
+    expect(mailboxCalls).toEqual([
+      { method: "POST", path: "/internal/mailbox/drafts/draft-1/unqueue", body: undefined },
+    ]);
+    expect(instance.state.pendingApprovals ?? []).toHaveLength(0);
+  });
+
   it("approve on email_delete issues the mailbox DELETE exactly once", async () => {
     const { instance, env, send, mailboxCalls, settled } = agentWithMailbox();
     const { approval_id } = await queueEmailApproval(env as never, {
@@ -694,6 +748,29 @@ describe("GET /api/approvals", () => {
     const after = await instance.onRequest(new Request("https://internal/api/approvals"));
     const remaining = (await after.json()) as { approvals: Array<{ approvalId: string }> };
     expect(remaining.approvals.map((a) => a.approvalId)).toEqual([second.approval_id]);
+  });
+
+  it("a poll sweeps an expired email_send: the pointer leaves state and its draft is freed", async () => {
+    const { instance, env, send, mailboxCalls, settled } = agentWithMailbox();
+    await queueEmailApproval(env as never, {
+      kind: "email_send",
+      mailbox: "agent-a@shiba.dev",
+      payload: { ...SEND_PAYLOAD },
+    });
+    (instance.state.pendingApprovals ?? [])[0]!.createdAt = Date.now() - APPROVAL_TTL_MS - 1;
+
+    const list = await instance.onRequest(new Request("https://internal/api/approvals"));
+    const body = (await list.json()) as { approvals: unknown[] };
+    expect(body.approvals).toHaveLength(0);
+    await settled();
+    // The GET hid expired pointers before; now it also prunes them and
+    // releases the queued draft — the only release path left once the
+    // approval ages out.
+    expect(instance.state.pendingApprovals ?? []).toHaveLength(0);
+    expect(mailboxCalls).toEqual([
+      { method: "POST", path: "/internal/mailbox/drafts/draft-1/unqueue", body: undefined },
+    ]);
+    expect(send).not.toHaveBeenCalled();
   });
 });
 

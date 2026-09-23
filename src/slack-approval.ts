@@ -16,6 +16,7 @@
  * `ctx.waitUntil` when a context is provided.
  */
 import type { Env } from "./env.js";
+import type { ApprovalKind } from "./pending-approvals.js";
 import { redactSecrets } from "./security.js";
 import { verifySlackRequest } from "./slack.js";
 
@@ -100,7 +101,7 @@ export interface ApprovalCardInput extends ApprovalPointer {
   repoUrl: string;
   task: string;
   /** PendingApproval kind — "email_send" / "email_delete" get email copy. */
-  kind?: string;
+  kind?: ApprovalKind;
   /**
    * Human-readable requester for email kinds (e.g. the mailbox's agent
    * label). Falls back to the mailbox address the record already carries.

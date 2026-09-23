@@ -16,14 +16,48 @@ vi.mock("agents/mcp", () => ({
 // Record queueEmailApproval calls so tests can assert the frozen payload —
 // the T6 stub only surfaces an approval_id, which this mock preserves.
 const queueCalls = vi.hoisted(
-  () => [] as Array<{ kind: string; mailbox: string; payload: Record<string, unknown> }>,
+  () =>
+    [] as Array<{
+      kind: string;
+      mailbox: string;
+      payload: Record<string, unknown>;
+      draftStatusAtMint: string | null;
+    }>,
 );
+const queueError = vi.hoisted(() => ({ message: null as string | null }));
 vi.mock("../src/email-approvals.js", () => ({
   queueEmailApproval: async (
-    _env: unknown,
+    env: {
+      Mailbox: {
+        idFromName: (name: string) => unknown;
+        get: (id: unknown) => { fetch: (r: Request) => Promise<Response> };
+      };
+    },
     request: { kind: string; mailbox: string; payload: Record<string, unknown> },
   ) => {
-    queueCalls.push(request);
+    if (queueError.message !== null) {
+      const message = queueError.message;
+      queueError.message = null;
+      throw new Error(message);
+    }
+    // Read back the draft's status at mint time — proves the queue CAS
+    // ran before the approval was minted (a mint-first order would
+    // still see "draft").
+    let draftStatusAtMint: string | null = null;
+    const draftId = request.payload.draft_id;
+    if (typeof draftId === "string") {
+      const stub = env.Mailbox.get(env.Mailbox.idFromName(request.mailbox));
+      const res = await stub.fetch(
+        new Request(
+          `https://internal/internal/mailbox/drafts/${encodeURIComponent(draftId)}`,
+        ),
+      );
+      if (res.ok) {
+        const body = (await res.json()) as { draft?: { status?: string } };
+        draftStatusAtMint = body.draft?.status ?? null;
+      }
+    }
+    queueCalls.push({ ...request, draftStatusAtMint });
     return { approval_id: `apv-mock-${queueCalls.length}` };
   },
   // Real contract preserved: wired exactly when the SEND_EMAIL binding exists.
@@ -420,6 +454,10 @@ describe("registerEmailTools — approval-gated tools", () => {
       body_text: "Body.",
       draft_id: draftId,
     });
+    // CAS-then-mint: the row was already `queued` when the approval was
+    // created — a racing send_email(draft_id) fails the CAS instead of
+    // minting a second live approval.
+    expect(draftQueue.draftStatusAtMint).toBe("queued");
 
     // The draft was NOT sent — but it is no longer an editable draft:
     // queueing the approval moved it to `queued` through the send-path
@@ -448,6 +486,95 @@ describe("registerEmailTools — approval-gated tools", () => {
     );
     expect(composed.status).toBe("pending_approval");
     expect(composed.approval_id).toMatch(/^apv-/);
+  });
+
+  it("send_email mints at most one approval per draft even under a concurrent race", async () => {
+    const { env } = makeEnv();
+    const registry = makeRegistry(env);
+    await registerMailbox(env);
+    const created = resultData(
+      await registry.invoke(
+        "create_draft",
+        { mailbox: REGISTERED, to: "client@example.com", subject: "Hi", body: "Body." },
+        reader,
+      ),
+    );
+    const draftId = created.draft.id as string;
+
+    const [first, second] = await Promise.all([
+      registry.invoke("send_email", { draft_id: draftId }, reader),
+      registry.invoke("send_email", { draft_id: draftId }, reader),
+    ]);
+    // One wins the CAS, the other loses — exactly one approval exists,
+    // so approval cannot double-send what two mint-first calls would.
+    const outcomes = [first, second].map((r) => r.isError === true);
+    expect(outcomes.sort()).toEqual([false, true]);
+    expect(queueCalls.filter((c) => c.payload.draft_id === draftId)).toHaveLength(1);
+  });
+
+  it("a failed approval mint unqueues the draft — the CAS never strands the row", async () => {
+    const { env } = makeEnv();
+    const registry = makeRegistry(env);
+    await registerMailbox(env);
+    const created = resultData(
+      await registry.invoke(
+        "create_draft",
+        { mailbox: REGISTERED, to: "client@example.com", subject: "Hi", body: "Body." },
+        reader,
+      ),
+    );
+    const draftId = created.draft.id as string;
+
+    queueError.message = "orchestrator unreachable";
+    const failed = await registry.invoke("send_email", { draft_id: draftId }, reader);
+    expect(failed.isError).toBe(true);
+    expect(queueCalls.filter((c) => c.payload.draft_id === draftId)).toHaveLength(0);
+
+    // The compensating unqueue released the row back to editable draft.
+    const draftsRes = await (env.Mailbox.get(env.Mailbox.idFromName(REGISTERED)) as unknown as FakeStub)
+      .fetch(new Request("https://internal/internal/mailbox/drafts"));
+    const drafts = ((await draftsRes.json()) as { drafts: { id: string; status: string }[] }).drafts;
+    expect(drafts.find((d) => d.id === draftId)?.status).toBe("draft");
+  });
+
+  it("a bridge-unset send_email refusal happens before the queue CAS — the draft stays editable", async () => {
+    const { env } = makeEnv();
+    const registry = makeRegistry(env);
+    await registerMailbox(env);
+    (env as unknown as { SEND_EMAIL?: unknown }).SEND_EMAIL = undefined;
+    const callsBefore = queueCalls.length;
+    try {
+      const created = resultData(
+        await registry.invoke(
+          "create_draft",
+          { mailbox: REGISTERED, to: "client@example.com", subject: "Hi", body: "Body." },
+          reader,
+        ),
+      );
+      const draftId = created.draft.id as string;
+
+      for (const args of [
+        { draft_id: draftId },
+        { mailbox: REGISTERED, to: "x@y.z", subject: "s", body: "b" },
+      ]) {
+        const result = await registry.invoke("send_email", args, reader);
+        expect(result.isError, JSON.stringify(args)).toBe(true);
+        expect((result.content[0] as { text: string }).text).toContain("SEND_EMAIL");
+      }
+      const email = await addEmail(env, { from_addr: "client@example.com" });
+      const reply = await registry.invoke("send_reply", { email_id: email.id, body: "Ack." }, reader);
+      expect(reply.isError).toBe(true);
+
+      // Nothing was queued — no approval minted, and the draft stayed
+      // editable (the refusal runs before the queue CAS).
+      expect(queueCalls).toHaveLength(callsBefore);
+      const draftsRes = await (env.Mailbox.get(env.Mailbox.idFromName(REGISTERED)) as unknown as FakeStub)
+        .fetch(new Request("https://internal/internal/mailbox/drafts"));
+      const drafts = ((await draftsRes.json()) as { drafts: { id: string; status: string }[] }).drafts;
+      expect(drafts.find((d) => d.id === draftId)?.status).toBe("draft");
+    } finally {
+      (env as unknown as { SEND_EMAIL?: unknown }).SEND_EMAIL = { send: async () => ({ status: "ok" }) };
+    }
   });
 
   it("send_reply and delete_email return pending_approval without touching the email", async () => {

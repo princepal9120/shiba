@@ -20,8 +20,11 @@
  *   and answer `pending_approval`. The T7 executor releases the frozen
  *   payload verbatim; callers can't rewrite it at release time. A draft
  *   sent for approval is locked to `queued` through the store's
- *   send-path seam (`POST /drafts/:id/queue`) — uneditable and
- *   un-requeueable behind a live approval.
+ *   send-path seam (`POST /drafts/:id/queue`) BEFORE its approval is
+ *   minted — the CAS-then-mint order the dashboard's draft send uses,
+ *   so a racing second send fails the CAS and a failed mint is
+ *   compensated by an unqueue. Uneditable and un-requeueable behind a
+ *   live approval.
  *
  * `move_email` maps to `email:draft`, the mailbox write scope: it
  * mutates `emails.status` inside the owning store — including the
@@ -32,7 +35,11 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import type { Scope } from "./agent-tokens.js";
-import { emailApprovalBridgeReady, queueEmailApproval } from "./email-approvals.js";
+import {
+  emailApprovalBridgeReady,
+  queueEmailApproval,
+  type EmailApprovalResult,
+} from "./email-approvals.js";
 import type { Env } from "./env.js";
 import { mailboxDirectoryStub, mailboxStub, registeredMailbox } from "./mailbox-do.js";
 import {
@@ -628,38 +635,58 @@ export function registerEmailTools(registry: ToolRegistry, env: Env): void {
             `Draft ${draft.id} is not editable (status: ${draft.status}).`,
           );
         }
-        // Freeze the draft's content into the approval: the approver sees
-        // exactly what ships, and the executor never re-reads the mutable
-        // drafts row at send time.
-        const approval = await queueEmailApproval(env, {
-          kind: "email_send",
-          mailbox: located.mailbox,
-          payload: {
-            to_addr: draft.to_addr,
-            subject: draft.subject,
-            body_text: draft.body_text,
-            ...(draft.thread_id !== null ? { thread_id: draft.thread_id } : {}),
-            ...(draft.in_reply_to_email_id !== null
-              ? { in_reply_to_email_id: draft.in_reply_to_email_id }
-              : {}),
-            draft_id: draft.id,
-          },
-        });
-        // Lock the row behind the approval: `draft` → `queued` through
-        // the store's send-path seam, so a second send_email(draft_id)
-        // fails the status check above (one draft mints at most one
-        // approval) and update_draft refuses edits while it awaits
-        // review. The approval is queued first so a mark failure cannot
-        // strand a `queued` row no pending approval references; a mark
-        // failure instead leaves the approval live and the row
-        // re-queueable — a duplicate T7's executor dedupes on
-        // `payload.draft_id`.
-        await stubJson(
+        // Lock the row FIRST — the CAS-then-mint order the dashboard's
+        // draft send uses (index.ts queueDraftSend). Two racing
+        // send_email(draft_id) calls cannot both mint an approval: the
+        // first CAS flips `draft` → `queued` and the second 400s here.
+        // Minting first would leave a live approval whose frozen payload
+        // still executes verbatim even when the CAS failed — the
+        // double-send this order closes.
+        const queuedBody = await stubJson<{ draft: DraftRecord }>(
           env,
           perMailbox(located.mailbox),
           `/drafts/${encodeURIComponent(draft.id)}/queue`,
           jsonPost({}),
         );
+        const queued = queuedBody?.draft ?? draft;
+        let approval: EmailApprovalResult;
+        try {
+          // Freeze the draft's content into the approval: the approver
+          // sees exactly what ships, and the executor never re-reads the
+          // mutable drafts row at send time.
+          approval = await queueEmailApproval(env, {
+            kind: "email_send",
+            mailbox: located.mailbox,
+            payload: {
+              to_addr: queued.to_addr,
+              subject: queued.subject,
+              body_text: queued.body_text,
+              ...(queued.thread_id !== null ? { thread_id: queued.thread_id } : {}),
+              ...(queued.in_reply_to_email_id !== null
+                ? { in_reply_to_email_id: queued.in_reply_to_email_id }
+                : {}),
+              draft_id: queued.id,
+            },
+          });
+        } catch (error) {
+          // Compensating unqueue: the CAS landed but no approval exists
+          // to release the row — without this the draft strands `queued`
+          // behind an approval that does not exist.
+          await stubJson(
+            env,
+            perMailbox(located.mailbox),
+            `/drafts/${encodeURIComponent(draft.id)}/unqueue`,
+            jsonPost({}),
+          ).catch((unqueueError: unknown) => {
+            console.warn(
+              `draft unqueue failed after approval mint error ${JSON.stringify({
+                draft_id: draft.id,
+                error: unqueueError instanceof Error ? unqueueError.message : String(unqueueError),
+              })}`,
+            );
+          });
+          throw error;
+        }
         return jsonResult({
           status: "pending_approval",
           kind: "email_send",

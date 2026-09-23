@@ -476,7 +476,8 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     }
     const decidedBy = typeof rawDecidedBy === "string" && rawDecidedBy.trim() ? rawDecidedBy.slice(0, 200) : "unknown";
     if (approved) await this.reclaimRuns();
-    const result = resolvePendingApproval(this.approvals, { threadKey, approvalId, approved, decidedBy }, Date.now());
+    const now = Date.now();
+    const result = resolvePendingApproval(this.approvals, { threadKey, approvalId, approved, decidedBy }, now);
     // Failed admission leaves the persisted approval pending and retryable.
     if (result.result === "approved") {
       const record = this.approvals.find((a) => a.approvalId === approvalId && a.threadKey === threadKey);
@@ -499,7 +500,14 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         }
       }
     }
-    const approvals = pruneExpiredApprovals(result.approvals, Date.now());
+    // Captured before the prune drops them: an expired email_send still
+    // owns a `queued` draft, and once its pointer is gone nothing else
+    // can reach the locked row — the sweep below releases it through the
+    // same unqueue seam a rejection uses. Covers both drops: the
+    // expired-pointer resolve (removed from `result.approvals` already)
+    // and every other expired pending the prune filters out.
+    const expiredSends = this.expiredEmailSends(now);
+    const approvals = pruneExpiredApprovals(result.approvals, now);
     const record = result.result === "approved"
       ? approvals.find((approval) => approval.approvalId === approvalId)
       : undefined;
@@ -550,19 +558,12 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     if (rejectedEmail) {
       // Rejecting frees the queued draft back to `draft` — otherwise the
       // row strands `queued` behind an approval that can never re-resolve.
-      const emailRecord = rejectedEmail;
-      const release = unqueueEmailApprovalDraft(this.env, emailRecord).catch((error) => {
-        console.error(
-          `Email approval ${approvalId} draft release failed`,
-          redactSecrets(String(error)),
-        );
-      });
-      if (typeof this.ctx === "object" && this.ctx !== null && "waitUntil" in this.ctx) {
-        this.ctx.waitUntil(release);
-      } else {
-        void release;
-      }
+      this.releaseEmailApprovalDrafts([rejectedEmail]);
     }
+    // Expired email approvals leave their queued drafts the same way —
+    // an approval that aged out can never be resolved, so its draft
+    // would sit `queued` forever without this compensating release.
+    this.releaseEmailApprovalDrafts(expiredSends);
     return Response.json({ result: result.result satisfies ResolveResult });
   }
 
@@ -678,18 +679,62 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     this.setState({ ...this.state, runs: this.store.list().filter((run) => !removed.has(run.runId)) });
   }
 
+  /** Pending email_send approvals past TTL — the records a prune drops. */
+  private expiredEmailSends(now: number): PendingApproval[] {
+    return this.approvals.filter(
+      (approval) =>
+        approval.status === "pending" &&
+        approval.kind === "email_send" &&
+        isApprovalExpired(approval, now),
+    );
+  }
+
+  /**
+   * Release each record's queued draft through the same unqueue seam a
+   * rejection uses. `queued` rows are immutable to every other surface
+   * (`updateDraft`/`markDraftQueued` refuse non-`draft` rows), so a
+   * draft locked behind an approval that can no longer resolve is
+   * stranded forever without this. Best-effort: a failure is logged,
+   * never fatal to the pointer path that triggered it.
+   */
+  private releaseEmailApprovalDrafts(records: PendingApproval[]): void {
+    if (records.length === 0) return;
+    const releases = Promise.all(
+      records.map((record) =>
+        unqueueEmailApprovalDraft(this.env, record).catch((error) => {
+          console.error(
+            `Email approval ${record.approvalId} draft release failed`,
+            redactSecrets(String(error)),
+          );
+        }),
+      ),
+    );
+    if (typeof this.ctx === "object" && this.ctx !== null && "waitUntil" in this.ctx) {
+      this.ctx.waitUntil(releases);
+    } else {
+      void releases;
+    }
+  }
+
   /**
    * GET the live approval pointers — the dashboard's Approvals surface
    * lists them to a human who decides via POST. Expired pendings are
-   * hidden (resolve would call them "unknown" anyway); decided records
-   * are dropped too — a resolved pointer must never be re-listed.
+   * pruned out of state here too, not merely hidden: this is the poll
+   * path a human dashboard session drives, so it runs the same sweep
+   * the resolve path does and frees any draft whose email approval
+   * aged out. Decided records are dropped from the listing — a
+   * resolved pointer must never be re-listed.
    */
   private listApprovals(): Response {
     const now = Date.now();
+    const expiredSends = this.expiredEmailSends(now);
+    const pruned = pruneExpiredApprovals(this.approvals, now);
+    if (pruned.length !== this.approvals.length) {
+      this.writeApprovals(pruned);
+      this.releaseEmailApprovalDrafts(expiredSends);
+    }
     return Response.json({
-      approvals: this.approvals.filter(
-        (approval) => approval.status === "pending" && !isApprovalExpired(approval, now),
-      ),
+      approvals: pruned.filter((approval) => approval.status === "pending"),
     });
   }
 
