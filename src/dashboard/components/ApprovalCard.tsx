@@ -9,34 +9,40 @@ export interface ApprovalCardProps {
   approval: PendingApproval;
   decided: boolean;
   onDecideApproval: (approvalId: string, approved: boolean) => void;
+  /** Agent requesting the approval — the orchestrator instance driving the chat. */
+  agentName?: string;
 }
 
-export function ApprovalCard({ approval, decided, onDecideApproval }: ApprovalCardProps): JSX.Element {
+export function ApprovalCard({ approval, decided, onDecideApproval, agentName }: ApprovalCardProps): JSX.Element {
   return (
-    <div className="border border-[#c9a227]/60 bg-[#0a0c10] rounded-xl p-4 shadow-lg shadow-[#c9a227]/5 flex flex-col gap-3">
+    <div className="border border-[#b45309]/60 bg-[#f1efe6] rounded-xl p-4 shadow-lg shadow-[#b45309]/5 flex flex-col gap-3">
       <div className="flex items-center justify-between gap-3">
-        <div className="font-mono font-bold text-sm text-[#e6edf3] flex items-center gap-2 min-w-0">
+        <div className="font-mono font-bold text-sm text-[#222320] flex items-center gap-2 min-w-0">
           <Tooltip content="Sacred Approval Gate — Zero Trust Security" side="bottom">
             <img
               src="/assets/mascot/pet-logo.png"
               alt="Shiba Guard"
-              className="w-5 h-5 rounded-full bg-white object-contain border border-amber-500/50 shrink-0 cursor-default"
+              className="w-5 h-5 rounded-full bg-white object-contain border border-[#f99c00]/50 shrink-0 cursor-default"
             />
           </Tooltip>
           <span className="truncate">{approval.tool}</span>
         </div>
-        <span className="text-[10px] uppercase tracking-wider font-bold bg-[#c9a227]/15 border border-[#c9a227]/30 text-[#c9a227] px-2 py-0.5 rounded-full shrink-0">
+        <span className="text-[10px] uppercase tracking-wider font-bold bg-[#b45309]/15 border border-[#b45309]/30 text-[#b45309] px-2 py-0.5 rounded-full shrink-0">
           Action Required
         </span>
       </div>
 
-      <pre className="whitespace-pre-wrap font-mono text-xs text-[#8b98a9] bg-black p-3 rounded-lg border border-[#1e2530] max-h-56 overflow-auto">
+      {agentName !== undefined ? (
+        <p className="text-[10px] font-mono text-[#6a6f63] truncate -mt-1">via {agentName}</p>
+      ) : null}
+
+      <pre className="whitespace-pre-wrap font-mono text-xs text-[#6a6f63] bg-[#fffef8] p-3 rounded-lg border border-[#e0ded5] max-h-56 overflow-auto">
         {typeof approval.input === "string"
           ? approval.input
           : JSON.stringify(approval.input, null, 2)}
       </pre>
 
-      <p className="text-xs text-[#8b98a9] leading-relaxed">
+      <p className="text-xs text-[#6a6f63] leading-relaxed">
         Approving starts an isolated sandbox run. Rejecting stops the tool call.
       </p>
 
@@ -44,7 +50,7 @@ export function ApprovalCard({ approval, decided, onDecideApproval }: ApprovalCa
         <Tooltip content="Approve tool execution inside isolated container" side="top">
           <button
             type="button"
-            className="bg-[#4cc38a] hover:bg-[#3ba875] text-[#06121f] font-semibold py-2 px-5 rounded-lg transition-all disabled:opacity-50 text-sm shadow-sm flex items-center gap-1.5 active:scale-[0.98]"
+            className="bg-[#15803d] hover:bg-[#166534] text-[#fffef8] font-semibold py-2 px-5 rounded-lg transition-all disabled:opacity-50 text-sm shadow-sm flex items-center gap-1.5 active:scale-[0.98]"
             disabled={decided}
             onClick={() => onDecideApproval(approval.approvalId, true)}
           >
@@ -58,7 +64,7 @@ export function ApprovalCard({ approval, decided, onDecideApproval }: ApprovalCa
         <Tooltip content="Reject tool execution and cancel operation" side="top">
           <button
             type="button"
-            className="bg-transparent border border-[#f06666] text-[#f06666] hover:bg-[#f06666]/10 font-semibold py-2 px-5 rounded-lg transition-all disabled:opacity-50 text-sm flex items-center gap-1.5 active:scale-[0.98]"
+            className="bg-transparent border border-[#fb2c36] text-[#fb2c36] hover:bg-[#fb2c36]/10 font-semibold py-2 px-5 rounded-lg transition-all disabled:opacity-50 text-sm flex items-center gap-1.5 active:scale-[0.98]"
             disabled={decided}
             onClick={() => onDecideApproval(approval.approvalId, false)}
           >

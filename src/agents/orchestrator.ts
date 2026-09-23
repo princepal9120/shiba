@@ -30,12 +30,20 @@ import {
 import { makeReceipt } from "../receipts.js";
 import {
   createPendingApproval,
+  decidedApprovals,
+  isApprovalExpired,
+  isJsonObject,
   pruneExpiredApprovals,
+  recordApprovalExecution,
   resolvePendingApproval,
   type PendingApproval,
   type ResolveResult,
 } from "../pending-approvals.js";
 import { makeSandboxId, parseGitHubRepoUrl, redactSecrets } from "../security.js";
+import { emailApprovalDraftRef, executeEmailApproval, PostTransmitError, releaseRestartedDraftClaim, unqueueEmailApprovalDraft } from "../email-approvals.js";
+import { ADDRESS_RE, type MailboxRecord } from "../mailbox-store.js";
+import { mailboxDirectoryStub, mailboxStub, registeredMailbox } from "../mailbox-do.js";
+import { approvalCardText, buildApprovalBlocks, type ApprovalCardInput } from "../slack-approval.js";
 import {
   destroyManagedContainer,
   leakedContainers,
@@ -43,6 +51,7 @@ import {
 } from "../sandbox/lifecycle.js";
 import { runWorkerEffect, toRunFailure, tryRunPromise } from "../effect/runtime.js";
 import { classifyExecutorError, classifyRunError, runErrorWire, toTaggedError, type RunErrorCode, type RunErrorWire } from "../run-errors.js";
+import { DEFAULT_ORCHESTRATOR_MODEL, distillSession } from "../session-distill.js";
 import { parseSlackThreadName } from "../slack-thread.js";
 import { evaluateResultQuality } from "../result-quality.js";
 import { HARNESS_DEFAULT_MODELS, allowedHostsFor, resolveHarness } from "../harness/index.js";
@@ -97,7 +106,15 @@ const delegateInputSchema = z.object({
 
 type DelegateInput = z.infer<typeof delegateInputSchema>;
 
-const DEFAULT_ORCHESTRATOR_MODEL = "@cf/meta/llama-3.1-8b-instruct";
+/**
+ * Floor between full-mailbox stale-draft sweeps. The sweep is a
+ * backstop, not a per-poll job — the dashboard polls approvals every
+ * 10s and each run wakes every registered mailbox DO, so it fires at
+ * most this often per orchestrator lifetime. A touch that just
+ * dropped expired email sends passes `force` — their drafts need
+ * freeing now, not at the next tick.
+ */
+const STALE_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 
 export class CodingOrchestrator extends Think<Env, OrchestratorState> {
   /** The orchestrator plans and delegates; it never runs shell commands. */
@@ -122,6 +139,13 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     return this.state?.pendingApprovals ?? [];
   }
 
+  /**
+   * Wall-clock time of this lifetime's last stale-draft sweep —
+   * volatile on purpose: an evicted DO re-sweeps once on its next
+   * approval touch, which is the correct post-restart behavior anyway.
+   */
+  private lastStaleSweepAt: number | undefined;
+
   private writeApprovals(next: PendingApproval[]): void {
     this.setState({ ...this.state, pendingApprovals: next });
   }
@@ -140,6 +164,76 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       });
     }
     await Promise.all(interrupted.map((run) => this.destroySandbox(run.sandboxId)));
+    // Before anything re-drives, free the draft claims a dead attempt
+    // could leave behind: a `sending` row at DO start belongs to a
+    // dispatch that died with the last lifetime — claims are only
+    // minted by this DO's dispatches (queueEmailApproval pins the
+    // shared instance) and none has run yet this lifetime, so the
+    // release cannot steal a live claim. `unqueue` refuses `sending`
+    // and the dead attempt's own `release` died with it, so this is
+    // the only surface that can return the row to `draft`. A freed
+    // claim means the dead attempt may have transmitted — stamp its
+    // outcome unknown like a draftless send instead of re-driving.
+    for (const approval of this.approvals) {
+      if (
+        approval.status !== "approved" ||
+        approval.kind !== "email_send" ||
+        approval.execution !== undefined
+      ) {
+        continue;
+      }
+      let released = false;
+      try {
+        released = await releaseRestartedDraftClaim(this.env, approval);
+      } catch (error) {
+        console.warn(
+          `Email approval ${approval.approvalId} claim release failed`,
+          redactSecrets(String(error)),
+        );
+      }
+      if (released && approval.execution === undefined) {
+        this.writeApprovals(recordApprovalExecution(this.approvals, {
+          threadKey: approval.threadKey,
+          approvalId: approval.approvalId,
+          execution: {
+            status: "failed",
+            error: "Execution interrupted by orchestrator restart while the draft was claimed 'sending' — outcome unknown (the dead attempt may have transmitted). The claim was released; inspect the mailbox before re-sending.",
+            executedAt: Date.now(),
+          },
+        }));
+      }
+    }
+    // Approved email approvals execute through ctx.waitUntil — an
+    // eviction between the persisted decision and the dispatch leaves
+    // `approved` with no `execution` and nothing to re-drive it (a
+    // silent no-send). Re-drive what a restart proves safe: a delete
+    // is idempotent, and a draft-backed send's claim CAS refuses what
+    // the first attempt already finished. An unanchored composed send
+    // could have transmitted before the restart — stamp its outcome
+    // unknown instead of risking a second copy.
+    for (const approval of this.approvals) {
+      if (approval.status !== "approved" || approval.execution !== undefined) {
+        continue;
+      }
+      const payload = isJsonObject(approval.payload) ? approval.payload : {};
+      const draftId = typeof payload.draft_id === "string" ? payload.draft_id.trim() : "";
+      if (approval.kind === "email_send" && draftId === "") {
+        this.writeApprovals(recordApprovalExecution(this.approvals, {
+          threadKey: approval.threadKey,
+          approvalId: approval.approvalId,
+          execution: {
+            status: "failed",
+            error: "Execution interrupted by orchestrator restart — outcome unknown. Inspect the mailbox before re-sending.",
+            executedAt: Date.now(),
+          },
+        }));
+        continue;
+      }
+      if (approval.kind === "email_send" || approval.kind === "email_delete") {
+        this.dispatchApprovedEmail(approval);
+      }
+    }
+    this.sweepStaleDrafts(true);
   }
 
   override getModel(): string {
@@ -295,6 +389,11 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
             `${status === "unknown" ? "Run outcome unknown" : "Run failed"} for ${fullInput.repoUrl}\n${wire.userMessage}\n${patch?.error?.slice(0, 1000) ?? ""}`.trim(),
           );
         }
+        // Megaplan T10: a retained run landing completed/error distills its
+        // transcript into long-term memory — best-effort under waitUntil.
+        if (status === "completed" || status === "error") {
+          this.dispatchSessionDistill(updated);
+        }
         return updated;
       };
       const running = this.store.transition(runId, "running", undefined, this.store.get(runId)?.generation);
@@ -400,11 +499,19 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
   }
 
   /**
-   * Queue a Slack-initiated task as a pending approval: the exact delegation
-   * input is frozen at queue time and nothing executes until a human
-   * resolves the pointer via POST /api/approvals.
+   * Queue a task as a pending approval: the exact delegation input is
+   * frozen at queue time and nothing executes until a human resolves
+   * the pointer via POST /api/approvals. Email-kind approvals freeze a
+   * mailbox payload instead of a run input.
    */
-  private queueSlackRun(input: { repoUrl?: unknown; task?: unknown; baseBranch?: unknown; publishPullRequest?: unknown; threadKey?: unknown }): Response {
+  private async queueSlackRun(input: { repoUrl?: unknown; task?: unknown; baseBranch?: unknown; publishPullRequest?: unknown; threadKey?: unknown; kind?: unknown; mailbox?: unknown; payload?: unknown }): Promise<Response> {
+    const kind = typeof input.kind === "string" && input.kind.trim() ? input.kind.trim() : "run";
+    if (kind === "email_send" || kind === "email_delete") {
+      return this.queueEmailApprovalRecord(kind, input);
+    }
+    if (kind !== "run") {
+      return Response.json({ error: `Unknown approval kind "${kind}".` }, { status: 400 });
+    }
     const repoUrl = typeof input.repoUrl === "string" ? input.repoUrl : "";
     const task = typeof input.task === "string" ? input.task : "";
     try {
@@ -438,6 +545,138 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
   }
 
   /**
+   * Email-kind approval (megaplan T7): the frozen send/delete payload is
+   * stored verbatim plus its owning mailbox — the single source the
+   * executor routes and sends against. `repoUrl`/`task` stay populated
+   * as the human-readable summary dashboard cards and audit rows show.
+   */
+  private async queueEmailApprovalRecord(kind: "email_send" | "email_delete", input: { mailbox?: unknown; payload?: unknown; threadKey?: unknown }): Promise<Response> {
+    const mailbox = typeof input.mailbox === "string" ? input.mailbox.trim() : "";
+    if (!ADDRESS_RE.test(mailbox)) {
+      return Response.json({ error: "mailbox must be a valid email address." }, { status: 400 });
+    }
+    if (!isJsonObject(input.payload)) {
+      return Response.json({ error: "payload must be a JSON object." }, { status: 400 });
+    }
+    const fields = input.payload;
+    const required = kind === "email_send" ? ["to_addr", "subject", "body_text"] : ["email_id"];
+    for (const field of required) {
+      if (typeof fields[field] !== "string" || (fields[field] as string).trim() === "") {
+        return Response.json({ error: `payload.${field} must be a non-empty string.` }, { status: 400 });
+      }
+    }
+    // Address-format check fails at intake, not post-approval at the
+    // binding — and the value freezes trimmed, so a padded address like
+    // " user@x.com " can't slide through the check and hit the wire.
+    if (kind === "email_send") {
+      const toAddr = (fields.to_addr as string).trim();
+      if (!ADDRESS_RE.test(toAddr)) {
+        return Response.json({ error: "payload.to_addr must be a valid email address." }, { status: 400 });
+      }
+      fields.to_addr = toAddr;
+    }
+    // The same registration invariant the MCP path enforces via
+    // requireMailbox: an approval's From must be a registered mailbox.
+    const registration = await registeredMailbox(this.env, mailbox);
+    if (registration === null) {
+      return Response.json({ error: `mailbox is not registered: ${mailbox}` }, { status: 400 });
+    }
+    // Bind a draft-backed send to the row it names: the draft must
+    // exist in this mailbox, sit `queued` (the CAS every legit mint
+    // follows — MCP send_email and the dashboard both lock-then-mint),
+    // and carry exactly the content the payload freezes. Without this a
+    // caller could mint an approval on another approval's draft with
+    // different content: the first-approved payload sends, and the
+    // parasite dedupes `executed` on mail it never wrote.
+    if (kind === "email_send") {
+      const draftId = typeof fields.draft_id === "string" ? fields.draft_id.trim() : "";
+      if (draftId !== "") {
+        const draftRes = await mailboxStub(this.env, registration.address).fetch(
+          new Request(`https://internal/internal/mailbox/drafts/${encodeURIComponent(draftId)}`),
+        );
+        const draftRow = draftRes.ok
+          ? ((((await draftRes.json().catch(() => ({}))) as { draft?: Record<string, unknown> }).draft) ?? null)
+          : null;
+        if (draftRow === null) {
+          return Response.json({ error: `payload.draft_id "${draftId}" was not found in ${registration.address}.` }, { status: 400 });
+        }
+        if (draftRow.status !== "queued") {
+          return Response.json({ error: `draft "${draftId}" is "${String(draftRow.status)}" — only a queued draft can back an email_send approval.` }, { status: 400 });
+        }
+        if (
+          draftRow.to_addr !== fields.to_addr ||
+          draftRow.subject !== fields.subject ||
+          draftRow.body_text !== fields.body_text
+        ) {
+          return Response.json({ error: `payload does not match draft "${draftId}" — a draft-backed send must freeze the draft's own content.` }, { status: 400 });
+        }
+      }
+    }
+    const approvalId = crypto.randomUUID();
+    const threadKey = typeof input.threadKey === "string" && input.threadKey.trim() ? input.threadKey.trim() : "default";
+    const subject = typeof fields.subject === "string" ? fields.subject : "";
+    // The spec's card phrasing — "Agent X requests email send to Y:
+    // subject" — reads verbatim off the card's "requests ${task}"
+    // headline, so the action text lives on the record itself.
+    const task = kind === "email_send"
+      ? `email send to ${String(fields.to_addr)}: ${subject}`
+      : `email delete of ${String(fields.email_id)}${subject ? ` "${subject}"` : ""}`;
+    try {
+      this.writeApprovals(createPendingApproval(this.approvals, {
+        threadKey,
+        approvalId,
+        repoUrl: mailbox,
+        task: task.slice(0, 4000),
+        kind,
+        payload: { ...fields, mailbox },
+        createdAt: Date.now(),
+      }));
+    } catch (error) {
+      return Response.json({ error: error instanceof Error ? error.message : "Could not queue approval." }, { status: 409 });
+    }
+    this.postEmailApprovalCard({
+      threadKey,
+      approvalId,
+      repoUrl: mailbox,
+      task,
+      kind,
+      ...(registration.agent ? { agent: registration.agent } : {}),
+    });
+    return Response.json({ ok: true, approvalId, kind, mailbox });
+  }
+
+  /**
+   * Email approvals mint with no Slack thread context — there is no
+   * thread_ts to post a card into. When the deployment configures an
+   * approvals channel, the card posts there carrying the same pointer
+   * buttons a thread card does, so a queued email approval is decidable
+   * from Slack as well as the dashboard. Optional and best-effort:
+   * unset, the dashboard Approvals surface is the only resolve path,
+   * and a post failure never faults the mint.
+   */
+  private postEmailApprovalCard(input: ApprovalCardInput): void {
+    const channel = this.env.SLACK_APPROVALS_CHANNEL?.trim();
+    const token = this.env.SLACK_BOT_TOKEN?.trim();
+    if (!channel || !token) return;
+    const posted = fetch("https://slack.com/api/chat.postMessage", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ channel, text: approvalCardText(input).slice(0, 3000), blocks: buildApprovalBlocks(input) }),
+    }).then((response) => {
+      if (!response.ok) {
+        console.error(`Slack email approval card post failed (${response.status})`);
+      }
+    }).catch((error) => {
+      console.error("Slack email approval card post failed", redactSecrets(String(error)));
+    });
+    if (typeof this.ctx === "object" && this.ctx !== null && "waitUntil" in this.ctx) {
+      this.ctx.waitUntil(posted);
+    } else {
+      void posted;
+    }
+  }
+
+  /**
    * Resolve an approval pointer exactly once. Approve executes the frozen
    * input through delegate_coding_task (the same gated path as the
    * dashboard); reject resolves without starting anything.
@@ -451,29 +690,52 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     }
     const decidedBy = typeof rawDecidedBy === "string" && rawDecidedBy.trim() ? rawDecidedBy.slice(0, 200) : "unknown";
     if (approved) await this.reclaimRuns();
-    const result = resolvePendingApproval(this.approvals, { threadKey, approvalId, approved, decidedBy }, Date.now());
+    const now = Date.now();
+    const result = resolvePendingApproval(this.approvals, { threadKey, approvalId, approved, decidedBy }, now);
     // Failed admission leaves the persisted approval pending and retryable.
     if (result.result === "approved") {
-      if (!canStartRun(this.store.list())) {
-        return Response.json({ error: "All coding runs are busy. Approve again when a slot frees." }, { status: 409 });
-      }
       const record = this.approvals.find((a) => a.approvalId === approvalId && a.threadKey === threadKey);
-      if (record && record.publishPullRequest && !this.env.GITHUB_TOKEN) {
-        return Response.json({ error: "publishPullRequest was requested but GITHUB_TOKEN is not configured." }, { status: 400 });
-      }
-      if (record) {
-        try {
-          parseGitHubRepoUrl(record.repoUrl);
-        } catch (error) {
-          return Response.json({ error: error instanceof Error ? error.message : "Invalid repository URL." }, { status: 400 });
+      // Email-kind approvals skip every run gate — no sandbox capacity,
+      // no repo URL, no publish flag. They execute a mailbox payload.
+      const isEmail = record !== undefined && (record.kind === "email_send" || record.kind === "email_delete");
+      if (!isEmail) {
+        if (!canStartRun(this.store.list())) {
+          return Response.json({ error: "All coding runs are busy. Approve again when a slot frees." }, { status: 409 });
+        }
+        if (record && record.publishPullRequest && !this.env.GITHUB_TOKEN) {
+          return Response.json({ error: "publishPullRequest was requested but GITHUB_TOKEN is not configured." }, { status: 400 });
+        }
+        if (record) {
+          try {
+            parseGitHubRepoUrl(record.repoUrl);
+          } catch (error) {
+            return Response.json({ error: error instanceof Error ? error.message : "Invalid repository URL." }, { status: 400 });
+          }
         }
       }
     }
-    const approvals = pruneExpiredApprovals(result.approvals, Date.now());
+    // Captured before the prune drops them: an expired email_send still
+    // owns a `queued` draft, and once its pointer is gone nothing else
+    // can reach the locked row — the sweep below releases it through the
+    // same unqueue seam a rejection uses. Covers both drops: the
+    // expired-pointer resolve (removed from `result.approvals` already)
+    // and every other expired pending the prune filters out.
+    const expiredSends = this.expiredEmailSends(now);
+    const approvals = pruneExpiredApprovals(result.approvals, now);
     const record = result.result === "approved"
-      ? approvals.find((approval) => approval.approvalId === approvalId)
+      ? approvals.find((approval) => approval.approvalId === approvalId && approval.threadKey === threadKey)
       : undefined;
-    const run = record ? createRun({
+    const rejectedEmail =
+      result.result === "rejected"
+        ? approvals.find(
+            (approval) =>
+              approval.approvalId === approvalId &&
+              approval.threadKey === threadKey &&
+              approval.kind === "email_send",
+          )
+        : undefined;
+    const isEmailRecord = record !== undefined && (record.kind === "email_send" || record.kind === "email_delete");
+    const run = record && !isEmailRecord ? createRun({
       runId: `agent-tool:${approvalId}`,
       sandboxId: makeSandboxId(record.repoUrl, record.task, approvalId),
       repoUrl: record.repoUrl,
@@ -489,6 +751,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     });
     if (run) {
       const dispatch = async () => {
+        const generation = this.store.get(run.runId)?.generation;
         try {
           const delegate = this.getTools()["delegate_coding_task"] as {
             execute: (input: unknown, options?: unknown) => Promise<unknown>;
@@ -500,16 +763,117 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
             publishPullRequest: run.publishPullRequest,
           }, { toolCallId: approvalId });
         } catch (error) {
+          // delegate.execute can throw before its inner `finish` seam ran;
+          // this fallback is the terminal transition then. Fence on the
+          // pre-dispatch generation so a terminal state that already landed
+          // (cancel, reclaim, or `finish` itself) is never overwritten —
+          // the dropped write means this catch also distills nothing.
           const failure = classifyRunError(error);
-          this.store.transition(run.runId, terminalStatusFor(failure.code), {
+          const status = terminalStatusFor(failure.code);
+          const updated = this.store.transition(run.runId, status, {
             error: redactSecrets(failure.message).slice(0, 4000),
             errorCode: failure.code,
-          });
+          }, generation);
+          if (updated !== null && (status === "completed" || status === "error")) {
+            this.dispatchSessionDistill(updated);
+          }
         }
       };
       void dispatch();
     }
+    if (record && isEmailRecord) {
+      this.dispatchApprovedEmail(record);
+    }
+    // Rejecting frees the queued draft back to `draft`, and expired
+    // email approvals leave their queued drafts the same way — without
+    // the compensating release the row strands `queued` behind an
+    // approval that can never (re-)resolve. Records whose draft a still
+    // live sibling pending approval also locks are skipped: intake
+    // deliberately lets a second approval mint on an already-`queued`
+    // row, and freeing it here would strand that sibling's later
+    // approve at the claim CAS.
+    const releasable = rejectedEmail === undefined ? expiredSends : [rejectedEmail, ...expiredSends];
+    this.releaseEmailApprovalDrafts(releasable, this.liveApprovalDrafts(now));
+    this.sweepStaleDrafts(expiredSends.length > 0);
     return Response.json({ result: result.result satisfies ResolveResult });
+  }
+
+  /**
+   * Execute an approved email approval and stamp the outcome back onto
+   * the persisted record — the record is the only durable account of a
+   * runless execution. Shared by the resolve path and the onStart
+   * recovery pass for approved-but-never-executed records.
+   */
+  private dispatchApprovedEmail(record: PendingApproval): void {
+    const { approvalId, threadKey } = record;
+    const dispatch = async () => {
+      try {
+        // Pre-claim failures run a stale-sweep on the mailbox — the sweep's
+        // age check can't see sibling approvals minted after a row queued,
+        // so live pending drafts ride along as exclusions.
+        const ref = emailApprovalDraftRef(record);
+        const live = ref === null ? undefined : this.liveApprovalDrafts(Date.now()).get(ref.mailbox);
+        await executeEmailApproval(this.env, record, {
+          excludeDraftIds: live === undefined ? undefined : [...live],
+        });
+        // The record is the only durable account of this runless
+        // execution — the outcome lands on it, not only in logs.
+        this.writeApprovals(recordApprovalExecution(this.approvals, {
+          threadKey,
+          approvalId,
+          execution: { status: "executed", executedAt: Date.now() },
+        }));
+      } catch (error) {
+        // The pointer is already spent — the failure is written back
+        // onto the persisted record so an approved-but-failed send/
+        // delete leaves durable state, not a misleading "recorded" reply.
+        const message = redactSecrets(String(error)).slice(0, 4000);
+        console.error(`Email approval ${approvalId} execution failed`, message);
+        // PostTransmitError = the mail already left; `failed` here would
+        // contradict the draft's `sent` mark and invite a re-approval
+        // double-send, so the record reads `executed` with the
+        // bookkeeping failure noted.
+        const transmitted = error instanceof PostTransmitError;
+        this.writeApprovals(recordApprovalExecution(this.approvals, {
+          threadKey,
+          approvalId,
+          execution: transmitted
+            ? { status: "executed", error: `transmitted — post-send record failed: ${message}`, executedAt: Date.now() }
+            : { status: "failed", error: message, executedAt: Date.now() },
+        }));
+      }
+    };
+    const pending = dispatch();
+    // waitUntil keeps the DO alive through the send; without a ctx
+    // (tests) the promise still runs to its own settle point.
+    if (typeof this.ctx === "object" && this.ctx !== null && "waitUntil" in this.ctx) {
+      this.ctx.waitUntil(pending);
+    } else {
+      void pending;
+    }
+  }
+
+  /**
+   * Megaplan T10: distill a retained terminal run's transcript into
+   * long-term memory (Memory DO facts + a session row). Fired from the
+   * fenced `finish` seam so a dropped transition distills nothing;
+   * `ctx.waitUntil` keeps the DO alive through the model call and the
+   * stub writes. Wrapped in try/catch and gated by `MEMORY_ENABLED`
+   * inside distillSession — a failure logs and never fails the run.
+   */
+  private dispatchSessionDistill(run: DelegatedRun): void {
+    const pending = (async () => {
+      try {
+        await distillSession(this.env, run, { agent: this.name });
+      } catch (error) {
+        console.error(`Session distillation failed for ${run.runId}`, redactSecrets(String(error)));
+      }
+    })();
+    if (typeof this.ctx === "object" && this.ctx !== null && "waitUntil" in this.ctx) {
+      this.ctx.waitUntil(pending);
+    } else {
+      void pending;
+    }
   }
 
   /** Cancel a retained run and destroy its sandbox. Returns null when unknown. */
@@ -612,8 +976,188 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     this.setState({ ...this.state, runs: this.store.list().filter((run) => !removed.has(run.runId)) });
   }
 
+  /** Pending email_send approvals past TTL — the records a prune drops. */
+  private expiredEmailSends(now: number): PendingApproval[] {
+    return this.approvals.filter(
+      (approval) =>
+        approval.status === "pending" &&
+        approval.kind === "email_send" &&
+        isApprovalExpired(approval, now),
+    );
+  }
+
+  /**
+   * Draft rows still owned by a resolvable email approval, keyed by
+   * mailbox — pending, unexpired email_send records only: an expired
+   * pointer can never resolve, so it must not hold the lock it once
+   * took, and decided records are already compensated by the release
+   * path. Intake mints sibling approvals on an already-`queued` row
+   * (same draft, same content), so every release path consults this
+   * set before freeing — dropping the lock while a sibling is pending
+   * strands its later approve at the claim CAS.
+   */
+  private liveApprovalDrafts(now: number): Map<string, Set<string>> {
+    const live = new Map<string, Set<string>>();
+    for (const approval of this.approvals) {
+      if (approval.status !== "pending" || approval.kind !== "email_send" || isApprovalExpired(approval, now)) {
+        continue;
+      }
+      const ref = emailApprovalDraftRef(approval);
+      if (ref === null) continue;
+      const ids = live.get(ref.mailbox) ?? new Set<string>();
+      ids.add(ref.draftId);
+      live.set(ref.mailbox, ids);
+    }
+    return live;
+  }
+
+  /**
+   * Release each record's queued draft through the same unqueue seam a
+   * rejection uses. `queued` rows are immutable to every other surface
+   * (`updateDraft`/`markDraftQueued` refuse non-`draft` rows), so a
+   * draft locked behind an approval that can no longer resolve is
+   * stranded forever without this. `liveDrafts` names rows a still
+   * resolvable sibling approval also locks — those stay `queued` for
+   * the sibling to claim. Best-effort: a failure is logged, never
+   * fatal to the pointer path that triggered it.
+   */
+  private releaseEmailApprovalDrafts(records: PendingApproval[], liveDrafts: Map<string, Set<string>>): void {
+    const released = new Set<string>();
+    const releasable = records.filter((record) => {
+      const ref = emailApprovalDraftRef(record);
+      if (ref === null) return false;
+      const key = `${ref.mailbox}\0${ref.draftId}`;
+      if (released.has(key)) return false;
+      released.add(key);
+      return liveDrafts.get(ref.mailbox)?.has(ref.draftId) !== true;
+    });
+    if (releasable.length === 0) return;
+    const releases = Promise.all(
+      releasable.map((record) =>
+        unqueueEmailApprovalDraft(this.env, record).catch((error) => {
+          console.error(
+            `Email approval ${record.approvalId} draft release failed`,
+            redactSecrets(String(error)),
+          );
+        }),
+      ),
+    );
+    if (typeof this.ctx === "object" && this.ctx !== null && "waitUntil" in this.ctx) {
+      this.ctx.waitUntil(releases);
+    } else {
+      void releases;
+    }
+  }
+
+  /**
+   * Backstop for the single-shot releases above: a draft left `queued`
+   * or `sending` past its provable lifetime (the approval TTL, a live
+   * send's seconds) belongs to a decision whose compensating release
+   * failed or never ran — including records a prune dropped or a mint
+   * that never wrote. Sweeps every registered mailbox through the
+   * `/drafts/release-stale` seam, which frees only provably-dead rows,
+   * so it can never unlock a live lock. Best-effort per mailbox, never
+   * fatal to its trigger.
+   *
+   * Cadence-bounded by {@link STALE_SWEEP_INTERVAL_MS}: the approvals
+   * poll fires every 10s and each run would otherwise wake every
+   * registered mailbox ~4×/min. `force` bypasses the floor for the one
+   * case that cannot wait — a touch that just dropped expired sends
+   * (or a DO restart, where the floor starts at zero anyway).
+   */
+  private sweepStaleDrafts(force = false): void {
+    const now = Date.now();
+    if (!force && now - (this.lastStaleSweepAt ?? 0) < STALE_SWEEP_INTERVAL_MS) {
+      return;
+    }
+    this.lastStaleSweepAt = now;
+    // Captured synchronously, before the async sweep: rows a live
+    // pending approval still owns are named to the mailbox as
+    // `exclude_ids` so the backstop frees only provably-dead locks and
+    // can never strand a sibling approval minted on an already-`queued`
+    // row. No body when the set is empty — the legacy wire shape.
+    const liveDrafts = this.liveApprovalDrafts(now);
+    const sweep = (async () => {
+      const listing = await mailboxDirectoryStub(this.env).fetch(
+        new Request("https://internal/internal/mailbox/mailboxes"),
+      );
+      if (!listing.ok) {
+        console.error(`Stale draft sweep: mailbox directory list failed (${listing.status})`);
+        return;
+      }
+      const { mailboxes } = (await listing.json()) as { mailboxes?: MailboxRecord[] };
+      await Promise.all(
+        (mailboxes ?? []).map(async (record) => {
+          const exclude = liveDrafts.get(record.address.toLowerCase());
+          try {
+            const swept = await mailboxStub(this.env, record.address).fetch(
+              new Request("https://internal/internal/mailbox/drafts/release-stale", {
+                method: "POST",
+                ...(exclude !== undefined && exclude.size > 0
+                  ? {
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ exclude_ids: [...exclude] }),
+                    }
+                  : {}),
+              }),
+            );
+            if (!swept.ok) {
+              console.warn(`Stale draft sweep failed for ${record.address} (${swept.status})`);
+            }
+          } catch (error) {
+            console.warn(`Stale draft sweep failed for ${record.address}`, redactSecrets(String(error)));
+          }
+        }),
+      );
+    })().catch((error) => {
+      console.error("Stale draft sweep failed", redactSecrets(String(error)));
+    });
+    if (typeof this.ctx === "object" && this.ctx !== null && "waitUntil" in this.ctx) {
+      this.ctx.waitUntil(sweep);
+    } else {
+      void sweep;
+    }
+  }
+
+  /**
+   * GET the live approval pointers — the dashboard's Approvals surface
+   * lists them to a human who decides via POST. Expired pendings are
+   * pruned out of state here too, not merely hidden: this is the poll
+   * path a human dashboard session drives, so it runs the same sweep
+   * the resolve path does and frees any draft whose email approval
+   * aged out. Decided records are dropped from the listing — a
+   * resolved pointer must never be re-listed.
+   */
+  private listApprovals(): Response {
+    const now = Date.now();
+    const expiredSends = this.expiredEmailSends(now);
+    const pruned = pruneExpiredApprovals(this.approvals, now);
+    if (pruned.length !== this.approvals.length) {
+      this.writeApprovals(pruned);
+      this.releaseEmailApprovalDrafts(expiredSends, this.liveApprovalDrafts(now));
+    }
+    this.sweepStaleDrafts(expiredSends.length > 0);
+    return Response.json({
+      approvals: pruned.filter((approval) => approval.status === "pending"),
+      // Decided records leave the pending arm but stay listed — the
+      // execution stamp (including a failed send) is durable state no
+      // other surface renders, so the listing returns recent ones.
+      decided: decidedApprovals(pruned),
+    });
+  }
+
   override async onRequest(request: Request): Promise<Response> {
     const url = new URL(request.url);
+    // Cron backstop for the poll-driven stale-draft sweep — in a quiet
+    // system no approvals fetch or DO restart ever calls it, so a human
+    // who stops polling would leave `sending`-locked drafts held forever.
+    if (request.method === "POST" && url.pathname === "/internal/sweep-drafts") {
+      this.sweepStaleDrafts(true);
+      return Response.json({ ok: true });
+    }
+    if (url.pathname === "/api/approvals" && request.method === "GET") {
+      return this.listApprovals();
+    }
     if (request.method === "POST" && url.pathname === "/api/approvals") {
       let approvalBody: unknown;
       try {
@@ -625,6 +1169,9 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         return Response.json({ error: "Request body must be a JSON object." }, { status: 400 });
       }
       return this.resolveApproval(approvalBody as Record<string, unknown>);
+    }
+    if (url.pathname === "/api/approvals") {
+      return Response.json({ error: "Method not allowed." }, { status: 405 });
     }
     const match = url.pathname.match(/^\/api\/runs(?:\/([^/]+))?$/);
     if (!match) {

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   SLACK_INTERACT_PATH,
+  approvalCardText,
   buildApprovalBlocks,
   buildApprovalValue,
   handleSlackInteract,
@@ -136,6 +137,68 @@ describe("buildApprovalBlocks", () => {
     expect(buttons.map((b) => b.action_id).sort()).toEqual(["approve", "reject"]);
     expect(buttons.map((b) => b.value)).toEqual([expectedValue, expectedValue]);
     expect(parseApprovalValue(buttons[0]!.value)).toEqual(pointer);
+  });
+
+  it("renders the megaplan's email-kind copy — agent requests the send", () => {
+    const blocks = buildApprovalBlocks({
+      threadKey: "default",
+      approvalId: "appr_2",
+      repoUrl: "agent-a@shiba.dev",
+      task: "email send to person@example.com: Status update",
+      kind: "email_send",
+    });
+    const text = JSON.stringify(blocks[0]);
+    // Spec copy verbatim: "Agent X requests email send to Y: subject" —
+    // the record's repoUrl is the sending mailbox, task carries the
+    // action phrase the headline reads after "requests".
+    expect(text).toContain("agent-a@shiba.dev");
+    expect(text).toContain("requests email send to person@example.com: Status update");
+    expect(text).not.toContain("*Repo:*");
+    expect(text).not.toContain("Send email to");
+
+    const labeled = buildApprovalBlocks({
+      threadKey: "default",
+      approvalId: "appr_3",
+      repoUrl: "agent-a@shiba.dev",
+      task: "email send to person@example.com: Status update",
+      kind: "email_send",
+      agent: "deploy-bot",
+    });
+    expect(JSON.stringify(labeled[0])).toContain("deploy-bot");
+  });
+
+  it("escapes mrkdwn in email-kind fields — an inbound subject cannot broadcast", () => {
+    // The email headline interpolates to_addr/subject, which an outside
+    // sender controls. Raw mrkdwn would let `<!channel>`/`<@U…>` post a
+    // broadcast mention to the approvals channel, and `*`/`<...>` would
+    // mangle the card.
+    const hostile = "email send to evil@x.com: <!channel> <@U1> <https://x|y> &gt; *bold*";
+    const blocks = buildApprovalBlocks({
+      threadKey: "default",
+      approvalId: "appr_evil",
+      repoUrl: "agent-a@shiba.dev",
+      task: hostile,
+      kind: "email_send",
+      agent: "agent<a>&b",
+    });
+    const text = JSON.stringify(blocks[0]);
+    // `&`, `<`, `>` are entity-escaped so Slack renders them literally.
+    expect(text).toContain("&lt;!channel&gt;");
+    expect(text).toContain("&lt;@U1&gt;");
+    expect(text).toContain("agent&lt;a&gt;&amp;b");
+    // No raw mention syntax survives anywhere in the headline.
+    expect(text).not.toContain("<!channel>");
+    expect(text).not.toContain("<@U1>");
+
+    // The plain-text mirror escapes the same way — Slack parses
+    // `<…>` syntax in the `text` field too.
+    expect(approvalCardText({
+      threadKey: "default",
+      approvalId: "appr_evil",
+      repoUrl: "agent-a@shiba.dev",
+      task: hostile,
+      kind: "email_send",
+    })).toContain("&lt;!channel&gt;");
   });
 });
 

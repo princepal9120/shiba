@@ -22,6 +22,18 @@ export class InputError extends Error {
   }
 }
 
+/**
+ * An input error whose answer is "missing" rather than "malformed" —
+ * carries the 404 through DO-to-worker plumbing that otherwise flattens
+ * every failure to a 400.
+ */
+export class NotFoundError extends InputError {
+  constructor(message: string) {
+    super(message);
+    this.name = "NotFoundError";
+  }
+}
+
 export interface GitHubRepo {
   owner: string;
   repo: string;

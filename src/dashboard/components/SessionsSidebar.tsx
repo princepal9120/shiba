@@ -5,6 +5,7 @@
  * Footer carries setup progress, docs link, and connection state.
  */
 import { useMemo, useState } from "react";
+import type { AgentPrincipal } from "../types";
 import { formatTimeAgo, statusLabel } from "../ui-helpers";
 import { Tooltip } from "./Tooltip";
 
@@ -19,6 +20,8 @@ export interface SessionItem {
 
 export interface SessionsSidebarProps {
   sessions: SessionItem[];
+  /** Registered MCP-token principals, shown in their own group. */
+  agents: AgentPrincipal[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   onNewTask: () => void;
@@ -33,37 +36,37 @@ export interface SessionsSidebarProps {
 
 export function statusDotClass(session: SessionItem): string {
   if (session.live || session.status === "live" || session.status === "running") {
-    return "bg-[#0B9F95] animate-pulse-subtle";
+    return "bg-[#0000a8] animate-pulse-subtle";
   }
   if (session.status === "waiting-approval" || session.status === "pending") {
-    return "bg-[#c9a227]";
+    return "bg-[#f99c00]";
   }
   if (session.status === "completed") {
-    return "bg-[#4cc38a]";
+    return "bg-[#15803d]";
   }
   // Amber, not red: an ambiguous outcome is not a known failure.
   if (session.status === "unknown") {
-    return "bg-[#d97706]";
+    return "bg-[#b45309]";
   }
   if (
     session.status === "error" ||
     session.status === "aborted" ||
     session.status === "cancelled"
   ) {
-    return "bg-[#f06666]";
+    return "bg-[#fb2c36]";
   }
-  return "bg-[#8b98a9]";
+  return "bg-[#6a6f63]";
 }
 
 function connectionDotClass(tone: SessionsSidebarProps["connectionTone"]): string {
-  if (tone === "ok") return "bg-[#4cc38a]";
-  if (tone === "pending") return "bg-[#c9a227] animate-pulse-subtle";
-  return "bg-[#f06666]";
+  if (tone === "ok") return "bg-[#15803d]";
+  if (tone === "pending") return "bg-[#f99c00] animate-pulse-subtle";
+  return "bg-[#fb2c36]";
 }
 
 function GroupLabel({ children }: { children: string }) {
   return (
-    <h3 className="px-3 pt-3.5 pb-1.5 text-[10px] font-mono font-semibold uppercase tracking-[0.1em] text-[#8b98a9]/60 select-none">
+    <h3 className="px-3 pt-3.5 pb-1.5 text-[10px] font-mono font-semibold uppercase tracking-[0.1em] text-[#6a6f63]/60 select-none">
       {children}
     </h3>
   );
@@ -87,7 +90,7 @@ function SessionRow({
         onClick={() => onSelect(session.id)}
         aria-current={selected ? "true" : undefined}
         className={`group w-full text-left rounded-lg px-3 py-2 flex items-start gap-2.5 transition-colors ${
-          selected ? "bg-[#161a22] text-white shadow-sm" : "hover:bg-white/[0.04] text-[#e6edf3]"
+          selected ? "bg-[#e0ded5] text-[#222320] shadow-sm" : "hover:bg-black/[0.04] text-[#222320]"
         }`}
       >
         <span
@@ -97,12 +100,12 @@ function SessionRow({
         <span className="min-w-0 flex-1">
           <span
             className={`block text-[13px] font-medium truncate leading-snug ${
-              session.live ? "text-[#2dd4bf]" : selected ? "text-white" : "text-[#e6edf3]"
+              session.live ? "text-[#1c1cc8]" : "text-[#222320]"
             }`}
           >
             {session.title || "Untitled session"}
           </span>
-          <span className="block text-[11px] font-mono text-[#8b98a9]/80 truncate mt-0.5 tabular-nums">
+          <span className="block text-[11px] font-mono text-[#6a6f63]/80 truncate mt-0.5 tabular-nums">
             {session.repoName} · {statusLabel(session.status)} ·{" "}
             {formatTimeAgo(session.updatedAt)}
           </span>
@@ -112,8 +115,38 @@ function SessionRow({
   );
 }
 
+function AgentRow({ agent }: { agent: AgentPrincipal }) {
+  const scopeLabel = agent.scopes.length === 0 ? "no scopes" : agent.scopes.join(", ");
+  const tooltipText = `${agent.principal} — ${agent.live ? "live" : "offline"} · ${scopeLabel}`;
+
+  return (
+    <Tooltip content={tooltipText} side="right" align="start" delayMs={400}>
+      <div
+        tabIndex={0}
+        className="group w-full text-left rounded-lg px-3 py-2 flex items-start gap-2.5 text-[#222320] focus:outline-none focus-visible:bg-black/[0.04]"
+      >
+        <span
+          className={`mt-[7px] size-1.5 rounded-full shrink-0 ${
+            agent.live ? "bg-[#15803d] animate-pulse-subtle" : "bg-[#6a6f63]"
+          }`}
+          aria-hidden="true"
+        />
+        <span className="min-w-0 flex-1">
+          <span className="block text-[13px] font-medium truncate leading-snug">
+            {agent.principal}
+          </span>
+          <span className="block text-[11px] font-mono text-[#6a6f63]/80 truncate mt-0.5 tabular-nums">
+            {scopeLabel}
+          </span>
+        </span>
+      </div>
+    </Tooltip>
+  );
+}
+
 export function SessionsSidebar({
   sessions,
+  agents,
   selectedId,
   onSelect,
   onNewTask,
@@ -142,16 +175,16 @@ export function SessionsSidebar({
 
   return (
     <aside
-      className="w-[280px] shrink-0 h-full flex flex-col bg-[#0a0c10] border-r border-[#1e2530]"
+      className="w-[280px] shrink-0 h-full flex flex-col bg-[#f1efe6] border-r border-[#e0ded5]"
       aria-label="Sessions"
     >
       {/* Header with collapse button */}
       <div className="flex items-center justify-between px-3.5 pt-3.5 pb-2.5">
         <div className="flex items-center gap-2">
-          <h2 className="text-[11px] font-mono font-semibold uppercase tracking-[0.12em] text-[#8b98a9]">
+          <h2 className="text-[11px] font-mono font-semibold uppercase tracking-[0.12em] text-[#6a6f63]">
             Sessions
           </h2>
-          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-[#11141b] border border-white/[0.06] text-[#8b98a9] tabular-nums">
+          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-[#fffef8] border border-black/[0.06] text-[#6a6f63] tabular-nums">
             {sessions.length}
           </span>
         </div>
@@ -162,7 +195,7 @@ export function SessionsSidebar({
               type="button"
               onClick={onToggleCollapse}
               aria-label={isMobileDrawer ? "Close sessions" : "Collapse sidebar"}
-              className="size-7 rounded-md flex items-center justify-center text-[#8b98a9] hover:text-[#e6edf3] hover:bg-white/[0.06] transition-colors"
+              className="size-7 rounded-md flex items-center justify-center text-[#6a6f63] hover:text-[#222320] hover:bg-black/[0.06] transition-colors"
             >
               {isMobileDrawer ? (
                 <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -184,7 +217,7 @@ export function SessionsSidebar({
           <button
             type="button"
             onClick={onNewTask}
-            className="w-full inline-flex items-center justify-center gap-1.5 bg-[#0B9F95] hover:bg-[#2dd4bf] text-black font-semibold text-[13px] h-9 px-3 rounded-lg transition-colors shadow-sm"
+            className="w-full inline-flex items-center justify-center gap-1.5 bg-[#0000a8] hover:bg-[#1c1cc8] text-white font-semibold text-[13px] h-9 px-3 rounded-lg transition-colors shadow-sm"
           >
             <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
@@ -198,7 +231,7 @@ export function SessionsSidebar({
       <div className="px-3 pb-2">
         <div className="relative">
           <svg
-            className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-[#8b98a9]/60"
+            className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-[#6a6f63]/60"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -216,14 +249,14 @@ export function SessionsSidebar({
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search sessions…"
             aria-label="Search sessions"
-            className="w-full h-8 bg-[#11141b] border border-transparent rounded-lg pl-8 pr-7 text-[13px] text-[#e6edf3] placeholder:text-[#8b98a9]/50 focus:border-[#2dd4bf]/40 focus:outline-none transition-colors"
+            className="w-full h-8 bg-[#fffef8] border border-transparent rounded-lg pl-8 pr-7 text-[13px] text-[#222320] placeholder:text-[#6a6f63]/50 focus:border-[#1c1cc8]/40 focus:outline-none transition-colors"
           />
           {query ? (
             <button
               type="button"
               onClick={() => setQuery("")}
               aria-label="Clear search"
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-[#8b98a9] hover:text-white text-xs"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-[#6a6f63] hover:text-[#222320] text-xs"
             >
               ✕
             </button>
@@ -234,59 +267,68 @@ export function SessionsSidebar({
       {/* Session list */}
       <div className="flex-1 overflow-y-auto px-2 pb-2">
         {filtered.length === 0 ? (
-          <p className="text-[#8b98a9] text-xs px-3 py-8 text-center text-pretty">
+          <p className="text-[#6a6f63] text-xs px-3 py-8 text-center text-pretty">
             {sessions.length === 0
               ? "No sessions yet — start a task."
               : "No sessions match your search."}
           </p>
-        ) : (
-          <>
-            {activeSessions.length > 0 ? (
-              <section aria-label="Active sessions">
-                <GroupLabel>Active</GroupLabel>
-                <ul className="flex flex-col gap-0.5">
-                  {activeSessions.map((session) => (
-                    <li key={session.id}>
-                      <SessionRow
-                        session={session}
-                        selected={session.id === selectedId}
-                        onSelect={onSelect}
-                      />
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ) : null}
-            {recentSessions.length > 0 ? (
-              <section aria-label="Recent sessions">
-                <GroupLabel>Recent</GroupLabel>
-                <ul className="flex flex-col gap-0.5">
-                  {recentSessions.map((session) => (
-                    <li key={session.id}>
-                      <SessionRow
-                        session={session}
-                        selected={session.id === selectedId}
-                        onSelect={onSelect}
-                      />
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ) : null}
-          </>
-        )}
+        ) : null}
+        {activeSessions.length > 0 ? (
+          <section aria-label="Active sessions">
+            <GroupLabel>Active</GroupLabel>
+            <ul className="flex flex-col gap-0.5">
+              {activeSessions.map((session) => (
+                <li key={session.id}>
+                  <SessionRow
+                    session={session}
+                    selected={session.id === selectedId}
+                    onSelect={onSelect}
+                  />
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+        {agents.length > 0 ? (
+          <section aria-label="Agents">
+            <GroupLabel>Agents</GroupLabel>
+            <ul className="flex flex-col gap-0.5">
+              {agents.map((agent) => (
+                <li key={agent.principal}>
+                  <AgentRow agent={agent} />
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+        {recentSessions.length > 0 ? (
+          <section aria-label="Recent sessions">
+            <GroupLabel>Recent</GroupLabel>
+            <ul className="flex flex-col gap-0.5">
+              {recentSessions.map((session) => (
+                <li key={session.id}>
+                  <SessionRow
+                    session={session}
+                    selected={session.id === selectedId}
+                    onSelect={onSelect}
+                  />
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
       </div>
 
       {/* Footer */}
-      <div className="border-t border-[#1e2530] px-3 py-3 flex flex-col gap-2.5 bg-[#07090e]/50">
+      <div className="border-t border-[#e0ded5] px-3 py-3 flex flex-col gap-2.5 bg-[#f6f4ed]/50">
         <Tooltip content={setupComplete ? "All 6 setup steps verified" : `${setupDone ?? 0} of ${setupTotal} setup steps complete`} side="top">
           <button
             type="button"
             onClick={onOpenSetup}
             className={`inline-flex items-center gap-2 text-xs font-semibold rounded-lg px-2.5 py-1.5 border transition-colors w-fit ${
               setupComplete
-                ? "text-[#2dd4bf] border-[#0B9F95]/40 bg-[#0B9F95]/10 hover:bg-[#0B9F95]/20"
-                : "text-[#c9a227] border-[#c9a227]/40 bg-[#c9a227]/10 hover:bg-[#c9a227]/20"
+                ? "text-[#1c1cc8] border-[#0000a8]/40 bg-[#0000a8]/10 hover:bg-[#0000a8]/20"
+                : "text-[#b45309] border-[#b45309]/40 bg-[#b45309]/10 hover:bg-[#b45309]/20"
             }`}
           >
             {setupComplete ? "Setup Guide" : `Setup ${setupDone ?? 0}/${setupTotal}`}
@@ -296,14 +338,14 @@ export function SessionsSidebar({
           <Tooltip content="Documentation & API guides" side="top">
             <a
               href="/docs"
-              className="text-xs text-[#8b98a9] hover:text-[#e6edf3] transition-colors shrink-0"
+              className="text-xs text-[#6a6f63] hover:text-[#222320] transition-colors shrink-0"
             >
               Docs
             </a>
           </Tooltip>
           <Tooltip content={`Agent State: ${connectionLabel}`} side="top">
             <span
-              className="inline-flex items-center gap-1.5 text-[11px] text-[#8b98a9] min-w-0 cursor-default"
+              className="inline-flex items-center gap-1.5 text-[11px] text-[#6a6f63] min-w-0 cursor-default"
             >
               <span
                 className={`size-1.5 rounded-full shrink-0 ${connectionDotClass(connectionTone)}`}

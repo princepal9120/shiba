@@ -1,32 +1,32 @@
-/* Hallmark · genre: modern-minimal · macrostructure: Workbench · design-system: design.md · designed-as-app */
+/* Bezalel-style · cream + navy · serif display · designed-as-app */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --font-display: 'Space Grotesk', 'Inter', ui-sans-serif, sans-serif;
-  --font-body: 'Inter', ui-sans-serif, system-ui, sans-serif;
-  --font-mono: 'DM Mono', ui-monospace, SFMono-Regular, monospace;
-  --bg: #000000;
-  --panel: #0a0c10;
-  --panel-elevated: #11141b;
-  --line: #1e2530;
-  --line-light: #2c3545;
-  --text: #e6edf3;
-  --muted: #8b98a9;
-  --accent: #0B9F95;
-  --accent-light: #2dd4bf;
-  --accent-ink: #000000;
-  --brand: #0B9F95;
-  --brand-light: #2dd4bf;
-  --danger: #f06666;
-  --ok: #4cc38a;
-  --pending: #f59e0b;
-  --running: #0B9F95;
-  --radius: 12px;
+  --font-display: 'Instrument Serif', 'Georgia', serif;
+  --font-body: 'Geist', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Geist Mono', 'DM Mono', ui-monospace, SFMono-Regular, monospace;
+  --bg: #f6f4ed;
+  --panel: #fffef8;
+  --panel-elevated: #f1efe6;
+  --line: #e0ded5;
+  --line-light: #d3d2c8;
+  --text: #222320;
+  --muted: #6a6f63;
+  --accent: #0000a8;
+  --accent-light: #1c1cc8;
+  --accent-ink: #fffef8;
+  --brand: #0000a8;
+  --brand-light: #1c1cc8;
+  --danger: #fb2c36;
+  --ok: #15803d;
+  --pending: #f99c00;
+  --running: #0000a8;
+  --radius: 10px;
   --space: 8px;
   --gutter: 16px;
-  --focus: 2px solid var(--accent-light);
+  --focus: 2px solid var(--accent);
 }
 
 * {
@@ -41,29 +41,26 @@ body {
   font-size: 14px;
   line-height: 1.5;
   overflow-x: hidden;
-  background-image: 
-    radial-gradient(circle at 50% 0%, rgba(11, 159, 149, 0.08) 0%, transparent 40%),
-    radial-gradient(circle at 100% 100%, rgba(79, 156, 240, 0.04) 0%, transparent 40%);
-  background-attachment: fixed;
 }
 
 h1, h2, h3, .font-display {
   font-family: var(--font-display);
   font-style: normal;
-  letter-spacing: -0.02em;
+  font-weight: 400;
+  letter-spacing: -0.01em;
 }
 
 code, pre, kbd, samp, .font-mono {
   font-family: var(--font-mono);
 }
 
-/* Glass and subtle elevation panels */
+/* Faint paper panel */
 .glass-panel {
-  background: rgba(9, 11, 14, 0.85);
+  background: rgba(255, 254, 248, 0.9);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0px 2px 4px -1px rgba(0, 0, 0, 0.5), 0px 1px 0px 0px rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(34, 35, 32, 0.08);
+  box-shadow: 0px 1px 2px rgba(34, 35, 32, 0.04);
 }
 
 /* Custom Scrollbars */
@@ -73,16 +70,16 @@ code, pre, kbd, samp, .font-mono {
 }
 
 ::-webkit-scrollbar-track {
-  background: #05070a;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1f2733;
+  background: #d3d2c8;
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #2d3848;
+  background: #b8b5a8;
 }
 
 /* Focus styles */
@@ -114,16 +111,15 @@ details summary::-webkit-details-marker {
   animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-/* ponytail: light theme via invert filter — the UI uses hardcoded dark hex
-   colors, so a real light palette is a full rewrite. Inverting the root keeps
-   fixed positioning intact; media is re-inverted so it stays normal. */
-html.light {
+/* Dark theme via invert filter — the UI is light-first like bezalel.sh;
+   inverting the root keeps fixed positioning intact; media is re-inverted. */
+html.dark {
   filter: invert(1) hue-rotate(180deg);
-  background: #ffffff;
+  background: #121008;
 }
-html.light img,
-html.light video,
-html.light canvas {
+html.dark img,
+html.dark video,
+html.dark canvas {
   filter: invert(1) hue-rotate(180deg);
 }
 
