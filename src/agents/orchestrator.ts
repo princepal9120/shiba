@@ -161,7 +161,11 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     // claim means the dead attempt may have transmitted — stamp its
     // outcome unknown like a draftless send instead of re-driving.
     for (const approval of this.approvals) {
-      if (approval.status !== "approved" || approval.kind !== "email_send") {
+      if (
+        approval.status !== "approved" ||
+        approval.kind !== "email_send" ||
+        approval.execution !== undefined
+      ) {
         continue;
       }
       let released = false;
