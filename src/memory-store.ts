@@ -351,20 +351,6 @@ export class MemoryStore {
     return row ? String(row.agent) : null;
   }
 
-  /** Every registry row (the fan-out map for cross-agent fact listing). */
-  listRegistryEntries(filter: { agent?: string } = {}): FactRegistryEntry[] {
-    const agent = filter.agent?.trim();
-    if (agent) {
-      return this.exec(
-        `SELECT * FROM fact_registry WHERE agent = ? ORDER BY created_at DESC`,
-        agent,
-      ).map(rowToRegistryEntry);
-    }
-    return this.exec(
-      `SELECT * FROM fact_registry ORDER BY created_at DESC`,
-    ).map(rowToRegistryEntry);
-  }
-
   /** Agents that have banked ≥1 fact — the recall/list fan-out set. */
   listRegisteredAgents(): string[] {
     return this.exec(`SELECT DISTINCT agent FROM fact_registry ORDER BY agent`).map((row) =>

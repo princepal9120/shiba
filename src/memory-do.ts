@@ -11,6 +11,8 @@
  * vector keyed by the fact id, then posts the registry row to `global`.
  * `recall` (`GET /facts/search`) embeds the query, queries `MEMORY_VECTORS`,
  * and joins each hit back to its owning agent stub through the registry.
+ * Forget and TTL purge drop all three copies — row, vector, registry row —
+ * so the index never accumulates un-joinable orphans.
  *
  * All routes live under `/internal/memory/*` and are reachable only through
  * `stub.fetch` inside the worker — index.ts returns 404 for external
@@ -86,6 +88,19 @@ function limitParam(raw: string | null): number | undefined {
     return undefined;
   }
   return Number(raw);
+}
+
+/**
+ * `limit` bound for the Vectorize `topK` in {@link Memory.recall}. Store
+ * reads sanitize via `clampLimit`, but a malformed value here would go
+ * straight to the Vectorize API and surface as a 500 — reject it as a 400.
+ */
+function topKParam(raw: string | null): number | undefined {
+  const value = limitParam(raw);
+  if (value !== undefined && (!Number.isInteger(value) || value < 1)) {
+    throw new InputError("limit must be a positive integer.");
+  }
+  return value;
 }
 
 /** Fact JSON carries the owning agent — facts rows have no column for it. */
@@ -184,6 +199,51 @@ export class Memory {
     }
   }
 
+  /**
+   * Drop `factId` from the global registry — best-effort like
+   * {@link deleteVector}: a missed row is invisible to recall (the join
+   * skips orphans) and self-heals on the next registry `GET /facts/:id`.
+   */
+  private async dropRegistryEntry(factId: string): Promise<void> {
+    try {
+      const res = await memoryRegistryStub(this.env).fetch(
+        new Request(
+          `https://internal${ROUTE_PREFIX}/registry/${encodeURIComponent(factId)}`,
+          { method: "DELETE" },
+        ),
+      );
+      if (!res.ok) {
+        console.warn(
+          `memory_registry_unregister_failed ${JSON.stringify({ factId, status: res.status })}`,
+        );
+      }
+    } catch (error) {
+      console.warn(
+        `memory_registry_unregister_failed ${JSON.stringify({
+          factId,
+          error: error instanceof Error ? error.message : String(error),
+        })}`,
+      );
+    }
+  }
+
+  /**
+   * `purgeExpiredFacts` deletes TTL-dead rows inside every store read and
+   * returns their ids — each purged fact still owns a Vectorize vector and
+   * a registry row on `global`. Drop both so the index and
+   * `listRegisteredAgents` never accumulate orphans.
+   */
+  private async collectPurged(ids: string[]): Promise<void> {
+    for (const id of ids) {
+      await this.deleteVector(id);
+      if (this.isRegistry) {
+        this.store.unregisterFact(id);
+      } else {
+        await this.dropRegistryEntry(id);
+      }
+    }
+  }
+
   // -- routes -------------------------------------------------------------
 
   /**
@@ -213,8 +273,23 @@ export class Memory {
     }
 
     // The fact id is minted here so it doubles as the Vectorize id — the
-    // row's `embedding_id` records it without a follow-up UPDATE.
-    const factId = optString(body.id) ?? `fact_${randomHex(12)}`;
+    // row's `embedding_id` records it without a follow-up UPDATE. A
+    // caller-supplied id must stay routable: "search" would shadow
+    // `/facts/search`, and a "/" splits into extra route segments.
+    let factId: string;
+    if (body.id !== undefined) {
+      const id = requiredString(body.id, "id");
+      if (id === "search" || id.includes("/")) {
+        throw new InputError(`id "${id}" collides with the /facts/:id route.`);
+      }
+      await this.collectPurged(this.store.purgeExpiredFacts());
+      if (this.store.getFact(id) !== null) {
+        return json({ error: `Fact "${id}" already exists.` }, { status: 409 });
+      }
+      factId = id;
+    } else {
+      factId = `fact_${randomHex(12)}`;
+    }
     const vector = await this.embed(factText);
     const fact = this.store.bankFact({
       fact: factText,
@@ -235,8 +310,9 @@ export class Memory {
   }
 
   /** This stub's live facts, newest first. */
-  private listFacts(url: URL): Response {
+  private async listFacts(url: URL): Promise<Response> {
     const limit = limitParam(url.searchParams.get("limit"));
+    await this.collectPurged(this.store.purgeExpiredFacts());
     return json({ facts: this.store.listFacts({ limit }).map((f) => factJson(f, this.agent)) });
   }
 
@@ -250,12 +326,15 @@ export class Memory {
     if (query === "") {
       throw new InputError("q must be a non-empty string.");
     }
-    const topK = limitParam(url.searchParams.get("limit"));
+    const topK = topKParam(url.searchParams.get("limit"));
     const scopedAgent = this.isRegistry ? url.searchParams.get("agent")?.trim() || undefined : this.agent;
+    await this.collectPurged(this.store.purgeExpiredFacts());
     const vector = await this.embed(query);
     const matches = await this.env.MEMORY_VECTORS.query(vector, {
       ...(topK !== undefined ? { topK } : {}),
-      // Metadata filter keeps a scoped recall inside one agent's bankings.
+      // Metadata filter keeps a scoped recall inside one agent's bankings —
+      // the live index needs `wrangler vectorize create-metadata-index
+      // shiba-memory --property-name=agent --type=string` (wrangler.jsonc).
       ...(scopedAgent !== undefined ? { filter: { agent: scopedAgent } } : {}),
     });
     const hits: Array<Record<string, unknown>> = [];
@@ -320,6 +399,7 @@ export class Memory {
     if (seg.length === 2) {
       if (request.method === "GET") {
         if (!this.isRegistry) {
+          await this.collectPurged(this.store.purgeExpiredFacts());
           const fact = this.store.getFact(id);
           return fact ? json({ fact: factJson(fact, this.agent) }) : notFound("Fact not found.");
         }
@@ -381,6 +461,7 @@ export class Memory {
         return notFound("Fact not found.");
       }
       await this.deleteVector(id);
+      await this.dropRegistryEntry(id);
       return json({ ok: true, id });
     }
     const agent = this.store.factOwner(id);
@@ -431,28 +512,38 @@ export class Memory {
     return json({ error: "Method not allowed." }, { status: 405 });
   }
 
-  /** `POST /registry` — agent stubs index banked facts here. */
+  /**
+   * `/registry` — `POST` indexes a banked fact, `GET` lists registered
+   * agents, `DELETE /registry/:factId` drops an entry (forget, TTL purge).
+   */
   private async registry(request: Request, seg: string[]): Promise<Response> {
     if (!this.isRegistry) {
       return badRequest(
         `The fact registry is served by the ${MEMORY_REGISTRY_NAME} instance.`,
       );
     }
-    if (seg.length !== 1) {
-      return notFound();
+    if (seg.length === 1) {
+      if (request.method === "GET") {
+        return json({ agents: this.store.listRegisteredAgents() });
+      }
+      if (request.method === "POST") {
+        const body = await this.jsonBody(request);
+        const entry = this.store.registerFact({
+          fact_id: requiredString(body.fact_id, "fact_id"),
+          agent: requiredString(body.agent, "agent"),
+        });
+        return json({ entry }, { status: 201 });
+      }
+      return json({ error: "Method not allowed." }, { status: 405 });
     }
-    if (request.method === "GET") {
-      return json({ agents: this.store.listRegisteredAgents() });
+    if (seg.length === 2) {
+      if (request.method !== "DELETE") {
+        return json({ error: "Method not allowed." }, { status: 405 });
+      }
+      const factId = pathParam(seg[1]);
+      return json({ ok: true, id: factId, removed: this.store.unregisterFact(factId) });
     }
-    if (request.method === "POST") {
-      const body = await this.jsonBody(request);
-      const entry = this.store.registerFact({
-        fact_id: requiredString(body.fact_id, "fact_id"),
-        agent: requiredString(body.agent, "agent"),
-      });
-      return json({ entry }, { status: 201 });
-    }
-    return json({ error: "Method not allowed." }, { status: 405 });
+    return notFound();
   }
 
   async fetch(request: Request): Promise<Response> {

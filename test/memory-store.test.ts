@@ -135,18 +135,14 @@ describe("fact registry", () => {
     expect(store.factOwner("fact_2")).toBe("scout");
     expect(store.factOwner("missing")).toBeNull();
     expect(store.listRegisteredAgents()).toEqual(["intern", "scout"]);
-    expect(store.listRegistryEntries().map((e) => e.fact_id)).toEqual(["fact_3", "fact_2", "fact_1"]);
-    expect(store.listRegistryEntries({ agent: "intern" }).map((e) => e.fact_id)).toEqual([
-      "fact_3",
-      "fact_1",
-    ]);
   });
 
   it("re-registers idempotently and unregisters on forget", () => {
     const store = makeStore();
     store.registerFact({ fact_id: "fact_1", agent: "intern" });
     store.registerFact({ fact_id: "fact_1", agent: "intern" });
-    expect(store.listRegistryEntries()).toHaveLength(1);
+    expect(store.listRegisteredAgents()).toEqual(["intern"]);
+    expect(store.factOwner("fact_1")).toBe("intern");
     expect(store.unregisterFact("fact_1")).toBe(true);
     expect(store.factOwner("fact_1")).toBeNull();
     expect(store.unregisterFact("fact_1")).toBe(false);
@@ -352,6 +348,59 @@ describe("Memory DO routes", () => {
     expect((await get(h.registry, `/facts/${id}`)).status).toBe(404);
     const agents = (await (await get(h.registry, "/registry")).json()) as { agents: string[] };
     expect(agents.agents).toEqual([]);
+  });
+
+  it("drops the registry row when the agent stub deletes the fact", async () => {
+    const h = makeHarness();
+    const { body } = await bank(h.stub("intern"), "doomed");
+    const id = body.fact?.id ?? "";
+    const res = await send(h.stub("intern"), "DELETE", `/facts/${id}`);
+    expect(res.status).toBe(200);
+    expect(h.vectors.has(id)).toBe(false);
+    const agents = (await (await get(h.registry, "/registry")).json()) as { agents: string[] };
+    expect(agents.agents).toEqual([]);
+  });
+
+  it("drops an expired fact's vector and registry row on the next read", async () => {
+    const h = makeHarness();
+    const { body } = await bank(h.stub("intern"), "short-lived", "run", { ttl: Date.now() - 1 });
+    const id = body.fact?.id ?? "";
+    expect(h.vectors.has(id)).toBe(true);
+    const listed = (await (await get(h.stub("intern"), "/facts")).json()) as { facts: unknown[] };
+    expect(listed.facts).toEqual([]);
+    expect(h.vectors.has(id)).toBe(false);
+    const agents = (await (await get(h.registry, "/registry")).json()) as { agents: string[] };
+    expect(agents.agents).toEqual([]);
+    expect((await get(h.registry, `/facts/${id}`)).status).toBe(404);
+  });
+
+  it("rejects a malformed recall limit instead of passing it to Vectorize", async () => {
+    const h = makeHarness();
+    await bank(h.stub("intern"), "alpha");
+    for (const bad of ["abc", "0", "-5", "1.5"]) {
+      expect((await get(h.registry, `/facts/search?q=x&limit=${bad}`)).status).toBe(400);
+    }
+    expect((await get(h.registry, "/facts/search?q=x&limit=2")).status).toBe(200);
+  });
+
+  it("rejects caller ids that shadow the /facts routes or already exist", async () => {
+    const h = makeHarness();
+    for (const id of ["search", "a/b", ""]) {
+      const res = await send(h.stub("intern"), "POST", "/facts", { id, fact: "x", source: "run" });
+      expect(res.status).toBe(400);
+    }
+    const first = await send(h.stub("intern"), "POST", "/facts", {
+      id: "fact_mine",
+      fact: "x",
+      source: "run",
+    });
+    expect(first.status).toBe(201);
+    const dup = await send(h.stub("intern"), "POST", "/facts", {
+      id: "fact_mine",
+      fact: "y",
+      source: "run",
+    });
+    expect(dup.status).toBe(409);
   });
 
   it("serves sessions on the registry and rejects them on agent stubs", async () => {

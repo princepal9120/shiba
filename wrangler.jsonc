@@ -52,8 +52,10 @@
     { "binding": "AGENT_AUDIT", "database_name": "shiba-audit", "database_id": "__PENDING__" },
   ],
   // Megaplan T8: bge-base-en-v1.5 embeddings of banked facts, keyed by
-  // fact id (768-dim, cosine). Provision:
-  // `wrangler vectorize create shiba-memory --dimensions=768 --metric=cosine`.
+  // fact id (768-dim, cosine); `agent` metadata powers scoped recall
+  // filters. Provision:
+  // `wrangler vectorize create shiba-memory --dimensions=768 --metric=cosine`
+  // `wrangler vectorize create-metadata-index shiba-memory --property-name=agent --type=string`
   "vectorize": [
     { "binding": "MEMORY_VECTORS", "index_name": "shiba-memory" },
   ],

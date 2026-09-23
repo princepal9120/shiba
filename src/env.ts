@@ -35,7 +35,9 @@ export interface Env {
    * Vectorize index holding the 768-dim bge-base embedding for every banked
    * fact, keyed by fact id (megaplan T8). Index name `shiba-memory`; the
    * index itself is provisioned outside code
-   * (`wrangler vectorize create shiba-memory --dimensions=768 --metric=cosine`).
+   * (`wrangler vectorize create shiba-memory --dimensions=768 --metric=cosine`,
+   * then `wrangler vectorize create-metadata-index shiba-memory
+   * --property-name=agent --type=string` so `?agent=` recall filters work).
    */
   MEMORY_VECTORS: VectorizeIndex;
   /**

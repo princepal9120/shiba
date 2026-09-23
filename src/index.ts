@@ -27,7 +27,7 @@ import type {
   ThreadView,
 } from "./mailbox-store.js";
 import { encodePrincipal, McpGateway, MCP_PRINCIPAL_HEADER } from "./mcp-gateway.js";
-import { Memory } from "./memory-do.js";
+import { Memory, memoryRegistryStub } from "./memory-do.js";
 import { Sandbox } from "./sandbox.js";
 import { InputError, NotFoundError, redactSecrets, verifyGitHubWebhookSignature } from "./security.js";
 import { handleSlackInteract } from "./slack-approval.js";
@@ -626,14 +626,6 @@ async function handleApprovals(request: Request, env: Env): Promise<Response | n
   return Response.json({ error: "Method not allowed." }, { status: 405 });
 }
 
-/** Shared registry stub — cross-agent reads all route through "global" (T8). */
-function memoryRegistryStub(env: Env): DurableObjectStub | null {
-  if (env.Memory === undefined) {
-    return null;
-  }
-  return env.Memory.get(env.Memory.idFromName("global"));
-}
-
 async function handleMemory(request: Request, env: Env): Promise<Response | null> {
   const url = new URL(request.url);
   const { pathname } = url;
@@ -644,13 +636,14 @@ async function handleMemory(request: Request, env: Env): Promise<Response | null
   if (!isAuthenticated(request, env)) {
     return Response.json({ error: "Authentication required." }, { status: 401 });
   }
-  const stub = memoryRegistryStub(env);
-  if (stub === null) {
+  if (env.Memory === undefined) {
     return Response.json(
       { error: "Memory is not provisioned yet." },
       { status: 503 },
     );
   }
+  // Cross-agent reads route through the shared registry stub (T8).
+  const stub = memoryRegistryStub(env);
   if (factId !== undefined) {
     if (request.method !== "DELETE") return methodNotAllowed();
     return stub.fetch(`${MEMORY_DO_BASE}/facts/${encodeURIComponent(factId)}`, {

@@ -296,6 +296,7 @@ Recorded in `docs/loop/STATE.md` triage inbox. Code ships with placeholders:
 - `wrangler kv namespace create AGENT_TOKENS` → paste id
 - `wrangler r2 bucket create shiba-attachments`
 - `wrangler vectorize create shiba-memory --dimensions=768 --metric=cosine`
+- `wrangler vectorize create-metadata-index shiba-memory --property-name=agent --type=string` (scoped `?agent=` recall filters on the `agent` vector metadata)
 - Enable Email Routing on the domain → route to this worker (MX setup is user-side)
 - Enable Email Sending for `send_email` binding (account-dependent; if
   unavailable, T7 keeps sends approval-queued and reports the gap)

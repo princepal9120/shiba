@@ -70,6 +70,7 @@ PARALLEL LANES: A=T7-T10 backend, B=T11-T13 UI. T6 DONE; T11 done w/ controller 
 - [ ] `wrangler kv namespace create AGENT_TOKENS` → paste namespace id
 - [ ] `wrangler r2 bucket create shiba-attachments`
 - [ ] `wrangler vectorize create shiba-memory --dimensions=768 --metric=cosine`
+- [ ] `wrangler vectorize create-metadata-index shiba-memory --property-name=agent --type=string` (required for `?agent=` scoped recall)
 - [ ] Enable Email Routing on the chosen domain + MX records (user-side DNS)
 - [ ] Confirm Email Sending (send_email binding) availability on the account
 - [ ] `wrangler deploy` — outward-facing, needs explicit user approval
