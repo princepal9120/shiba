@@ -32,14 +32,14 @@ function headers(timestamp: string, signature: string): Headers {
 
 describe("verifySlackRequest", () => {
   it("verifies valid Slack signature", async () => {
-    const body = "token=abc&team_id=T123&command=%2Fai-intern&text=fix+this";
+    const body = "token=abc&team_id=T123&command=%2Fshiba-ai-coworker&text=fix+this";
     const timestamp = String(Math.floor(Date.now() / 1000));
     const signature = await sign(SECRET, timestamp, body);
     await expect(verifySlackRequest(body, headers(timestamp, signature), SECRET)).resolves.toBe(true);
   });
 
   it("rejects a tampered body", async () => {
-    const body = "command=%2Fai-intern&text=fix+this";
+    const body = "command=%2Fshiba-ai-coworker&text=fix+this";
     const timestamp = String(Math.floor(Date.now() / 1000));
     const signature = await sign(SECRET, timestamp, body);
     await expect(
@@ -48,14 +48,14 @@ describe("verifySlackRequest", () => {
   });
 
   it("rejects a 6-minute-old timestamp (replay protection)", async () => {
-    const body = "command=%2Fai-intern&text=fix+this";
+    const body = "command=%2Fshiba-ai-coworker&text=fix+this";
     const timestamp = String(Math.floor(Date.now() / 1000) - 360);
     const signature = await sign(SECRET, timestamp, body);
     await expect(verifySlackRequest(body, headers(timestamp, signature), SECRET)).resolves.toBe(false);
   });
 
   it("rejects missing headers and missing secret", async () => {
-    const body = "command=%2Fai-intern&text=fix+this";
+    const body = "command=%2Fshiba-ai-coworker&text=fix+this";
     const timestamp = String(Math.floor(Date.now() / 1000));
     const signature = await sign(SECRET, timestamp, body);
     await expect(verifySlackRequest(body, new Headers(), SECRET)).resolves.toBe(false);
@@ -89,7 +89,7 @@ describe("slack slash command", () => {
 
   it("routes slash command to orchestrator and returns Task queued", async () => {
     const request = await signedCommandRequest({
-      command: "/ai-intern",
+      command: "/shiba-ai-coworker",
       text: "https://github.com/owner/repo Fix the login bug",
       user_id: "U123",
       channel_id: "C456",
@@ -116,7 +116,7 @@ describe("slack slash command", () => {
 
   it("rejects an invalid Slack signature with 401 and queues nothing", async () => {
     const request = await signedCommandRequest(
-      { command: "/ai-intern", text: "https://github.com/owner/repo Fix it" },
+      { command: "/shiba-ai-coworker", text: "https://github.com/owner/repo Fix it" },
       "wrong-secret",
     );
     const fetchMock = vi.fn(
@@ -131,7 +131,7 @@ describe("slack slash command", () => {
 
   it("returns 400 when no GitHub URL is present", async () => {
     const request = await signedCommandRequest({
-      command: "/ai-intern",
+      command: "/shiba-ai-coworker",
       text: "fix it please",
     });
     const fetchMock = vi.fn(

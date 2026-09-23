@@ -16,13 +16,13 @@ function msg(user: string, text: string, ts: number): SlackThreadMessage {
 
 describe("extractGitHubRepoUrl", () => {
   it("finds a GitHub URL in mention text", () => {
-    expect(extractGitHubRepoUrl("@ai-intern fix https://github.com/owner/repo please")).toBe(
+    expect(extractGitHubRepoUrl("@shiba-ai-coworker fix https://github.com/owner/repo please")).toBe(
       "https://github.com/owner/repo",
     );
   });
 
   it("returns null when no URL is present", () => {
-    expect(extractGitHubRepoUrl("@ai-intern fix this please")).toBeNull();
+    expect(extractGitHubRepoUrl("@shiba-ai-coworker fix this please")).toBeNull();
   });
 });
 
@@ -42,7 +42,7 @@ describe("parseChannelRepoMap", () => {
 describe("resolveSlackRepo", () => {
   it("prefers an explicit URL over the channel default", () => {
     const resolved = resolveSlackRepo({
-      mentionText: "@ai-intern fix https://github.com/owner/explicit now",
+      mentionText: "@shiba-ai-coworker fix https://github.com/owner/explicit now",
       threadTexts: ["see https://github.com/owner/threaded"],
       channelId: "C123",
       channelRepos: { C123: "https://github.com/owner/mapped" },
@@ -53,7 +53,7 @@ describe("resolveSlackRepo", () => {
   it("falls back to the thread URL, then the channel map", () => {
     expect(
       resolveSlackRepo({
-        mentionText: "@ai-intern fix this",
+        mentionText: "@shiba-ai-coworker fix this",
         threadTexts: ["context https://github.com/owner/from-thread"],
         channelId: "C123",
         channelRepos: { C123: "https://github.com/owner/mapped" },
@@ -62,7 +62,7 @@ describe("resolveSlackRepo", () => {
 
     expect(
       resolveSlackRepo({
-        mentionText: "@ai-intern fix this",
+        mentionText: "@shiba-ai-coworker fix this",
         threadTexts: ["no links here"],
         channelId: "C123",
         channelRepos: { C123: "https://github.com/owner/mapped" },
@@ -72,7 +72,7 @@ describe("resolveSlackRepo", () => {
 
   it("asks when no repo can be resolved, starting no run", () => {
     const resolved = resolveSlackRepo({
-      mentionText: "@ai-intern fix this",
+      mentionText: "@shiba-ai-coworker fix this",
       threadTexts: ["no links here"],
       channelId: "C999",
       channelRepos: {},

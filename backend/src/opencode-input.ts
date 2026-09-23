@@ -6,8 +6,8 @@
 import { z } from "zod";
 import { parseGitHubRepoUrl } from "./security.js";
 
-export const TOOL_INPUT_MARKER = "AI_INTERN_CODING_TASK_JSON";
-export const RESULT_MARKER = "AI_INTERN_CODING_RESULT_JSON";
+export const TOOL_INPUT_MARKER = "SHIBA_AI_COWORKER_CODING_TASK_JSON";
+export const RESULT_MARKER = "SHIBA_AI_COWORKER_CODING_RESULT_JSON";
 
 const codingTaskInputSchema = z.object({
   repoUrl: z.string().min(1),

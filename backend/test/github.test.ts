@@ -46,20 +46,20 @@ describe("publishFilesAsPullRequest", () => {
       {
         repoUrl: "https://github.com/owner/repo",
         baseBranch: "main",
-        newBranch: "ai-intern/run-abc",
-        title: "AI Intern: fix",
+        newBranch: "shiba-ai-coworker/run-abc",
+        title: "AI Coworker: fix",
         body: "details",
         files: [
           { path: "a.ts", content: "hello", encoding: "utf8" },
           { path: "img.png", content: "aGVsbG8=", encoding: "base64" },
         ],
         token: SECRET,
-        message: "AI Intern: fix",
+        message: "AI Coworker: fix",
       },
       { fetchImpl: makeFetch(calls) },
     );
     expect(result).toEqual({
-      branch: "ai-intern/run-abc",
+      branch: "shiba-ai-coworker/run-abc",
       commitSha: "new-commit",
       pullUrl: "https://github.com/owner/repo/pull/7",
       pullNumber: 7,
@@ -182,15 +182,15 @@ describe("publishFilesAsPullRequest", () => {
       {
         repoUrl: "https://github.com/owner/repo",
         baseBranch: "main",
-        newBranch: "ai-intern/run-abc",
-        title: "AI Intern: delete",
+        newBranch: "shiba-ai-coworker/run-abc",
+        title: "AI Coworker: delete",
         body: "details",
         files: [
           { path: "gone.ts", content: null, encoding: "utf8" },
           { path: "kept.ts", content: "x", encoding: "utf8" },
         ],
         token: SECRET,
-        message: "AI Intern: delete",
+        message: "AI Coworker: delete",
       },
       { fetchImpl: makeFetch(calls) },
     );
@@ -222,7 +222,7 @@ describe("publishFilesAsPullRequest", () => {
         {
           repoUrl: "https://github.com/owner/repo",
           baseBranch: "main",
-          newBranch: "ai-intern/run-abc",
+          newBranch: "shiba-ai-coworker/run-abc",
           title: "t",
           body: "b",
           files: [{ path: "a.ts", content: "x", encoding: "utf8" }],
@@ -231,9 +231,9 @@ describe("publishFilesAsPullRequest", () => {
         },
         { fetchImpl: failingPulls as unknown as typeof fetch },
       ),
-    ).rejects.toThrow(/ai-intern\/run-abc was removed/);
+    ).rejects.toThrow(/shiba-ai-coworker\/run-abc was removed/);
     const cleanup = calls.find(
-      (call) => call.init?.method === "DELETE" && call.url.includes("/git/refs/heads/ai-intern"),
+      (call) => call.init?.method === "DELETE" && call.url.includes("/git/refs/heads/shiba-ai-coworker"),
     );
     expect(cleanup).toBeDefined();
   });

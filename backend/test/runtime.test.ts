@@ -132,7 +132,7 @@ describe("SandboxRuntimeAdapter", () => {
     const envText = JSON.stringify(ops.execs.map((exec) => exec.env));
     expect(envText).not.toContain("AI_GATEWAY_TOKEN");
     expect(envText).not.toContain("GITHUB_TOKEN");
-    expect(envText).toContain("ai-intern-dummy-key");
+    expect(envText).toContain("shiba-ai-coworker-dummy-key");
   });
 
   it("reports clone failures honestly", async () => {
@@ -180,7 +180,7 @@ describe("opencode config and argv", () => {
       autoupdate: false,
     });
     const options = (config.provider as Record<string, { options: Record<string, string> }>)["google"];
-    expect(options?.options.apiKey).toBe("ai-intern-dummy-key");
+    expect(options?.options.apiKey).toBe("shiba-ai-coworker-dummy-key");
     expect(options?.options).not.toHaveProperty("baseURL");
   });
 
@@ -188,7 +188,7 @@ describe("opencode config and argv", () => {
     const config = buildOpencodeConfig({ ...INPUT, codingModel: "openai/gpt-5" });
     expect(config.enabled_providers).toEqual(["openai"]);
     expect((config.provider as Record<string, { options: { apiKey: string } }>).openai?.options.apiKey)
-      .toBe("ai-intern-dummy-key");
+      .toBe("shiba-ai-coworker-dummy-key");
   });
 
   it("refuses a provider the harness cannot drive, and a model with no provider", () => {

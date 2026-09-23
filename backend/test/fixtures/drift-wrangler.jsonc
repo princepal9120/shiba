@@ -1,5 +1,5 @@
 {
-  "name": "ai-intern",
+  "name": "shiba-ai-coworker",
   "main": "src/index.ts",
   "compatibility_date": "2026-06-01",
   "compatibility_flags": ["nodejs_compat"],
@@ -32,7 +32,7 @@
   "containers": [
     {
       "class_name": "Sandbox",
-      "name": "ai-intern-sandbox",
+      "name": "shiba-ai-coworker-sandbox",
       "image": "./Dockerfile",
       "instance_type": "standard-1",
       "max_instances": 5,

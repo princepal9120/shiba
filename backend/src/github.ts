@@ -37,7 +37,7 @@ export interface GitHubDeps {
 }
 
 const API_BASE = "https://api.github.com";
-const USER_AGENT = "ai-intern";
+const USER_AGENT = "shiba-ai-coworker";
 const API_TIMEOUT_MS = 30_000;
 
 function authHeaders(token: string): Record<string, string> {

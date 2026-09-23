@@ -5,10 +5,10 @@ import {
   ERROR_FAMILY_STATUSES,
   STATUS_CHIP_CLASSES,
   statusLabel,
-} from "../src/dashboard/ui-helpers";
-import { statusDotClass } from "../src/dashboard/components/SessionsSidebar";
-import { RunRegistryView } from "../src/dashboard/components/RunRegistryView";
-import type { RetainedRun } from "../src/dashboard/types";
+} from "../../frontend/src/ui-helpers";
+import { statusDotClass } from "../../frontend/src/components/SessionsSidebar";
+import { RunRegistryView } from "../../frontend/src/components/RunRegistryView";
+import type { RetainedRun } from "../../frontend/src/types";
 
 describe("dashboard unknown status", () => {
   it("exposes an amber chip and 'Unknown' label", () => {

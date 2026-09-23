@@ -69,8 +69,8 @@ vi.mock("../src/email-approvals.js", () => ({
 
 import worker from "../src/index.js";
 import type { Env } from "../src/env.js";
-import { InboxTab, replyAddress, replyMailbox } from "../src/dashboard/components/InboxTab";
-import { MemoryTab } from "../src/dashboard/components/MemoryTab";
+import { InboxTab, replyAddress, replyMailbox } from "../../frontend/src/components/InboxTab";
+import { MemoryTab } from "../../frontend/src/components/MemoryTab";
 
 interface FakeStub {
   calls: Array<{ url: string; method: string; body: string | undefined }>;

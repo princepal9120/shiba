@@ -38,14 +38,14 @@ vi.mock("ai", () => ({
     typeof part.type === "string" && part.type.startsWith("tool-"),
 }));
 
-import { App } from "../src/dashboard/app";
-import { VMInspector } from "../src/dashboard/components/VMInspector";
-import { RunRegistryView } from "../src/dashboard/components/RunRegistryView";
-import { AutomationsView } from "../src/dashboard/components/AutomationsView";
-import { ArchitectureView } from "../src/dashboard/components/ArchitectureView";
-import { OnboardingModal, ONBOARDING_STEPS } from "../src/dashboard/components/OnboardingModal";
-import { TaskForm } from "../web/src/components/TaskForm";
-import { Tooltip } from "../src/dashboard/components/Tooltip";
+import { App } from "../../frontend/src/app";
+import { VMInspector } from "../../frontend/src/components/VMInspector";
+import { RunRegistryView } from "../../frontend/src/components/RunRegistryView";
+import { AutomationsView } from "../../frontend/src/components/AutomationsView";
+import { ArchitectureView } from "../../frontend/src/components/ArchitectureView";
+import { OnboardingModal, ONBOARDING_STEPS } from "../../frontend/src/components/OnboardingModal";
+import { TaskForm } from "../../web/src/components/TaskForm";
+import { Tooltip } from "../../frontend/src/components/Tooltip";
 
 afterEach(() => {
   mocks.chat.messages = [];
@@ -175,7 +175,7 @@ describe("dashboard rendering", () => {
   });
 
   it("renders the Missions surface with standing-goal framing", async () => {
-    const { MissionsView } = await import("../src/dashboard/components/MissionsView");
+    const { MissionsView } = await import("../../frontend/src/components/MissionsView");
     const markup = renderToStaticMarkup(React.createElement(MissionsView));
     expect(markup).toContain("Standing goal");
     expect(markup).toContain("Deploy mission");
@@ -183,7 +183,7 @@ describe("dashboard rendering", () => {
   });
 
   it("renders the Gates surface with review, QA, and security entry points", async () => {
-    const { GatesView } = await import("../src/dashboard/components/GatesView");
+    const { GatesView } = await import("../../frontend/src/components/GatesView");
     const markup = renderToStaticMarkup(React.createElement(GatesView));
     expect(markup).toContain("Code Review");
     expect(markup).toContain("QA");

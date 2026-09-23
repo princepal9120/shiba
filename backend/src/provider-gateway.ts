@@ -1,5 +1,5 @@
 
-export const DUMMY_PROVIDER_KEY = "ai-intern-dummy-key";
+export const DUMMY_PROVIDER_KEY = "shiba-ai-coworker-dummy-key";
 export const GOOGLE_API_HOST = "generativelanguage.googleapis.com";
 
 /** Provider API headers that constrain the request shape, not the credential. */

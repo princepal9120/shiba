@@ -57,7 +57,7 @@ describe("OpenCodeAgent response boundary", () => {
       start(controller) { chunks.forEach((chunk) => controller.enqueue(chunk)); controller.close(); },
     }) })) messages.push(message);
     expect(messages.at(-1)?.role).toBe("assistant");
-    expect(messages.at(-1)?.parts).toEqual([{ type: "text", text: expect.stringContaining("AI_INTERN_CODING_RESULT_JSON"), state: "done" }]);
+    expect(messages.at(-1)?.parts).toEqual([{ type: "text", text: expect.stringContaining("SHIBA_AI_COWORKER_CODING_RESULT_JSON"), state: "done" }]);
     expect(chunks.at(-1)).toEqual({ type: "finish", finishReason: "stop" });
     expect(result.files).toEqual([]);
   });

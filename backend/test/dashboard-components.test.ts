@@ -6,15 +6,15 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { ApprovalCard } from "../src/dashboard/components/ApprovalCard";
-import { ArchitectureView } from "../src/dashboard/components/ArchitectureView";
-import { OnboardingModal } from "../src/dashboard/components/OnboardingModal";
+import { ApprovalCard } from "../../frontend/src/components/ApprovalCard";
+import { ArchitectureView } from "../../frontend/src/components/ArchitectureView";
+import { OnboardingModal } from "../../frontend/src/components/OnboardingModal";
 import {
   SessionsSidebar,
   type SessionItem,
-} from "../src/dashboard/components/SessionsSidebar";
-import { TaskComposer } from "../src/dashboard/components/TaskComposer";
-import type { AgentPrincipal } from "../src/dashboard/types";
+} from "../../frontend/src/components/SessionsSidebar";
+import { TaskComposer } from "../../frontend/src/components/TaskComposer";
+import type { AgentPrincipal } from "../../frontend/src/types";
 
 const sessions: SessionItem[] = [
   {

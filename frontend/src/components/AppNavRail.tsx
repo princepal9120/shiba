@@ -148,7 +148,7 @@ export function AppNavRail({
       aria-label="Primary"
     >
       {/* Brand */}
-      <a href="/" className="flex items-center gap-2.5 px-1.5 pb-3 mb-1 group focus:outline-none" aria-label="AI Intern Home">
+      <a href="/" className="flex items-center gap-2.5 px-1.5 pb-3 mb-1 group focus:outline-none" aria-label="AI Coworker Home">
         <img
           src="/assets/mascot/pet-logo.png"
           alt="Shiba"
@@ -156,7 +156,7 @@ export function AppNavRail({
         />
         <span className="min-w-0">
           <span className="flex items-center gap-1.5">
-            <span className="font-display text-lg leading-none text-[#222320]">AI Intern</span>
+            <span className="font-display text-lg leading-none text-[#222320]">AI Coworker</span>
             <span className="text-[9px] font-mono font-semibold uppercase tracking-wider text-[#0000a8] border border-[#0000a8]/25 bg-[#0000a8]/10 rounded px-1 py-px">
               Beta
             </span>

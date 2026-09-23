@@ -196,7 +196,7 @@ export function App(): React.JSX.Element {
   const toggleTheme = () => setTheme(theme === "dark" ? "light" : "dark");
 
   useEffect(() => {
-    document.title = "AI Intern Dashboard · Cloudflare Native Coding Agent";
+    document.title = "AI Coworker Dashboard · Cloudflare Native Coding Agent";
   }, []);
 
   // Surface transient notices through the toast channel (aria-live inside sonner).
@@ -219,7 +219,7 @@ export function App(): React.JSX.Element {
   const [mobileSessionsOpen, setMobileSessionsOpen] = useState(false);
   const [sessionsCollapsed, setSessionsCollapsed] = useState(() =>
     typeof window !== "undefined"
-      ? localStorage.getItem("ai-intern:sidebar-collapsed") === "true"
+      ? localStorage.getItem("shiba-ai-coworker:sidebar-collapsed") === "true"
       : false,
   );
 
@@ -228,7 +228,7 @@ export function App(): React.JSX.Element {
       const next = !current;
       if (typeof window !== "undefined") {
         try {
-          localStorage.setItem("ai-intern:sidebar-collapsed", String(next));
+          localStorage.setItem("shiba-ai-coworker:sidebar-collapsed", String(next));
         } catch {
           // Ignore storage quota or access errors in private mode
         }
@@ -827,7 +827,7 @@ export function App(): React.JSX.Element {
       <header className="h-11 shrink-0 bg-[#0000a8] text-white flex items-center gap-2.5 px-4 z-20">
         <nav aria-label="Breadcrumb" className="flex items-center gap-2 min-w-0">
           <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.14em] text-white/60">
-            AI Intern
+            AI Coworker
           </span>
           <span className="text-white/40 text-xs" aria-hidden="true">/</span>
           <span className="text-[13px] font-medium truncate">

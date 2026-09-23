@@ -245,12 +245,12 @@ export class OpenCodeAgent extends AIChatAgent<Env> {
     const published = await publishFilesAsPullRequest({
       repoUrl: input.repoUrl,
       baseBranch: input.baseBranch,
-      newBranch: `ai-intern/${input.sandboxId}`,
-      title: `AI Intern: ${this.safeText(input.task, 80)}`,
+      newBranch: `shiba-ai-coworker/${input.sandboxId}`,
+      title: `AI Coworker: ${this.safeText(input.task, 80)}`,
       body: `${this.safeText(result.summary, 4000)}\n\nSandbox: ${input.sandboxId}`,
       files: result.files,
       token,
-      message: `AI Intern: ${this.safeText(input.task, 120)}`,
+      message: `AI Coworker: ${this.safeText(input.task, 120)}`,
     });
     return published.pullUrl;
   }

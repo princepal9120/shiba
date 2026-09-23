@@ -317,7 +317,7 @@ ${task}` : task;
     await postMessage({
       channel: channelId,
       threadTs,
-      text: "Could not queue that task. Try again or use `/ai-intern`.",
+      text: "Could not queue that task. Try again or use `/shiba-ai-coworker`.",
     });
   }
 }

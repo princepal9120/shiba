@@ -142,7 +142,7 @@ describe("the container never receives a real credential", () => {
     [codexHarness, "openai/gpt-5", "OPENAI_API_KEY"],
   ])("%# passes only the dummy key", (harness, model, keyVar) => {
     const env = harness.env(input(model), null);
-    expect(env[keyVar]).toBe("ai-intern-dummy-key");
+    expect(env[keyVar]).toBe("shiba-ai-coworker-dummy-key");
     for (const value of Object.values(env)) {
       expect(value).not.toMatch(/sk-|ghp_|AIza/);
     }
@@ -166,7 +166,7 @@ describe("OpenCode output is unchanged by the T22 widening", () => {
       model: "google/gemini-3.5-flash-lite",
       enabled_providers: ["google"],
       autoupdate: false,
-      provider: { google: { options: { apiKey: "ai-intern-dummy-key" } } },
+      provider: { google: { options: { apiKey: "shiba-ai-coworker-dummy-key" } } },
     });
   });
 
@@ -174,7 +174,7 @@ describe("OpenCode output is unchanged by the T22 widening", () => {
     expect(opencodeHarness.env(BASE, "/workspace/cfg.json")).toEqual({
       OPENCODE_CONFIG: "/workspace/cfg.json",
       OPENCODE_DISABLE_AUTOUPDATE: "true",
-      GOOGLE_GENERATIVE_AI_API_KEY: "ai-intern-dummy-key",
+      GOOGLE_GENERATIVE_AI_API_KEY: "shiba-ai-coworker-dummy-key",
     });
   });
 });

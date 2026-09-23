@@ -63,7 +63,7 @@ describe("T8 parseAgentResult", () => {
 
   it("returns null for malformed or absent envelopes, never silent success", () => {
     expect(parseAgentResult("just prose, no envelope")).toBeNull();
-    expect(parseAgentResult("AI_INTERN_CODING_RESULT_JSON\n{not json")).toBeNull();
+    expect(parseAgentResult("SHIBA_AI_COWORKER_CODING_RESULT_JSON\n{not json")).toBeNull();
   });
 });
 

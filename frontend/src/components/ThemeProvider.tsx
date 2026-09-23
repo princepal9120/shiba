@@ -11,7 +11,7 @@ export function ThemeProvider({
       attribute="class"
       defaultTheme="light"
       enableSystem
-      storageKey="ai-intern-theme"
+      storageKey="shiba-ai-coworker-theme"
       themes={["dark", "light"]}
     >
       {children}

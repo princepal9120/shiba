@@ -37,7 +37,7 @@ export const Worker = Cloudflare.Worker("Worker", {
       className: "Automations",
     }),
     Sandbox: Cloudflare.Container("Sandbox", {
-      name: "ai-intern-sandbox",
+      name: "shiba-ai-coworker-sandbox",
       context: ".",
       dockerfile: "./Dockerfile",
       instanceType: "standard-1",

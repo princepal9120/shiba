@@ -31,7 +31,7 @@ export const ONBOARDING_STEPS: SetupStep[] = [
 "migrations": [{ "tag": "v1", "new_sqlite_classes": ["CodingOrchestrator", "OpenCodeAgent", "Sandbox"] }],
 "containers": [{
   "class_name": "Sandbox",
-  "name": "ai-intern-sandbox",
+  "name": "shiba-ai-coworker-sandbox",
   "image": "./Dockerfile",
   "instance_type": "standard-1",
   "max_instances": 5
@@ -92,7 +92,7 @@ GITHUB_TOKEN=ghp_yourTokenHere`,
     title: "Slack Bot App & Approver Allowlist (Optional)",
     category: "Slack Bot",
     required: false,
-    summary: "Enable on-call @ai-intern mentions in Slack with Block Kit approval cards.",
+    summary: "Enable on-call @shiba-ai-coworker mentions in Slack with Block Kit approval cards.",
     detail:
       "PLAN.md §9 (T12-T15): Create a Slack App with scopes (app_mentions:read, chat:write, channels:history). Point Events to /api/slack/events (acking <3s) and Interactivity to /api/slack/interact. Set SLACK_APPROVERS to allowlisted Slack user IDs (fails closed if empty).",
     codeSnippet: `npx wrangler secret put SLACK_BOT_TOKEN
@@ -111,7 +111,7 @@ SLACK_CHANNEL_REPOS=C04INCIDENTS:myorg/backend-api`,
     required: true,
     summary: "Submit a coding task, review the structured approval card, and watch the isolated container work.",
     detail:
-      "PLAN.md §7 (T10): The core value of AI Intern is human-in-the-loop security. When a task is submitted, Think plans it and requests approval with exact tool arguments. Once approved, the micro-container clones the repo, streams progress, tests changes, and produces a diff or PR.",
+      "PLAN.md §7 (T10): The core value of AI Coworker is human-in-the-loop security. When a task is submitted, Think plans it and requests approval with exact tool arguments. Once approved, the micro-container clones the repo, streams progress, tests changes, and produces a diff or PR.",
     codeSnippet: `# Example task to test:
 Repository: https://github.com/cloudflare/ai-chat
 Base branch: main

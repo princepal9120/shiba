@@ -286,7 +286,7 @@ type ToolExtra = RequestHandlerExtra<ServerRequest, ServerNotification>;
  * and delegates to the registry's scope/audit wrapper.
  */
 export class McpGateway extends McpAgent<Env> {
-  server = new McpServer({ name: "shiba-intern", version: "0.1.0" });
+  server = new McpServer({ name: "shiba-ai-coworker", version: "0.1.0" });
 
   async init(): Promise<void> {
     const registry = createToolRegistry(this.env);

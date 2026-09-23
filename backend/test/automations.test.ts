@@ -172,10 +172,10 @@ describe("Slack triggers", () => {
     const trigger = automation.triggers[0];
     if (trigger?.kind !== "slack") throw new Error("expected slack trigger");
     expect(
-      matchSlackTrigger(trigger, { channel: "C123", author: "U456", text: "@ai-intern fix this now" }),
+      matchSlackTrigger(trigger, { channel: "C123", author: "U456", text: "@shiba-ai-coworker fix this now" }),
     ).toBe(true);
     expect(
-      matchSlackTrigger(trigger, { channel: "C999", author: "U456", text: "@ai-intern fix this now" }),
+      matchSlackTrigger(trigger, { channel: "C999", author: "U456", text: "@shiba-ai-coworker fix this now" }),
     ).toBe(false);
     expect(
       matchSlackTrigger(trigger, { channel: "C123", author: "U456", text: "hello there" }),

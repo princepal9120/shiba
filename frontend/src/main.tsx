@@ -15,7 +15,7 @@ createRoot(root).render(
     <ErrorBoundary>
       <ThemeProvider>
         <App />
-        <Toaster theme="dark" position="bottom-right" richColors />
+        <Toaster theme="light" position="bottom-right" richColors />
       </ThemeProvider>
     </ErrorBoundary>
   </StrictMode>,

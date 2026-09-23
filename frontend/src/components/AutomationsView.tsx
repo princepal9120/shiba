@@ -164,7 +164,7 @@ export function AutomationsView(): JSX.Element {
             </span>
           </h2>
           <p className="text-xs text-[#6a6f63]">
-            AI Intern triggers tasks automatically from GitHub webhooks, Slack channels, and scheduled cron ticks.
+            AI Coworker triggers tasks automatically from GitHub webhooks, Slack channels, and scheduled cron ticks.
           </p>
         </div>
 

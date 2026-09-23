@@ -38,8 +38,8 @@ vi.mock("agents/mcp", () => ({
 import worker from "../src/index.js";
 import type { Env } from "../src/env.js";
 import { TOKEN_PREFIX } from "../src/agent-tokens.js";
-import { SessionsSidebar } from "../src/dashboard/components/SessionsSidebar";
-import { WorkspacePanel, type WorkspacePanelProps } from "../src/dashboard/components/WorkspacePanel";
+import { SessionsSidebar } from "../../frontend/src/components/SessionsSidebar";
+import { WorkspacePanel, type WorkspacePanelProps } from "../../frontend/src/components/WorkspacePanel";
 
 /** In-memory KV standing in for AGENT_TOKENS — stores JSON strings like the real binding. */
 class FakeKV {
