@@ -6,6 +6,7 @@ import starlight from '@astrojs/starlight';
 // Static site built to public/ by Astro (see scripts/copy-docs.mjs).
 // Static output is Astro's default; no adapter, no SSR.
 export default defineConfig({
+	site: 'https://tryshiba.dev',
 	srcDir: './src',
 	outDir: 'dist',
 	output: 'static',
@@ -35,7 +36,7 @@ export default defineConfig({
 			sidebar: [
 				{
 					label: 'Landing Page ↗',
-					link: 'https://shiba-intern.pages.dev/',
+					link: 'https://tryshiba.dev/',
 					attrs: { target: '_blank', rel: 'noopener noreferrer' },
 				},
 				{
