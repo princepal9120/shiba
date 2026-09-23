@@ -7,7 +7,7 @@ description: Authentication, credential boundaries, and known limitations.
 
 Each installation is single-tenant and account-owned. There is no multi-tenant isolation. Put Cloudflare Access in front of the Worker route before exposing it: an obscure URL is not protection.
 
-Set `REQUIRE_ACCESS` so the Worker fails closed: `/api/runs`, the agent WebSocket, and static assets all require a `cf-access-authenticated-user-email` identity. Signature-authenticated paths (`/api/slack/events`, `/api/slack/command`, `/api/slack/interact`, `/api/github/webhook`) are exempt by construction, because Slack and GitHub cannot complete an Access login: those routes need a matching **bypass policy** on the Access application too.
+Live Alchemy deploys set `REQUIRE_ACCESS` so the Worker fails closed, and with `ACCESS_AUD` the identity comes only from a verified `Cf-Access-Jwt-Assertion` JWT: `/api/runs`, the agent WebSocket, and static assets all require a `cf-access-authenticated-user-email` identity. Paths the Worker authenticates itself (`/api/slack/events`, `/api/slack/command`, `/api/slack/interact`, `/api/github/webhook`, `/mcp`, `/api/automations/*/trigger`) are exempt by construction, because Slack, GitHub, and MCP clients cannot complete an Access login: those routes need a matching **bypass policy** on the Access application too.
 
 **Stated limit:** the Worker checks for the Access header, which is not JWT verification. Anyone who can reach the Worker origin directly can forge it. The route must not be exposed outside Access. JWT verification is filed for v0.2.
 

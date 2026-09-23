@@ -63,6 +63,7 @@ export default defineConfig({
 						{ label: 'Slack Integration', slug: 'docs/slack' },
 						{ label: 'GitHub Pull Requests', slug: 'docs/github' },
 						{ label: 'Automations & Cron', slug: 'docs/automations' },
+						{ label: 'Use from Claude Code', slug: 'docs/mcp' },
 					],
 				},
 				{

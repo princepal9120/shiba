@@ -1,4 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
+import { fakeSqlStorage } from "./fixtures/do-sql-storage.js";
 import { describe, expect, it, vi } from "vitest";
 
 // `mcp-gateway.js` pulls agents/mcp at module load; stub the base class —
@@ -69,7 +70,7 @@ import { createToolRegistry } from "../src/mcp-gateway.js";
 import type { Env } from "../src/env.js";
 import { Mailbox } from "../src/mailbox-do.js";
 import type { Scope, TokenRecord } from "../src/agent-tokens.js";
-import type { SqlRow, StoredEmail } from "../src/mailbox-store.js";
+import type { StoredEmail } from "../src/mailbox-store.js";
 
 /**
  * Pure-boundary harness: `env.Mailbox` serves real `Mailbox` DOs over
@@ -119,13 +120,7 @@ function makeEnv() {
           const db = new DatabaseSync(":memory:");
           const ctx = {
             id: { name },
-            storage: {
-              sql: {
-                exec: (sql: string, ...params: unknown[]) => ({
-                  toArray: () => db.prepare(sql).all(...(params as any[])) as SqlRow[],
-                }),
-              },
-            },
+            storage: fakeSqlStorage(db),
             blockConcurrencyWhile: async (fn: () => Promise<unknown>) => fn(),
             waitUntil: () => {},
           };

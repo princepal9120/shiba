@@ -2,10 +2,15 @@ node_modules/
 public/
 !apps/web/public/
 !apps/web/public/**
+!apps/frontend/public/
+!apps/frontend/public/**
 dist/
 .wrangler/
 .wrangler-ephemeral-*.jsonc
 .dev.vars
+.env
+.env.*
+!.env.example
 wrangler-devenv.json
 .omx/
 .omc/

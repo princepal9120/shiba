@@ -11,6 +11,10 @@ export default {
   ],
   theme: {
     extend: {
+      // `touch:` targets coarse pointers (phones/tablets) for 44px tap targets.
+      screens: {
+        touch: { raw: "(pointer: coarse)" },
+      },
       fontFamily: {
         display: ['"Instrument Serif"', 'Georgia', 'serif'],
         comic: ['Bangers', '"Comic Sans MS"', 'cursive', 'sans-serif'],

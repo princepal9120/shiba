@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { handleSlackEvent, type SlackMentionDeps } from "../src/slack-mention.js";
 import type { SlackEventCallbackBody } from "../src/slack-events.js";
+import { escapeMrkdwn } from "../src/slack-approval.js";
 
 const REPO = "https://github.com/owner/repo";
 const THREAD = "slack:T1:C1:1758217392.000100";
@@ -279,6 +280,9 @@ describe("classifySlackMentionIntent wired into handleSlackEvent", () => {
     const queued = queueRun.mock.calls.at(0)?.at(0);
     // task should start with the intent hint sentence
     expect(queued?.task).toMatch(/fix a bug|broken behaviour/i);
+    // The card renders exactly the task that will run, hint included (mrkdwn-escaped).
+    const card = JSON.stringify(postMessage.mock.calls.at(0)?.at(0)?.blocks);
+    expect(card).toContain(JSON.stringify(escapeMrkdwn(queued?.task ?? "")).slice(1, -1));
   });
 
   it("sends task unchanged when TYPESAFE_API_KEY is absent", async () => {
@@ -298,14 +302,45 @@ describe("classifySlackMentionIntent wired into handleSlackEvent", () => {
   it("sends task unchanged when classification fails (fail-open)", async () => {
     const queueRun = vi.fn<QueueRun>(async () => ({ approvalId: "appr_fail" }));
     const postMessage = vi.fn<PostMessage>(async () => {});
-    // env has key but fetch throws
+    // env has key but fetch throws — injected, so the test never reaches the real API.
+    const typeSafeFetch = vi.fn(async () => {
+      throw new Error("network down");
+    }) as unknown as typeof fetch;
     await handleSlackEvent(
       mention({ text: `<@U0> fix login ${REPO}` }),
       env({ TYPESAFE_API_KEY: "ts-key" }),
-      { queueRun, postMessage, fetchThread: async () => [] },
+      { queueRun, postMessage, fetchThread: async () => [], typeSafeFetch },
     );
+    expect(typeSafeFetch).toHaveBeenCalled();
     // still queued despite classification failure
     expect(queueRun).toHaveBeenCalledOnce();
   });
 });
 
+describe("default Slack Web API calls", () => {
+  it("fetches the thread via GET query params and treats HTTP 200 ok:false as a failure", async () => {
+    const calls: Request[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push(new Request(input, init));
+      return Response.json({ ok: false, error: "missing_scope" });
+    }));
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const queueRun = vi.fn<QueueRun>(async () => ({ approvalId: "appr_get" }));
+    const postMessage = vi.fn<PostMessage>(async () => {});
+    try {
+      await handleSlackEvent(mention(), env(), { queueRun, postMessage });
+      expect(error).toHaveBeenCalledWith("Slack thread fetch failed", expect.stringContaining("missing_scope"));
+    } finally {
+      vi.unstubAllGlobals();
+      error.mockRestore();
+    }
+    const replies = calls.find((r) => r.url.startsWith("https://slack.com/api/conversations.replies"));
+    expect(replies?.method).toBe("GET");
+    const url = new URL(replies!.url);
+    expect(url.searchParams.get("channel")).toBe("C1");
+    expect(url.searchParams.get("ts")).toBe("1758217392.000100");
+    expect(replies!.headers.get("authorization")).toBe("Bearer xoxb-test");
+    // The failed fetch falls back to the mention text; the run still queues.
+    expect(queueRun).toHaveBeenCalledOnce();
+  });
+});

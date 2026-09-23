@@ -34,7 +34,6 @@ Provider traffic is intercepted at the Sandbox egress boundary and forwarded thr
     │   └── test/           # vitest suite
     ├── frontend/
     │   ├── package.json    # @shiba-ai-coworker/frontend
-    │   ├── app/index.html  # dashboard entry (emitted at /app/)
     │   ├── src/            # dashboard SPA
     │   └── vite.config.ts  # root=apps/frontend/, outDir=../../public
     └── web/
@@ -47,7 +46,7 @@ Provider traffic is intercepted at the Sandbox egress boundary and forwarded thr
 
 `pnpm build` produces one aggregate `public/` directory:
 
-1. Vite builds the dashboard — `apps/frontend/app/index.html` is emitted as `public/app/index.html` and chunks land in `public/assets/`; `apps/web/public/` is copied in (favicons, `_redirects`, mascot assets).
+1. Vite builds the dashboard — TanStack Start (SPA mode) generates the shell as `public/app/index.html` and chunks land in `public/assets/`; `apps/web/public/` is copied in (favicons, `_redirects`, mascot assets).
 2. Astro builds the landing page (`public/index.html`), the docs (`public/docs/`), `404.html`, and the Pagefind search index; `scripts/copy-docs.mjs` merges `apps/web/dist` into `public/`.
 
 At runtime a single Worker serves that directory via `assets.directory` (`apps/backend/wrangler.jsonc`: `../../public`; `alchemy.run.ts`: `./public`) with `not_found_handling: "404-page"`. The dashboard reaches the backend through same-origin `/api/*` calls — no cross-stack wiring.
@@ -66,7 +65,7 @@ pnpm build
 pnpm docs:preview
 ~~~
 
-- Dashboard: `pnpm dev` (port 5173; `/` redirects to `/app/`; no Worker API proxy).
+- Dashboard: `pnpm dev` (port 5173; opens `/app/`; `/api` and `/agents` proxy to the Worker on 8788).
 - Docs editing: `pnpm docs:dev` (port 4321/docs/; search requires a production build).
 - Built Worker/assets: `pnpm build`, then `npx wrangler dev --config apps/backend/wrangler.jsonc`. Containers require a compatible local engine; startup may fail without it.
 - Local Worker deployment packaging: `npx wrangler deploy --dry-run --config apps/backend/wrangler.jsonc`. This is not a deployment or proof of a live coding run.
@@ -84,47 +83,48 @@ This flow deploys only the landing page, `/app/` dashboard, and `/docs/` documen
 
 ## Deploy the Worker backend
 
-The full self-hosted flow provisions the Cloudflare Worker, Durable Objects, Containers, R2, and AI Gateway integration. It is separate from the Pages UI deployment:
-
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/princepal9120/shiba)
-
-### Prerequisites (in order)
-
-1. Workers Paid plan (Durable Objects + Containers require it).
-2. An AI Gateway with a stored provider key ([BYOK](https://developers.cloudflare.com/ai-gateway/configuration/bring-your-own-keys/)) — the key never enters this repo or the container.
-3. Cloudflare Access on the Worker route, **with a bypass for `/api/slack/events`, `/api/slack/command`, and `/api/github/webhook`** (Slack and GitHub cannot complete an Access login). The Worker exempts exactly those paths; anything else under `/api/slack/` is still gated.
-4. `GITHUB_TOKEN` secret — required for PR publishing, so effectively required for Slack.
-5. Optional Slack app — see the Slack section below.
-
-**Resolve the readiness blockers before deploying.** Confirm Workers/Containers plan eligibility, quotas, and account billing in current Cloudflare documentation. Configure an account-owned AI Gateway with a stored Google BYOK key or Unified Billing, and select an available model id (model ids retire — see Configuration).
-
-After implementing and validating the missing security boundaries, the self-hosted Worker is deployed with Alchemy — `alchemy.run.ts` declares the same stack as `apps/backend/wrangler.jsonc` (`scripts/check-alchemy-drift.mjs` guards them staying in sync):
+One command provisions everything with [Alchemy](https://alchemy.run) (`alchemy.run.ts`): Worker, Durable Objects, Containers, KV, R2, D1, Vectorize, and **Cloudflare Access** in front of the dashboard. Prerequisites: Workers Paid plan, Docker running, `npx wrangler login`.
 
 ~~~sh
-# One-time: credentials + remote state
-npx alchemy provider cloudflare token      # mint an API token into the default profile
-#   or: export CLOUDFLARE_API_TOKEN=... CLOUDFLARE_ACCOUNT_ID=...
-# Optional — only for the remote state store (local filesystem state is the default):
-npx alchemy provider cloudflare bootstrap  # needs Secrets Store scope on the token
-
-# Secrets — bound only when set in the deploy environment (see alchemy.run.ts)
-export GITHUB_TOKEN=...
-export GITHUB_WEBHOOK_SECRET=...
-
-pnpm build
-pnpm deploy            # alchemy deploy — the live stage adopts the
-                       # wrangler-managed worker/resources in place automatically
-pnpm deploy:preview    # alchemy plan (dry-run)
-pnpm deploy:destroy    # alchemy destroy
+pnpm install
+pnpm run bootstrap   # asks for Access emails + secrets → .env, mints the Alchemy token once, builds, deploys
 ~~~
 
-Rollback to wrangler (same bindings, unchanged): `npx wrangler login`, preview via `pnpm deploy:preview:wrangler`, ship via `npx wrangler deploy --config apps/backend/wrangler.jsonc`.
+Re-deploy after changes with `pnpm run deploy` (build + `alchemy deploy`). Preview with `pnpm deploy:preview` (`alchemy plan`); tear down with `pnpm deploy:destroy`. Use `pnpm run …` — bare `pnpm deploy`/`pnpm setup` are pnpm built-ins.
 
-Stage selection goes through `$ALCHEMY_STAGE` only (e.g. `ALCHEMY_STAGE=test-x pnpm deploy` gives the worker/container a `-test-x` suffix); do not pass `--stage` — resource names are derived from the env var and a diverging flag fails loudly instead of colliding with live. Local deploys use the filesystem state store by default; `ALCHEMY_STATE_BACKEND=cloudflare` opts into the remote State Store after the one-time `bootstrap` above (needs a token with the Secrets Store scope).
+What a live deploy does, secure by default:
 
-These commands change the operator's account. They are separate from the Pages-only command above. `pnpm deploy` does not automatically build the static assets first.
+- `REQUIRE_ACCESS=1` is always set on live stages: no verified Access identity means 401 on the dashboard and API.
+- With `ACCESS_EMAILS` and `WORKERS_SUBDOMAIN` set, it creates an Access app for the Worker host that allows only those emails, and the Worker verifies the `Cf-Access-Jwt-Assertion` JWT (`ACCESS_AUD`) instead of trusting the identity header.
+- A second Access app **bypasses** the machine callers, which the Worker authenticates itself: `/api/slack/events`, `/api/slack/command`, `/api/slack/interact`, `/api/github/webhook` (HMAC), `/mcp` (bearer token), `/api/automations/*/trigger` (shared secret).
+- Secrets come only from `.env` (see `.env.example`). Alchemy replaces the Worker's secrets on every deploy, so a secret missing from `.env` is removed — don't mix in `wrangler secret put`.
 
-Protect every reachable hostname with Cloudflare Access or equivalent authentication. An obscure URL is not access control. Browser approval is not route authorization. Review the security docs before live operation.
+Still manual: add a provider key (BYOK) to the `default` AI Gateway, create the Slack app from `slack-app-manifest.yaml`, and mint an MCP token for Claude Code (see [Use from Claude Code](#use-from-claude-code)). Inbound email needs a domain on Cloudflare with Email Routing sending to the Worker; workers.dev cannot receive mail.
+
+Stage selection goes through `$ALCHEMY_STAGE` only (e.g. `ALCHEMY_STAGE=test-x pnpm run deploy` suffixes every resource name); do not pass `--stage`. State is on the local filesystem by default; `ALCHEMY_STATE_BACKEND=cloudflare` opts into the remote State Store after `npx alchemy provider cloudflare bootstrap`.
+
+Rollback to wrangler (same bindings): `npx wrangler deploy --config apps/backend/wrangler.jsonc` — but it does not create the Access apps, so set them up by hand.
+
+### Use from each surface
+
+| Surface | How |
+|---|---|
+| Web dashboard | `https://<worker-host>/app/` — Access login with an allowed email |
+| iPhone | Same URL in Safari → Share → **Add to Home Screen** (standalone app). Slack mobile works for approvals too. |
+| Slack | `@shiba-ai-coworker` in a thread or `/shiba-ai-coworker <repo> <task>`; approve on the card |
+| Claude Code | MCP over `https://<worker-host>/mcp` with a bearer token — see below |
+
+### Use from Claude Code
+
+Mint a token into the deployed KV (id printed as `agentTokensNamespace` by `pnpm run deploy`), then paste the printed line:
+
+~~~sh
+node scripts/mint-token.mjs --agent claude-code --scopes sandbox:exec \
+  --host <worker-host> --namespace-id <agentTokensNamespace> --write
+claude mcp add --transport http shiba https://<worker-host>/mcp --header "Authorization: Bearer shb_…"
+~~~
+
+Tools: `queue_run`, `run_status`, `list_runs`, `list_approvals` (`sandbox:exec`), plus email and memory tools behind their own scopes. `queue_run` only queues — a human approves in the dashboard, on iPhone, or in Slack; there is no approve tool. Details: [/docs/mcp](apps/web/src/content/docs/docs/mcp.md).
 
 ## Documentation
 

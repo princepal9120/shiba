@@ -248,31 +248,32 @@ function attachmentManifest(emailId: string, prepared: PreparedAttachment[]): Em
 /**
  * Every attachment body lands under `emailId/partId` and runs BEFORE the
  * record write commits the manifest — so a committed `r2_key` always
- * resolves to a real object. A part whose put fails is logged and dropped
- * from the returned list (it gets no manifest row); the caller's email
- * insert can only orphan objects on failure, never dangle a row.
+ * resolves to a real object. A failed put fails the whole delivery (bodies
+ * deleted, then throw) — the same transient contract as a 5xx store write —
+ * rather than acking a mail minus an attachment.
  */
 async function storeAttachments(
   env: Env,
   emailId: string,
   prepared: PreparedAttachment[],
 ): Promise<PreparedAttachment[]> {
-  const writes = prepared.map(async (part) => {
-    try {
-      await putAttachment(env, `${emailId}/${part.partId}`, part.bytes, part.meta);
-      return part;
-    } catch (error) {
-      logWarn("inbound_email_attachment_write_failed", {
-        emailId,
-        part: part.partId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return null;
-    }
-  });
-  return (await Promise.all(writes)).filter(
-    (part): part is PreparedAttachment => part !== null,
+  const results = await Promise.allSettled(
+    prepared.map((part) => putAttachment(env, `${emailId}/${part.partId}`, part.bytes, part.meta)),
   );
+  const failed = results.findIndex((result) => result.status === "rejected");
+  if (failed === -1) {
+    return prepared;
+  }
+  // Delete every key, not just the fulfilled ones: a rejected put may still have committed.
+  await deleteObjects(env, prepared.map((part) => `${emailId}/${part.partId}`));
+  const reason = (results[failed] as PromiseRejectedResult).reason;
+  const partId = prepared[failed]!.partId;
+  logWarn("inbound_email_attachment_write_failed", {
+    emailId,
+    part: partId,
+    error: reason instanceof Error ? reason.message : String(reason),
+  });
+  throw new Error(`Attachment body write failed for ${emailId}/${partId}.`);
 }
 
 /** Best-effort delete of bodies whose manifest rows were never committed. */

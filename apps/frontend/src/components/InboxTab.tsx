@@ -16,9 +16,9 @@ import type {
 import { formatTimeAgo } from "../ui-helpers";
 
 const GHOST_BUTTON =
-  "text-[11px] bg-transparent hover:bg-[#fffef8] border border-[#e0ded5] hover:border-[#d3d2c8] text-[#6a6f63] hover:text-[#222320] font-medium py-1 px-2.5 rounded-md transition-colors";
+  "text-[11px] bg-transparent hover:bg-[#fffef8] border border-[#e0ded5] hover:border-[#d3d2c8] text-[#6a6f63] hover:text-[#222320] font-medium py-1 px-2.5 touch:min-h-11 rounded-md transition-colors";
 const ACCENT_BUTTON =
-  "text-[11px] bg-[#0000a8]/10 hover:bg-[#0000a8]/15 border border-[#0000a8]/15 text-[#1c1cc8] font-medium py-1 px-2.5 rounded-md transition-colors";
+  "text-[11px] bg-[#0000a8]/10 hover:bg-[#0000a8]/15 border border-[#0000a8]/15 text-[#1c1cc8] font-medium py-1 px-2.5 touch:min-h-11 rounded-md transition-colors";
 
 async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, init);
@@ -105,20 +105,52 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
   // landing after a newer expand would otherwise paint A's body on B's row
   // and aim B's reply draft at A's sender.
   const detailRequestRef = useRef<string | null>(null);
+  const [registerOpen, setRegisterOpen] = useState(false);
+  const [newAddress, setNewAddress] = useState("");
+  const [newLabel, setNewLabel] = useState("");
+  const [registerError, setRegisterError] = useState<string | null>(null);
+  const [registerNotice, setRegisterNotice] = useState<string | null>(null);
+
+  const loadMailboxes = useCallback(async () => {
+    try {
+      const body = await apiJson<{ mailboxes?: InboxMailbox[] }>("/api/mailboxes");
+      setMailboxes(Array.isArray(body.mailboxes) ? body.mailboxes : []);
+    } catch {
+      setMailboxes((current) => current ?? []);
+    }
+  }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    apiJson<{ mailboxes?: InboxMailbox[] }>("/api/mailboxes")
-      .then((body) => {
-        if (!cancelled) setMailboxes(Array.isArray(body.mailboxes) ? body.mailboxes : []);
-      })
-      .catch(() => {
-        if (!cancelled) setMailboxes([]);
+    void loadMailboxes();
+  }, [loadMailboxes]);
+
+  const registerMailbox = useCallback(async () => {
+    const address = newAddress.trim();
+    if (address === "") {
+      setRegisterError("Enter the mailbox address to register.");
+      return;
+    }
+    setActionBusy("register");
+    setRegisterError(null);
+    setRegisterNotice(null);
+    try {
+      const label = newLabel.trim();
+      await apiJson<{ mailbox?: InboxMailbox }>("/api/mailboxes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(label === "" ? { address } : { address, label }),
       });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+      setRegisterNotice(`Registered ${address}.`);
+      setNewAddress("");
+      setNewLabel("");
+      setRegisterOpen(false);
+      await loadMailboxes();
+    } catch (err) {
+      setRegisterError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setActionBusy(null);
+    }
+  }, [newAddress, newLabel, loadMailboxes]);
 
   const loadMail = useCallback(async () => {
     setLoading(true);
@@ -302,11 +334,75 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
           type="button"
           onClick={() => void loadMail()}
           title="Refresh inbox"
-          className="text-[11px] text-[#6a6f63] hover:text-[#222320] border border-[#e0ded5] hover:border-[#d3d2c8] rounded-md px-2 py-1 transition-colors"
+          className="text-[11px] text-[#6a6f63] hover:text-[#222320] border border-[#e0ded5] hover:border-[#d3d2c8] rounded-md px-2 py-1 touch:min-h-11 transition-colors"
         >
           Refresh
         </button>
+        <button
+          type="button"
+          onClick={() => {
+            setRegisterOpen((open) => !open);
+            setRegisterError(null);
+            setRegisterNotice(null);
+          }}
+          aria-expanded={registerOpen}
+          title="Register a mailbox"
+          className={`${ACCENT_BUTTON} shrink-0`}
+        >
+          + Mailbox
+        </button>
       </div>
+
+      {registerOpen ? (
+        <form
+          aria-label="Register mailbox"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void registerMailbox();
+          }}
+          className="flex flex-col gap-2 border border-[#e0ded5] rounded-xl bg-[#f6f4ed] p-3"
+        >
+          <h4 className="text-[10px] font-bold uppercase tracking-wider text-[#6a6f63]">
+            Register mailbox
+          </h4>
+          <input
+            type="email"
+            required
+            value={newAddress}
+            onChange={(event) => setNewAddress(event.target.value)}
+            placeholder="agent@yourdomain.com"
+            aria-label="Mailbox address"
+            autoComplete="off"
+            className="w-full text-[11px] font-mono bg-[#fffef8] border border-[#e0ded5] rounded-md px-2 py-1.5 text-[#222320] placeholder:text-[#6a6f63] focus:outline-none focus:border-[#0000a8]/50"
+          />
+          <input
+            type="text"
+            value={newLabel}
+            onChange={(event) => setNewLabel(event.target.value)}
+            placeholder="Label (optional)"
+            aria-label="Mailbox label"
+            className="w-full text-[11px] bg-[#fffef8] border border-[#e0ded5] rounded-md px-2 py-1.5 text-[#222320] placeholder:text-[#6a6f63] focus:outline-none focus:border-[#0000a8]/50"
+          />
+          {registerError !== null ? (
+            <p role="alert" className="text-[11px] text-[#fb2c36] break-words">
+              {registerError}
+            </p>
+          ) : null}
+          <div className="flex items-center justify-end gap-2">
+            <button type="button" className={GHOST_BUTTON} onClick={() => setRegisterOpen(false)}>
+              Cancel
+            </button>
+            <button type="submit" className={ACCENT_BUTTON} disabled={actionBusy === "register"}>
+              {actionBusy === "register" ? "Registering…" : "Register"}
+            </button>
+          </div>
+        </form>
+      ) : null}
+      {registerNotice !== null ? (
+        <p role="status" className="text-[11px] text-[#15803d] bg-[#15803d]/10 border border-[#15803d]/20 rounded-lg px-2.5 py-2">
+          {registerNotice}
+        </p>
+      ) : null}
 
       <form
         onSubmit={(event) => {

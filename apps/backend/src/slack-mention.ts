@@ -66,6 +66,13 @@ function stripMentionMarkers(text: string): string {
   return text.replace(/<@[A-Z0-9]+>/gi, " ").replace(/\s+/g, " ").trim();
 }
 
+function requireSlackOk(response: Response, json: Record<string, unknown>): void {
+  // Slack answers HTTP 200 with {ok:false, error} — check both.
+  if (!response.ok || json.ok !== true) {
+    throw new Error(typeof json.error === "string" ? json.error : `Slack API ${response.status}`);
+  }
+}
+
 async function slackApi(
   token: string,
   url: string,
@@ -80,9 +87,23 @@ async function slackApi(
     body: JSON.stringify(body),
   });
   const json = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-  if (!response.ok || json.ok !== true) {
-    throw new Error(typeof json.error === "string" ? json.error : `Slack API ${response.status}`);
-  }
+  requireSlackOk(response, json);
+  return json;
+}
+
+// conversations.replies is a GET method — query params, not a JSON body.
+async function slackApiGet(
+  token: string,
+  url: string,
+  params: Record<string, string>,
+): Promise<Record<string, unknown>> {
+  const query = new URLSearchParams(params);
+  const response = await fetch(`${url}?${query.toString()}`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const json = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  requireSlackOk(response, json);
   return json;
 }
 
@@ -99,7 +120,7 @@ async function defaultPostMessage(
 }
 
 async function defaultFetchThread(token: string, channel: string, threadTs: string): Promise<SlackThreadMessage[]> {
-  const json = await slackApi(token, SLACK_REPLIES, { channel, ts: threadTs, limit: 50 });
+  const json = await slackApiGet(token, SLACK_REPLIES, { channel, ts: threadTs, limit: "50" });
   const messages = Array.isArray(json.messages) ? json.messages : [];
   const out: SlackThreadMessage[] = [];
   for (const raw of messages) {
@@ -260,9 +281,8 @@ export async function handleSlackEvent(
   const hint = intentHint(intentClassification);
 
   const threadKey = buildSlackThreadName(teamId, channelId, threadTs);
-  // Prepend the TypeSafe intent hint to the task when available.
-  // The hint is a single sentence that sharpens the orchestrator system prompt;
-  // it does not change the approval card — the human still sees exact arguments.
+  // The hint becomes part of the task the run executes — the card renders
+  // taskWithHint verbatim so the human approves exactly what will run.
   const taskWithHint = hint ? `${hint}
 ${task}` : task;
 
@@ -309,7 +329,7 @@ ${task}` : task;
         threadKey,
         approvalId,
         repoUrl: resolution.repoUrl,
-        task,
+        task: taskWithHint,
       }),
     });
   } catch (error) {
