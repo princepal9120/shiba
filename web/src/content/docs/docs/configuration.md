@@ -3,7 +3,7 @@ title: Configuration
 description: Current runtime variables, optional secrets, and model boundaries.
 ---
 
-Non-secret defaults live in wrangler.jsonc. Local overrides and secrets may be placed in the ignored .dev.vars file. Production secrets are set through Wrangler; .dev.vars is not uploaded as production configuration.
+Non-secret defaults live in backend/wrangler.jsonc. Local overrides and secrets may be placed in the ignored .dev.vars file. Production secrets are set through Wrangler; .dev.vars is not uploaded as production configuration.
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
@@ -31,15 +31,15 @@ Select a currently available model in your account. The checked-in default is no
 | GITHUB_WEBHOOK_SECRET | HMAC verification for acknowledgment-only webhooks |
 
 ~~~sh
-cp .dev.vars.example .dev.vars
+cp backend/.dev.vars.example backend/.dev.vars
 # Edit locally; never commit secrets.
 ~~~
 
 After resolving [readiness blockers](/docs/readiness/), production operators may configure:
 
 ~~~sh
-npx wrangler secret put GITHUB_TOKEN
-npx wrangler secret put GITHUB_WEBHOOK_SECRET
+npx wrangler secret put GITHUB_TOKEN --config backend/wrangler.jsonc
+npx wrangler secret put GITHUB_WEBHOOK_SECRET --config backend/wrangler.jsonc
 ~~~
 
 These commands modify your Cloudflare account. They are not local validation steps. Keep actual provider keys in the supported gateway credential store, never in container configuration. See [Deployment](/docs/deployment/#ai-gateway-setup).

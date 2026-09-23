@@ -4,7 +4,7 @@
  * (rollback path: wrangler still deploys the same bindings).
  *
  * wrangler.jsonc -> props mapping:
- *   name                          -> Worker "ai-intern" (live stages; see below)
+ *   name                          -> Worker "shiba-ai-coworker" (live stages; see below)
  *   main                          -> main
  *   compatibility_date/_flags     -> compatibility.{date,flags}
  *   assets.{directory,not_found_handling} -> assets.{directory,notFoundHandling}
@@ -43,12 +43,12 @@
 import { Effect, Redacted } from "effect";
 import * as Alchemy from "alchemy";
 import * as Cloudflare from "alchemy/Cloudflare";
-import type { CodingOrchestrator } from "./src/agents/orchestrator.js";
-import type { OpenCodeAgent } from "./src/agents/opencode-agent.js";
-import type { Mailbox } from "./src/mailbox-do.js";
-import type { McpGateway } from "./src/mcp-gateway.js";
-import type { Memory } from "./src/memory-do.js";
-import type { Sandbox } from "./src/sandbox.js";
+import type { CodingOrchestrator } from "./backend/src/agents/orchestrator.js";
+import type { OpenCodeAgent } from "./backend/src/agents/opencode-agent.js";
+import type { Mailbox } from "./backend/src/mailbox-do.js";
+import type { McpGateway } from "./backend/src/mcp-gateway.js";
+import type { Memory } from "./backend/src/memory-do.js";
+import type { Sandbox } from "./backend/src/sandbox.js";
 
 const secrets = (names: readonly string[]) => {
   const entries: Record<string, ReturnType<typeof Redacted.make>> = {};
@@ -73,8 +73,8 @@ const configVars = (names: readonly string[]) => {
 const LIVE_STAGE = /^live(_|$)/;
 const stage = process.env.ALCHEMY_STAGE;
 const isLiveStage = stage === undefined || LIVE_STAGE.test(stage);
-const workerName = isLiveStage ? "ai-intern" : `ai-intern-${stage}`;
-const containerName = isLiveStage ? "ai-intern-sandbox" : `ai-intern-sandbox-${stage}`;
+const workerName = isLiveStage ? "shiba-ai-coworker" : `shiba-ai-coworker-${stage}`;
+const containerName = isLiveStage ? "shiba-ai-coworker-sandbox" : `shiba-ai-coworker-sandbox-${stage}`;
 // Same stage isolation for the megaplan stores (KV/R2/D1/Vectorize): live
 // stages pin the wrangler names, test stages get a suffixed copy. Vectorize
 // names only allow lowercase letters, digits and hyphens — `_` stages
@@ -88,7 +88,7 @@ if (!/^[a-z][a-z0-9-]{0,62}$/.test(workerName) || !/^[a-z][a-z0-9-]{0,62}$/.test
 
 export const Worker = Cloudflare.Worker("Worker", {
   name: workerName,
-  main: "src/index.ts",
+  main: new URL("./backend/src/index.ts", import.meta.url).href,
   compatibility: {
     date: "2026-06-01",
     flags: ["nodejs_compat"],
@@ -154,8 +154,8 @@ export const Worker = Cloudflare.Worker("Worker", {
     // Container decl is the DO namespace binding plus its container app.
     Sandbox: Cloudflare.Container<Sandbox>("Sandbox", {
       name: containerName,
-      context: ".",
-      dockerfile: "./Dockerfile",
+      context: "./backend",
+      dockerfile: "./backend/Dockerfile",
       instanceType: "standard-1",
       maxInstances: 5,
     }),
@@ -187,7 +187,7 @@ export const Worker = Cloudflare.Worker("Worker", {
 export type WorkerEnv = Cloudflare.InferEnv<typeof Worker>;
 
 export default Alchemy.Stack(
-  "ai-intern",
+  "shiba-ai-coworker",
   {
     providers: Cloudflare.providers(),
     state:

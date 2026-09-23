@@ -20,7 +20,7 @@
 
 1. `POST /api/runs` `{repoUrl: octocat/Hello-World, task, baseBranch: master}` → `200`, `approvalId` issued, pending approval persisted on the `default` orchestrator DO.
 2. `POST /api/slack/interact` with a locally HMAC-signed `block_actions` payload (`v0` signature, action `approve`, value `{threadKey:"default", approvalId}`) → `200` ack; allowlist admitted `U_E2E`; the DO resolved the pointer exactly once. **Note: interact resolves the orchestrator DO by `threadKey` — the DO name must match the queue target (`default`), not an arbitrary thread key.**
-3. Approval → `delegate_coding_task` → `OpenCodeAgent` child → real Docker container `workerd-ai-intern-Sandbox-*-proxy` up under OrbStack.
+3. Approval → `delegate_coding_task` → `OpenCodeAgent` child → real Docker container `workerd-shiba-ai-coworker-Sandbox-*-proxy` up under OrbStack.
 4. HTTPS egress interception ran: `approveRepoScope` installed `githubScoped` for `/octocat/Hello-World`; `git clone` succeeded into `/workspace/run-*`.
 5. `opencode run --format json --model google/gemini-3.5-flash-lite` executed; provider egress was rewritten to AI Gateway `…/default/google-ai-studio` and returned **401 (code 2009, Unauthorized)** — no `AI_GATEWAY_TOKEN` in `.dev.vars` and no BYOK key visible. The error propagated as a structured envelope; run marked `error`; sandbox destroyed.
 
@@ -62,7 +62,7 @@ Factory/Droid-parity surfaces, verified live on `wrangler dev` (:8788):
 Onboarding/deploy-simplicity work, all verified against local `wrangler dev` (:8788) and the test suite:
 
 - **`GET /api/setup/status`** (`src/setup-status.ts`): live booleans for every required binding/secret — Slack (signing secret, bot token, approver count, channel repos), GitHub (token, webhook secret), AI Gateway (token configured + a real reachability probe — observed `unauthorized` locally, matching the 401 seen in the e2e run), Access requirement, model names, automation/TypeSafe flags. No secret values are ever returned.
-- **`slack-app-manifest.yaml`**: import at api.slack.com/apps → "From a manifest" creates the app with the exact scopes, `app_mention` event, `/ai-intern` command, and interactivity URL the code expects. Hostname is the only edit.
+- **`slack-app-manifest.yaml`**: import at api.slack.com/apps → "From a manifest" creates the app with the exact scopes, `app_mention` event, `/shiba-ai-coworker` command, and interactivity URL the code expects. Hostname is the only edit.
 - **`pnpm setup`** (`scripts/setup.mjs`): one-command bootstrap — wrangler auth check → deploy → per-secret `wrangler secret put` prompts (skippable) → prints manifest + URLs. stdlib-only, no new deps.
 - **OnboardingModal live status**: fetches `/api/setup/status`, auto-checks detected steps ("detected live" badge), merges with the localStorage manual checklist; progress counter counts detected steps.
 - **Slack post-back** (`orchestrator.postToSlackThread`): thread-keyed DO names (`slack:{team}:{channel}:{ts}`) parse back to channel+thread; run start, completion (summary incl. PR link), error, and cancellation post into the originating thread via `chat.postMessage`. Best-effort `waitUntil` — never touches the run record. Non-Slack orchestrators and missing bot token no-op. Covered by two new orchestrator tests (posts to C9/1700.0001; skips `default`).

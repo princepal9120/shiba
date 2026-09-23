@@ -1,9 +1,9 @@
 ---
 name: testing-shiba-dashboard
-description: How to run and browser-test the shiba ai-intern dashboard locally — dev server, routes, expected backend-down artifacts, and which UI surfaces need live data.
+description: How to run and browser-test the shiba-ai-coworker dashboard locally — dev server, routes, expected backend-down artifacts, and which UI surfaces need live data.
 ---
 
-# Testing the shiba ai-intern dashboard locally
+# Testing the shiba-ai-coworker dashboard locally
 
 ## Run it
 
@@ -26,12 +26,13 @@ Only vite runs in most sessions — the Cloudflare worker (Durable Objects, sand
 - Approvals tab shows a `Approval queue: Unexpected token '<'…` error card + `No pending approvals.` — its fetch in app.tsx uses raw `response.json()` and propagates the parse error.
 - Inbox / Memory / Audit panels instead degrade to EMPTY STATE ONLY (no error card): their local `apiJson` helper does `response.json().catch(() => ({}))`, so a 200-HTML response becomes empty data. Expect `No mailboxes registered yet…`, `No facts banked yet.` / `No sessions recorded.`, and `No audited tool calls yet.` with no red card — that is graceful-by-design, not a missed error.
 - The Agents group in the sessions sidebar only renders when `/api/agents` returns ≥1 principal — with the backend down the whole section is silently absent (silent catch).
+- The Inbox tab stays mounted after its first visit (WorkspacePanel `inboxMounted` flag + `div.hidden` wrapper) — component state (search text, reply draft) survives tab switches by design; verify via a same-node DOM check, not just pixels.
 
 ## Surfaces testable without the backend
 
 All of these work client-side and were verified in a restyle pass:
 
-- Sidebar nav: 8 views across WORKSPACE (Tasks/Runs/Missions/Automations) + SANDBOX (VM/Agents/Gates/Architecture), navy `#0000a8` active pill, navy header breadcrumb (`AI Intern / <label>`).
+- Sidebar nav: 8 views across WORKSPACE (Tasks/Runs/Missions/Automations) + SANDBOX (VM/Agents/Gates/Architecture), navy `#0000a8` active pill, navy header breadcrumb (`AI Coworker / <label>`).
 - SYSTEM cluster: Setup Guide modal (6-step onboarding), Documentation link (`href="/docs/"`), Keyboard shortcuts modal (7 rows), theme toggle.
 - Theme: `next-themes` toggles `html.dark`; dark mode is `filter: invert(1) hue-rotate(180deg)` on the root with img/video/canvas re-inverted — the whole page flips, not per-component styling.
 - ⌘K button in header + Ctrl/Cmd-K: cmdk command menu; all 8 "Go to …" items + New task + toggles.
@@ -43,6 +44,8 @@ All of these work client-side and were verified in a restyle pass:
 
 - The sessions search ✕ clear button is a tiny target (~x=290,y=157 at 1024px); clicks at the input's far right edge land in the field, not on the button.
 - `Send` requires BOTH task text and repo URL, and even then shows "Task not sent" when the orchestrator is unreachable (expected).
-- Old dark-theme hexes were fully removed in the restyle commit — grep `src/dashboard/` for `#0a0c10|#0d1117|neutral-800|f06666` to confirm no leftovers before visual review.
+- Old dark-theme hexes were fully removed in the restyle commit — grep `frontend/src/` for `#0a0c10|#0d1117|neutral-800|f06666` to confirm no leftovers before visual review.
 - Console hygiene: two mount-time entries are expected, not bugs — (a) React dev `Encountered a script tag…` from `next-themes`' anti-flicker ThemeScript, (b) `Failed to parse initial messages JSON` from `@cloudflare/ai-chat-react` hitting `/api/messages` without the worker. Runtime console is otherwise silent: failed API fetches go into UI error state, not console noise.
 - New package deps on recent branches (`@modelcontextprotocol/sdk`, `postal-mime`) need `pnpm install` before `pnpm dev` or vite re-optimizes on first load anyway.
+- To exercise data-driven surfaces without the worker, inject a `window.fetch` wrapper via `browser_console` returning `new Response(JSON.stringify(payload))` for the paths you need and delegating everything else to the saved real fetch. `/api/approvals` + `/api/agents` poll every 10s (app.tsx), so post-load stubs are picked up within ~11s; InboxTab's mailbox fetch runs once at tab mount — inject before the first Inbox visit or hit Refresh for list data. Canned data must carry unique marker strings (e.g. `AAA-UNIQUE-BODY`) so wrong-body/stale-render bugs are unmistakable; delay one response (~1500ms) to force races. Store DOM nodes (`window.__x`) to prove keep-mount via `isConnected`/`closest('div.hidden')`/same-node `===` — pixels alone can't distinguish "state survived" from "fresh mount that happens to look identical".
+- Approvals tab renders TWO different cards: `ApprovalCard` (live chat `PendingApproval` — the only place the green `bg-[#15803d]` Approve button exists; needs a live chat approval, can't be stubbed) and `StoredApprovalCard` (from `/api/approvals` — navy-tint `ACCENT_BUTTON`, stub-able). A pixel check of the chat card's button needs a real run; don't confuse the two when verifying button-style fixes.

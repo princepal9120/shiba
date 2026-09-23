@@ -1,0 +1,18 @@
+overrides:
+  chat: "4.40.0"
+
+packages:
+  - backend
+  - frontend
+  - web
+
+onlyBuiltDependencies:
+  - "@mongodb-js/zstd"
+  - core-js-pure
+  - esbuild
+  - node-liblzma
+  - workerd
+
+patchedDependencies:
+  brace-expansion@5.0.12: patches/brace-expansion@5.0.12.patch
+  chat@4.40.0: patches/chat@4.40.0.patch

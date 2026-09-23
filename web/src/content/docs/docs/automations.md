@@ -1,15 +1,15 @@
 ---
 title: Automations
-description: Learn how AI Intern runs autonomous background sweeps, scheduled maintenance, and webhook triggers on Cloudflare Workers.
+description: Learn how AI Coworker runs autonomous background sweeps, scheduled maintenance, and webhook triggers on Cloudflare Workers.
 ---
 
-Automations allow AI Intern to perform ongoing, unattended engineering tasks (like routine dependency audits, framework migrations, test flake investigations, and scheduled code health sweeps) without waiting for a human prompt.
+Automations allow AI Coworker to perform ongoing, unattended engineering tasks (like routine dependency audits, framework migrations, test flake investigations, and scheduled code health sweeps) without waiting for a human prompt.
 
 ---
 
 ## Trigger kinds
 
-Automations support up to 20 triggers evaluated together (`OR` semantics). When any trigger condition is met, AI Intern initiates an approval-gated delegation run.
+Automations support up to 20 triggers evaluated together (`OR` semantics). When any trigger condition is met, AI Coworker initiates an approval-gated delegation run.
 
 | Kind | Trigger Source | Frequency / Floor |
 | :--- | :--- | :--- |
@@ -23,7 +23,7 @@ Automations support up to 20 triggers evaluated together (`OR` semantics). When 
 
 ## Status: fire path is shipped
 
-The trigger engine (`src/automations.ts`) is wired to a production runner (`src/automation-runner.ts`) and an `Automations` Durable Object. Cloudflare Triggers fire `*/5 * * * *`; the Worker `scheduled()` handler ticks due schedules. Verified GitHub webhooks and `POST /api/automations/{id}/trigger` fan out through the same gate: match → optional TypeSafe/`run_when` → T20 safety → queue an approval (or auto-approve only when unattended is granted). Create records with `POST /api/automations`.
+The trigger engine (`backend/src/automations.ts`) is wired to a production runner (`backend/src/automation-runner.ts`) and an `Automations` Durable Object. Cloudflare Triggers fire `*/5 * * * *`; the Worker `scheduled()` handler ticks due schedules. Verified GitHub webhooks and `POST /api/automations/{id}/trigger` fan out through the same gate: match → optional TypeSafe/`run_when` → T20 safety → queue an approval (or auto-approve only when unattended is granted). Create records with `POST /api/automations`.
 
 The per-automation webhook secret is returned once on create and never again, and must be sent as the `x-automation-secret` header. It is never accepted as a `?secret=` query parameter — query strings land in proxy and access logs, which is exactly where a credential must not appear.
 

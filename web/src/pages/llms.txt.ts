@@ -14,7 +14,7 @@ export async function GET() {
 
 - Website: ${SITE}/
 - Dashboard: ${SITE}/app/
-- Source (MIT): https://github.com/princepal9120/ai-intern
+- Source (MIT): https://github.com/princepal9120/shiba
 
 ## Docs
 

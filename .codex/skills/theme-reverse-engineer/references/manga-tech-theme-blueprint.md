@@ -1,5 +1,5 @@
 # Manga-Tech & Capybara-Shiba Theme Blueprint
-Reverse-engineered from `/Users/princepal/oss/ai-intern/web/public/assets/theme`.
+Reverse-engineered from `/Users/princepal/oss/shiba-ai-coworker/web/public/assets/theme`.
 
 This document records the exact visual DNA, design rules, color formulas, inking parameters, and asset taxonomy of the hybrid Manga / Neo-Brutalist Developer Tool aesthetic.
 

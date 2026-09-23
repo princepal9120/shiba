@@ -64,7 +64,7 @@ Architecture: single root package and lockfile — no docs-local package, no wor
 
 Build order (root `npm run build`): 1) `vite build` (empties `public/`), 2) `astro build --root docs` into `docs/dist` with `base: '/docs'`, 3) small copy step (`scripts/copy-docs.mjs`, ~15 lines, fs.cp) moving `docs/dist` -> `public/docs`. This ordering prevents Vite's `emptyOutDir` from wiping docs output. `docs:dev` on port 4321 (`astro dev --root docs --port 4321`); `docs:check` runs `astro check --root docs`.
 
-Wrangler 404 implication: `wrangler.jsonc` currently sets `not_found_handling: "single-page-application"`, so any missing `/docs/*` path would serve the SPA shell instead of 404. Plan: switch to `"404-page"` with a static 404 (hand-authored minimal `client/public/404.html` so Vite copies it into `public/`; Astro's generated `404.html` lands at `public/docs/404.html` via the copy step). `/api` and `/agents` are Worker-routed before assets and unaffected. The dashboard has no client-side routes, so a global static 404 is safe; if this config change is judged too invasive at review, that decision is made explicitly, not silently.
+Wrangler 404 implication: `backend/wrangler.jsonc` currently sets `not_found_handling: "single-page-application"`, so any missing `/docs/*` path would serve the SPA shell instead of 404. Plan: switch to `"404-page"` with a static 404 (hand-authored minimal `client/public/404.html` so Vite copies it into `public/`; Astro's generated `404.html` lands at `public/docs/404.html` via the copy step). `/api` and `/agents` are Worker-routed before assets and unaffected. The dashboard has no client-side routes, so a global static 404 is safe; if this config change is judged too invasive at review, that decision is made explicitly, not silently.
 
 File map (proposed):
 ```
@@ -81,9 +81,9 @@ New devDependencies: `astro`, `@astrojs/starlight`, plus `@astrojs/check` for `d
 Pages (`docs/src/content/docs/`): overview; getting-started (prerequisites); configuration (env vars + AI Gateway setup); local-development; dashboard (approvals, runs, states); deployment; github (optional PR/webhook); security (account ownership, Access requirement, single-tenant honesty); architecture (orchestrator/sub-agent/sandbox/provider path, runtime adapter seam); troubleshooting; costs; contributing.
 
 Content rules:
-- Written from source (`src/`, `wrangler.jsonc`, `.dev.vars.example`), not the stale README.
+- Written from source (`src/`, `backend/wrangler.jsonc`, `.dev.vars.example`), not the stale README.
 - Label "Current behavior (as implemented)" vs "Specification target (GOAL)" where they diverge; no invented behavior.
-- Gateway reconciliation: README describes AI Gateway with Unified Billing or stored BYOK plus `AI_GATEWAY_TOKEN`; GOAL says the real provider credential never enters a container, command, process environment, logs, or UI output. Docs describe only what `src/provider-gateway.ts` verifiably does, keep the container-sees-dummy-key claim, and flag any README/GOAL divergence as an open item rather than papering over it or making untrue credential/security claims.
+- Gateway reconciliation: README describes AI Gateway with Unified Billing or stored BYOK plus `AI_GATEWAY_TOKEN`; GOAL says the real provider credential never enters a container, command, process environment, logs, or UI output. Docs describe only what `backend/src/provider-gateway.ts` verifiably does, keep the container-sees-dummy-key claim, and flag any README/GOAL divergence as an open item rather than papering over it or making untrue credential/security claims.
 - Static docs never publish private run content, run registries, or secrets; documentation of protection says Cloudflare Access (or equivalent) is required — URL obscurity is not protection.
 
 ## Implementation sequence (each step is independently revertable; full green gate is a single checkpoint AFTER consolidation, since intermediate steps cannot all typecheck while the broken chain exists)
@@ -95,7 +95,7 @@ Content rules:
 5. Delete `client/src/` per the conditional above; then run the FULL gate (`typecheck`, `lint`, `test`, `build`, `wrangler deploy --dry-run`) and resolve to green. Dry-run validates bundling only; full container behavior cannot be verified locally without a container engine — stated honestly.
 6. Docs scaffolding: deps, root scripts (`docs:dev`, `docs:build`, `docs:check`, composite `build`), `docs/astro.config.mjs`, `content.config.ts`, copy script, `client/public/404.html`, wrangler `not_found_handling: "404-page"`.
 7. Docs content: the twelve pages, following the content rules.
-8. Tests: `test/ui-helpers.test.ts` in the existing Vitest node environment only if step 2 produced genuinely pure helpers (deterministic, development-only fixtures in-file). A browser-environment component test would need a new dependency — add only if a behavior cannot be tested otherwise, with justification.
+8. Tests: `backend/test/ui-helpers.test.ts` in the existing Vitest node environment only if step 2 produced genuinely pure helpers (deterministic, development-only fixtures in-file). A browser-environment component test would need a new dependency — add only if a behavior cannot be tested otherwise, with justification.
 
 ## Tests and verification
 

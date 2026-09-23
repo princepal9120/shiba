@@ -1,11 +1,11 @@
 ---
 title: Slack Integration
-description: Connect AI Intern to Slack for chatops, task delegation, and interactive approval gates.
+description: Connect AI Coworker to Slack for chatops, task delegation, and interactive approval gates.
 ---
 
 import { Steps } from '@astrojs/starlight/components';
 
-AI Intern connects directly to your team Slack workspace. Developers can trigger coding tasks, inspect plans, and grant approval directly in thread conversations.
+AI Coworker connects directly to your team Slack workspace. Developers can trigger coding tasks, inspect plans, and grant approval directly in thread conversations.
 
 ## Architecture
 
@@ -22,12 +22,12 @@ The Slack integration is powered by the Orchestrator Worker and Durable Objects:
 <Steps>
 
 1. **Create a Slack App**
-   Fastest: at [api.slack.com/apps](https://api.slack.com/apps) choose **Create New App → From a manifest** and paste `slack-app-manifest.yaml` from the repository root — it declares the scopes, `app_mention` event, `/ai-intern` command, and interactivity below. Edit the two `your-worker.workers.dev` URLs to your Worker hostname. Manual alternative:
+   Fastest: at [api.slack.com/apps](https://api.slack.com/apps) choose **Create New App → From a manifest** and paste `slack-app-manifest.yaml` from the repository root — it declares the scopes, `app_mention` event, `/shiba-ai-coworker` command, and interactivity below. Edit the two `your-worker.workers.dev` URLs to your Worker hostname. Manual alternative:
 
 2. **Configure Bot Token Scopes**
    Under **OAuth & Permissions**, add the following Bot Token Scopes:
    - `chat:write` (post messages and replies)
-   - `app_mentions:read` (listen for @AI Intern mentions)
+   - `app_mentions:read` (listen for @AI Coworker mentions)
    - `channels:history` (read thread context)
 
 3. **Enable Event Subscriptions**
@@ -46,8 +46,8 @@ The Slack integration is powered by the Orchestrator Worker and Durable Objects:
 5. **Store Secrets with Wrangler**
    Set the secrets in your Cloudflare environment:
    ```bash
-   pnpm wrangler secret put SLACK_BOT_TOKEN
-   pnpm wrangler secret put SLACK_SIGNING_SECRET
+   pnpm wrangler secret put SLACK_BOT_TOKEN --config backend/wrangler.jsonc
+   pnpm wrangler secret put SLACK_SIGNING_SECRET --config backend/wrangler.jsonc
    ```
    Mentions need `SLACK_BOT_TOKEN`. Map channels to repos with the `SLACK_CHANNEL_REPOS` var (`{"C123":"https://github.com/owner/repo"}`). `SLACK_APPROVERS` is a comma-separated list of Slack user ids; unset means nobody can approve.
 
@@ -57,14 +57,14 @@ The Slack integration is powered by the Orchestrator Worker and Durable Objects:
 
 In any public or private channel where the bot is invited:
 
-> **Developer**: `@AI Intern fix the typo in README.md and add pnpm instructions`
+> **Developer**: `@AI Coworker fix the typo in README.md and add pnpm instructions`
 >
-> **AI Intern**:
+> **AI Coworker**:
 > 📋 **Delegation Plan Prepared**
-> - Target: `princepal9120/ai-intern` (`main` branch)
+> - Target: `princepal9120/shiba` (`main` branch)
 > - Action: Update `README.md`
 > - Test Command: `pnpm test`
 >
 > [ **Approve Run** ]   [ **Reject** ]
 
-Once approved, AI Intern spins up an isolated sandbox container, runs the changes, and posts the resulting GitHub PR link directly in the thread.
+Once approved, AI Coworker spins up an isolated sandbox container, runs the changes, and posts the resulting GitHub PR link directly in the thread.

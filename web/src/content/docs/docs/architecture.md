@@ -33,7 +33,7 @@ description: Components, data flow, and unfinished integration boundaries.
     <div class="arch-card">
       <div class="arch-card-header">
         <span class="arch-card-name">Slack ChatOps</span>
-        <span class="arch-card-pill">@AI Intern</span>
+        <span class="arch-card-pill">@AI Coworker</span>
       </div>
       <p class="arch-card-desc">Interactive Block Kit approval cards and thread execution updates.</p>
     </div>
@@ -175,14 +175,14 @@ The parent uses Workers AI for planning. Real model-provider and GitHub credenti
 
 | Path | Responsibility |
 | --- | --- |
-| src/index.ts | Assets, SDK routes, run API, provider forwarding, webhook |
-| src/agents/orchestrator.ts | Planning, approval, delegation, retained registry |
-| src/agents/opencode-agent.ts | Sandbox SDK operations, progress and publishing |
+| backend/src/index.ts | Assets, SDK routes, run API, provider forwarding, webhook |
+| backend/src/agents/orchestrator.ts | Planning, approval, delegation, retained registry |
+| backend/src/agents/opencode-agent.ts | Sandbox SDK operations, progress and publishing |
 | src/runtime.ts | Clone, OpenCode execution, bounded file/diff collection |
 | src/provider-gateway.ts | Server-side provider forwarding |
-| src/github.ts | GitHub REST publication |
+| backend/src/github.ts | GitHub REST publication |
 | src/runs.ts and src/transcript.ts | State and transcript helpers |
-| client/main.tsx and client/app.tsx | Mounted dashboard |
+| frontend/src/main.tsx and frontend/src/app.tsx | Mounted dashboard |
 | docs/ and scripts/ | Static documentation and build checks |
 
 No D1, KV, Queues, R2, Postgres, Redis, or separate frontend service is required. State resides in Agents/Sandbox Durable Objects.

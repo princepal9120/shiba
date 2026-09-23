@@ -13,8 +13,9 @@ wrangler-devenv.json
 
 .astro/
 .vitest/
+.turbo/
 .build/
-ai-intern-docs/
+shiba-ai-coworker-docs/
 
 
 .playwright-mcp/

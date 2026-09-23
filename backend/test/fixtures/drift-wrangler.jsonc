@@ -1,0 +1,44 @@
+{
+  "name": "shiba-ai-coworker",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-06-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./public",
+    "not_found_handling": "404-page",
+  },
+  "preview_urls": false,
+  "vars": {
+    "GATEWAY_ID": "default",
+    "ORCHESTRATOR_MODEL": "@cf/meta/llama-3.1-8b-instruct",
+    "CODING_MODEL": "google/gemini-3.5-flash-lite",
+    "RUNTIME": "sandbox",
+    "INSTANCE_TYPE": "standard-1",
+  },
+  "ai": {
+    "binding": "AI",
+  },
+  "kv_namespaces": [{ "binding": "MY_KV", "id": "0000" }],
+  "triggers": {
+    "crons": ["*/5 * * * *"],
+  },
+  "durable_objects": {
+    "bindings": [
+      { "name": "CodingOrchestrator", "class_name": "CodingOrchestrator" },
+      { "name": "OpenCodeAgent", "class_name": "OpenCodeAgent" },
+      { "name": "Sandbox", "class_name": "Sandbox" },
+    ],
+  },
+  "containers": [
+    {
+      "class_name": "Sandbox",
+      "name": "shiba-ai-coworker-sandbox",
+      "image": "./Dockerfile",
+      "instance_type": "standard-1",
+      "max_instances": 5,
+    },
+  ],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["CodingOrchestrator", "OpenCodeAgent", "Sandbox"] },
+  ],
+}

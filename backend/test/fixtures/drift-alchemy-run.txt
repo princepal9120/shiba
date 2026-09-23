@@ -1,0 +1,50 @@
+// Drifted variant of alchemy.run.ts for the drift-guard tests: drops the
+// RUNTIME var, renames the worker, and adds a non-secret env entry that
+// wrangler.jsonc does not declare.
+import { Config } from "effect";
+import * as Cloudflare from "alchemy/Cloudflare";
+
+const secret = (name: string) =>
+  process.env[name] === undefined ? undefined : Config.redacted(name);
+
+export const Worker = Cloudflare.Worker("Worker", {
+  name: "renamed-worker",
+  main: "src/index.ts",
+  compatibility: {
+    date: "2026-06-01",
+    flags: ["nodejs_compat"],
+  },
+  assets: {
+    directory: "./public",
+    notFoundHandling: "404-page",
+  },
+  workersDev: { enabled: true, previewsEnabled: false },
+  crons: ["*/5 * * * *"],
+  env: {
+    GATEWAY_ID: "default",
+    ORCHESTRATOR_MODEL: "@cf/meta/llama-3.1-8b-instruct",
+    CODING_MODEL: "google/gemini-3.5-flash-lite",
+    INSTANCE_TYPE: "standard-1",
+    ROGUE: "not-in-wrangler",
+    AI: Cloudflare.Workers.AI(),
+    CodingOrchestrator: Cloudflare.DurableObject("CodingOrchestrator", {
+      className: "CodingOrchestrator",
+    }),
+    OpenCodeAgent: Cloudflare.DurableObject("OpenCodeAgent", {
+      className: "OpenCodeAgent",
+    }),
+    Automations: Cloudflare.DurableObject("Automations", {
+      className: "Automations",
+    }),
+    Sandbox: Cloudflare.Container("Sandbox", {
+      name: "shiba-ai-coworker-sandbox",
+      context: ".",
+      dockerfile: "./Dockerfile",
+      instanceType: "standard-1",
+      maxInstances: 5,
+    }),
+    GITHUB_TOKEN: secret("GITHUB_TOKEN"),
+  },
+});
+
+export type WorkerEnv = Cloudflare.InferEnv<typeof Worker>;

@@ -1,0 +1,64 @@
+import { describe, expect, it } from "vitest";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import {
+  ERROR_FAMILY_STATUSES,
+  STATUS_CHIP_CLASSES,
+  statusLabel,
+} from "../../frontend/src/ui-helpers";
+import { statusDotClass } from "../../frontend/src/components/SessionsSidebar";
+import { RunRegistryView } from "../../frontend/src/components/RunRegistryView";
+import type { RetainedRun } from "../../frontend/src/types";
+
+describe("dashboard unknown status", () => {
+  it("exposes an amber chip and 'Unknown' label", () => {
+    expect(statusLabel("unknown")).toBe("Unknown");
+    const chip = STATUS_CHIP_CLASSES["unknown"];
+    expect(chip).toBeDefined();
+    expect(chip).toContain("text-[#b45309]");
+    expect(chip).toContain("border-[#b45309]");
+    expect(chip).toContain("bg-[#b45309]");
+  });
+
+  it("groups unknown with the error family for filters and counters", () => {
+    expect(ERROR_FAMILY_STATUSES.has("unknown")).toBe(true);
+    for (const s of ["error", "aborted", "cancelled"]) expect(ERROR_FAMILY_STATUSES.has(s)).toBe(true);
+    for (const s of ["completed", "pending", "running"]) expect(ERROR_FAMILY_STATUSES.has(s)).toBe(false);
+  });
+
+  it("gives unknown its own sidebar dot, distinct from error red and completed green", () => {
+    const base = { id: "s1", title: "t", repoName: "o/r", status: "unknown", live: false, updatedAt: 0 };
+    const unknown = statusDotClass(base);
+    const error = statusDotClass({ ...base, status: "error" });
+    const completed = statusDotClass({ ...base, status: "completed" });
+    const pending = statusDotClass({ ...base, status: "pending" });
+    expect(unknown).toContain("#b45309");
+    expect(unknown).not.toBe(error);
+    expect(unknown).not.toBe(completed);
+    expect(unknown).not.toBe(pending);
+  });
+
+  it("renders an unknown run with amber styling and the Unknown label", () => {
+    const runs: RetainedRun[] = [{
+      runId: "run-unk",
+      sandboxId: "sb-unk",
+      repoUrl: "https://github.com/owner/repo",
+      task: "Ambiguous run",
+      baseBranch: "main",
+      publishPullRequest: false,
+      status: "unknown",
+      createdAt: Date.now() - 1000,
+      updatedAt: Date.now(),
+    }];
+    const markup = renderToStaticMarkup(React.createElement(RunRegistryView, {
+      runs,
+      onInspectVM: () => {},
+      onReuseParams: () => {},
+      onCancelRun: () => {},
+      onClearHistory: () => {},
+      onRefresh: () => {},
+    }));
+    expect(markup).toContain("Unknown");
+    expect(markup).toContain("#b45309");
+  });
+});

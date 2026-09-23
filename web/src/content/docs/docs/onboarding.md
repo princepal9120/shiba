@@ -1,9 +1,9 @@
 ---
 title: End-to-End Onboarding & Setup
-description: Complete step-by-step setup guide for deploying and running AI Intern according to PLAN.md.
+description: Complete step-by-step setup guide for deploying and running AI Coworker according to PLAN.md.
 ---
 
-This guide provides the **complete, end-to-end setup walkthrough** for deploying and operating AI Intern (Shiba) on your own Cloudflare account, adhering strictly to the architecture, security boundaries, and operational invariants specified in **`PLAN.md`**.
+This guide provides the **complete, end-to-end setup walkthrough** for deploying and operating AI Coworker (Shiba) on your own Cloudflare account, adhering strictly to the architecture, security boundaries, and operational invariants specified in **`PLAN.md`**.
 
 ---
 
@@ -27,9 +27,9 @@ Before provisioning resources or writing configuration, ensure you have:
 ## 2. Infrastructure Setup (PLAN.md §5, T1–T2)
 
 ### Durable Objects SQLite Storage
-AI Intern requires SQLite-backed storage for both the parent orchestrator (`CodingOrchestrator`) and the container sandbox (`Sandbox`).
+AI Coworker requires SQLite-backed storage for both the parent orchestrator (`CodingOrchestrator`) and the container sandbox (`Sandbox`).
 
-In `wrangler.jsonc`, verify the migration definition uses `new_sqlite_classes`:
+In `backend/wrangler.jsonc`, verify the migration definition uses `new_sqlite_classes`:
 
 ```jsonc
 "migrations": [
@@ -47,13 +47,13 @@ Cloudflare rejects modifications to historical migrations. If your Worker was pr
 ### Container Sizing and Concurrency
 Containers default to `lite` (256 MiB RAM), which causes out-of-memory (OOM) crashes when running a coding CLI and git clone.
 
-AI Intern configures `standard-1` (1 vCPU, 4 GiB RAM, 10 GB disk) with concurrency capped at 5:
+AI Coworker configures `standard-1` (1 vCPU, 4 GiB RAM, 10 GB disk) with concurrency capped at 5:
 
 ```jsonc
 "containers": [
   {
     "class_name": "Sandbox",
-    "name": "ai-intern-sandbox",
+    "name": "shiba-ai-coworker-sandbox",
     "image": "./Dockerfile",
     "instance_type": "standard-1",
     "max_instances": 5
@@ -69,7 +69,7 @@ Cloudflare's maximum container profile is **`standard-4`** (4 vCPU / 12 GiB RAM 
 
 ## 3. AI Gateway & BYOK Keys (PLAN.md §5 & §8)
 
-AI Intern follows a strict security invariant: **real provider API keys never enter the container and never enter the Worker code.**
+AI Coworker follows a strict security invariant: **real provider API keys never enter the container and never enter the Worker code.**
 
 Instead, provider calls are intercepted at the Sandbox egress proxy and authenticated via Cloudflare AI Gateway's **Bring Your Own Keys (BYOK)** credential store.
 
@@ -113,17 +113,17 @@ REQUIRE_ACCESS=true
 
 ## 5. GitHub Token & Scoped Permissions (PLAN.md §6, T6)
 
-AI Intern needs permission to clone target repositories, commit changes, and optionally open Pull Requests.
+AI Coworker needs permission to clone target repositories, commit changes, and optionally open Pull Requests.
 
 ### Create a Scoped GitHub Token:
 1. Go to **GitHub Settings** > **Developer Settings** > **Personal Access Tokens** > **Fine-grained tokens**.
-2. Scope the token to the specific repositories you want AI Intern to access.
+2. Scope the token to the specific repositories you want AI Coworker to access.
 3. Grant **Repository Permissions**:
    - **Contents**: `Read and write`
    - **Pull requests**: `Read and write`
 4. Store the secret in Cloudflare:
    ```sh
-   npx wrangler secret put GITHUB_TOKEN
+   npx wrangler secret put GITHUB_TOKEN --config backend/wrangler.jsonc
    ```
 
 ### Egress Isolation Invariant:
@@ -133,7 +133,7 @@ Even if a token has access to multiple repositories, the container egress proxy 
 
 ## 6. Slack Bot Integration (PLAN.md §9, Optional)
 
-AI Intern can be operated directly from incident and development channels via Slack mentions (`@ai-intern fix this`).
+AI Coworker can be operated directly from incident and development channels via Slack mentions (`@shiba-ai-coworker fix this`).
 
 ### 1. Slack App Configuration:
 1. Create an app at [api.slack.com/apps](https://api.slack.com/apps).
@@ -154,16 +154,16 @@ AI Intern can be operated directly from incident and development channels via Sl
 
 ### 3. Approver Allowlist Security:
 :::note[Approver Allowlist Required]
-A Block Kit button in a public Slack channel can be clicked by any channel member. AI Intern enforces `SLACK_APPROVERS`. If this variable is empty, nobody in Slack can approve tasks (fails closed).
+A Block Kit button in a public Slack channel can be clicked by any channel member. AI Coworker enforces `SLACK_APPROVERS`. If this variable is empty, nobody in Slack can approve tasks (fails closed).
 :::
 
 Configure your secrets:
 ```sh
-npx wrangler secret put SLACK_BOT_TOKEN
-npx wrangler secret put SLACK_SIGNING_SECRET
+npx wrangler secret put SLACK_BOT_TOKEN --config backend/wrangler.jsonc
+npx wrangler secret put SLACK_SIGNING_SECRET --config backend/wrangler.jsonc
 
 # Comma-separated Slack User IDs permitted to click Approve:
-npx wrangler secret put SLACK_APPROVERS
+npx wrangler secret put SLACK_APPROVERS --config backend/wrangler.jsonc
 # e.g., U01234567,U09876543
 ```
 
@@ -187,7 +187,7 @@ Once configured, verify the deployment end-to-end with the **first acceptance ru
 4. **Inspect the Approval Card**:
    - Think plans the task and displays a pending approval card with the exact command, arguments, and scoped repository.
 5. Click **Approve**:
-   - The `ai-intern-sandbox` container boots in Cloudflare.
+   - The `shiba-ai-coworker-sandbox` container boots in Cloudflare.
    - Progress events stream live to the terminal output.
    - The agent inspects code, writes changes, and executes tests.
    - Upon completion, review the **unified diff** in the DiffViewer, and view the opened Pull Request link on GitHub!

@@ -1,6 +1,6 @@
 # Generative Prompts Library: Manga-Tech & Mascot Theme
 
-Exact, field-tested prompts for recreating or expanding the aesthetic found in `/Users/princepal/oss/ai-intern/web/public/assets/theme`.
+Exact, field-tested prompts for recreating or expanding the aesthetic found in `/Users/princepal/oss/shiba-ai-coworker/web/public/assets/theme`.
 
 ---
 

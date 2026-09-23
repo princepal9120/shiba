@@ -1,4 +1,4 @@
-# Design — AI Intern
+# Design — AI Coworker
 
 Locked design system. Every page redesign reads this file first. Do not
 regenerate per page — amend this file when the system needs to grow.
