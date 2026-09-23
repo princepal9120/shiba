@@ -14,8 +14,8 @@ Controller: Devin session devin-7261650508fa4a628628eed12636bf13
 | T6 email tools | 3 | devin-bec26a183 (head afd94360) | r0 major → r1 minor → r2 approved | 2 fixes | DONE |
 | T7 approval bridge | 3 | devin-0076a0d9 (head 8be6914b) | r0-r5 minor/major loop | 5 rounds EXHAUSTED + controller fix (restart-release scope) | DONE w/ adjudication |
 | T8 MemoryDO | 4 | devin-df608401 (head c6cf1dd) | r0-r5 minor loop | 5 rounds EXHAUSTED + controller fix (bank-race 409) | DONE w/ adjudication |
-| T9 memory tools | 4 | — | — | 0 | pending |
-| T10 distillation | 4 | — | — | 0 | pending |
+| T9 memory tools | 4 | devin-f23e310a (head 1e1ee00) | r0 approved | 0 | DONE |
+| T10 distillation | 4 | devin-09109009 (head 1301c1c) | r0 minor → r1 approved | 2 | DONE |
 | T11 inbox+memory tabs | 5 | — | — | 0 | pending |
 | T12 sidebar+approvals | 5 | — | — | 0 | pending |
 | T13 audit view | 5 | — | — | 0 | pending |
