@@ -16,6 +16,10 @@
 # Optional TypeSafe System One key for run_when (falls back to Workers AI).
 # TYPESAFE_API_KEY=
 
+# Optional bearer token for POST /api/trigger (e.g. iPhone Apple Shortcuts).
+# Unset disables the route with a 503.
+# TRIGGER_TOKEN=
+
 # AI Gateway uses the AI binding and GATEWAY_ID, not a container provider key.
 # Optional: sent as cf-aig-authorization on gateway requests (src/egress.ts).
 # Required when the gateway is auth-gated or has no BYOK key stored.

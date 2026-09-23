@@ -1,0 +1,79 @@
+---
+title: HTTP Triggers (iPhone Shortcuts)
+description: Queue approval-gated coding tasks from an iPhone Apple Shortcut or any HTTP client via POST /api/trigger.
+---
+
+import { Steps } from '@astrojs/starlight/components';
+
+AI Coworker exposes `POST /api/trigger`, a bearer-authenticated endpoint that queues a coding task as a **pending approval**. Nothing executes when you call it — the run lands on the shared orchestrator and waits for a human to approve it on the dashboard, exactly like a Slack-queued task.
+
+## Endpoint Contract
+
+```
+POST https://<your-worker-domain>/api/trigger
+Authorization: Bearer <TRIGGER_TOKEN>
+Content-Type: application/json
+```
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `repoUrl` | string | yes | GitHub repository URL (`https://github.com/owner/repo`) — validated before queueing |
+| `task` | string | yes | Non-empty task description |
+| `baseBranch` | string | no | Defaults to `main` |
+| `publishPullRequest` | boolean | no | Defaults to `false`; requires `GITHUB_TOKEN` |
+
+**Response (200)**:
+
+```json
+{
+  "status": "pending_approval",
+  "approvalId": "apv-...",
+  "approveUrl": "https://<your-worker-domain>/app/",
+  "message": "queued — approve it on the dashboard"
+}
+```
+
+| Status | Meaning |
+| --- | --- |
+| `401` | Missing or wrong bearer token |
+| `400` | Invalid JSON, bad `repoUrl`, or empty `task` |
+| `502` | The orchestrator rejected the queue request |
+| `503` | `TRIGGER_TOKEN` is not configured on the Worker |
+
+## Configuration
+
+Generate a random token and store it as a Wrangler secret:
+
+```sh
+npx wrangler secret put TRIGGER_TOKEN --config apps/backend/wrangler.jsonc
+```
+
+`/api/trigger` sits in the `SIGNATURE_AUTHENTICATED` allowlist, so it bypasses the Cloudflare Access identity check — the bearer token is its only credential. Like every other ingress, it can only *queue* work; the approval gate is unchanged.
+
+:::caution[Access Bypass]
+If you front the Worker with Cloudflare Access, add `/api/trigger` to the same **Bypass** path policy as `/api/slack/` and `/api/github/webhook` — a Shortcut cannot complete an interactive Access login. The bearer token still protects the endpoint inside Worker code.
+:::
+
+## Apple Shortcut Recipe
+
+<Steps>
+
+1. **Add a Text action** for the task description (or use **Ask for Input → Text** so each run prompts you).
+
+2. **Add a *Get Contents of URL* action** and configure:
+   - **URL**: `https://<your-worker-domain>/api/trigger`
+   - **Method**: `POST`
+   - **Headers**: `Authorization` = `Bearer <TRIGGER_TOKEN>`
+   - **Request Body**: `JSON`
+     - `repoUrl` (Text): `https://github.com/owner/repo`
+     - `task` (Text): the Text action's output from step 1
+     - `baseBranch` (Text, optional): `main`
+     - `publishPullRequest` (Boolean, optional): `false`
+
+3. **Add a *Show Result* action** displaying the response's `message` (and `approvalId` if you want the reference).
+
+4. **Approve on the dashboard**: open `https://<your-worker-domain>/app/` — the queued run appears as a pending approval card. Tap **Approve** to start the sandboxed run.
+
+</Steps>
+
+The Shortcut only queues work. Approval, streaming progress, diffs, and PR links all stay on the dashboard surface.

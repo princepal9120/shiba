@@ -34,6 +34,7 @@ import { handleSlackInteract } from "./slack-approval.js";
 import { handleSlackEvents } from "./slack-events.js";
 import { handleSlackEvent } from "./slack-mention.js";
 import { ORCHESTRATOR_NAME, handleSlackCommand } from "./slack-routes.js";
+import { handleTrigger } from "./trigger.js";
 import { handleSandboxRoutes } from "./sandbox-routes.js";
 import { readSetupStatus } from "./setup-status.js";
 
@@ -54,6 +55,7 @@ export const SIGNATURE_AUTHENTICATED = [
   "/api/slack/command",
   "/api/slack/interact",
   "/api/github/webhook",
+  "/api/trigger",
 ];
 
 function isAutomationWebhookPath(pathname: string): boolean {
@@ -1083,6 +1085,10 @@ export default {
       const slackResponse = await handleSlackCommand(request, env);
       if (slackResponse) {
         return slackResponse;
+      }
+      const triggerResponse = await handleTrigger(request, env);
+      if (triggerResponse) {
+        return triggerResponse;
       }
       // Pointer.threadKey names the DO that queued the card (slash = default).
       const slackInteractResponse = await handleSlackInteract(request, env, {

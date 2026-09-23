@@ -61,6 +61,7 @@ export default defineConfig({
 					label: 'Connect',
 					items: [
 						{ label: 'Slack Integration', slug: 'docs/slack' },
+						{ label: 'HTTP Triggers (iPhone)', slug: 'docs/triggers' },
 						{ label: 'GitHub Pull Requests', slug: 'docs/github' },
 						{ label: 'Automations & Cron', slug: 'docs/automations' },
 					],

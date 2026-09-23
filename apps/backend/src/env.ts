@@ -130,6 +130,12 @@ export interface Env {
   /** Optional. Verifies incoming GitHub webhook signatures. */
   GITHUB_WEBHOOK_SECRET?: string;
   /**
+   * Optional. Bearer token for POST /api/trigger — external HTTP clients
+   * (e.g. an iPhone Apple Shortcut) queue approvals with it. Unset disables
+   * the route with a 503.
+   */
+  TRIGGER_TOKEN?: string;
+  /**
    * Optional. When set, require Cloudflare Access identity on every path
    * except SIGNATURE_AUTHENTICATED. Unset for `wrangler dev`.
    */

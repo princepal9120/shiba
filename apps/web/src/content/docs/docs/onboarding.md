@@ -210,6 +210,7 @@ Once configured, verify the deployment end-to-end with the **first acceptance ru
 | `SLACK_SIGNING_SECRET` | Secret | Unset | Slack App signing secret |
 | `SLACK_APPROVERS` | Var/Secret | Unset | Comma-separated Slack User IDs permitted to approve |
 | `SLACK_CHANNEL_REPOS` | Var | Unset | Default channel-to-repo mapping (e.g. `C123:owner/repo`) |
+| `TRIGGER_TOKEN` | Secret | Unset | Bearer token for `POST /api/trigger` HTTP triggers (e.g. iPhone Shortcuts) |
 | `TYPESAFE_API_KEY` | Secret | Unset | Optional TypeSafe key for `run_when` automation gate |
 | `AUTOMATION_DAILY_RUN_BUDGET` | Var | `20` | Maximum automated container runs per day |
 

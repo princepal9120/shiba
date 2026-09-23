@@ -29,6 +29,7 @@ Select a currently available model in your account. The checked-in default is no
 | --- | --- |
 | GITHUB_TOKEN | Worker-side PR publishing, not private clone access |
 | GITHUB_WEBHOOK_SECRET | HMAC verification for acknowledgment-only webhooks |
+| TRIGGER_TOKEN | Bearer token for POST /api/trigger (e.g. iPhone Apple Shortcuts); unset disables the route |
 
 ~~~sh
 cp apps/backend/.dev.vars.example apps/backend/.dev.vars
