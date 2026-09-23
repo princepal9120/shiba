@@ -29,12 +29,15 @@ import {
 import { makeReceipt } from "../receipts.js";
 import {
   createPendingApproval,
+  isJsonObject,
   pruneExpiredApprovals,
   resolvePendingApproval,
   type PendingApproval,
   type ResolveResult,
 } from "../pending-approvals.js";
 import { makeSandboxId, parseGitHubRepoUrl, redactSecrets } from "../security.js";
+import { executeEmailApproval } from "../email-approvals.js";
+import { ADDRESS_RE } from "../mailbox-store.js";
 import { classifyExecutorError, classifyRunError, runErrorWire, type RunErrorCode, type RunErrorWire } from "../run-errors.js";
 import { parseSlackThreadName } from "../slack-thread.js";
 import { evaluateResultQuality } from "../result-quality.js";
@@ -328,11 +331,19 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
   }
 
   /**
-   * Queue a Slack-initiated task as a pending approval: the exact delegation
-   * input is frozen at queue time and nothing executes until a human
-   * resolves the pointer via POST /api/approvals.
+   * Queue a task as a pending approval: the exact delegation input is
+   * frozen at queue time and nothing executes until a human resolves
+   * the pointer via POST /api/approvals. Email-kind approvals freeze a
+   * mailbox payload instead of a run input.
    */
-  private queueSlackRun(input: { repoUrl?: unknown; task?: unknown; baseBranch?: unknown; publishPullRequest?: unknown; threadKey?: unknown }): Response {
+  private queueSlackRun(input: { repoUrl?: unknown; task?: unknown; baseBranch?: unknown; publishPullRequest?: unknown; threadKey?: unknown; kind?: unknown; mailbox?: unknown; payload?: unknown }): Response {
+    const kind = typeof input.kind === "string" && input.kind.trim() ? input.kind.trim() : "run";
+    if (kind === "email_send" || kind === "email_delete") {
+      return this.queueEmailApprovalRecord(kind, input);
+    }
+    if (kind !== "run") {
+      return Response.json({ error: `Unknown approval kind "${kind}".` }, { status: 400 });
+    }
     const repoUrl = typeof input.repoUrl === "string" ? input.repoUrl : "";
     const task = typeof input.task === "string" ? input.task : "";
     try {
@@ -366,6 +377,49 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
   }
 
   /**
+   * Email-kind approval (megaplan T7): the frozen send/delete payload is
+   * stored verbatim plus its owning mailbox — the single source the
+   * executor routes and sends against. `repoUrl`/`task` stay populated
+   * as the human-readable summary dashboard cards and audit rows show.
+   */
+  private queueEmailApprovalRecord(kind: "email_send" | "email_delete", input: { mailbox?: unknown; payload?: unknown; threadKey?: unknown }): Response {
+    const mailbox = typeof input.mailbox === "string" ? input.mailbox.trim() : "";
+    if (!ADDRESS_RE.test(mailbox)) {
+      return Response.json({ error: "mailbox must be a valid email address." }, { status: 400 });
+    }
+    if (!isJsonObject(input.payload)) {
+      return Response.json({ error: "payload must be a JSON object." }, { status: 400 });
+    }
+    const fields = input.payload;
+    const required = kind === "email_send" ? ["to_addr", "subject", "body_text"] : ["email_id"];
+    for (const field of required) {
+      if (typeof fields[field] !== "string" || (fields[field] as string).trim() === "") {
+        return Response.json({ error: `payload.${field} must be a non-empty string.` }, { status: 400 });
+      }
+    }
+    const approvalId = crypto.randomUUID();
+    const threadKey = typeof input.threadKey === "string" && input.threadKey.trim() ? input.threadKey.trim() : "default";
+    const subject = typeof fields.subject === "string" ? fields.subject : "";
+    const task = kind === "email_send"
+      ? `Send email to ${String(fields.to_addr)}: ${subject}`
+      : `Delete email ${String(fields.email_id)}${subject ? ` "${subject}"` : ""}`;
+    try {
+      this.writeApprovals(createPendingApproval(this.approvals, {
+        threadKey,
+        approvalId,
+        repoUrl: mailbox,
+        task: task.slice(0, 4000),
+        kind,
+        payload: { ...fields, mailbox },
+        createdAt: Date.now(),
+      }));
+    } catch (error) {
+      return Response.json({ error: error instanceof Error ? error.message : "Could not queue approval." }, { status: 409 });
+    }
+    return Response.json({ ok: true, approvalId, kind, mailbox });
+  }
+
+  /**
    * Resolve an approval pointer exactly once. Approve executes the frozen
    * input through delegate_coding_task (the same gated path as the
    * dashboard); reject resolves without starting anything.
@@ -382,18 +436,23 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     const result = resolvePendingApproval(this.approvals, { threadKey, approvalId, approved, decidedBy }, Date.now());
     // Failed admission leaves the persisted approval pending and retryable.
     if (result.result === "approved") {
-      if (!canStartRun(this.store.list())) {
-        return Response.json({ error: "All coding runs are busy. Approve again when a slot frees." }, { status: 409 });
-      }
       const record = this.approvals.find((a) => a.approvalId === approvalId && a.threadKey === threadKey);
-      if (record && record.publishPullRequest && !this.env.GITHUB_TOKEN) {
-        return Response.json({ error: "publishPullRequest was requested but GITHUB_TOKEN is not configured." }, { status: 400 });
-      }
-      if (record) {
-        try {
-          parseGitHubRepoUrl(record.repoUrl);
-        } catch (error) {
-          return Response.json({ error: error instanceof Error ? error.message : "Invalid repository URL." }, { status: 400 });
+      // Email-kind approvals skip every run gate — no sandbox capacity,
+      // no repo URL, no publish flag. They execute a mailbox payload.
+      const isEmail = record !== undefined && (record.kind === "email_send" || record.kind === "email_delete");
+      if (!isEmail) {
+        if (!canStartRun(this.store.list())) {
+          return Response.json({ error: "All coding runs are busy. Approve again when a slot frees." }, { status: 409 });
+        }
+        if (record && record.publishPullRequest && !this.env.GITHUB_TOKEN) {
+          return Response.json({ error: "publishPullRequest was requested but GITHUB_TOKEN is not configured." }, { status: 400 });
+        }
+        if (record) {
+          try {
+            parseGitHubRepoUrl(record.repoUrl);
+          } catch (error) {
+            return Response.json({ error: error instanceof Error ? error.message : "Invalid repository URL." }, { status: 400 });
+          }
         }
       }
     }
@@ -401,7 +460,8 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     const record = result.result === "approved"
       ? approvals.find((approval) => approval.approvalId === approvalId)
       : undefined;
-    const run = record ? createRun({
+    const isEmailRecord = record !== undefined && (record.kind === "email_send" || record.kind === "email_delete");
+    const run = record && !isEmailRecord ? createRun({
       runId: `agent-tool:${approvalId}`,
       sandboxId: makeSandboxId(record.repoUrl, record.task, approvalId),
       repoUrl: record.repoUrl,
@@ -436,6 +496,29 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         }
       };
       void dispatch();
+    }
+    if (record && isEmailRecord) {
+      const emailRecord = record;
+      const dispatch = async () => {
+        try {
+          await executeEmailApproval(this.env, emailRecord);
+        } catch (error) {
+          // The pointer is already spent — a transient send/delete failure
+          // surfaces in logs, not as a misleading "not recorded" reply.
+          console.error(
+            `Email approval ${approvalId} execution failed`,
+            redactSecrets(String(error)),
+          );
+        }
+      };
+      const pending = dispatch();
+      // waitUntil keeps the DO alive through the send; without a ctx
+      // (tests) the promise still runs to its own settle point.
+      if (typeof this.ctx === "object" && this.ctx !== null && "waitUntil" in this.ctx) {
+        this.ctx.waitUntil(pending);
+      } else {
+        void pending;
+      }
     }
     return Response.json({ result: result.result satisfies ResolveResult });
   }

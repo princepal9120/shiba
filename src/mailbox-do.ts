@@ -401,6 +401,15 @@ export class Mailbox {
       const draft = this.store.markDraftQueued(id);
       return draft ? json({ draft }) : notFound("Draft not found.");
     }
+    if (seg.length === 3 && seg[2] === "sent") {
+      const id = pathParam(seg[1]);
+      if (request.method !== "POST") {
+        return json({ error: "Method not allowed." }, { status: 405 });
+      }
+      // Approval-executor seam: the only route that may set `sent`.
+      const draft = this.store.markDraftSent(id);
+      return draft ? json({ draft }) : notFound("Draft not found.");
+    }
     return notFound();
   }
 

@@ -6,6 +6,67 @@
 
 export const APPROVAL_TTL_MS = 30 * 60 * 1000;
 
+/** JSON-serializable value — the shape a frozen approval payload takes. */
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonArray
+  | JsonObject;
+
+/**
+ * Array arm of {@link JsonValue} as a named interface — see JsonObject
+ * for why the recursive arms are named interfaces rather than inline
+ * types or aliases (only interface references defer instantiation).
+ */
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type -- marker interface; see above
+export interface JsonArray extends Array<JsonValue> {}
+
+/**
+ * Object arm of {@link JsonValue} as a named reference: deep generic
+ * instantiation (agent stub types traversing `OrchestratorState`) defers
+ * named references instead of blowing the instantiation-depth budget.
+ */
+export interface JsonObject {
+  [key: string]: JsonValue;
+}
+
+/**
+ * What an approval gates. `"run"` covers sandboxed delegation runs;
+ * `"email_send"`/`"email_delete"` cover the frozen mailbox payloads the
+ * orchestrator executes on approve instead of dispatching a run. Records
+ * written before email approvals existed carry no `kind` — readers treat
+ * absent as `"run"`.
+ */
+export type ApprovalKind = "run" | "email_send" | "email_delete";
+
+/** Runtime check that `value` is JSON-serializable — the shape a JSON body parse produces. */
+export function isJsonValue(value: unknown): value is JsonValue {
+  if (value === null) return true;
+  switch (typeof value) {
+    case "string":
+    case "number":
+    case "boolean":
+      return true;
+    case "object":
+      if (Array.isArray(value)) return value.every(isJsonValue);
+      return Object.values(value).every(isJsonValue);
+    default:
+      return false;
+  }
+}
+
+/** `isJsonValue` narrowed to the object arm — a JSON map payload. */
+export function isJsonObject(value: unknown): value is Record<string, JsonValue> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.values(value).every(isJsonValue)
+  );
+}
+
 export interface PendingApproval {
   threadKey: string;
   approvalId: string;
@@ -14,6 +75,10 @@ export interface PendingApproval {
   /** Exact delegation input frozen at queue time; executed verbatim on approve. */
   baseBranch?: string;
   publishPullRequest?: boolean;
+  /** Approval kind; absent on records written before email kinds landed — treated as `"run"`. */
+  kind?: ApprovalKind;
+  /** Frozen email send/delete input for email-kind approvals. */
+  payload?: JsonValue;
   status: "pending" | "approved" | "rejected";
   createdAt: number;
   decidedBy?: string;
@@ -27,6 +92,8 @@ export interface CreateApprovalInput {
   task: string;
   baseBranch?: string;
   publishPullRequest?: boolean;
+  kind?: ApprovalKind;
+  payload?: JsonValue;
   createdAt: number;
 }
 
@@ -46,6 +113,8 @@ export function createPendingApproval(
       task: input.task,
       ...(input.baseBranch !== undefined ? { baseBranch: input.baseBranch } : {}),
       ...(input.publishPullRequest !== undefined ? { publishPullRequest: input.publishPullRequest } : {}),
+      ...(input.kind !== undefined ? { kind: input.kind } : {}),
+      ...(input.payload !== undefined ? { payload: input.payload } : {}),
       status: "pending",
       createdAt: input.createdAt,
     },

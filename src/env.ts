@@ -53,6 +53,14 @@ export interface Env {
    * database_id until `wrangler d1 create shiba-audit` runs.
    */
   AGENT_AUDIT: D1Database;
+  /**
+   * Optional. Outbound email sender the approval-gated `email_send`
+   * executor uses (megaplan T7, `send_email` binding in wrangler.jsonc).
+   * Requires Email Routing's Email Sending enabled on the account; the
+   * email approval bridge reports unready while it is unset so queued
+   * sends cannot strand behind an approval nothing can execute.
+   */
+  SEND_EMAIL?: SendEmail;
   ASSETS: Fetcher;
   /** AI Gateway id. Default "default". */
   GATEWAY_ID: string;

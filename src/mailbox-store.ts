@@ -960,6 +960,31 @@ export class MailboxStore {
     return row ? rowToDraft(row) : null;
   }
 
+  /**
+   * Send-path seam: `queued` → `sent`, the transition the approval
+   * executor performs after the outbound send succeeds. Only a live
+   * `"queued"` row may move — `queued` is evidence an approval froze
+   * this draft, and `"sent"` is evidence the frozen payload actually
+   * went out. Neither is caller-settable through {@link updateDraft}.
+   */
+  markDraftSent(id: string, nowMs?: number): DraftRecord | null {
+    const current = this.exec(`SELECT status FROM drafts WHERE id = ?`, id)[0];
+    if (!current) {
+      return null;
+    }
+    if (current.status !== "queued") {
+      throw new InputError(
+        `draft is '${String(current.status)}' — only queued drafts can be marked sent.`,
+      );
+    }
+    const row = this.exec(
+      `UPDATE drafts SET status = 'sent', updated_at = ? WHERE id = ? AND status = 'queued' RETURNING *`,
+      nowMs ?? Date.now(),
+      id,
+    )[0];
+    return row ? rowToDraft(row) : null;
+  }
+
   listDrafts(filter: { status?: DraftStatus; limit?: number } = {}): DraftRecord[] {
     const params: SqlScalar[] = [];
     let where = "";

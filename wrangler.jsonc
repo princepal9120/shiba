@@ -50,6 +50,13 @@
   "d1_databases": [
     { "binding": "AGENT_AUDIT", "database_name": "shiba-audit", "database_id": "__PENDING__" },
   ],
+  // Megaplan T7: outbound send for approval-gated email_send executions.
+  // destination_addresses unset — every recipient is a human-approved
+  // frozen payload field, not a binding-level restriction. Requires
+  // Email Routing's Email Sending enabled on the account.
+  "send_email": [
+    { "name": "SEND_EMAIL" },
+  ],
   "containers": [
     {
       "class_name": "Sandbox",
