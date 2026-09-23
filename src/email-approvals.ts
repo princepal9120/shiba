@@ -214,6 +214,13 @@ async function reconcileQueuedDraft(
   }
   const seam = progress.transmitted ? "sent" : progress.claimed ? "release" : "unqueue";
   try {
+    if (!progress.transmitted && !progress.claimed) {
+      // Claim refused: the row may sit `sending` behind a dead attempt
+      // (restart between claim and wire) that `unqueue` cannot reach.
+      // The sweep frees only provably-dead claims, so a live sibling's
+      // `sending` stays untouched; `unqueue` still covers `queued`.
+      await mailboxCall(stub, `/drafts/release-stale`, { method: "POST" });
+    }
     await mailboxCall(stub, `/drafts/${encodeURIComponent(draftId)}/${seam}`, {
       method: "POST",
     });

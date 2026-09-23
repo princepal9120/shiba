@@ -1048,6 +1048,23 @@ export class MailboxStore {
   }
 
   /**
+   * Recovery seam: `sending` → `draft` for claims older than
+   * `staleBeforeMs`. Only the send path sets `sending`, and a live send
+   * holds it for seconds — a `sending` row untouched that long belongs
+   * to a dead attempt (a DO restart between claim and wire) no live
+   * executor can release, since `releaseDraftClaim` is scoped to the
+   * executor's own claim. Returns the rows it freed.
+   */
+  releaseStaleSendingDrafts(staleBeforeMs: number, nowMs?: number): DraftRecord[] {
+    const rows = this.exec(
+      `UPDATE drafts SET status = 'draft', updated_at = ? WHERE status = 'sending' AND updated_at < ? RETURNING *`,
+      nowMs ?? Date.now(),
+      staleBeforeMs,
+    );
+    return rows.map((row) => rowToDraft(row));
+  }
+
+  /**
    * Compensating seam: `queued` → `draft`, the transition the approval
    * path performs when a queued send is rejected or the approval itself
    * never materialized (the mint failed after the queue CAS landed, or

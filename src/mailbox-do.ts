@@ -41,6 +41,10 @@ export const MAILBOX_DIRECTORY_NAME = "__directory__";
 
 const ROUTE_PREFIX = "/internal/mailbox";
 
+/** A `sending` row untouched this long is a dead claim — a live send
+ * completes or fails in seconds. */
+const STALE_SENDING_MS = 10 * 60 * 1000;
+
 /** Per-address stub — the unit every mailbox-scoped call goes through. */
 export function mailboxStub(env: Env, address: string): DurableObjectStub {
   // Normalize like the store's registry lookups so every spelling of an
@@ -418,6 +422,17 @@ export class Mailbox {
       };
       const draft = this.store.updateDraft(id, input);
       return draft ? json({ draft }) : notFound("Draft not found.");
+    }
+    if (seg.length === 2 && seg[1] === "release-stale") {
+      if (request.method !== "POST") {
+        return json({ error: "Method not allowed." }, { status: 405 });
+      }
+      // Recovery seam: a `sending` row older than the threshold is a
+      // dead claim — a live send holds `sending` for seconds, so the
+      // sweep only ever frees attempts that can never finish.
+      return json({
+        drafts: this.store.releaseStaleSendingDrafts(Date.now() - STALE_SENDING_MS),
+      });
     }
     if (seg.length === 3 && seg[2] === "claim") {
       const id = pathParam(seg[1]);

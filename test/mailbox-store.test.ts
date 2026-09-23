@@ -424,6 +424,33 @@ describe("drafts", () => {
     expect(() => store.unqueueDraft(draft.id)).toThrow(InputError);
   });
 
+  it("releaseStaleSendingDrafts frees dead claims only — a restart strands sending→draft", () => {
+    const store = makeStore();
+    const draft = store.createDraft({
+      to_addr: "sender@example.com",
+      subject: "x",
+      body_text: "y",
+    });
+    store.markDraftQueued(draft.id, 40);
+    store.claimDraftSend(draft.id, 50);
+    // A claim that died before the wire strands the row `sending`:
+    // re-claiming and unqueue both refuse it, so the next approval stalls.
+    expect(() => store.claimDraftSend(draft.id)).toThrow(InputError);
+    expect(() => store.unqueueDraft(draft.id)).toThrow(InputError);
+    // A `sending` row at-or-newer than the cutoff is a live claim — untouched.
+    expect(store.releaseStaleSendingDrafts(50, 70)).toEqual([]);
+    expect(store.getDraft(draft.id)?.status).toBe("sending");
+    // Past the cutoff the dead claim frees back to editable `draft` —
+    // re-queued under a fresh approval, never auto-sent.
+    const freed = store.releaseStaleSendingDrafts(60, 61);
+    expect(freed.map((d) => d.id)).toEqual([draft.id]);
+    expect(store.getDraft(draft.id)?.status).toBe("draft");
+    expect(store.updateDraft(draft.id, { body_text: "edited" })?.body_text).toBe("edited");
+    expect(store.markDraftQueued(draft.id, 80)?.status).toBe("queued");
+    // Non-sending rows are immune to the sweep.
+    expect(store.releaseStaleSendingDrafts(1e15, 100)).toEqual([]);
+  });
+
   it("markDraftSent moves queued→sent once, and refuses anything but a queued row", () => {
     const store = makeStore();
     const draft = store.createDraft({
