@@ -5,6 +5,7 @@
   "description": "Shiba AI Coworker backend: Cloudflare Worker + Durable Objects + Sandbox container orchestration.",
   "type": "module",
   "scripts": {
+    "dev": "wrangler dev --port 8788",
     "lint": "eslint src test",
     "test": "vitest run",
     "test:live": "vitest run test/typesafe-live.test.ts"

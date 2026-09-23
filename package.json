@@ -11,7 +11,7 @@
     "deploy:preview": "alchemy plan",
     "deploy:preview:wrangler": "node scripts/plan-deploy.mjs",
     "deploy:destroy": "alchemy destroy",
-    "dev": "turbo run dev --filter=@shiba-ai-coworker/frontend",
+    "dev": "turbo run dev",
     "docs:build": "turbo run build --filter=@shiba-ai-coworker/web",
     "docs:check": "pnpm -C apps/web check",
     "docs:dev": "pnpm -C apps/web dev",
