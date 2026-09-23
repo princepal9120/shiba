@@ -412,6 +412,38 @@ describe("drafts", () => {
     store.markDraftSent(draft.id);
     expect(() => store.unqueueDraft(draft.id)).toThrow(InputError);
   });
+
+  it("markDraftSent moves queued→sent once, and refuses anything but a queued row", () => {
+    const store = makeStore();
+    const draft = store.createDraft({
+      to_addr: "sender@example.com",
+      subject: "x",
+      body_text: "y",
+    });
+    // A live draft and a discarded row both refuse the sent seam — `sent`
+    // is evidence a frozen payload went out, so only `queued` may move.
+    expect(() => store.markDraftSent(draft.id)).toThrow(InputError);
+    store.updateDraft(draft.id, { status: "discarded" });
+    expect(() => store.markDraftSent(draft.id)).toThrow(InputError);
+
+    const queued = store.createDraft({
+      to_addr: "sender@example.com",
+      subject: "x",
+      body_text: "y",
+    });
+    store.markDraftQueued(queued.id, 40);
+    const sent = store.markDraftSent(queued.id, 50);
+    expect(sent?.status).toBe("sent");
+    expect(sent?.updated_at).toBe(50);
+    // `sent` is terminal: no re-mark, no edit, no unqueue, no re-queue.
+    expect(() => store.markDraftSent(queued.id)).toThrow(InputError);
+    expect(() => store.updateDraft(queued.id, { body_text: "late edit" })).toThrow(
+      InputError,
+    );
+    expect(() => store.unqueueDraft(queued.id)).toThrow(InputError);
+    expect(() => store.markDraftQueued(queued.id)).toThrow(InputError);
+    expect(store.markDraftSent("drf-nope")).toBeNull();
+  });
 });
 
 describe("mailboxes", () => {

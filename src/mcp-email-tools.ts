@@ -34,7 +34,7 @@ import { z } from "zod";
 import type { Scope } from "./agent-tokens.js";
 import { queueEmailApproval } from "./email-approvals.js";
 import type { Env } from "./env.js";
-import { mailboxDirectoryStub, mailboxStub } from "./mailbox-do.js";
+import { mailboxDirectoryStub, mailboxStub, registeredMailbox } from "./mailbox-do.js";
 import {
   ADDRESS_RE,
   DRAFT_UPDATE_STATUSES,
@@ -159,15 +159,12 @@ async function listMailboxes(env: Env): Promise<MailboxRecord[]> {
 }
 
 async function requireMailbox(env: Env, address: string): Promise<MailboxRecord> {
-  const body = await stubJson<{ mailbox: MailboxRecord | null }>(
-    env,
-    DIRECTORY,
-    `/mailboxes/${encodeURIComponent(address)}`,
-  );
-  if (!body?.mailbox) {
+  // Shared with the `/api/runs` approval intake — one probe, one invariant.
+  const mailbox = await registeredMailbox(env, address);
+  if (!mailbox) {
     throw new InputError(`Mailbox is not registered: ${address}`);
   }
-  return body.mailbox;
+  return mailbox;
 }
 
 /** Run `probe` against every registered stub in parallel; first non-null wins. */

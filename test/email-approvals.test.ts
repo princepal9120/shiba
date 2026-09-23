@@ -6,6 +6,7 @@ import {
   executeEmailApproval,
   queueEmailApproval,
 } from "../src/email-approvals.js";
+import { MAILBOX_DIRECTORY_NAME } from "../src/mailbox-do.js";
 import { InputError } from "../src/security.js";
 
 const mocks = vi.hoisted(() => ({ execute: vi.fn(), getAgentByName: vi.fn(), destroy: vi.fn() }));
@@ -31,7 +32,7 @@ interface MailboxCall {
  * executions run against a fake `env.Mailbox` stub + `env.SEND_EMAIL`
  * binding that record every call the frozen payload produces.
  */
-function agentWithMailbox(opts: { failingMailboxPaths?: RegExp } = {}) {
+function agentWithMailbox(opts: { failingMailboxPaths?: RegExp; messageIds?: Record<string, string[]> } = {}) {
   const mailboxCalls: MailboxCall[] = [];
   const send = vi.fn(async (_message: unknown) => ({ status: "ok" }));
   const mailboxStub = {
@@ -48,14 +49,39 @@ function agentWithMailbox(opts: { failingMailboxPaths?: RegExp } = {}) {
       if (opts.failingMailboxPaths?.test(url.pathname)) {
         return new Response("fail", { status: 500 });
       }
+      const emailMatch = url.pathname.match(/^\/internal\/mailbox\/emails\/([^/]+)$/);
+      if (request.method === "GET" && emailMatch) {
+        const messageIds = opts.messageIds?.[decodeURIComponent(emailMatch[1]!)] ?? [];
+        return new Response(JSON.stringify({ message_ids: messageIds }), { status: 200 });
+      }
       return new Response("{}", { status: 200 });
+    },
+  };
+  // The directory instance answers registry lookups: any *@shiba.dev
+  // address is registered here; anything else is not.
+  const directoryStub = {
+    fetch: async (request: Request) => {
+      const url = new URL(request.url);
+      const match = url.pathname.match(/^\/internal\/mailbox\/mailboxes\/(.+)$/);
+      const address = match ? decodeURIComponent(match[1]!).toLowerCase() : "";
+      const registered = address.endsWith("@shiba.dev");
+      return new Response(
+        JSON.stringify({
+          mailbox: registered ? { address, label: null, agent: null, created_at: 0 } : null,
+          registered,
+        }),
+        { status: 200 },
+      );
     },
   };
   const env = {
     Sandbox: {},
     GITHUB_TOKEN: "test-token",
     SEND_EMAIL: { send },
-    Mailbox: { idFromName: (address: string) => address, get: () => mailboxStub },
+    Mailbox: {
+      idFromName: (address: string) => address.trim().toLowerCase(),
+      get: (id: string) => (id === MAILBOX_DIRECTORY_NAME ? directoryStub : mailboxStub),
+    },
     CodingOrchestrator: {},
   };
   const instance = Object.assign(Object.create(CodingOrchestrator.prototype) as CodingOrchestrator, {
@@ -164,6 +190,49 @@ describe("queueEmailApproval", () => {
     expect((await post({ kind: "bogus", mailbox: "a@shiba.dev", payload: {} })).status).toBe(400);
     expect(instance.state.pendingApprovals ?? []).toHaveLength(0);
   });
+
+  it("rejects an unregistered mailbox at intake — the registry invariant the MCP path enforces", async () => {
+    const { instance } = agentWithMailbox();
+    const post = (body: unknown) =>
+      instance.onRequest(
+        new Request("https://internal/api/runs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }),
+      );
+    // Well-formed everywhere except registration — the surface must not
+    // queue an approval From an address the registry does not own.
+    expect(
+      (await post({ kind: "email_send", mailbox: "ghost@example.com", payload: { ...SEND_PAYLOAD } })).status,
+    ).toBe(400);
+    expect(
+      (await post({ kind: "email_delete", mailbox: "ghost@example.com", payload: { ...DELETE_PAYLOAD } })).status,
+    ).toBe(400);
+    expect(instance.state.pendingApprovals ?? []).toHaveLength(0);
+  });
+
+  it("rejects a malformed to_addr at intake instead of failing at the binding post-approval", async () => {
+    const { instance } = agentWithMailbox();
+    const post = (body: unknown) =>
+      instance.onRequest(
+        new Request("https://internal/api/runs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }),
+      );
+    expect(
+      (
+        await post({
+          kind: "email_send",
+          mailbox: "agent-a@shiba.dev",
+          payload: { ...SEND_PAYLOAD, to_addr: "not-an-address" },
+        })
+      ).status,
+    ).toBe(400);
+    expect(instance.state.pendingApprovals ?? []).toHaveLength(0);
+  });
 });
 
 describe("email approval execution", () => {
@@ -200,6 +269,93 @@ describe("email approval execution", () => {
     // No coding run was created — email approvals bypass every run gate.
     expect(instance.state.runs).toEqual([]);
     expect(mocks.execute).not.toHaveBeenCalled();
+    // The runless execution's outcome lands on the approval record —
+    // durable state in place of a run's terminal status.
+    const decided = (instance.state.pendingApprovals ?? []).find(
+      (a) => a.approvalId === approval_id,
+    );
+    expect(decided?.status).toBe("approved");
+    expect(decided?.execution?.status).toBe("executed");
+    expect(decided?.execution?.executedAt).toBeGreaterThan(0);
+  });
+
+  it("approved replies send In-Reply-To/References from the parent's stored Message-ID", async () => {
+    const { instance, env, send, mailboxCalls, settled } = agentWithMailbox({
+      messageIds: { "parent-1": ["<original-msg@example.com>"] },
+    });
+    const { approval_id } = await queueEmailApproval(env as never, {
+      kind: "email_send",
+      mailbox: "agent-a@shiba.dev",
+      payload: {
+        to_addr: "peer@example.com",
+        subject: "Re: Status update",
+        body_text: "Thanks — received.",
+        thread_id: "thread-1",
+        in_reply_to_email_id: "parent-1",
+      },
+    });
+    await approve(instance, approval_id, true);
+    await settled();
+    // The frozen internal id resolved to the wire Message-ID, so the
+    // approved reply threads in the recipient's mail client.
+    expect(send).toHaveBeenCalledOnce();
+    expect(send).toHaveBeenCalledWith({
+      from: "agent-a@shiba.dev",
+      to: "peer@example.com",
+      subject: "Re: Status update",
+      text: "Thanks — received.",
+      headers: {
+        "In-Reply-To": "<original-msg@example.com>",
+        References: "<original-msg@example.com>",
+      },
+    });
+    // The stored outbound copy records the same link — the mailbox was
+    // asked for the parent's RFC822 id before the send went out.
+    const outbound = mailboxCalls.find((call) => call.path === "/internal/mailbox/emails" && call.method === "POST");
+    expect(outbound?.body).toMatchObject({ in_reply_to: "<original-msg@example.com>" });
+    expect(mailboxCalls.some((call) => call.method === "GET" && call.path === "/internal/mailbox/emails/parent-1")).toBe(true);
+  });
+
+  it("a reply whose parent has no stored Message-ID sends unthreaded rather than vetoing the send", async () => {
+    const { instance, env, send, settled } = agentWithMailbox();
+    const { approval_id } = await queueEmailApproval(env as never, {
+      kind: "email_send",
+      mailbox: "agent-a@shiba.dev",
+      payload: {
+        to_addr: "peer@example.com",
+        subject: "Re: Status update",
+        body_text: "Thanks — received.",
+        in_reply_to_email_id: "parent-gone",
+      },
+    });
+    await approve(instance, approval_id, true);
+    await settled();
+    expect(send).toHaveBeenCalledWith({
+      from: "agent-a@shiba.dev",
+      to: "peer@example.com",
+      subject: "Re: Status update",
+      text: "Thanks — received.",
+    });
+  });
+
+  it("a failed execution writes a durable outcome onto the approval record", async () => {
+    const { instance, env, send, settled } = agentWithMailbox();
+    send.mockRejectedValue(new Error("smtp down"));
+    const { approval_id } = await queueEmailApproval(env as never, {
+      kind: "email_send",
+      mailbox: "agent-a@shiba.dev",
+      payload: { ...SEND_PAYLOAD },
+    });
+    expect((await approve(instance, approval_id, true)).status).toBe(200);
+    await settled();
+    // `approved` + no execution state would read as "went out fine" —
+    // the failure is durable on the record, not only a log line.
+    const decided = (instance.state.pendingApprovals ?? []).find(
+      (a) => a.approvalId === approval_id,
+    );
+    expect(decided?.status).toBe("approved");
+    expect(decided?.execution?.status).toBe("failed");
+    expect(decided?.execution?.error).toContain("smtp down");
   });
 
   it("resolve is replay-guarded: a second approve executes nothing", async () => {

@@ -232,11 +232,23 @@ async function sendApprovedEmail(
   if (!env.SEND_EMAIL) {
     throw new Error("SEND_EMAIL binding is not configured — enable Email Sending.");
   }
+  // `send_reply` freezes the parent's internal id as in_reply_to_email_id;
+  // the wire send must quote its RFC822 Message-ID in In-Reply-To/
+  // References or the approved reply will not thread in mail clients.
+  const threading = await replyThreading(stub, fields);
   // The frozen payload is authoritative: the send input is exactly what
   // the approver reviewed; no draft row is re-read at release time.
-  await env.SEND_EMAIL.send({ from: mailbox, to: toAddr, subject, text: bodyText });
+  await env.SEND_EMAIL.send({
+    from: mailbox,
+    to: toAddr,
+    subject,
+    text: bodyText,
+    ...(threading !== undefined ? { headers: threading.headers } : {}),
+  });
   progress.transmitted = true;
-  // The outbound copy lands next to the conversation it answers.
+  // The outbound copy lands next to the conversation it answers — the
+  // wire-level in_reply_to re-derives the parent thread when the frozen
+  // payload carried no thread_id.
   const threadId =
     typeof fields.thread_id === "string" && fields.thread_id.trim() !== ""
       ? fields.thread_id
@@ -251,6 +263,7 @@ async function sendApprovedEmail(
       body_text: bodyText,
       status: "sent",
       ...(threadId !== undefined ? { thread_id: threadId } : {}),
+      ...(threading !== undefined ? { in_reply_to: threading.inReplyTo } : {}),
     }),
   });
   // A queued draft proves its send happened only through this seam —
@@ -259,4 +272,66 @@ async function sendApprovedEmail(
   if (draftId !== "") {
     await mailboxCall(stub, `/drafts/${encodeURIComponent(draftId)}/sent`, { method: "POST" });
   }
+}
+
+interface ReplyThreading {
+  /** RFC822 headers to send on the wire (`In-Reply-To` + `References`). */
+  headers: Record<string, string>;
+  /** The bracketed parent Message-ID — also recorded on the stored copy. */
+  inReplyTo: string;
+}
+
+/**
+ * Wire threading metadata for a frozen reply. `send_reply` freezes the
+ * parent's internal email id as `in_reply_to_email_id`; mail clients
+ * thread on its RFC822 Message-ID, which lives in the mailbox's
+ * `email_ids` map (exposed as `message_ids` on `GET /emails/:id`).
+ * Returns undefined when the payload is not a reply or the parent's id
+ * is unknowable (a deleted row, an inbound message that carried no
+ * Message-ID header) — a reply still delivers unthreaded rather than
+ * vetoing the approved send.
+ */
+async function replyThreading(
+  stub: MailboxFetch,
+  fields: Record<string, unknown>,
+): Promise<ReplyThreading | undefined> {
+  const parentEmailId =
+    typeof fields.in_reply_to_email_id === "string"
+      ? fields.in_reply_to_email_id.trim()
+      : "";
+  if (parentEmailId === "") {
+    return undefined;
+  }
+  let parentIds: string[] = [];
+  try {
+    const response = await stub.fetch(
+      new Request(
+        `https://internal/internal/mailbox/emails/${encodeURIComponent(parentEmailId)}`,
+      ),
+    );
+    if (response.ok) {
+      const body = (await response.json()) as { message_ids?: unknown };
+      parentIds = Array.isArray(body.message_ids)
+        ? body.message_ids.filter(
+            (id): id is string => typeof id === "string" && id.trim() !== "",
+          )
+        : [];
+    }
+  } catch (error) {
+    console.warn(
+      `email reply threading lookup failed ${JSON.stringify({
+        email_id: parentEmailId,
+        error: error instanceof Error ? error.message : String(error),
+      })}`,
+    );
+  }
+  const raw = parentIds[0]?.trim();
+  if (raw === undefined || raw === "") {
+    return undefined;
+  }
+  const bracketed = raw.startsWith("<") ? raw : `<${raw}>`;
+  return {
+    headers: { "In-Reply-To": bracketed, References: bracketed },
+    inReplyTo: bracketed,
+  };
 }

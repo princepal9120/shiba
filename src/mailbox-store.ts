@@ -727,6 +727,19 @@ export class MailboxStore {
     return row ? rowToEmail(row) : null;
   }
 
+  /**
+   * RFC822 Message-IDs recorded for this email — `email_ids` maps the
+   * wire id to the row, so the reverse lookup is what a sender needs to
+   * quote `In-Reply-To`/`References` back at a stored message. Zero or
+   * one entry in practice (inbound mail may carry no Message-ID header).
+   */
+  messageIdsFor(emailId: string): string[] {
+    return this.exec(
+      `SELECT message_id FROM email_ids WHERE email_id = ? ORDER BY message_id`,
+      emailId,
+    ).map((row) => String(row.message_id));
+  }
+
   /** Attachment manifest for one email, in part order ([] when none). */
   getAttachments(emailId: string): StoredAttachment[] {
     return this.exec(

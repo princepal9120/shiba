@@ -257,7 +257,7 @@ async function queueDraftSend(env: Env, draftId: string): Promise<Response> {
   }
   if (!emailApprovalBridgeReady(env)) {
     return Response.json(
-      { error: "Email approvals are not wired yet — the approval bridge ships with T7, so this draft stays editable." },
+      { error: "Email sending is not configured — the SEND_EMAIL binding is unset, so this draft stays editable." },
       { status: 503 },
     );
   }

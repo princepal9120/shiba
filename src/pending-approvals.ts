@@ -83,6 +83,22 @@ export interface PendingApproval {
   createdAt: number;
   decidedBy?: string;
   decidedAt?: number;
+  /**
+   * Executor outcome for email-kind approvals, written after the
+   * post-decision dispatch settles. Absent while execution is in flight
+   * or never ran; run-kind records omit it — their durable outcome is
+   * the reserved run's terminal status, which an approved email
+   * approval (runless by design) has no analogue for without this.
+   */
+  execution?: ApprovalExecution;
+}
+
+/** What the email executor did with an approved payload. */
+export interface ApprovalExecution {
+  status: "executed" | "failed";
+  /** Redacted error text when `status` is `"failed"`. */
+  error?: string;
+  executedAt: number;
 }
 
 export interface CreateApprovalInput {
@@ -155,6 +171,23 @@ export function resolvePendingApproval(
       : a,
   );
   return { result: input.approved ? "approved" : "rejected", approvals: next };
+}
+
+/**
+ * Stamp the executor outcome onto a decided approval. Run-kind records
+ * never call this — their outcome is the run's terminal status. An
+ * approved email approval has no run, so its send/delete result lands
+ * here instead of vanishing into a `ctx.waitUntil` log line.
+ */
+export function recordApprovalExecution(
+  approvals: PendingApproval[],
+  input: { threadKey: string; approvalId: string; execution: ApprovalExecution },
+): PendingApproval[] {
+  return approvals.map((approval) =>
+    approval.approvalId === input.approvalId && approval.threadKey === input.threadKey
+      ? { ...approval, execution: input.execution }
+      : approval,
+  );
 }
 
 /** Drop pending approvals past their TTL; resolved records stay for audit. */

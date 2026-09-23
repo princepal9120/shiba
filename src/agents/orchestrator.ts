@@ -32,6 +32,7 @@ import {
   isApprovalExpired,
   isJsonObject,
   pruneExpiredApprovals,
+  recordApprovalExecution,
   resolvePendingApproval,
   type PendingApproval,
   type ResolveResult,
@@ -39,6 +40,7 @@ import {
 import { makeSandboxId, parseGitHubRepoUrl, redactSecrets } from "../security.js";
 import { executeEmailApproval, unqueueEmailApprovalDraft } from "../email-approvals.js";
 import { ADDRESS_RE } from "../mailbox-store.js";
+import { registeredMailbox } from "../mailbox-do.js";
 import { classifyExecutorError, classifyRunError, runErrorWire, type RunErrorCode, type RunErrorWire } from "../run-errors.js";
 import { parseSlackThreadName } from "../slack-thread.js";
 import { evaluateResultQuality } from "../result-quality.js";
@@ -337,7 +339,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
    * the pointer via POST /api/approvals. Email-kind approvals freeze a
    * mailbox payload instead of a run input.
    */
-  private queueSlackRun(input: { repoUrl?: unknown; task?: unknown; baseBranch?: unknown; publishPullRequest?: unknown; threadKey?: unknown; kind?: unknown; mailbox?: unknown; payload?: unknown }): Response {
+  private async queueSlackRun(input: { repoUrl?: unknown; task?: unknown; baseBranch?: unknown; publishPullRequest?: unknown; threadKey?: unknown; kind?: unknown; mailbox?: unknown; payload?: unknown }): Promise<Response> {
     const kind = typeof input.kind === "string" && input.kind.trim() ? input.kind.trim() : "run";
     if (kind === "email_send" || kind === "email_delete") {
       return this.queueEmailApprovalRecord(kind, input);
@@ -383,7 +385,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
    * executor routes and sends against. `repoUrl`/`task` stay populated
    * as the human-readable summary dashboard cards and audit rows show.
    */
-  private queueEmailApprovalRecord(kind: "email_send" | "email_delete", input: { mailbox?: unknown; payload?: unknown; threadKey?: unknown }): Response {
+  private async queueEmailApprovalRecord(kind: "email_send" | "email_delete", input: { mailbox?: unknown; payload?: unknown; threadKey?: unknown }): Promise<Response> {
     const mailbox = typeof input.mailbox === "string" ? input.mailbox.trim() : "";
     if (!ADDRESS_RE.test(mailbox)) {
       return Response.json({ error: "mailbox must be a valid email address." }, { status: 400 });
@@ -397,6 +399,16 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       if (typeof fields[field] !== "string" || (fields[field] as string).trim() === "") {
         return Response.json({ error: `payload.${field} must be a non-empty string.` }, { status: 400 });
       }
+    }
+    // Address-format check fails at intake, not post-approval at the binding.
+    if (kind === "email_send" && !ADDRESS_RE.test((fields.to_addr as string).trim())) {
+      return Response.json({ error: "payload.to_addr must be a valid email address." }, { status: 400 });
+    }
+    // The same registration invariant the MCP path enforces via
+    // requireMailbox: an approval's From must be a registered mailbox.
+    const registration = await registeredMailbox(this.env, mailbox);
+    if (registration === null) {
+      return Response.json({ error: `mailbox is not registered: ${mailbox}` }, { status: 400 });
     }
     const approvalId = crypto.randomUUID();
     const threadKey = typeof input.threadKey === "string" && input.threadKey.trim() ? input.threadKey.trim() : "default";
@@ -507,13 +519,24 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       const dispatch = async () => {
         try {
           await executeEmailApproval(this.env, emailRecord);
+          // The record is the only durable account of this runless
+          // execution — the outcome lands on it, not only in logs.
+          this.writeApprovals(recordApprovalExecution(this.approvals, {
+            threadKey: emailRecord.threadKey,
+            approvalId,
+            execution: { status: "executed", executedAt: Date.now() },
+          }));
         } catch (error) {
-          // The pointer is already spent — a transient send/delete failure
-          // surfaces in logs, not as a misleading "not recorded" reply.
-          console.error(
-            `Email approval ${approvalId} execution failed`,
-            redactSecrets(String(error)),
-          );
+          // The pointer is already spent — the failure is written back
+          // onto the persisted record so an approved-but-failed send/
+          // delete leaves durable state, not a misleading "recorded" reply.
+          const message = redactSecrets(String(error)).slice(0, 4000);
+          console.error(`Email approval ${approvalId} execution failed`, message);
+          this.writeApprovals(recordApprovalExecution(this.approvals, {
+            threadKey: emailRecord.threadKey,
+            approvalId,
+            execution: { status: "failed", error: message, executedAt: Date.now() },
+          }));
         }
       };
       const pending = dispatch();

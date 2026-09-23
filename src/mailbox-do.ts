@@ -54,6 +54,26 @@ export function mailboxDirectoryStub(env: Env): DurableObjectStub {
   return mailboxStub(env, MAILBOX_DIRECTORY_NAME);
 }
 
+/**
+ * Worker-side registry probe — the directory instance is the single
+ * source of truth for "is this address registered". Every gate that
+ * acts on a mailbox (MCP tools' `requireMailbox`, the `/api/runs`
+ * approval intake) enforces the same invariant through this one read;
+ * a directory failure throws so callers fail closed, never open.
+ */
+export async function registeredMailbox(env: Env, address: string): Promise<MailboxRecord | null> {
+  const response = await mailboxDirectoryStub(env).fetch(
+    new Request(
+      `https://internal${ROUTE_PREFIX}/mailboxes/${encodeURIComponent(address)}`,
+    ),
+  );
+  if (!response.ok) {
+    throw new Error(`Mailbox directory lookup failed (${response.status}).`);
+  }
+  const body = (await response.json()) as { mailbox?: MailboxRecord | null };
+  return body.mailbox ?? null;
+}
+
 function json(body: unknown, init?: ResponseInit): Response {
   return Response.json(body, init);
 }
@@ -298,9 +318,15 @@ export class Mailbox {
       if (request.method === "GET") {
         const email = this.store.getEmail(id);
         // The manifest rides along so consumers never list the R2 bucket
-        // (or HEAD its objects) to learn a part's name/type/size/location.
+        // (or HEAD its objects) to learn a part's name/type/size/location;
+        // `message_ids` exposes the RFC822 ids a wire reply must quote
+        // back to thread onto this email.
         return email
-          ? json({ email, attachments: this.store.getAttachments(id) })
+          ? json({
+              email,
+              attachments: this.store.getAttachments(id),
+              message_ids: this.store.messageIdsFor(id),
+            })
           : notFound("Email not found.");
       }
       if (request.method === "DELETE") {

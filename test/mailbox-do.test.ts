@@ -407,6 +407,31 @@ describe("draft routes", () => {
     expect((await send(stub, "POST", "/drafts/drf-nope/unqueue", {})).status).toBe(404);
     expect((await get(stub, `/drafts/${draft.id}/unqueue`)).status).toBe(405);
   });
+
+  it("POST /drafts/:id/sent transitions once and only from 'queued'", async () => {
+    const h = makeHarness();
+    const stub = h.stub("agent@shiba.dev");
+    const created = await send(stub, "POST", "/drafts", {
+      to_addr: "sender@example.com",
+      subject: "s",
+      body_text: "b",
+    });
+    const { draft } = await asJson(created);
+    // Only a queued row may become `sent` — a live draft refuses.
+    expect((await send(stub, "POST", `/drafts/${draft.id}/sent`, {})).status).toBe(400);
+    await send(stub, "POST", `/drafts/${draft.id}/queue`, {});
+    const sent = await asJson(await send(stub, "POST", `/drafts/${draft.id}/sent`, {}));
+    expect(sent.draft.status).toBe("sent");
+    // `sent` is terminal: no re-mark, no unqueue back, no re-queue, no edit.
+    expect((await send(stub, "POST", `/drafts/${draft.id}/sent`, {})).status).toBe(400);
+    expect((await send(stub, "POST", `/drafts/${draft.id}/unqueue`, {})).status).toBe(400);
+    expect((await send(stub, "POST", `/drafts/${draft.id}/queue`, {})).status).toBe(400);
+    expect(
+      (await send(stub, "PATCH", `/drafts/${draft.id}`, { subject: "sneak" })).status,
+    ).toBe(400);
+    expect((await send(stub, "POST", "/drafts/drf-nope/sent", {})).status).toBe(404);
+    expect((await get(stub, `/drafts/${draft.id}/sent`)).status).toBe(405);
+  });
 });
 
 describe("mailbox meta", () => {
