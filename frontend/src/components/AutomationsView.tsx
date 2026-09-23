@@ -349,7 +349,7 @@ export function AutomationsView(): JSX.Element {
             </div>
 
             <p className="text-xs text-[#6a6f63] leading-relaxed">
-              Mention <code className="text-[#222320]">@intern</code> or run <code className="text-[#222320]">/intern</code>. Approvals are posted as interactive Slack Block Kit cards.
+              Mention <code className="text-[#222320]">@shiba-ai-coworker</code> or run <code className="text-[#222320]">/shiba-ai-coworker</code>. Approvals are posted as interactive Slack Block Kit cards.
             </p>
 
             <div className="flex flex-col gap-1.5 text-xs font-mono">
