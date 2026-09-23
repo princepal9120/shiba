@@ -94,6 +94,16 @@ export interface Env {
   AGENT_HARNESS?: string;
   /** Optional. Harness for Slack-originated runs; defaults to AGENT_HARNESS, then "claude-code". */
   SLACK_AGENT_HARNESS?: string;
+  /** Optional. Harness for Telegram-originated runs; defaults to AGENT_HARNESS, then "claude-code". */
+  TELEGRAM_AGENT_HARNESS?: string;
+  /** Optional. Bot token for Telegram posts (sendMessage/editMessageText/answerCallbackQuery). */
+  TELEGRAM_BOT_TOKEN?: string;
+  /** Optional. Shared secret verified against X-Telegram-Bot-Api-Secret-Token; unset disables the webhook. */
+  TELEGRAM_WEBHOOK_SECRET?: string;
+  /** Optional. Comma-separated Telegram user ids allowed to approve; unset = nobody. */
+  TELEGRAM_APPROVERS?: string;
+  /** Optional. Bot username (no @) — group messages only queue when they mention it. */
+  TELEGRAM_BOT_USERNAME?: string;
   /** "sandbox" (default) or "computer" (preview-only refusal). */
   RUNTIME?: string;
   /**

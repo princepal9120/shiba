@@ -34,6 +34,7 @@ import { handleSlackInteract } from "./slack-approval.js";
 import { handleSlackEvents } from "./slack-events.js";
 import { handleSlackEvent } from "./slack-mention.js";
 import { ORCHESTRATOR_NAME, handleSlackCommand } from "./slack-routes.js";
+import { handleTelegramWebhook } from "./telegram-routes.js";
 import { handleSandboxRoutes } from "./sandbox-routes.js";
 import { readSetupStatus } from "./setup-status.js";
 
@@ -53,6 +54,7 @@ export const SIGNATURE_AUTHENTICATED = [
   "/api/slack/events",
   "/api/slack/command",
   "/api/slack/interact",
+  "/api/telegram/webhook",
   "/api/github/webhook",
 ];
 
@@ -1090,6 +1092,10 @@ export default {
       }, ctx ? { waitUntil: (promise) => ctx.waitUntil(promise) } : undefined);
       if (slackInteractResponse) {
         return slackInteractResponse;
+      }
+      const telegramResponse = await handleTelegramWebhook(request, env);
+      if (telegramResponse) {
+        return telegramResponse;
       }
       const automationsResponse = await handleAutomations(request, env);
       if (automationsResponse) {

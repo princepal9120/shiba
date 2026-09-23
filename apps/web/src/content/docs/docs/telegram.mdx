@@ -1,0 +1,59 @@
+---
+title: Telegram Integration
+description: Queue and approve coding runs from Telegram — free, self-hosted, no vendor.
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+AI Coworker can be operated from Telegram DMs and group chats — same approval-gated flow as Slack: a message queues a run, an inline-keyboard card gates it, an approver's tap launches it, and the outcome posts back into the same chat. It costs nothing beyond the Worker you already run: Telegram bots are free, and the webhook is the same Worker — no polling process, no relay, no SDK.
+
+## How It Works
+
+- **Inbound webhook**: Telegram delivers updates to `POST /api/telegram/webhook`, authenticated by a shared secret in the `X-Telegram-Bot-Api-Secret-Token` header (Telegram has no request signing — `setWebhook`'s `secret_token` is the whole auth story).
+- **Conversation-per-orchestrator**: the Durable Object is named `telegram:{chat_id}`, so each chat gets its own run registry and approval queue — the same pattern as `slack:{team}:{channel}:{ts}`.
+- **DMs and group mentions**: a DM is always a task request; in groups the bot only responds to `@yourbot ...` messages.
+- **Approval card**: the run posts a message with inline-keyboard **Approve / Reject** buttons. Only Telegram user ids in `TELEGRAM_APPROVERS` can decide — unset means nobody can.
+- **Post-back**: run start, completion (with PR link), failure, and cancellation post back into the chat via `sendMessage`.
+
+## Setup
+
+<Steps>
+
+1. **Create the bot** with [@BotFather](https://t.me/BotFather): `/newbot` → pick a name and username. Copy the token (`123456:ABC-...`).
+
+2. **Store secrets and vars** in your Cloudflare environment:
+   ```bash
+   pnpm wrangler secret put TELEGRAM_BOT_TOKEN --config apps/backend/wrangler.jsonc
+   pnpm wrangler secret put TELEGRAM_WEBHOOK_SECRET --config apps/backend/wrangler.jsonc
+   # comma-separated Telegram user ids allowed to click Approve:
+   pnpm wrangler secret put TELEGRAM_APPROVERS --config apps/backend/wrangler.jsonc
+   ```
+   `TELEGRAM_WEBHOOK_SECRET` is any random string you invent (`openssl rand -hex 32`); it must match the `secret_token` you register below. `TELEGRAM_BOT_USERNAME` (bot username without `@`, as a wrangler `var`) enables group mentions. Your numeric Telegram id is in [@userinfobot](https://t.me/userinfobot).
+
+3. **Register the webhook** (replace the host and secrets):
+   ```bash
+   curl "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook" \
+     -d "url=https://your-worker.workers.dev/api/telegram/webhook" \
+     -d "secret_token=<TELEGRAM_WEBHOOK_SECRET>" \
+     -d 'allowed_updates=["message","callback_query"]'
+   ```
+
+4. **Optional**: `TELEGRAM_AGENT_HARNESS` var picks the coding agent for Telegram runs (`claude-code` default, falling back to `AGENT_HARNESS`).
+
+</Steps>
+
+## Example Interaction
+
+In a DM with the bot — or a group `@yourbot` mention:
+
+> **You**: `fix the flaky login test https://github.com/owner/repo`
+>
+> **AI Coworker**: on it — queued a claude code run for owner/repo. tap approve and i'll start.
+>
+> [ **Approve** ]   [ **Reject** ]
+
+The tap only counts if your Telegram id is in `TELEGRAM_APPROVERS`; everyone else gets a refusal toast. Once approved, the run starts, and the coworker posts the outcome — changed files and the PR link — back into the same chat.
+
+<Aside type="caution">
+Approvals decide on `telegram:{chat_id}` orchestrators, reached through the button callback or the chat. The dashboard Approvals surface only lists the `default` and per-user orchestrators, so Telegram cards resolve in-chat, not on the dashboard.
+</Aside>

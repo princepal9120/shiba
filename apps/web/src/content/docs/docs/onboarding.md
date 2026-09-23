@@ -168,6 +168,10 @@ npx wrangler secret put SLACK_APPROVERS --config apps/backend/wrangler.jsonc
 # e.g., U01234567,U09876543
 ```
 
+### 4. Telegram (Optional)
+
+The same approval-gated flow runs on Telegram for free — no Slack workspace needed. Create a bot with @BotFather, store `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, and `TELEGRAM_APPROVERS`, then `setWebhook` to `/api/telegram/webhook`. Full steps: [Telegram Integration](/docs/telegram/).
+
 ---
 
 ## 7. First Acceptance Run (PLAN.md §7, T10)

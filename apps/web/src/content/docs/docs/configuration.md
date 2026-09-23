@@ -15,6 +15,8 @@ Non-secret defaults live in apps/backend/wrangler.jsonc. Local overrides and sec
 | RUNTIME | sandbox | Default adapter; computer refuses execution |
 | AGENT_HARNESS | opencode | Default harness; a run may override it from the dashboard |
 | SLACK_AGENT_HARNESS | AGENT_HARNESS, then claude-code | Harness for Slack-originated runs (mentions, DMs, /shiba-ai-coworker) |
+| TELEGRAM_AGENT_HARNESS | AGENT_HARNESS, then claude-code | Harness for Telegram-originated runs |
+| TELEGRAM_BOT_USERNAME | unset | Bot username (no @) — required for group-chat @mention dispatch |
 
 Provider traffic is intercepted at Sandbox egress. There is no public `/api/provider` callback. Keep provider keys in AI Gateway BYOK; they never enter the container.
 
@@ -30,6 +32,12 @@ Select a currently available model in your account. The checked-in default is no
 | --- | --- |
 | GITHUB_TOKEN | Worker-side PR publishing, not private clone access |
 | GITHUB_WEBHOOK_SECRET | HMAC verification for acknowledgment-only webhooks |
+| SLACK_SIGNING_SECRET | Enables Slack routes; HMAC-verifies every Slack request |
+| SLACK_APPROVERS | Comma-separated Slack user ids allowed to approve runs |
+| SLACK_BOT_TOKEN | Posts approval cards and run outcomes to Slack threads |
+| TELEGRAM_BOT_TOKEN | Posts approval cards and run outcomes to Telegram chats |
+| TELEGRAM_WEBHOOK_SECRET | Shared secret on X-Telegram-Bot-Api-Secret-Token; unset disables the webhook |
+| TELEGRAM_APPROVERS | Comma-separated Telegram user ids allowed to approve runs |
 
 ~~~sh
 cp apps/backend/.dev.vars.example apps/backend/.dev.vars

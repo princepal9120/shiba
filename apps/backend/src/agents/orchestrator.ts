@@ -60,6 +60,8 @@ import {
   slackRunStarted,
 } from "../slack-persona.js";
 import { postSlackMessage } from "../slack.js";
+import { postTelegramMessage } from "../telegram.js";
+import { parseTelegramThreadName } from "../telegram-thread.js";
 import { evaluateResultQuality } from "../result-quality.js";
 import { extractPullRequestUrl } from "../transcript.js";
 import { HARNESS_DEFAULT_MODELS, allowedHostsFor, resolveHarness } from "../harness/index.js";
@@ -394,7 +396,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         const updated = this.store.transition(runId, status, patch, generation);
         if (updated === null) return null;
         if (slackText) {
-          this.postToSlackThread(slackText);
+          this.postToThread(slackText);
         }
         // Megaplan T10: a retained run landing completed/error distills its
         // transcript into long-term memory — best-effort under waitUntil.
@@ -408,7 +410,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         return `Run ${runId} did not start — it is already ${this.store.get(runId)?.status ?? "missing"}.`;
       }
       const generation = running.generation;
-      this.postToSlackThread(
+      this.postToThread(
         slackRunStarted({ repoUrl: fullInput.repoUrl, baseBranch: fullInput.baseBranch, harness: fullInput.harness }),
       );
       return yield* Effect.acquireUseRelease(
@@ -932,26 +934,39 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     // Cancellation is deliberately unfenced: it is allowed to win races.
     const updated = this.store.transition(runId, "cancelled", { errorCode: "cancelled" });
     this.runControllers.get(runId)?.abort();
-    this.postToSlackThread(slackRunCancelled({ repoUrl: run.repoUrl }));
+    this.postToThread(slackRunCancelled({ repoUrl: run.repoUrl }));
     await this.destroySandbox(run.sandboxId);
     return updated;
   }
 
   /**
-   * Slack post-back: thread-keyed orchestrators (`slack:{team}:{channel}:{ts}`)
-   * relay run start + terminal outcome into the thread they came from.
+   * Channel post-back: conversation-keyed orchestrators relay run start +
+   * terminal outcome into the thread they came from — `slack:{team}:{ch}:{ts}`
+   * posts to the Slack thread, `telegram:{chat_id}` to the Telegram chat.
    * Best-effort — the ack already went out and failure must not touch the run.
    */
-  private postToSlackThread(text: string): void {
-    const ids = parseSlackThreadName(this.name);
-    const token = this.env.SLACK_BOT_TOKEN?.trim();
-    if (!ids || !token) return;
-    this.ctx.waitUntil(
-      postSlackMessage(token, { channel: ids.channelId, threadTs: ids.threadTs, text: text.slice(0, 3000) })
-        .catch((error: unknown) => {
-          console.error(`Slack post-back failed: ${redactSecrets(error instanceof Error ? error.message : String(error))}`);
-        }),
-    );
+  private postToThread(text: string): void {
+    const slackIds = parseSlackThreadName(this.name);
+    const slackToken = this.env.SLACK_BOT_TOKEN?.trim();
+    if (slackIds && slackToken) {
+      this.ctx.waitUntil(
+        postSlackMessage(slackToken, { channel: slackIds.channelId, threadTs: slackIds.threadTs, text: text.slice(0, 3000) })
+          .catch((error: unknown) => {
+            console.error(`Slack post-back failed: ${redactSecrets(error instanceof Error ? error.message : String(error))}`);
+          }),
+      );
+      return;
+    }
+    const telegramChatId = parseTelegramThreadName(this.name);
+    const telegramToken = this.env.TELEGRAM_BOT_TOKEN?.trim();
+    if (telegramChatId && telegramToken) {
+      this.ctx.waitUntil(
+        postTelegramMessage(telegramToken, { chatId: telegramChatId, text: text.slice(0, 4000) })
+          .catch((error: unknown) => {
+            console.error(`Telegram post-back failed: ${redactSecrets(error instanceof Error ? error.message : String(error))}`);
+          }),
+      );
+    }
   }
 
   /** Wire projection for API responses: errorCode -> {status, code, userMessage}. */

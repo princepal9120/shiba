@@ -105,6 +105,34 @@ describe("orchestrator run routes", () => {
     }
   });
 
+  it("posts run cancellation back to the originating Telegram chat", async () => {
+    const instance = agent();
+    Object.assign(instance, {
+      name: "telegram:1234",
+      ctx: { waitUntil: vi.fn((p: Promise<unknown>) => p) },
+    });
+    Object.assign(instance.env, { TELEGRAM_BOT_TOKEN: "tg-test" });
+    instance.setState({ runs: [{ ...retained(), updatedAt: Date.now() }] });
+    const fetchMock = vi.fn(async (_url: unknown, _init?: { body?: unknown }) =>
+      new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const response = await instance.onRequest(
+        new Request("https://internal/api/runs/r1", { method: "DELETE" }),
+      );
+      expect(response.status).toBe(200);
+      const postCalls = fetchMock.mock.calls.filter((call) =>
+        String(call[0]).includes("api.telegram.org"));
+      expect(postCalls).toHaveLength(1);
+      expect(String(postCalls[0]![0])).toContain("/bottg-test/sendMessage");
+      const body = JSON.parse(String(postCalls[0]![1]?.body)) as Record<string, unknown>;
+      expect(body.chat_id).toBe(1234);
+      expect(String(body.text)).toContain("cancelled");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("skips post-back for non-Slack orchestrators", async () => {
     const instance = agent();
     Object.assign(instance, {
