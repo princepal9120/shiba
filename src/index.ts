@@ -646,7 +646,10 @@ async function handleMemory(request: Request, env: Env): Promise<Response | null
   const stub = memoryRegistryStub(env);
   if (factId !== undefined) {
     if (request.method !== "DELETE") return methodNotAllowed();
-    return stub.fetch(`${MEMORY_DO_BASE}/facts/${encodeURIComponent(factId)}`, {
+    // `pathname` is still percent-encoded — forward the segment verbatim:
+    // the DO decodes once, so re-encoding here double-encodes caller ids
+    // that legitimately contain escapable characters (`bank` allows them).
+    return stub.fetch(`${MEMORY_DO_BASE}/facts/${factId}`, {
       method: "DELETE",
     });
   }

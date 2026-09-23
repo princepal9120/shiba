@@ -24,6 +24,7 @@
  */
 import type { Env } from "./env.js";
 import {
+  MAX_LIST_LIMIT,
   MemoryStore,
   randomHex,
   type FactRecord,
@@ -384,13 +385,21 @@ export class Memory {
         const fact = this.store.getFact(factId);
         if (fact !== null) {
           hits.push({ ...factJson(fact, this.agent), score: match.score });
+        } else {
+          // Orphaned vector — collect it (and the registry row pointing
+          // here) exactly like `forget`, or it burns a topK slot on every
+          // subsequent scoped recall.
+          await this.deleteVector(factId);
+          await this.dropRegistryEntry(factId);
         }
         continue;
       }
       const agent = this.store.factOwner(factId);
       if (agent === null) {
         // Orphaned vector — the fact was forgotten without the index row
-        // (or vice versa). Skip rather than fail the whole recall.
+        // (or vice versa). Collect it rather than just skipping: an
+        // orphan keeps matching every recall and burns a topK slot.
+        await this.deleteVector(factId);
         continue;
       }
       // One sequential stub fetch per hit — bounded by MAX_RECALL_TOP_K
@@ -411,6 +420,10 @@ export class Memory {
         continue;
       }
       if (fact === null) {
+        // Registry pointed at a vanished row — same self-heal as the
+        // GET path: drop the stale index entry and the orphaned vector.
+        this.store.unregisterFact(factId);
+        await this.deleteVector(factId);
         continue;
       }
       hits.push({ ...factJson(fact, agent), score: match.score });
@@ -485,7 +498,10 @@ export class Memory {
   /**
    * `GET /facts` on the registry fans out: `?agent=` proxies that stub's
    * list; no agent merges every registered agent's facts. On a per-agent
-   * stub the route answers the local listing directly.
+   * stub the route answers the local listing directly. The merge applies
+   * `limit` as one global cap (default: the store's list ceiling) —
+   * per-stub fetches ask for that same bound, or an agent holding more
+   * than the store's single-stub default silently under-reports.
    */
   private async listFactsFor(url: URL): Promise<Response> {
     const limit = limitParam(url.searchParams.get("limit"));
@@ -505,10 +521,15 @@ export class Memory {
     // Only registered agents can own facts, so an unknown scope is an
     // empty result, not a stub probe.
     const agents = scoped ? (registered.includes(scoped) ? [scoped] : []) : registered;
+    // One bound for the fan-out and the merge: without a caller limit the
+    // cap is the store's own list ceiling (a single stub clamps there
+    // anyway); with one, per-stub top-`limit` still covers the global
+    // top-`limit` — no agent can occupy more than `limit` merged slots.
+    const cap = limit ?? MAX_LIST_LIMIT;
     const facts: Record<string, unknown>[] = [];
     for (const agent of agents) {
       const res = await memoryStub(this.env, agent).fetch(
-        new Request(`https://internal${ROUTE_PREFIX}/facts${limit !== undefined ? `?limit=${limit}` : ""}`),
+        new Request(`https://internal${ROUTE_PREFIX}/facts?limit=${cap}`),
       );
       if (!res.ok) {
         throw new Error(`Memory fact listing for ${agent} failed (${res.status}).`);
@@ -517,7 +538,7 @@ export class Memory {
       facts.push(...(body.facts ?? []));
     }
     facts.sort((a, b) => Number(b.created_at) - Number(a.created_at));
-    return json({ facts: facts.slice(0, limit ?? facts.length) });
+    return json({ facts: facts.slice(0, cap) });
   }
 
   /**

@@ -651,6 +651,19 @@ describe("dashboard memory routes", () => {
     ).toBe(true);
   });
 
+  it("DELETE /api/memory/facts/:id forwards the encoded segment without double-encoding", async () => {
+    const { env, memoryStub } = memoryEnv();
+    await worker.fetch(
+      new Request("https://worker/api/memory/facts/my%20fact", { method: "DELETE" }),
+      env,
+      ctx,
+    );
+    const call = memoryStub.calls.find((c) => c.method === "DELETE");
+    // The DO decodes once — re-encoding at the worker produced
+    // `my%2520fact`, which the DO looked up literally and 404'd.
+    expect(call?.url).toBe("https://internal/internal/memory/facts/my%20fact");
+  });
+
   it("answers 503 while the Memory binding is unprovisioned", async () => {
     const { env } = makeEnvWithTwoMailboxes();
     const response = await worker.fetch(new Request("https://worker/api/memory/facts"), env, ctx);

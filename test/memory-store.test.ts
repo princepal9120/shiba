@@ -576,6 +576,61 @@ describe("Memory DO routes", () => {
     expect(agents.agents).toEqual([]);
   });
 
+  it("recall self-heals an orphaned vector whose registry row is gone", async () => {
+    const h = makeHarness();
+    const { body } = await bank(h.stub("intern"), "doomed");
+    const id = body.fact?.id ?? "";
+    // Registry row vaporized, vector survives — the state a crash between
+    // forget's steps leaves. The orphan must not keep burning topK slots.
+    h.dbs.get("global")?.prepare("DELETE FROM fact_registry WHERE fact_id = ?").run(id);
+    const res = await get(h.registry, "/facts/search?q=a%20query");
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { facts: unknown[] }).facts).toEqual([]);
+    expect(h.vectors.has(id)).toBe(false);
+  });
+
+  it("recall self-heals the registry row and vector behind a vanished fact", async () => {
+    const h = makeHarness();
+    const { body } = await bank(h.stub("intern"), "doomed");
+    const id = body.fact?.id ?? "";
+    h.dbs.get("intern")?.prepare("DELETE FROM facts WHERE id = ?").run(id);
+    const res = await get(h.registry, "/facts/search?q=a%20query");
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { facts: unknown[] }).facts).toEqual([]);
+    expect(h.vectors.has(id)).toBe(false);
+    const agents = (await (await get(h.registry, "/registry")).json()) as { agents: string[] };
+    expect(agents.agents).toEqual([]);
+  });
+
+  it("scoped recall on an agent stub self-heals its orphaned vector", async () => {
+    const h = makeHarness();
+    const { body } = await bank(h.stub("intern"), "doomed");
+    const id = body.fact?.id ?? "";
+    h.dbs.get("intern")?.prepare("DELETE FROM facts WHERE id = ?").run(id);
+    const res = await get(h.stub("intern"), "/facts/search?q=a%20query");
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { facts: unknown[] }).facts).toEqual([]);
+    expect(h.vectors.has(id)).toBe(false);
+    const agents = (await (await get(h.registry, "/registry")).json()) as { agents: string[] };
+    expect(agents.agents).toEqual([]);
+  });
+
+  it("merged listing on the registry returns more than one stub's default page", async () => {
+    const h = makeHarness();
+    // 55 > the store's 50-row single-stub default — the fan-out must ask
+    // for the real ceiling or a large agent silently under-reports.
+    for (let i = 0; i < 55; i++) {
+      await bank(h.stub("intern"), `fact ${i}`);
+    }
+    const body = (await (await get(h.registry, "/facts")).json()) as { facts: unknown[] };
+    expect(body.facts).toHaveLength(55);
+    // An explicit limit still applies globally across the merge.
+    const capped = (await (await get(h.registry, "/facts?limit=10")).json()) as {
+      facts: unknown[];
+    };
+    expect(capped.facts).toHaveLength(10);
+  });
+
   it("skips a failing agent stub in cross-agent recall instead of failing the call", async () => {
     const h = makeHarness();
     await bank(h.stub("intern"), "alpha survives");

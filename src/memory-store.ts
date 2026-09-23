@@ -129,7 +129,7 @@ export interface AddSessionInput {
 // ---------------------------------------------------------------------------
 
 const DEFAULT_LIST_LIMIT = 50;
-const MAX_LIST_LIMIT = 500;
+export const MAX_LIST_LIMIT = 500;
 
 export function randomHex(bytes: number): string {
   const raw = crypto.getRandomValues(new Uint8Array(bytes));
@@ -264,7 +264,12 @@ export class MemoryStore {
     return row ? rowToFact(row) : null;
   }
 
-  /** Live facts, newest first — expired rows are purged before listing. */
+  /**
+   * Live facts, newest first — expired rows are purged before listing.
+   * Agent scoping is the DO instance (per-agent partition), not a filter
+   * param here — the spec's `listFacts(agent?, …)` maps to `?agent=` on
+   * the registry routes, which merge per-agent stub listings.
+   */
   listFacts(filter: { limit?: number; nowMs?: number } = {}): FactRecord[] {
     this.purgeExpiredFacts(filter.nowMs);
     return this.exec(
