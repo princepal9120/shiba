@@ -44,6 +44,7 @@ import { ADDRESS_RE, type MailboxRecord } from "../mailbox-store.js";
 import { mailboxDirectoryStub, mailboxStub, registeredMailbox } from "../mailbox-do.js";
 import { approvalCardText, buildApprovalBlocks, type ApprovalCardInput } from "../slack-approval.js";
 import { classifyExecutorError, classifyRunError, runErrorWire, type RunErrorCode, type RunErrorWire } from "../run-errors.js";
+import { DEFAULT_ORCHESTRATOR_MODEL, distillSession } from "../session-distill.js";
 import { parseSlackThreadName } from "../slack-thread.js";
 import { evaluateResultQuality } from "../result-quality.js";
 import { HARNESS_DEFAULT_MODELS, allowedHostsFor, resolveHarness } from "../harness/index.js";
@@ -89,8 +90,6 @@ const delegateInputSchema = z.object({
 });
 
 type DelegateInput = z.infer<typeof delegateInputSchema>;
-
-const DEFAULT_ORCHESTRATOR_MODEL = "@cf/meta/llama-3.1-8b-instruct";
 
 /**
  * Floor between full-mailbox stale-draft sweeps. The sweep is a
@@ -355,6 +354,11 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         this.postToSlackThread(
           `${status === "unknown" ? "Run outcome unknown" : "Run failed"} for ${fullInput.repoUrl}\n${wire.userMessage}\n${patch?.error?.slice(0, 1000) ?? ""}`.trim(),
         );
+      }
+      // Megaplan T10: a retained run landing completed/error distills its
+      // transcript into long-term memory — best-effort under waitUntil.
+      if (status === "completed" || status === "error") {
+        this.dispatchSessionDistill(updated);
       }
       return updated;
     };
@@ -753,6 +757,29 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     const pending = dispatch();
     // waitUntil keeps the DO alive through the send; without a ctx
     // (tests) the promise still runs to its own settle point.
+    if (typeof this.ctx === "object" && this.ctx !== null && "waitUntil" in this.ctx) {
+      this.ctx.waitUntil(pending);
+    } else {
+      void pending;
+    }
+  }
+
+  /**
+   * Megaplan T10: distill a retained terminal run's transcript into
+   * long-term memory (Memory DO facts + a session row). Fired from the
+   * fenced `finish` seam so a dropped transition distills nothing;
+   * `ctx.waitUntil` keeps the DO alive through the model call and the
+   * stub writes. Wrapped in try/catch and gated by `MEMORY_ENABLED`
+   * inside distillSession — a failure logs and never fails the run.
+   */
+  private dispatchSessionDistill(run: DelegatedRun): void {
+    const pending = (async () => {
+      try {
+        await distillSession(this.env, run, { agent: this.name });
+      } catch (error) {
+        console.error(`Session distillation failed for ${run.runId}`, redactSecrets(String(error)));
+      }
+    })();
     if (typeof this.ctx === "object" && this.ctx !== null && "waitUntil" in this.ctx) {
       this.ctx.waitUntil(pending);
     } else {

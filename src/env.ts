@@ -84,6 +84,12 @@ export interface Env {
   DEVIN_MODEL?: string;
   /** Optional kill switch. "false"/"0"/"off" stops every automation firing. */
   AUTOMATIONS_ENABLED?: string;
+  /**
+   * Optional kill switch for run-end session distillation into long-term
+   * memory (megaplan T10, see `session-distill.ts`). Unset means enabled;
+   * "false"/"0"/"off" disables the Memory DO writes — never the run.
+   */
+  MEMORY_ENABLED?: string;
   /** Agent harness: "opencode" (default), "claude-code", or "codex". */
   AGENT_HARNESS?: string;
   /** "sandbox" (default) or "computer" (preview-only refusal). */
