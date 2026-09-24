@@ -8,7 +8,7 @@
 |-------|--------|
 | `pnpm typecheck` | PASS |
 | `pnpm lint` | PASS (0 errors) |
-| `pnpm test` | PASS (987 passed / 6 skipped across 62 files) |
+| `pnpm test` | PASS (995 passed across 62 files) |
 | `pnpm build` | PASS (docs: 25 pages, 1124 links verified; TanStack Start prerenders `/app` to `public/app/index.html`) |
 | Frontend dev smoke | PASS — `/app/`, `/app`, manifest, and both app icons return 200 with expected content types |
 | `npx wrangler deploy --dry-run` | BLOCKED — Docker CLI unavailable to build configured container image; Worker/assets dry-run passes with `--containers-rollout=none` |
@@ -80,6 +80,13 @@ Specifically unmeasured: peak container memory (which decides `basic` vs `standa
 - Run result envelope parsing (an `error` envelope never reads `completed`), Slack signature verification and replay bounds, approver allowlisting, burst grouping, cron parsing and coalescing, GitHub tree publishing including deletions.
 
 ## Fix history
+
+**2026-09-24 (post-merge code-review remediation — team findings, 995 tests)**
+- **MCP run isolation (HIGH).** `run_status`, `list_runs`, and `list_approvals` moved from `sandbox:exec` to a new `runs:read` scope, and runs/approvals now carry `queuedBy` stamped from the worker-vouched `X-Agent-Principal` header at intake. The orchestrator filters `GET /api/runs`, `GET/DELETE /api/runs/:id`, and `GET /api/approvals` to the calling principal when the header is present — one agent token can no longer read another agent's task text, diffs, errors, or PR URLs. Agent principals get 403 on `POST /api/approvals` (decisions stay human) and on `DELETE /api/runs` (registry clear stays operator-only).
+- **Deploy footgun (HIGH).** `alchemy.run.ts` now warns when a live stage deploys without `DashboardAccess` — `REQUIRE_ACCESS` still fails closed, but the operator sees that every request will 401 unless an external Access app fronts the hostname.
+- **`list_runs` performance (MEDIUM).** `GET /api/runs?limit=N` slices newest-first inside the DO; the tool no longer fetches the full registry to return 20 rows.
+- **Bypass-path drift (MEDIUM).** `check-alchemy-drift.mjs` now asserts every `ACCESS_BYPASS_PATHS` entry has a Worker auth exemption (`SIGNATURE_AUTHENTICATED`, `isMcpPath`, `parseAutomationWebhookPath`) and that no signature route is missing from the bypass list.
+- Verified: `pnpm typecheck`, `pnpm lint`, `pnpm test` (995 pass incl. new isolation/scope-denial cases), `pnpm build`, both drift scripts — all green. Commit `5bb0766` on `main`.
 
 **2026-09-23 (reskin-dashboard branch — VERIFICATION_PLAN gap closure + reskin consistency, 10-agent team, 961 tests)**
 
