@@ -49,7 +49,7 @@ class FakeD1 {
   }
 }
 
-const agent: TokenRecord = { principal: "claude-code", scopes: ["sandbox:exec"], created: 0, revoked: false };
+const agent: TokenRecord = { principal: "claude-code", scopes: ["sandbox:exec", "runs:read"], created: 0, revoked: false };
 
 function setup() {
   const orchestrator = Object.assign(Object.create(CodingOrchestrator.prototype) as CodingOrchestrator, {
@@ -62,6 +62,11 @@ function setup() {
     state: { runs: [] } as OrchestratorState,
     setState(state: OrchestratorState) {
       Object.assign(this, { state });
+    },
+    // resolveApproval dispatches under keepAliveWhile; the fake has no
+    // DO context, so run the dispatch inline like the base method does.
+    keepAliveWhile(fn: () => Promise<unknown>) {
+      return fn();
     },
   });
   route.names.length = 0;
@@ -125,6 +130,21 @@ describe("registerRunTools", () => {
     expect(outcomes()).toEqual(["queue_run:denied"]);
   });
 
+  it("refuses reads to a sandbox:exec-only token and queueing to a runs:read-only token", async () => {
+    const { orchestrator, registry, outcomes } = setup();
+    const execOnly: TokenRecord = { ...agent, scopes: ["sandbox:exec"] };
+    const readOnly: TokenRecord = { ...agent, scopes: ["runs:read"] };
+    const status = await registry.invoke("run_status", { runId: "r1" }, execOnly);
+    expect(status.isError).toBe(true);
+    expect((status.content[0] as { text: string }).text).toContain('missing scope "runs:read"');
+    const queued = await registry.invoke("queue_run", { repoUrl: "https://github.com/o/r", task: "t" }, readOnly);
+    expect(queued.isError).toBe(true);
+    expect((queued.content[0] as { text: string }).text).toContain('missing scope "sandbox:exec"');
+    expect(route.names).toEqual([]);
+    expect(orchestrator.state.pendingApprovals ?? []).toEqual([]);
+    expect(outcomes()).toEqual(["run_status:denied", "queue_run:denied"]);
+  });
+
   it("refuses an invalid repo via the orchestrator's own validation", async () => {
     const { orchestrator, registry, outcomes } = setup();
     for (const repoUrl of ["https://gitlab.com/o/r", "not a url", 42]) {
@@ -138,7 +158,8 @@ describe("registerRunTools", () => {
   it("reads runs newest first and hides email approvals", async () => {
     const { orchestrator, registry } = setup();
     const run = (runId: string) =>
-      createRun({ runId, sandboxId: `s-${runId}`, repoUrl: "https://github.com/o/r", task: "t", baseBranch: "main", publishPullRequest: false });
+      // Agent reads are scoped to queuedBy — these belong to the fixture principal.
+      createRun({ runId, sandboxId: `s-${runId}`, repoUrl: "https://github.com/o/r", task: "t", baseBranch: "main", publishPullRequest: false, queuedBy: "claude-code" });
     orchestrator.setState({
       runs: [run("r1"), run("r2"), run("r3")],
       pendingApprovals: [
@@ -160,6 +181,66 @@ describe("registerRunTools", () => {
     const names = registry.tools().map((t) => t.name);
     expect(names).toEqual(expect.arrayContaining(["queue_run", "run_status", "list_runs", "list_approvals"]));
     expect(names.filter((n) => /approve|decide|resolve/i.test(n))).toEqual([]);
-    expect(registry.tools().filter((t) => ["queue_run", "run_status", "list_runs", "list_approvals"].includes(t.name)).map((t) => t.scope)).toEqual(Array(4).fill("sandbox:exec"));
+    expect(
+      Object.fromEntries(
+        registry.tools().filter((t) => ["queue_run", "run_status", "list_runs", "list_approvals"].includes(t.name)).map((t) => [t.name, t.scope]),
+      ),
+    ).toEqual({ queue_run: "sandbox:exec", run_status: "runs:read", list_runs: "runs:read", list_approvals: "runs:read" });
+  });
+
+  it("scopes runs and approvals to the calling principal", async () => {
+    const { orchestrator, registry } = setup();
+    const other: TokenRecord = { principal: "other-agent", scopes: ["sandbox:exec", "runs:read"], created: 0, revoked: false };
+    const queued = await registry.invoke(
+      "queue_run",
+      { repoUrl: "https://github.com/o/r", task: "mine" },
+      agent,
+    );
+    const { approvalId } = data(queued);
+    expect(orchestrator.state.pendingApprovals?.[0]?.queuedBy).toBe("claude-code");
+
+    // Operator decision (no principal) mints the run with queuedBy carried over.
+    const decided = await orchestrator.onRequest(
+      new Request("https://internal/api/approvals", {
+        method: "POST",
+        body: JSON.stringify({ threadKey: "default", approvalId, approved: true, decidedBy: "human" }),
+      }),
+    );
+    expect(decided.status).toBe(200);
+    const runId = `agent-tool:${String(approvalId)}`;
+    expect(orchestrator.state.runs.find((r) => r.runId === runId)?.queuedBy).toBe("claude-code");
+
+    // The queuing principal sees its run and its decided approval;
+    // another principal sees neither.
+    expect((data(await registry.invoke("run_status", { runId }, agent)).run as { runId: string }).runId).toBe(runId);
+    expect((await registry.invoke("run_status", { runId }, other)).isError).toBe(true);
+    expect((data(await registry.invoke("list_runs", {}, agent)).runs as unknown[]).length).toBe(1);
+    expect(data(await registry.invoke("list_runs", {}, other)).runs).toEqual([]);
+    const mine = data(await registry.invoke("list_approvals", {}, agent));
+    expect((mine.decided as Array<{ approvalId: string }>).map((a) => a.approvalId)).toEqual([approvalId]);
+    const theirs = data(await registry.invoke("list_approvals", {}, other));
+    expect(theirs.approvals).toEqual([]);
+    expect(theirs.decided).toEqual([]);
+
+    // An agent principal can never decide approvals or clear the registry.
+    const agentPost = await orchestrator.onRequest(
+      new Request("https://internal/api/approvals", {
+        method: "POST",
+        headers: { "X-Agent-Principal": "other-agent" },
+        body: JSON.stringify({ threadKey: "default", approvalId, approved: false }),
+      }),
+    );
+    expect(agentPost.status).toBe(403);
+    const agentClear = await orchestrator.onRequest(
+      new Request("https://internal/api/runs", { method: "DELETE", headers: { "X-Agent-Principal": "other-agent" } }),
+    );
+    expect(agentClear.status).toBe(403);
+    const foreignCancel = await orchestrator.onRequest(
+      new Request(`https://internal/api/runs/${encodeURIComponent(runId)}`, {
+        method: "DELETE",
+        headers: { "X-Agent-Principal": "other-agent" },
+      }),
+    );
+    expect(foreignCancel.status).toBe(404);
   });
 });

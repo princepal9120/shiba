@@ -10,13 +10,13 @@ The Worker serves an MCP gateway at `https://<worker-host>/mcp` (streamable HTTP
 From the repo root:
 
 ```bash
-node scripts/mint-token.mjs --agent claude-code --scopes sandbox:exec --ttl-days 30 --host <worker-host>
+node scripts/mint-token.mjs --agent claude-code --scopes sandbox:exec,runs:read --ttl-days 30 --host <worker-host>
 ```
 
 | Flag | Meaning |
 | --- | --- |
 | `--agent <name>` | Principal recorded on every audit row. No whitespace, max 128 chars. |
-| `--scopes <a,b>` | Comma list from: `email:read`, `email:draft`, `email:send`, `email:delete`, `memory:read`, `memory:write`, `sandbox:exec`, `admin:tokens`. |
+| `--scopes <a,b>` | Comma list from: `email:read`, `email:draft`, `email:send`, `email:delete`, `memory:read`, `memory:write`, `runs:read`, `sandbox:exec`, `admin:tokens`. |
 | `--ttl-days N` | Optional. The KV entry expires after N days, and the token stops working then. |
 | `--host <host>` | Your Worker host, used in the printed `claude mcp add` line. |
 | `--write` | Also runs the printed `wrangler kv key put … --remote` for you. Without it, nothing is written. |
@@ -38,9 +38,9 @@ Run `claude mcp list` to confirm that `shiba` connects. A 401 means the token is
 | Tool | Scope | What it does |
 | --- | --- | --- |
 | `queue_run` | `sandbox:exec` | Queues `{repoUrl, task, baseBranch?, publishPullRequest?}` as a pending approval on the shared `default` orchestrator, the same route as `POST /api/runs`. Returns `approvalId` and `runId` (`agent-tool:<approvalId>`). It never starts a run. |
-| `run_status` | `sandbox:exec` | Returns one run record by `runId`. |
-| `list_runs` | `sandbox:exec` | Lists run records, newest first (`limit`, default 20). |
-| `list_approvals` | `sandbox:exec` | Lists pending and recently decided run approvals. Email approvals are left out. |
+| `run_status` | `runs:read` | Returns one run record by `runId`. |
+| `list_runs` | `runs:read` | Lists run records, newest first (`limit`, default 20). |
+| `list_approvals` | `runs:read` | Lists pending and recently decided run approvals. Email approvals are left out. |
 | `list_mailboxes`, `list_emails`, `get_email`, `get_thread`, `search_emails`, `mark_email_read` | `email:read` | Mailbox reads. |
 | `create_draft`, `update_draft`, `draft_reply`, `move_email` | `email:draft` | Draft and organize. |
 | `send_email`, `send_reply` | `email:send` | Queue an email send for human approval. |
@@ -49,6 +49,8 @@ Run `claude mcp list` to confirm that `shiba` connects. A 401 means the token is
 | `memory_bank`, `memory_forget` | `memory:write` | Write shared memory. |
 
 The gateway has no approve tool. Runs queued this way execute with the deployment's default harness and model (`AGENT_HARNESS`, `CODING_MODEL`) once approved.
+
+Run visibility is per-principal: `run_status`, `list_runs`, and `list_approvals` only return records the calling token's principal queued (`queuedBy` is stamped at intake). Operator surfaces — dashboard, Slack, `/api/runs` with an Access identity — still see everything. Pair `sandbox:exec` with `runs:read` on tokens that queue and poll runs.
 
 ## 4. How `/mcp` is authenticated
 

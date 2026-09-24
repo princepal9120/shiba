@@ -119,12 +119,12 @@ Rollback to wrangler (same bindings): `npx wrangler deploy --config apps/backend
 Mint a token into the deployed KV (id printed as `agentTokensNamespace` by `pnpm run deploy`), then paste the printed line:
 
 ~~~sh
-node scripts/mint-token.mjs --agent claude-code --scopes sandbox:exec \
+node scripts/mint-token.mjs --agent claude-code --scopes sandbox:exec,runs:read \
   --host <worker-host> --namespace-id <agentTokensNamespace> --write
 claude mcp add --transport http shiba https://<worker-host>/mcp --header "Authorization: Bearer shb_…"
 ~~~
 
-Tools: `queue_run`, `run_status`, `list_runs`, `list_approvals` (`sandbox:exec`), plus email and memory tools behind their own scopes. `queue_run` only queues — a human approves in the dashboard, on iPhone, or in Slack; there is no approve tool. Details: [/docs/mcp](apps/web/src/content/docs/docs/mcp.md).
+Tools: `queue_run` (`sandbox:exec`) plus `run_status`, `list_runs`, `list_approvals` (`runs:read`, scoped to records the token's principal queued), and email and memory tools behind their own scopes. `queue_run` only queues — a human approves in the dashboard, on iPhone, or in Slack; there is no approve tool. Details: [/docs/mcp](apps/web/src/content/docs/docs/mcp.md).
 
 ## Documentation
 

@@ -97,6 +97,16 @@ const accessEmails = (process.env.ACCESS_EMAILS ?? "").split(",").map((e: string
 const workersSubdomain = process.env.WORKERS_SUBDOMAIN?.trim();
 const workerHost = workersSubdomain ? `${workerName}.${workersSubdomain}.workers.dev` : undefined;
 const accessEnabled = isLiveStage && workerHost !== undefined && accessEmails.length > 0;
+if (isLiveStage && !accessEnabled) {
+  // REQUIRE_ACCESS is set for live stages below, so a deploy without a
+  // managed Access app fails closed: every dashboard/API request 401s
+  // unless an operator-managed Access app already fronts the hostname.
+  console.warn(
+    "alchemy: live stage without DashboardAccess — set ACCESS_EMAILS and " +
+      "WORKERS_SUBDOMAIN to manage Access here, or every request will 401 " +
+      "unless an external Access application fronts the worker hostname.",
+  );
+}
 // Machine callers authenticate inside the Worker (Slack/GitHub HMAC, MCP bearer,
 // automation secret) and cannot complete an Access login.
 export const ACCESS_BYPASS_PATHS = [

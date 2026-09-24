@@ -13,6 +13,7 @@ const SCOPES = [
   "email:delete",
   "memory:read",
   "memory:write",
+  "runs:read",
   "sandbox:exec",
   "admin:tokens",
 ];

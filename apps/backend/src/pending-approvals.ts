@@ -84,6 +84,11 @@ export interface PendingApproval {
   decidedBy?: string;
   decidedAt?: number;
   /**
+   * MCP principal that queued this approval (X-Agent-Principal at intake).
+   * Absent on operator-queued records — agent tokens only list their own.
+   */
+  queuedBy?: string;
+  /**
    * Executor outcome for email-kind approvals, written after the
    * post-decision dispatch settles. Absent while execution is in flight
    * or never ran; run-kind records omit it — their durable outcome is
@@ -110,6 +115,7 @@ export interface CreateApprovalInput {
   publishPullRequest?: boolean;
   kind?: ApprovalKind;
   payload?: JsonValue;
+  queuedBy?: string;
   createdAt: number;
 }
 
@@ -131,6 +137,7 @@ export function createPendingApproval(
       ...(input.publishPullRequest !== undefined ? { publishPullRequest: input.publishPullRequest } : {}),
       ...(input.kind !== undefined ? { kind: input.kind } : {}),
       ...(input.payload !== undefined ? { payload: input.payload } : {}),
+      ...(input.queuedBy !== undefined ? { queuedBy: input.queuedBy } : {}),
       status: "pending",
       createdAt: input.createdAt,
     },
@@ -220,4 +227,3 @@ export function decidedApprovals(approvals: PendingApproval[]): PendingApproval[
 export function isApprovalExpired(record: PendingApproval, now: number): boolean {
   return now - record.createdAt > APPROVAL_TTL_MS;
 }
-

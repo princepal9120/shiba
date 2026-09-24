@@ -5,6 +5,7 @@ import { getAgentByName } from "agents/routing";
 import { z } from "zod";
 import type { Env } from "./env.js";
 import type { ToolRegistry } from "./mcp-gateway.js";
+import { AGENT_PRINCIPAL_HEADER } from "./runs.js";
 
 const ORCHESTRATOR_NAME = "default";
 const DEFAULT_LIST_LIMIT = 20;
@@ -13,9 +14,14 @@ function jsonResult(payload: Record<string, unknown>): CallToolResult {
   return { content: [{ type: "text", text: JSON.stringify(payload) }], structuredContent: payload };
 }
 
-async function orchestratorJson(env: Env, path: string, init?: RequestInit): Promise<Record<string, unknown>> {
+async function orchestratorJson(env: Env, path: string, init?: RequestInit, principal?: string): Promise<Record<string, unknown>> {
   const stub = await getAgentByName(env.CodingOrchestrator, ORCHESTRATOR_NAME);
-  const res = await stub.fetch(new Request(`https://internal${path}`, init));
+  const request = new Request(`https://internal${path}`, init);
+  // Vouched principal: the DO scopes run/approval reads and stamps
+  // queuedBy on intakes, so one agent token can never see or cancel
+  // another agent's runs.
+  if (principal) request.headers.set(AGENT_PRINCIPAL_HEADER, principal);
+  const res = await stub.fetch(request);
   const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (!res.ok) {
     throw new Error(typeof body.error === "string" ? body.error : `orchestrator returned ${res.status}`);
@@ -27,7 +33,7 @@ export function registerRunTools(registry: ToolRegistry, env: Env): void {
   registry.registerTool(
     "queue_run",
     "sandbox:exec",
-    async (args) => {
+    async (args, ctx) => {
       const body = await orchestratorJson(env, "/api/runs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -41,7 +47,7 @@ export function registerRunTools(registry: ToolRegistry, env: Env): void {
           baseBranch: args.baseBranch,
           publishPullRequest: args.publishPullRequest,
         }),
-      });
+      }, ctx.principal.principal);
       const approvalId = String(body.approvalId);
       return jsonResult({
         status: "pending_approval",
@@ -70,9 +76,9 @@ export function registerRunTools(registry: ToolRegistry, env: Env): void {
 
   registry.registerTool(
     "run_status",
-    "sandbox:exec",
-    async (args) =>
-      jsonResult(await orchestratorJson(env, `/api/runs/${encodeURIComponent(String(args.runId))}`)),
+    "runs:read",
+    async (args, ctx) =>
+      jsonResult(await orchestratorJson(env, `/api/runs/${encodeURIComponent(String(args.runId))}`, undefined, ctx.principal.principal)),
     {
       description: "Fetch one run record (status, result, pull request) by runId.",
       inputSchema: { runId: z.string().min(1).describe("Run id, e.g. agent-tool:<approvalId>.") },
@@ -82,12 +88,12 @@ export function registerRunTools(registry: ToolRegistry, env: Env): void {
 
   registry.registerTool(
     "list_runs",
-    "sandbox:exec",
-    async (args) => {
+    "runs:read",
+    async (args, ctx) => {
       const limit = typeof args.limit === "number" && args.limit >= 1 ? Math.floor(args.limit) : DEFAULT_LIST_LIMIT;
-      const { runs } = await orchestratorJson(env, "/api/runs");
-      // The DO stores runs oldest first; callers want the newest.
-      return jsonResult({ runs: (Array.isArray(runs) ? runs : []).slice(-limit).reverse() });
+      // The DO slices newest-first itself — no full-registry fetch.
+      const { runs } = await orchestratorJson(env, `/api/runs?limit=${limit}`, undefined, ctx.principal.principal);
+      return jsonResult({ runs: Array.isArray(runs) ? runs : [] });
     },
     {
       description: `List run records, newest first (default ${DEFAULT_LIST_LIMIT}).`,
@@ -98,9 +104,9 @@ export function registerRunTools(registry: ToolRegistry, env: Env): void {
 
   registry.registerTool(
     "list_approvals",
-    "sandbox:exec",
-    async () => {
-      const { approvals, decided } = await orchestratorJson(env, "/api/approvals");
+    "runs:read",
+    async (_args, ctx) => {
+      const { approvals, decided } = await orchestratorJson(env, "/api/approvals", undefined, ctx.principal.principal);
       // Email approvals freeze message bodies — those stay behind email scopes.
       const runsOnly = (list: unknown) =>
         (Array.isArray(list) ? (list as Array<{ kind?: string }>) : []).filter((a) => (a.kind ?? "run") === "run");

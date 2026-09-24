@@ -19,6 +19,7 @@ import {
   MAX_CONCURRENT_RUNS,
   RUN_DEADLINE_MS,
   RunStore,
+  AGENT_PRINCIPAL_HEADER,
   canStartRun,
   createRun,
   isActiveStatus,
@@ -526,7 +527,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
    * the pointer via POST /api/approvals. Email-kind approvals freeze a
    * mailbox payload instead of a run input.
    */
-  private async queueSlackRun(input: { repoUrl?: unknown; task?: unknown; baseBranch?: unknown; publishPullRequest?: unknown; threadKey?: unknown; kind?: unknown; mailbox?: unknown; payload?: unknown }): Promise<Response> {
+  private async queueSlackRun(input: { repoUrl?: unknown; task?: unknown; baseBranch?: unknown; publishPullRequest?: unknown; threadKey?: unknown; kind?: unknown; mailbox?: unknown; payload?: unknown; queuedBy?: unknown }): Promise<Response> {
     const kind = typeof input.kind === "string" && input.kind.trim() ? input.kind.trim() : "run";
     if (kind === "email_send" || kind === "email_delete") {
       return this.queueEmailApprovalRecord(kind, input);
@@ -558,6 +559,11 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         task: task.slice(0, 4000),
         baseBranch: typeof input.baseBranch === "string" && input.baseBranch.trim() ? input.baseBranch.slice(0, 200) : "main",
         publishPullRequest,
+        // Worker-vouched principal (X-Agent-Principal) — never the raw body,
+        // so an operator-queued record can't be claimed by an agent token.
+        ...(typeof input.queuedBy === "string" && input.queuedBy.trim()
+          ? { queuedBy: input.queuedBy.trim().slice(0, 200) }
+          : {}),
         createdAt: Date.now(),
       }));
     } catch (error) {
@@ -769,6 +775,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       task: record.task,
       baseBranch: record.baseBranch ?? "main",
       publishPullRequest: record.publishPullRequest ?? false,
+      queuedBy: record.queuedBy,
     }) : undefined;
     // One state write reserves capacity and records the decision before any await.
     this.setState({
@@ -1170,7 +1177,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
    * aged out. Decided records are dropped from the listing — a
    * resolved pointer must never be re-listed.
    */
-  private listApprovals(): Response {
+  private listApprovals(agentPrincipal: string | null): Response {
     const now = Date.now();
     const expiredSends = this.expiredEmailSends(now);
     const pruned = pruneExpiredApprovals(this.approvals, now);
@@ -1179,17 +1186,27 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       this.releaseEmailApprovalDrafts(expiredSends, this.liveApprovalDrafts(now));
     }
     this.sweepStaleDrafts(expiredSends.length > 0);
+    // Agent principals see only records they queued; operator surfaces
+    // (no principal header) keep the full listing.
+    const visible = agentPrincipal === null
+      ? pruned
+      : pruned.filter((approval) => approval.queuedBy === agentPrincipal);
     return Response.json({
-      approvals: pruned.filter((approval) => approval.status === "pending"),
+      approvals: visible.filter((approval) => approval.status === "pending"),
       // Decided records leave the pending arm but stay listed — the
       // execution stamp (including a failed send) is durable state no
       // other surface renders, so the listing returns recent ones.
-      decided: decidedApprovals(pruned),
+      decided: decidedApprovals(visible),
     });
   }
 
   override async onRequest(request: Request): Promise<Response> {
     const url = new URL(request.url);
+    // Worker-vouched agent identity: only mcp-run-tools sets this after
+    // bearer auth, so it scopes reads/cancels to records that principal
+    // queued. External callers never reach this DO without an Access or
+    // signature-authenticated identity on the Worker first.
+    const agentPrincipal = request.headers.get(AGENT_PRINCIPAL_HEADER)?.trim() || null;
     // Cron backstop for the poll-driven stale-draft sweep — in a quiet
     // system no approvals fetch or DO restart ever calls it, so a human
     // who stops polling would leave `sending`-locked drafts held forever.
@@ -1198,9 +1215,13 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       return Response.json({ ok: true });
     }
     if (url.pathname === "/api/approvals" && request.method === "GET") {
-      return this.listApprovals();
+      return this.listApprovals(agentPrincipal);
     }
     if (request.method === "POST" && url.pathname === "/api/approvals") {
+      // Approving is a human act — an agent principal can never decide.
+      if (agentPrincipal !== null) {
+        return Response.json({ error: "Agent principals cannot decide approvals." }, { status: 403 });
+      }
       let approvalBody: unknown;
       try {
         approvalBody = await request.json();
@@ -1229,7 +1250,9 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       if (typeof queueBody !== "object" || queueBody === null || Array.isArray(queueBody)) {
         return Response.json({ error: "Request body must be a JSON object." }, { status: 400 });
       }
-      return this.queueSlackRun(queueBody as Record<string, unknown>);
+      // queuedBy comes only from the vouched header — a body field would
+      // let any caller attribute its run to another principal.
+      return this.queueSlackRun({ ...(queueBody as Record<string, unknown>), queuedBy: agentPrincipal ?? undefined });
     }
     if (request.method !== "GET" && request.method !== "DELETE") {
       return Response.json({ error: "Method not allowed." }, { status: 405 });
@@ -1242,19 +1265,39 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     }
     await this.reclaimRuns();
     if (request.method === "GET" && id === null) {
-      return Response.json({ runs: this.store.list().map((run) => this.serializeRun(run)) });
+      const visible = agentPrincipal === null
+        ? this.store.list()
+        : this.store.list().filter((run) => run.queuedBy === agentPrincipal);
+      const limitParam = url.searchParams.get("limit");
+      if (limitParam !== null) {
+        const limit = Number(limitParam);
+        if (!Number.isInteger(limit) || limit < 1) {
+          return Response.json({ error: "limit must be a positive integer." }, { status: 400 });
+        }
+        // Store order is oldest-first; a bounded listing serves newest first.
+        return Response.json({ runs: visible.slice(-Math.min(limit, 500)).reverse().map((run) => this.serializeRun(run)) });
+      }
+      return Response.json({ runs: visible.map((run) => this.serializeRun(run)) });
     }
     if (request.method === "DELETE" && id === null) {
+      // Registry clear is an operator action — never agent-bulk-deletable.
+      if (agentPrincipal !== null) {
+        return Response.json({ error: "Agent principals cannot clear the run registry." }, { status: 403 });
+      }
       await this.clearRuns();
       return Response.json({ ok: true });
     }
     if (id !== null && request.method === "GET") {
       const run = this.store.get(id);
-      return run
+      return run && (agentPrincipal === null || run.queuedBy === agentPrincipal)
         ? Response.json({ run: this.serializeRun(run) })
         : Response.json({ error: "Run not found." }, { status: 404 });
     }
     if (id !== null && request.method === "DELETE") {
+      const existing = this.store.get(id);
+      if (!existing || (agentPrincipal !== null && existing.queuedBy !== agentPrincipal)) {
+        return Response.json({ error: "Run not found." }, { status: 404 });
+      }
       const run = await this.cancelRun(id);
       return run
         ? Response.json({ run: this.serializeRun(run) })
