@@ -1,5 +1,5 @@
 // @ts-check
-import { defineConfig } from 'astro/config';
+import { defineConfig, passthroughImageService } from 'astro/config';
 import tailwind from "@astrojs/tailwind";
 import starlight from '@astrojs/starlight';
 
@@ -10,6 +10,8 @@ export default defineConfig({
 	srcDir: './src',
 	outDir: 'dist',
 	output: 'static',
+	// Static host: ship source images as-is; avoids the native sharp dep in CI.
+	image: { service: passthroughImageService() },
 	redirects: {
 		'/docs': '/docs/overview/',
 	},

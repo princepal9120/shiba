@@ -370,12 +370,25 @@ html.dark [class~="selection:text-white"]::selection {
 html.dark ::-webkit-scrollbar-thumb         { background: #3b3d36; }
 html.dark ::-webkit-scrollbar-thumb:hover   { background: #4a4c44; }
 
-/* iOS Safari zooms into any focused field under 16px. */
-@media (pointer: coarse) {
+/* iOS Safari zooms into any focused field under 16px. Narrow viewports get
+   the same rule even on fine pointers (devtools emulation, resized windows). */
+@media (pointer: coarse), (max-width: 640px) {
   input:not([type="checkbox"]):not([type="radio"]),
   textarea,
   select {
     font-size: 16px !important;
+  }
+  /* 40px tap targets on small screens regardless of pointer type. */
+  button,
+  [role="button"],
+  select,
+  input:not([type="checkbox"]):not([type="radio"]) {
+    min-height: 40px;
+  }
+  input[type="checkbox"],
+  input[type="radio"] {
+    width: 18px;
+    height: 18px;
   }
 }
 

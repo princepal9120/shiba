@@ -14,6 +14,12 @@ import {
 } from "ai";
 import type { Env } from "../env.js";
 import { publishFilesAsPullRequest } from "../github.js";
+import {
+  addPullToProject,
+  pullRequestNodeId,
+  resolveProject,
+  setItemStatus,
+} from "../github-project.js";
 import { allowedHostsFor, resolveHarness } from "../harness/index.js";
 import {
   formatAgentResult,
@@ -252,6 +258,23 @@ export class OpenCodeAgent extends AIChatAgent<Env> {
       token,
       message: `AI Coworker: ${this.safeText(input.task, 120)}`,
     });
+    await this.syncProjectBoard(input.repoUrl, published.pullNumber);
     return published.pullUrl;
+  }
+
+  // Board sync is best-effort: a missing PAT or a broken board never fails a published PR.
+  private async syncProjectBoard(repoUrl: string, pullNumber: number): Promise<void> {
+    const token = this.env.GITHUB_PROJECT_TOKEN;
+    const projectNumber = this.env.GITHUB_PROJECT_NUMBER;
+    if (!token || !projectNumber) return;
+    try {
+      const { owner } = parseGitHubRepoUrl(repoUrl);
+      const board = await resolveProject(owner, Number(projectNumber), token);
+      const nodeId = await pullRequestNodeId(repoUrl, pullNumber, token);
+      const itemId = await addPullToProject(board.projectId, nodeId, token);
+      await setItemStatus(board.projectId, itemId, "In review", token);
+    } catch (error) {
+      console.warn(`project board sync failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 }

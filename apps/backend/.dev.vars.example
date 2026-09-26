@@ -4,6 +4,10 @@
 # Optional, Worker-side PR publishing only. Private cloning is not wired.
 # GITHUB_TOKEN=
 
+# Optional Projects v2 board sync: PAT with `project` scope + board number.
+# GITHUB_PROJECT_TOKEN=
+# GITHUB_PROJECT_NUMBER=
+
 # Optional, HMAC verification of acknowledgment-only GitHub webhooks.
 # GITHUB_WEBHOOK_SECRET=
 
