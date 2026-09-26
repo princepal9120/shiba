@@ -164,7 +164,7 @@ export const Worker = Cloudflare.Worker("Worker", {
   crons: ["*/5 * * * *"],
   env: {
     GATEWAY_ID: "default",
-    ORCHESTRATOR_MODEL: "@cf/meta/llama-3.1-8b-instruct",
+    ORCHESTRATOR_MODEL: "@cf/zai-org/glm-4.7-flash",
     CODING_MODEL: "google/gemini-3.5-flash-lite",
     RUNTIME: "sandbox",
     // Must match the Sandbox container's instanceType.

@@ -53,7 +53,7 @@ checks independently. See [Security](/docs/security/).
 Deployment, pushing commits, and opening pull requests are external actions;
 local verification does not authorize them. State what was tested without
 claiming live acceptance from a static build.
-The project declares AGPL-3.0-only in `package.json` and `LICENSE`. Prior MIT notices are preserved in `LICENSE-MIT-PRIOR`.
+The project declares AGPL-3.0-only in `package.json` and `LICENSE`.
 
 ## Release hygiene
 

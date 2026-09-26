@@ -30,6 +30,7 @@ import {
   type RunStatus,
 } from "../runs.js";
 import { makeReceipt } from "../receipts.js";
+import { createRunCodeTool } from "../codemode.js";
 import {
   createPendingApproval,
   decidedApprovals,
@@ -297,6 +298,10 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       "what will happen (repository, branch, task, whether a pull request is requested).",
       "After the run finishes, report the summary, changed files, and diff to the user.",
       "If the run fails, report the failure honestly with the exit code and error.",
+      "For mailbox/memory/run questions needing more than one lookup, call run_code:",
+      "write an async arrow function that calls codemode.<tool>({...}) directly —",
+      "chain, loop, and filter in code, and return only the fields you need.",
+      "run_code can queue sends/deletes but never approves them; humans decide.",
     ].join(" ");
   }
 
@@ -322,7 +327,10 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         return this.executeDelegatedTask(input, childExecute, options?.toolCallId, options?.abortSignal);
       },
     });
-    return { ...super.getTools(), delegate_coding_task: delegate };
+    const tools: ToolSet = { ...super.getTools(), delegate_coding_task: delegate };
+    const runCode = createRunCodeTool(this.env);
+    if (runCode) tools.run_code = runCode;
+    return tools;
   }
 
   private resolveHarnessAndModel(input: DelegateInput): { harness: string; codingModel: string } {

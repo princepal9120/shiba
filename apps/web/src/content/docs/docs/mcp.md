@@ -48,6 +48,19 @@ Run `claude mcp list` to confirm that `shiba` connects. A 401 means the token is
 | `memory_recall`, `memory_sessions` | `memory:read` | Read shared memory. |
 | `memory_bank`, `memory_forget` | `memory:write` | Write shared memory. |
 
+### Pair a cloud agent with its mailbox
+
+The `--agent` token principal is also the mailbox assignment key. In the dashboard Inbox settings, register an address with **Cloud agent token principal** set to that exact name (for example, `scout`). You can re-enter an existing address to change its assignment, or leave the field blank to unassign it. An unassigned mailbox is dashboard-only; MCP email tools do not see it. This is Shiba's mailbox-scoped analogue to Goshen Email's mailbox keys, without adding a second email service or moving mail out of your Cloudflare account.
+
+```bash
+node scripts/mint-token.mjs --agent scout --scopes email:read,email:draft,email:send \
+  --host <worker-host> --namespace-id <agentTokensNamespace> --write
+```
+
+Give the resulting token only to that cloud agent and connect it to `/mcp` as above. `list_mailboxes` returns only addresses assigned to `scout`; direct mailbox calls and ID-based email/draft/thread tools also refuse other agents' or unassigned mailboxes. The token cannot approve its own send or delete request. Agents can poll `list_emails`/`search_emails` for new mail; inbound mail does **not** automatically start a sandbox or execute instructions from a message. Existing mailboxes without an `agent` assignment must be paired before their MCP email tools can see them; dashboard access is unchanged.
+
+For a first read-only test, grant only `email:read`. Configure Cloudflare Email Routing separately, send a message from another address, and verify it appears both in the Inbox and in the agent's `list_emails` result. Add draft/send scopes later if needed; they still cannot bypass human approval.
+
 The gateway has no approve tool. This MCP tool accepts only repository/task/branch/publish inputs, not a per-run harness or model; queued runs use the deployment's configured defaults (`AGENT_HARNESS`, `CODING_MODEL`, and the selected harness's model default) when approved. Harness implementation and verification status are documented in [Coding Harnesses](/docs/claude-code/). No cloud end-to-end run is recorded; the dated local OpenCode exercise did not reach successful model inference.
 
 Run visibility is per-principal: `run_status`, `list_runs`, and `list_approvals` only return records the calling token's principal queued (`queuedBy` is stamped at intake). Operator surfaces — dashboard, Slack, `/api/runs` with an Access identity — still see everything. Pair `sandbox:exec` with `runs:read` on tokens that queue and poll runs.

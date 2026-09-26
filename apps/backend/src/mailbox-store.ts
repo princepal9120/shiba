@@ -503,21 +503,27 @@ export class MailboxStore {
   registerMailbox(input: {
     address: string;
     label?: string;
-    agent?: string;
+    /** Undefined preserves an existing assignment; null explicitly unassigns it. */
+    agent?: string | null;
     nowMs?: number;
   }): MailboxRecord {
     const address = requireAddress(input.address, "address").toLowerCase();
+    const agent = input.agent === null ? null : input.agent?.trim();
+    if (typeof agent === "string" && (agent === "" || agent.length > 128 || /\s/.test(agent))) {
+      throw new InputError("agent must be a token principal without whitespace (max 128 characters).");
+    }
     const created = input.nowMs ?? Date.now();
     this.exec(
       `INSERT INTO mailboxes (address, label, agent, created_at)
        VALUES (?, ?, ?, ?)
        ON CONFLICT(address) DO UPDATE SET
          label = COALESCE(excluded.label, mailboxes.label),
-         agent = COALESCE(excluded.agent, mailboxes.agent)`,
+         agent = CASE WHEN ? = 1 THEN excluded.agent ELSE mailboxes.agent END`,
       address,
       input.label ?? null,
-      input.agent ?? null,
+      agent ?? null,
       created,
+      input.agent === undefined ? 0 : 1,
     );
     const row = this.exec(`SELECT * FROM mailboxes WHERE address = ?`, address)[0];
     if (!row) {

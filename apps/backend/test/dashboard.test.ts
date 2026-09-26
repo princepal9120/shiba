@@ -42,7 +42,6 @@ import { App } from "../../frontend/src/app";
 import { VMInspector } from "../../frontend/src/components/VMInspector";
 import { RunRegistryView } from "../../frontend/src/components/RunRegistryView";
 import { AutomationsView } from "../../frontend/src/components/AutomationsView";
-import { ArchitectureView } from "../../frontend/src/components/ArchitectureView";
 import { DashboardView } from "../../frontend/src/components/DashboardView";
 import { WorkspacePanel } from "../../frontend/src/components/WorkspacePanel";
 import { DiffView } from "../../frontend/src/components/DiffView";
@@ -244,7 +243,7 @@ describe("dashboard rendering", () => {
     expect(diffMarkup).toContain("<code");
   });
 
-  it("renders the top navigation bar with all architectural views", () => {
+  it("renders the top navigation bar without the retired Architecture view", () => {
     const markup = renderApp();
     expect(markup).toContain("Dashboard");
     expect(markup).toContain("Tasks");
@@ -257,7 +256,7 @@ describe("dashboard rendering", () => {
     expect(markup).toContain("Automations");
     expect(markup).toContain("Missions");
     expect(markup).toContain("Gates");
-    expect(markup).toContain("Architecture");
+    expect(markup).not.toContain("Architecture");
   });
 
   it("renders standalone DiffView and ApprovalsView with empty states and zero-trust framing", () => {
@@ -365,11 +364,6 @@ describe("dashboard rendering", () => {
     expect(markup).toContain("/api/slack/command");
   });
 
-  it("renders ArchitectureView with isolation boundaries", () => {
-    const markup = renderToStaticMarkup(React.createElement(ArchitectureView));
-    expect(markup).toContain("System Architecture &amp; Isolation Boundary");
-    expect(markup).toContain("Isolated Sandbox VM");
-  });
   it("renders OnboardingModal with steps from PLAN.md", () => {
     expect(ONBOARDING_STEPS.length).toBe(6);
     const markup = renderToStaticMarkup(React.createElement(OnboardingModal, {

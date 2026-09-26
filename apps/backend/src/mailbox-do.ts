@@ -276,7 +276,7 @@ export class Mailbox {
         const mailbox = this.store.registerMailbox({
           address: requiredString(body.address, "address"),
           label: optString(body.label),
-          agent: optString(body.agent),
+          agent: body.agent === null ? null : body.agent === undefined ? undefined : requiredString(body.agent, "agent"),
         });
         return json({ mailbox }, { status: 201 });
       }

@@ -149,12 +149,12 @@ const reader: TokenRecord = {
   revoked: false,
 };
 
-async function registerMailbox(env: Env, address = REGISTERED): Promise<void> {
+async function registerMailbox(env: Env, address = REGISTERED, agent: string | null = "scout"): Promise<void> {
   const res = await (env.Mailbox.get(env.Mailbox.idFromName("__directory__")) as unknown as FakeStub).fetch(
     new Request("https://internal/internal/mailbox/mailboxes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ address }),
+      body: JSON.stringify({ address, agent }),
     }),
   );
   if (!res.ok) throw new Error(`register failed: ${res.status}`);
@@ -267,6 +267,75 @@ describe("registerEmailTools — scope denial", () => {
     );
     const insert = d1.calls.find((c) => c.sql.startsWith("INSERT"))!;
     expect(insert.params[5]).toBe("denied");
+  });
+});
+
+describe("registerEmailTools — agent mailbox ownership", () => {
+  it("uses the current assignment on every call, so re-pairing transfers access", async () => {
+    const { env } = makeEnv();
+    const registry = makeRegistry(env);
+    await registerMailbox(env, REGISTERED, "scout");
+    const email = await addEmail(env);
+    expect(resultData(await registry.invoke("get_email", { id: email.id }, reader)).email.id).toBe(email.id);
+
+    await registerMailbox(env, REGISTERED, "peer");
+    expect((await registry.invoke("get_email", { id: email.id }, reader)).isError).toBe(true);
+    const peer = { ...reader, principal: "peer" };
+    expect(resultData(await registry.invoke("get_email", { id: email.id }, peer)).email.id).toBe(email.id);
+
+    await registerMailbox(env, REGISTERED, null);
+    expect((await registry.invoke("get_email", { id: email.id }, peer)).isError).toBe(true);
+    expect(resultData(await registry.invoke("list_mailboxes", {}, peer)).mailboxes).toEqual([]);
+  });
+
+  it("shows only assigned mailboxes and refuses cross-agent reads, mutations, and approval mints", async () => {
+    const { env } = makeEnv();
+    const registry = makeRegistry(env);
+    await registerMailbox(env, REGISTERED, "scout");
+    await registerMailbox(env, OTHER, "peer");
+    await registerMailbox(env, "unassigned@shiba.dev", null);
+    const mine = await addEmail(env, { subject: "Mine" }, REGISTERED);
+    const theirs = await addEmail(env, { subject: "Theirs" }, OTHER);
+    const unassigned = await addEmail(env, { subject: "Unassigned" }, "unassigned@shiba.dev");
+    const peer = { ...reader, principal: "peer" };
+    const peerDraft = resultData(await registry.invoke(
+      "create_draft",
+      { mailbox: OTHER, to: "x@y.z", subject: "Private", body: "Peer only" },
+      peer,
+    )).draft;
+
+    const boxes = resultData(await registry.invoke("list_mailboxes", {}, reader));
+    expect(boxes.mailboxes.map((box: { address: string }) => box.address)).toEqual([REGISTERED]);
+    const search = resultData(await registry.invoke("search_emails", { query: "Mine" }, reader));
+    expect(search.emails.map((email: { id: string }) => email.id)).toEqual([mine.id]);
+
+    const before = queueCalls.length;
+    const forbidden: Array<[string, Record<string, unknown>]> = [
+      ["list_emails", { mailbox: OTHER }],
+      ["search_emails", { query: "Theirs", mailbox: OTHER }],
+      ["get_email", { id: theirs.id }],
+      ["get_thread", { thread_id: theirs.thread_id }],
+      ["mark_email_read", { id: theirs.id }],
+      ["move_email", { id: theirs.id, status: "archived" }],
+      ["draft_reply", { email_id: theirs.id, body: "No" }],
+      ["send_reply", { email_id: theirs.id, body: "No" }],
+      ["delete_email", { id: theirs.id }],
+      ["create_draft", { mailbox: OTHER, to: "x@y.z", subject: "No", body: "No" }],
+      ["send_email", { mailbox: OTHER, to: "x@y.z", subject: "No", body: "No" }],
+      ["update_draft", { draft_id: peerDraft.id, fields: { subject: "Tampered" } }],
+      ["send_email", { draft_id: peerDraft.id }],
+      ["get_email", { id: unassigned.id }],
+    ];
+    for (const [tool, args] of forbidden) {
+      const result = await registry.invoke(tool, args, reader);
+      expect(result.isError, tool).toBe(true);
+    }
+    expect(queueCalls).toHaveLength(before);
+    const peerBoxes = resultData(await registry.invoke("list_mailboxes", {}, peer));
+    expect(peerBoxes.mailboxes.map((box: { address: string }) => box.address)).toEqual([OTHER]);
+    const peerEmail = resultData(await registry.invoke("get_email", { id: theirs.id }, peer)).email;
+    expect(peerEmail.id).toBe(theirs.id);
+    expect(peerEmail.status).toBe("unread");
   });
 });
 

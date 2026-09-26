@@ -18,8 +18,7 @@ export type AppNavView =
   | "memory"
   | "automations"
   | "missions"
-  | "gates"
-  | "architecture";
+  | "gates";
 
 export interface AppNavItem {
   id: AppNavView;
@@ -40,13 +39,12 @@ export const APP_NAV_ITEMS: AppNavItem[] = [
   { id: "automations", label: "Automations", description: "Automations & Triggers" },
   { id: "missions", label: "Missions", description: "Missions & Standing Goals" },
   { id: "gates", label: "Gates", description: "Review, QA & Security Gates" },
-  { id: "architecture", label: "Architecture", description: "System Architecture & Isolation" },
 ];
 
 const NAV_GROUPS: { label: string; items: AppNavView[] }[] = [
   { label: "Workspace", items: ["dashboard", "tasks", "runs", "diff", "approvals", "missions", "automations"] },
   { label: "Capabilities", items: ["agents", "inbox", "memory"] },
-  { label: "Sandbox & Safety", items: ["vm", "gates", "architecture"] },
+  { label: "Sandbox & Safety", items: ["vm", "gates"] },
 ];
 
 export interface AppNavRailProps {
@@ -126,11 +124,6 @@ const ICONS: Record<AppNavView, JSX.Element> = {
       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
     </svg>
   ),
-  architecture: (
-    <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z" />
-    </svg>
-  ),
 };
 
 function NavItem({
@@ -155,11 +148,11 @@ function NavItem({
       className={
         "group w-full flex items-center gap-2.5 rounded-none px-2.5 py-1.5 touch:min-h-11 text-[13px] font-medium transition-colors duration-100 " +
         (active
-          ? "bg-[#0000a8] text-white shadow-[2px_2px_0_var(--paper-shadow)]"
-          : "text-[#222320] hover:bg-[#e0ded5] hover:text-[#222320]")
+          ? "bg-[#0000a8] dark:bg-[#9cbce2] text-white dark:text-[#152335] shadow-[2px_2px_0_var(--paper-shadow)]"
+          : "text-[#222320] dark:text-[#eae8e1] hover:bg-[#e0ded5] dark:hover:bg-[#3b3d36] hover:text-[#222320] dark:hover:text-[#f4f2ea]")
       }
     >
-      <span className={active ? "text-white" : "text-[#6a6f63] group-hover:text-[#222320]"} aria-hidden="true">
+      <span className={active ? "text-white dark:text-[#152335]" : "text-[#6a6f63] dark:text-[#aaa99f] group-hover:text-[#222320] dark:group-hover:text-[#f4f2ea]"} aria-hidden="true">
         {children}
       </span>
       <span className="flex-1 text-left truncate">{label}</span>
@@ -190,8 +183,8 @@ export function AppNavRail({
     <nav
       className={
         variant === "sheet"
-          ? "w-72 max-w-[85vw] h-full flex flex-col bg-[#f6f4ed] border-r border-[#e0ded5] px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-[max(0.75rem,env(safe-area-inset-left))] select-none overflow-y-auto"
-          : "hidden lg:flex w-56 shrink-0 flex-col bg-[#f6f4ed] border-r border-[#e0ded5] py-3 px-3 z-30 select-none overflow-y-auto"
+          ? "w-72 max-w-[85vw] h-full flex flex-col bg-[#f6f4ed] dark:bg-[#191a18] border-r border-[#e0ded5] dark:border-[#3b3d36] px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-[max(0.75rem,env(safe-area-inset-left))] select-none overflow-y-auto"
+          : "hidden lg:flex w-56 shrink-0 flex-col bg-[#f6f4ed] dark:bg-[#191a18] border-r border-[#e0ded5] dark:border-[#3b3d36] py-3 px-3 z-30 select-none overflow-y-auto"
       }
       aria-label="Primary"
     >
@@ -205,12 +198,12 @@ export function AppNavRail({
         />
         <span className="min-w-0">
           <span className="flex items-center gap-1.5">
-            <span className="font-display text-lg leading-none text-[#222320]">Shiba</span>
+            <span className="font-display text-lg leading-none text-[#222320] dark:text-[#eae8e1]">Shiba</span>
             <span className="text-[9px] font-mono font-semibold uppercase tracking-wider text-[#0000a8] border border-[#0000a8]/25 bg-[#0000a8]/10 rounded-none px-1 py-px">
               Beta
             </span>
           </span>
-          <span className="block text-[11px] text-[#6a6f63] leading-tight">agent plane</span>
+          <span className="block text-[11px] text-[#6a6f63] dark:text-[#aaa99f] leading-tight">agent plane</span>
         </span>
       </a>
       {onClose ? (
@@ -218,7 +211,7 @@ export function AppNavRail({
           type="button"
           onClick={onClose}
           aria-label="Close navigation"
-          className="size-11 -mt-1.5 -mr-1.5 shrink-0 rounded-none flex items-center justify-center text-[#6a6f63] hover:text-[#222320] hover:bg-[#e0ded5] transition-colors"
+          className="size-11 -mt-1.5 -mr-1.5 shrink-0 rounded-none flex items-center justify-center text-[#6a6f63] dark:text-[#aaa99f] hover:text-[#222320] dark:hover:text-[#f4f2ea] hover:bg-[#e0ded5] dark:hover:bg-[#3b3d36] transition-colors"
         >
           <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -231,7 +224,7 @@ export function AppNavRail({
       <div className="flex flex-col gap-4">
         {NAV_GROUPS.map((group) => (
           <div key={group.label}>
-            <div className="px-2.5 pb-1 text-[10px] font-mono font-semibold uppercase tracking-[0.12em] text-[#6a6f63]">
+            <div className="px-2.5 pb-1 text-[10px] font-mono font-semibold uppercase tracking-[0.12em] text-[#6a6f63] dark:text-[#aaa99f]">
               {group.label}
             </div>
             <div className="flex flex-col gap-0.5">
@@ -271,8 +264,8 @@ export function AppNavRail({
       </div>
 
       {/* Utility cluster */}
-      <div className="mt-auto flex flex-col gap-0.5 pt-3 mt-4 border-t border-[#e0ded5]">
-        <div className="px-2.5 pb-1 text-[10px] font-mono font-semibold uppercase tracking-[0.12em] text-[#6a6f63]">
+      <div className="mt-auto flex flex-col gap-0.5 pt-3 mt-4 border-t border-[#e0ded5] dark:border-[#3b3d36]">
+        <div className="px-2.5 pb-1 text-[10px] font-mono font-semibold uppercase tracking-[0.12em] text-[#6a6f63] dark:text-[#aaa99f]">
           System
         </div>
         <NavItem
@@ -297,9 +290,9 @@ export function AppNavRail({
         <a
           href="/docs/"
           aria-label="Documentation"
-          className="w-full flex items-center gap-2.5 rounded-none px-2.5 py-1.5 touch:min-h-11 text-[13px] font-medium text-[#222320] hover:bg-[#e0ded5] hover:text-[#222320] transition-colors duration-100"
+          className="group w-full flex items-center gap-2.5 rounded-none px-2.5 py-1.5 touch:min-h-11 text-[13px] font-medium text-[#222320] dark:text-[#eae8e1] hover:bg-[#e0ded5] dark:hover:bg-[#3b3d36] hover:text-[#222320] dark:hover:text-[#f4f2ea] transition-colors duration-100"
         >
-          <span className="text-[#6a6f63]" aria-hidden="true">
+          <span className="text-[#6a6f63] dark:text-[#aaa99f] group-hover:text-[#222320] dark:group-hover:text-[#f4f2ea]" aria-hidden="true">
             <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 19.5A2.5 2.5 0 016.5 17H20M4 19.5A2.5 2.5 0 006.5 22H20V2H6.5A2.5 2.5 0 004 4.5v15z" />
             </svg>

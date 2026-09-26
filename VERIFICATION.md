@@ -1,5 +1,7 @@
 # Verification Results
 
+**2026-09-26 — cloud-agent mailbox pairing.** Inbox pairing now writes an `agent` principal; the MCP email tool registry limits all 13 tools to that principal's currently assigned mailboxes (including bare-ID lookup paths). New real-Mailbox-DO tests cover cross-agent denial, unassigned mailboxes, approval-mint refusal, and reassignment; the active AGPL `LICENSE` is unchanged. `pnpm typecheck && pnpm lint && pnpm test && pnpm build` and `npx wrangler deploy --dry-run --config apps/backend/wrangler.jsonc` passed. This is local evidence only; a live cloud-agent `/mcp` round trip and real mail delivery remain unverified.
+
 **Last run: 2026-09-26 (email API and attachment pass).**
 
 ## Status: Local checks and Wrangler dry-run PASS; cloud deployment and live mail unverified

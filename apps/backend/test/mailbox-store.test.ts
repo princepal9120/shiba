@@ -570,6 +570,18 @@ describe("drafts", () => {
 });
 
 describe("mailboxes", () => {
+  it("accepts only token-compatible agent principals and preserves the old assignment on invalid input", () => {
+    const store = makeStore();
+    store.registerMailbox({ address: "agent@shiba.dev", agent: "scout" });
+    for (const agent of ["", "two words", "x".repeat(129)]) {
+      expect(() => store.registerMailbox({ address: "agent@shiba.dev", agent })).toThrow(InputError);
+    }
+    expect(store.getMailbox("agent@shiba.dev")?.agent).toBe("scout");
+    expect(store.registerMailbox({ address: "agent@shiba.dev", agent: " peer " }).agent).toBe("peer");
+    expect(store.registerMailbox({ address: "agent@shiba.dev" }).agent).toBe("peer");
+    expect(store.registerMailbox({ address: "agent@shiba.dev", agent: null }).agent).toBeNull();
+  });
+
   it("registers, lists, and checks addresses case-insensitively", () => {
     const store = makeStore();
     seedMailbox(store, "Agent@Shiba.dev");
