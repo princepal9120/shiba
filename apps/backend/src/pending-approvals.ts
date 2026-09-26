@@ -75,6 +75,8 @@ export interface PendingApproval {
   /** Exact delegation input frozen at queue time; executed verbatim on approve. */
   baseBranch?: string;
   publishPullRequest?: boolean;
+  /** Coding agent the human approved (e.g. "claude-code"). */
+  harness?: string;
   /** Approval kind; absent on records written before email kinds landed — treated as `"run"`. */
   kind?: ApprovalKind;
   /** Frozen email send/delete input for email-kind approvals. */
@@ -83,6 +85,11 @@ export interface PendingApproval {
   createdAt: number;
   decidedBy?: string;
   decidedAt?: number;
+  /**
+   * MCP principal that queued this approval (X-Agent-Principal at intake).
+   * Absent on operator-queued records — agent tokens only list their own.
+   */
+  queuedBy?: string;
   /**
    * Executor outcome for email-kind approvals, written after the
    * post-decision dispatch settles. Absent while execution is in flight
@@ -108,8 +115,10 @@ export interface CreateApprovalInput {
   task: string;
   baseBranch?: string;
   publishPullRequest?: boolean;
+  harness?: string;
   kind?: ApprovalKind;
   payload?: JsonValue;
+  queuedBy?: string;
   createdAt: number;
 }
 
@@ -129,8 +138,10 @@ export function createPendingApproval(
       task: input.task,
       ...(input.baseBranch !== undefined ? { baseBranch: input.baseBranch } : {}),
       ...(input.publishPullRequest !== undefined ? { publishPullRequest: input.publishPullRequest } : {}),
+      ...(input.harness !== undefined ? { harness: input.harness } : {}),
       ...(input.kind !== undefined ? { kind: input.kind } : {}),
       ...(input.payload !== undefined ? { payload: input.payload } : {}),
+      ...(input.queuedBy !== undefined ? { queuedBy: input.queuedBy } : {}),
       status: "pending",
       createdAt: input.createdAt,
     },
@@ -220,4 +231,3 @@ export function decidedApprovals(approvals: PendingApproval[]): PendingApproval[
 export function isApprovalExpired(record: PendingApproval, now: number): boolean {
   return now - record.createdAt > APPROVAL_TTL_MS;
 }
-

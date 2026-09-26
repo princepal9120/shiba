@@ -1,4 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
+import { fakeSqlStorage } from "./fixtures/do-sql-storage.js";
 import { describe, expect, it } from "vitest";
 import type { Env } from "../src/env.js";
 import {
@@ -7,7 +8,6 @@ import {
   mailboxDirectoryStub,
   mailboxStub,
 } from "../src/mailbox-do.js";
-import type { SqlRow } from "../src/mailbox-store.js";
 
 /**
  * Route-level tests: the DO's only hard dependency is `ctx.storage.sql`,
@@ -40,13 +40,7 @@ function makeHarness(): Harness {
         toString: () => `id:${name}`,
         equals: () => false,
       },
-      storage: {
-        sql: {
-          exec: (sql: string, ...params: unknown[]) => ({
-            toArray: () => db.prepare(sql).all(...(params as any[])) as SqlRow[],
-          }),
-        },
-      },
+      storage: fakeSqlStorage(db),
       blockConcurrencyWhile: async (fn: () => Promise<unknown>) => fn(),
       waitUntil: () => {},
     };

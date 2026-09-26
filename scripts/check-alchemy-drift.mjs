@@ -561,6 +561,36 @@ for (const [key, value] of env) {
   }
 }
 
+// (e) Access bypass contract: every ACCESS_BYPASS_PATHS entry must be a
+// path the Worker itself exempts from Access identity — a bypassed edge
+// path that still requires Access identity 401s machine callers, and a
+// signature route missing from the bypass list 403s at the edge.
+const indexPath = resolve(wranglerDir, "src/index.ts");
+let indexText = "";
+try {
+  indexText = stripTsComments(readFileSync(indexPath, "utf8"));
+} catch {
+  drift.push(`cannot read ${indexPath} for the Access bypass check`);
+}
+const literalsIn = (text, name) => {
+  const m = new RegExp(name + "\\s*=\\s*\\[([\\s\\S]*?)\\]").exec(text);
+  return m ? [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]) : [];
+};
+const bypassPaths = literalsIn(alchemyText, "ACCESS_BYPASS_PATHS");
+const signaturePaths = new Set(literalsIn(indexText, "SIGNATURE_AUTHENTICATED"));
+const hasMcpRule = /isMcpPath\s*\(/.test(indexText);
+const hasAutomationRule = /parseAutomationWebhookPath\s*\(/.test(indexText);
+for (const path of bypassPaths) {
+  if (signaturePaths.has(path)) continue;
+  if ((path === "/mcp" || path === "/mcp/*") && hasMcpRule) continue;
+  if (path === "/api/automations/*/trigger" && hasAutomationRule) continue;
+  drift.push(`ACCESS_BYPASS_PATHS "${path}" has no Worker auth exemption in apps/backend/src/index.ts`);
+}
+for (const path of signaturePaths) {
+  if (!bypassPaths.includes(path)) {
+    drift.push(`SIGNATURE_AUTHENTICATED "${path}" is missing from ACCESS_BYPASS_PATHS — machine callers will 403 at the edge`);
+  }
+}
 if (drift.length > 0) {
   for (const line of drift) console.error(`check-alchemy-drift: ${line}`);
   process.exit(1);

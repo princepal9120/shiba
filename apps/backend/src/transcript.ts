@@ -22,9 +22,15 @@ export function messageText(value: unknown): string {
   return chunks.join("\n");
 }
 
+/** Pull the `Pull request: <url>` line back out of rendered output. */
+export function extractPullRequestUrl(text: string): string | null {
+  const match = /^Pull request:\s*(https?:\/\/\S+)\s*$/m.exec(text);
+  return match?.[1] ?? null;
+}
+
 /**
  * Build the assistant text for one run: task header, progress lines,
- * changed files, bounded diff, optional pull request URL, or the honest
+ * optional pull request URL, changed files, bounded diff, or the honest
  * failure summary with stderr tail.
  */
 export function renderRunTranscript(args: {
@@ -42,6 +48,10 @@ export function renderRunTranscript(args: {
     lines.push(`[${event.phase}] ${event.message}`);
   }
   if (args.result.status === "completed") {
+    // Before the diff: readers that truncate the transcript must still see the PR.
+    if (args.pullUrl) {
+      lines.push(`Pull request: ${args.pullUrl}`);
+    }
     lines.push(
       args.result.changedFiles.length > 0
         ? `Changed files: ${args.result.changedFiles.join(", ")}`
@@ -50,9 +60,6 @@ export function renderRunTranscript(args: {
     if (args.result.diff) {
       lines.push("Diff:");
       lines.push(boundTail(redactSecrets(args.result.diff), 20_000));
-    }
-    if (args.pullUrl) {
-      lines.push(`Pull request: ${args.pullUrl}`);
     }
   } else {
     lines.push(`Failed: ${args.result.summary}`);

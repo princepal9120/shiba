@@ -84,6 +84,20 @@ describe("agent result envelope", () => {
     expect(parseAgentResultText(text)).toEqual(result);
   });
 
+  it("carries an optional pullUrl through the envelope", () => {
+    const result = {
+      status: "completed" as const,
+      exitCode: 0,
+      stderrTail: "",
+      changedFiles: [],
+      diff: "",
+      files: [],
+      summary: "done",
+      pullUrl: "https://github.com/owner/repo/pull/7",
+    };
+    expect(parseAgentResultText(formatAgentResult(result)).pullUrl).toBe(result.pullUrl);
+  });
+
   it("rejects text without a result envelope", () => {
     expect(() => parseAgentResultText("just prose")).toThrow();
   });

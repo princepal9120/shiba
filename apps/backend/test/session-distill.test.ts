@@ -383,6 +383,7 @@ describe("T10 orchestrator wiring", () => {
     instance.env = env;
     instance.name = "intern";
     instance.ctx = { waitUntil: (p: Promise<unknown>) => pending.push(p) };
+    instance.keepAliveWhile = (fn: () => Promise<unknown>) => fn();
     instance.setState = (s: unknown) => {
       instance.state = s;
     };

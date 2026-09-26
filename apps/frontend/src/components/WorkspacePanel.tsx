@@ -1,10 +1,10 @@
 /**
  * WorkspacePanel — right-hand Devin-style pane (~400px).
- * Tabs: Runs | VM | Diff | Approvals. Collapses to a 40px icon rail.
- * Below lg the expanded panel becomes a fixed right drawer so the
- * conversation keeps full width on small screens.
+ * Tabs: Runs | VM | Diff | Approvals. Collapses to a 40px icon rail (lg+).
+ * Below lg the expanded panel becomes a drawer over a tap-to-close
+ * backdrop — full-screen on phones — so the conversation keeps full width.
  */
-import { useMemo, useState, type JSX } from "react";
+import { useEffect, useMemo, useRef, useState, type JSX } from "react";
 import { DiffViewer } from "./DiffViewer";
 import { VMInspector, type VMRun } from "./VMInspector";
 import { ApprovalCard } from "./ApprovalCard";
@@ -88,11 +88,11 @@ const TABS: { id: WorkspaceTab; label: string }[] = [
 ];
 
 const GHOST_BUTTON =
-  "text-[11px] bg-transparent hover:bg-[#fffef8] border border-[#e0ded5] hover:border-[#d3d2c8] text-[#6a6f63] hover:text-[#222320] font-medium py-1 px-2.5 rounded-md transition-colors";
+  "text-[11px] bg-transparent hover:bg-[#fffef8] border border-[#e0ded5] hover:border-[#d3d2c8] text-[#6a6f63] hover:text-[#222320] font-medium py-1 px-2.5 touch:min-h-11 touch:px-3.5 rounded-md transition-colors";
 const ACCENT_BUTTON =
-  "text-[11px] bg-[#0000a8]/10 hover:bg-[#0000a8]/15 border border-[#0000a8]/15 text-[#1c1cc8] font-medium py-1 px-2.5 rounded-md transition-colors";
+  "text-[11px] bg-[#0000a8]/10 hover:bg-[#0000a8]/15 border border-[#0000a8]/15 text-[#1c1cc8] font-medium py-1 px-2.5 touch:min-h-11 touch:px-3.5 rounded-md transition-colors";
 const DANGER_BUTTON =
-  "text-[11px] bg-transparent hover:bg-[#fb2c36]/10 border border-[#fb2c36]/50 text-[#fb2c36] font-medium py-1 px-2.5 rounded-md transition-colors";
+  "text-[11px] bg-transparent hover:bg-[#fb2c36]/10 border border-[#fb2c36]/50 text-[#fb2c36] font-medium py-1 px-2.5 touch:min-h-11 touch:px-3.5 rounded-md transition-colors";
 
 /** Kind-aware label for a stored approval pointer; unknown kinds render raw. */
 function storedApprovalKind(approval: StoredApproval): string {
@@ -257,6 +257,11 @@ export function WorkspacePanel({
     onTabChange?.(next);
   };
   const [runsFilter, setRunsFilter] = useState<RunsFilter>("all");
+  // Tabs scroll sideways on phones; keep the active one (e.g. opened via "Review") in view.
+  const activeTabRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    activeTabRef.current?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  }, [tab, collapsed]);
   // The inbox stays mounted after its first visit — an in-progress reply
   // draft lives only in component state, and unmounting on a tab switch
   // would silently drop it. The flag sets during render so the same pass
@@ -294,10 +299,10 @@ export function WorkspacePanel({
     approvals: pendingApprovals.length + storedApprovals.length,
   };
 
-  // Collapsed: 40px icon rail — always rendered, even below lg.
+  // Collapsed: 40px icon rail on lg+; phones reopen it from the session header.
   if (collapsed) {
     return (
-      <aside className="w-10 shrink-0 border-l border-[#e0ded5] bg-[#f1efe6] flex flex-col items-center py-2 gap-2">
+      <aside className="hidden lg:flex w-10 shrink-0 border-l border-[#e0ded5] bg-[#f1efe6] flex-col items-center py-2 gap-2">
         <button
           type="button"
           onClick={onToggleCollapsed}
@@ -320,18 +325,28 @@ export function WorkspacePanel({
   }
 
   return (
-    <aside className="w-[400px] max-w-[88vw] shrink-0 border-l border-[#e0ded5] bg-[#f1efe6] flex flex-col min-h-0 fixed top-14 bottom-0 right-0 z-40 shadow-2xl lg:static lg:z-auto lg:shadow-none">
-      {/* Tab bar */}
-      <div className="flex items-center gap-1 px-3 pt-2 pb-0 border-b border-[#e0ded5]">
+    <>
+    <button
+      type="button"
+      aria-label="Close workspace panel"
+      onClick={onToggleCollapsed}
+      className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm lg:hidden"
+    />
+    <aside className="fixed inset-0 z-50 w-full sm:left-auto sm:w-[400px] pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] shrink-0 border-l border-[#e0ded5] bg-[#f1efe6] flex flex-col min-h-0 shadow-2xl lg:static lg:inset-auto lg:w-[400px] lg:pt-0 lg:pb-0 lg:z-auto lg:shadow-none">
+      {/* Tab bar: tabs scroll sideways, the close button stays pinned. */}
+      <div className="flex items-center border-b border-[#e0ded5]">
+        <div className="flex-1 min-w-0 flex items-center gap-1 pl-3 pt-2 overflow-x-auto no-scrollbar">
         {TABS.map((t) => {
           const active = tab === t.id;
           const count = badgeCounts[t.id];
           return (
             <button
               key={t.id}
+              ref={active ? activeTabRef : undefined}
               type="button"
+              aria-pressed={active}
               onClick={() => setTab(t.id)}
-              className={`text-xs font-medium px-2.5 py-1.5 rounded-t-lg border-b-2 transition-colors flex items-center gap-1.5 ${
+              className={`shrink-0 text-xs font-medium px-2.5 py-1.5 touch:min-h-11 rounded-t-lg border-b-2 transition-colors flex items-center gap-1.5 ${
                 active
                   ? "text-[#222320] border-[#0000a8] bg-[#fffef8]"
                   : "text-[#6a6f63] border-transparent hover:text-[#222320] hover:bg-[#fffef8]"
@@ -352,15 +367,18 @@ export function WorkspacePanel({
             </button>
           );
         })}
-        <div className="flex-1" />
+        </div>
         <button
           type="button"
           onClick={onToggleCollapsed}
           aria-label="Collapse workspace panel"
           title="Collapse workspace panel"
-          className="w-7 h-7 mb-1 rounded-lg flex items-center justify-center text-[#6a6f63] hover:text-[#222320] hover:bg-[#fffef8] transition-colors"
+          className="w-11 h-11 lg:w-7 lg:h-7 mx-1 lg:mx-2 mt-1 shrink-0 rounded-lg flex items-center justify-center text-[#6a6f63] hover:text-[#222320] hover:bg-[#fffef8] transition-colors"
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className="w-5 h-5 lg:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+          <svg className="w-4 h-4 hidden lg:block" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
         </button>
@@ -654,5 +672,6 @@ export function WorkspacePanel({
         ) : null}
       </div>
     </aside>
+    </>
   );
 }

@@ -19,6 +19,18 @@ import type { Env } from "./env.js";
 /** The Slack path opens a pull request by default. */
 export const SLACK_DEFAULT_PUBLISH_PR = true;
 
+/** Slack-originated runs launch Claude Code unless configured otherwise. */
+export const SLACK_DEFAULT_HARNESS = "claude-code";
+
+/**
+ * Which coding agent runs Slack tasks: SLACK_AGENT_HARNESS wins, then the
+ * deployment-wide AGENT_HARNESS, then Claude Code — Slack is the coworker
+ * surface, and the coworker's default hands are Claude's.
+ */
+export function resolveSlackHarness(env: { SLACK_AGENT_HARNESS?: string; AGENT_HARNESS?: string }): string {
+  return env.SLACK_AGENT_HARNESS?.trim() || env.AGENT_HARNESS?.trim() || SLACK_DEFAULT_HARNESS;
+}
+
 /** Slack message timestamps look like "1758217392.000100". */
 const SLACK_TS_PATTERN = /^\d+\.\d+$/;
 
@@ -80,6 +92,8 @@ export interface SlackRunPayload {
   baseBranch: string;
   publishPullRequest: boolean;
   source: "slack";
+  /** Coding agent the approval card shows and the run executes. */
+  harness?: string;
   channel_id?: string;
   user_id?: string;
 }
@@ -94,6 +108,7 @@ export function buildSlackRunPayload(input: {
   baseBranch?: string;
   channelId?: string;
   userId?: string;
+  harness?: string;
 }): SlackRunPayload {
   return {
     repoUrl: input.repoUrl,
@@ -101,6 +116,7 @@ export function buildSlackRunPayload(input: {
     baseBranch: input.baseBranch ?? "main",
     publishPullRequest: SLACK_DEFAULT_PUBLISH_PR,
     source: "slack",
+    ...(input.harness ? { harness: input.harness } : {}),
     ...(input.channelId ? { channel_id: input.channelId } : {}),
     ...(input.userId ? { user_id: input.userId } : {}),
   };

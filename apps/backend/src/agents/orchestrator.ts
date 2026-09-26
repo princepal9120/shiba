@@ -17,7 +17,9 @@ import {
 } from "../opencode-input.js";
 import {
   MAX_CONCURRENT_RUNS,
+  RUN_DEADLINE_MS,
   RunStore,
+  AGENT_PRINCIPAL_HEADER,
   canStartRun,
   createRun,
   isActiveStatus,
@@ -53,7 +55,15 @@ import { runWorkerEffect, toRunFailure, tryRunPromise } from "../effect/runtime.
 import { classifyExecutorError, classifyRunError, runErrorWire, toTaggedError, type RunErrorCode, type RunErrorWire } from "../run-errors.js";
 import { DEFAULT_ORCHESTRATOR_MODEL, distillSession } from "../session-distill.js";
 import { parseSlackThreadName } from "../slack-thread.js";
+import {
+  slackRunCancelled,
+  slackRunCompleted,
+  slackRunFailed,
+  slackRunStarted,
+} from "../slack-persona.js";
+import { postSlackMessage } from "../slack.js";
 import { evaluateResultQuality } from "../result-quality.js";
+import { extractPullRequestUrl } from "../transcript.js";
 import { HARNESS_DEFAULT_MODELS, allowedHostsFor, resolveHarness } from "../harness/index.js";
 import { OpenCodeAgent } from "./opencode-agent.js";
 
@@ -116,6 +126,19 @@ type DelegateInput = z.infer<typeof delegateInputSchema>;
  */
 const STALE_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 
+/**
+ * Accept a scraped "Pull request:" URL only when it points at a PR in the
+ * run's own repository — transcript text is agent-influenced, so a link to
+ * any other repo is rejected instead of posted to Slack.
+ */
+function repoPullUrl(output: string, repoUrl: string): string | undefined {
+  const url = extractPullRequestUrl(output);
+  if (!url) return undefined;
+  const { owner, repo } = parseGitHubRepoUrl(repoUrl);
+  const expected = `https://github.com/${owner}/${repo}/pull/`;
+  return url.toLowerCase().startsWith(expected.toLowerCase()) ? url : undefined;
+}
+
 export class CodingOrchestrator extends Think<Env, OrchestratorState> {
   /** The orchestrator plans and delegates; it never runs shell commands. */
   override workspaceBash = false;
@@ -158,12 +181,19 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       .filter((run): run is DelegatedRun => run !== null && isActiveStatus(run.status));
     // Do not retry potentially published work after losing the execution context.
     for (const run of interrupted) {
-      this.store.transition(run.runId, "unknown", {
+      const updated = this.store.transition(run.runId, "unknown", {
         error: "Execution interrupted by orchestrator restart. Inspect repository state before retrying.",
         errorCode: "outcome_unknown",
       });
+      if (updated !== null) this.postOutcomeUnknown(updated);
     }
-    await Promise.all(interrupted.map((run) => this.destroySandbox(run.sandboxId)));
+    // Teardown runs in the background: awaiting container I/O here would block the DO's start.
+    const teardown = Promise.all(interrupted.map((run) => this.destroySandbox(run.sandboxId)));
+    if (typeof this.ctx === "object" && this.ctx !== null && "waitUntil" in this.ctx) {
+      this.ctx.waitUntil(teardown);
+    } else {
+      void teardown;
+    }
     // Before anything re-drives, free the draft claims a dead attempt
     // could leave behind: a `sending` row at DO start belongs to a
     // dispatch that died with the last lifetime — claims are only
@@ -355,6 +385,9 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       // harness/model pair fails before a container starts — not inside one.
       const { harness: resolvedHarness, codingModel } = this.resolveHarnessAndModel(input);
       const sandboxId = makeSandboxId(input.repoUrl, input.task, callId);
+      // Slack thread ids ride the DO name, not the queue body — recovering
+      // them here lets the child post progress without new queue plumbing.
+      const slackIds = parseSlackThreadName(this.name);
       const fullInput: CodingTaskInput = {
         repoUrl: input.repoUrl,
         task: input.task,
@@ -363,6 +396,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         sandboxId,
         codingModel,
         harness: resolvedHarness as CodingTaskInput["harness"],
+        ...(slackIds ? { slackThread: { channelId: slackIds.channelId, threadTs: slackIds.threadTs } } : {}),
       };
       if (!reserved) this.store.add(
         createRun({
@@ -374,20 +408,15 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
           publishPullRequest: fullInput.publishPullRequest,
         }),
       );
-      const finish = (status: RunStatus, patch?: RunPatch): DelegatedRun | null => {
+      // Slack-originated runs get the outcome back in the thread in the
+      // coworker voice; the summary carries the PR link when one was published.
+      const finish = (status: RunStatus, patch?: RunPatch, slackText?: string): DelegatedRun | null => {
         // Fenced write: a stale generation (cancel/reclaim landed while the
         // child was running) drops the transition AND every side effect.
         const updated = this.store.transition(runId, status, patch, generation);
         if (updated === null) return null;
-        // Slack-originated runs get the outcome back in the thread; the
-        // summary carries the PR link when one was published.
-        if (status === "completed") {
-          this.postToSlackThread(`Run completed for ${fullInput.repoUrl}\n${patch?.summary?.slice(0, 1500) ?? ""}`.trim());
-        } else if (status === "error" || status === "unknown") {
-          const wire = runErrorWire(patch?.errorCode ?? "internal_error");
-          this.postToSlackThread(
-            `${status === "unknown" ? "Run outcome unknown" : "Run failed"} for ${fullInput.repoUrl}\n${wire.userMessage}\n${patch?.error?.slice(0, 1000) ?? ""}`.trim(),
-          );
+        if (slackText) {
+          this.postToSlackThread(slackText);
         }
         // Megaplan T10: a retained run landing completed/error distills its
         // transcript into long-term memory — best-effort under waitUntil.
@@ -401,7 +430,17 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         return `Run ${runId} did not start — it is already ${this.store.get(runId)?.status ?? "missing"}.`;
       }
       const generation = running.generation;
-      this.postToSlackThread(`Run started for ${fullInput.repoUrl} (${fullInput.baseBranch ?? "main"}).`);
+      // Durable backstop: reclaim fires at the deadline even when no request ever arrives.
+      yield* Effect.promise(async () => {
+        try {
+          await this.schedule(Math.ceil(RUN_DEADLINE_MS / 1000) + 60, "reclaimRuns");
+        } catch (error) {
+          console.warn(`Run ${runId} reclaim schedule failed`, redactSecrets(String(error)));
+        }
+      });
+      this.postToSlackThread(
+        slackRunStarted({ repoUrl: fullInput.repoUrl, baseBranch: fullInput.baseBranch, harness: fullInput.harness }),
+      );
       return yield* Effect.acquireUseRelease(
         Effect.sync(() => {
           const controller = new AbortController();
@@ -425,7 +464,20 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
               // transport type instead would mark failed runs "completed".
               const parsed = parseAgentResult(output);
               if (parsed?.status === "completed") {
-                const finished = finish("completed", { summary: output.slice(0, 4000), diff: parsed?.diff ? parsed.diff.slice(0, 20000) : undefined });
+                const finished = finish(
+                  "completed",
+                  { summary: output.slice(0, 4000), diff: parsed?.diff ? parsed.diff.slice(0, 20000) : undefined, pullUrl: parsed.pullUrl },
+                  slackRunCompleted({
+                    repoUrl: fullInput.repoUrl,
+                    summary: redactSecrets(parsed.summary ?? "").slice(0, 4000),
+                    changedFiles: parsed.changedFiles?.length,
+                    // The envelope carries pullUrl; the transcript scrape is a
+                    // fallback for older children — never the source of truth.
+                    // A scraped link is accepted only inside the run's own repo,
+                    // so a "Pull request: https://evil" line cannot spoof it.
+                    pullUrl: parsed.pullUrl ?? repoPullUrl(output, fullInput.repoUrl),
+                  }),
+                );
                 // TypeSafe Score: grade the run quality (fail-open — never
                 // blocks completion). Terminal runs are immutable
                 // (transitionRun refuses them), so the grade lands as a
@@ -458,16 +510,28 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
                 return output;
               }
               const failure = classifyExecutorError(new Error(parsed?.summary ?? output.slice(0, 4000)));
-              finish(terminalStatusFor(failure.code), {
+              const failureStatus = terminalStatusFor(failure.code);
+              finish(failureStatus, {
                 summary: output.slice(0, 4000),
                 error: redactSecrets(parsed?.summary ?? output.slice(0, 4000)).slice(0, 4000),
                 errorCode: failure.code,
-              });
+              }, slackRunFailed({
+                repoUrl: fullInput.repoUrl,
+                userMessage: runErrorWire(failure.code).userMessage,
+                detail: redactSecrets(parsed?.summary ?? output.slice(0, 1000)).slice(0, 1000),
+                unknown: failureStatus === "unknown",
+              }));
               return output;
             }
             const message = `Coding run failed: ${JSON.stringify(output).slice(0, 2000)}`;
             const failure = classifyRunError(new Error(message));
-            finish(terminalStatusFor(failure.code), { error: redactSecrets(message), errorCode: failure.code });
+            const failureStatus = terminalStatusFor(failure.code);
+            finish(failureStatus, { error: redactSecrets(message), errorCode: failure.code }, slackRunFailed({
+              repoUrl: fullInput.repoUrl,
+              userMessage: runErrorWire(failure.code).userMessage,
+              detail: message.slice(0, 1000),
+              unknown: failureStatus === "unknown",
+            }));
             return yield* Effect.fail(toTaggedError(failure.code, message));
           }).pipe(
             // The old catch block: every in-flight failure or interruption
@@ -476,12 +540,18 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
             // continues out as the rejection.
             Effect.catchCause((cause) => {
               const failure = toRunFailure(cause);
+              const failureStatus = terminalStatusFor(failure.code);
               return Effect.andThen(
                 Effect.sync(() => {
-                  finish(terminalStatusFor(failure.code), {
+                  finish(failureStatus, {
                     error: redactSecrets(failure.message).slice(0, 4000),
                     errorCode: failure.code,
-                  });
+                  }, slackRunFailed({
+                    repoUrl: fullInput.repoUrl,
+                    userMessage: runErrorWire(failure.code).userMessage,
+                    detail: redactSecrets(failure.message).slice(0, 1000),
+                    unknown: failureStatus === "unknown",
+                  }));
                 }),
                 Effect.failCause(cause),
               );
@@ -504,7 +574,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
    * the pointer via POST /api/approvals. Email-kind approvals freeze a
    * mailbox payload instead of a run input.
    */
-  private async queueSlackRun(input: { repoUrl?: unknown; task?: unknown; baseBranch?: unknown; publishPullRequest?: unknown; threadKey?: unknown; kind?: unknown; mailbox?: unknown; payload?: unknown }): Promise<Response> {
+  private async queueSlackRun(input: { repoUrl?: unknown; task?: unknown; baseBranch?: unknown; publishPullRequest?: unknown; threadKey?: unknown; kind?: unknown; mailbox?: unknown; payload?: unknown; harness?: unknown; queuedBy?: unknown }): Promise<Response> {
     const kind = typeof input.kind === "string" && input.kind.trim() ? input.kind.trim() : "run";
     if (kind === "email_send" || kind === "email_delete") {
       return this.queueEmailApprovalRecord(kind, input);
@@ -521,6 +591,16 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     }
     if (!task.trim()) {
       return Response.json({ error: "Task description is required." }, { status: 400 });
+    }
+    // The approver must see a real agent name on the card — validate here
+    // so a bad harness fails before the card, never inside a container.
+    const harness = typeof input.harness === "string" && input.harness.trim() ? input.harness.trim() : undefined;
+    if (harness !== undefined) {
+      try {
+        resolveHarness(harness);
+      } catch (error) {
+        return Response.json({ error: error instanceof Error ? error.message : "Unknown agent harness." }, { status: 400 });
+      }
     }
     const publishPullRequest = input.publishPullRequest === true;
     if (publishPullRequest && !this.env.GITHUB_TOKEN) {
@@ -542,6 +622,12 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         task: task.slice(0, 4000),
         baseBranch: typeof input.baseBranch === "string" && input.baseBranch.trim() ? input.baseBranch.slice(0, 200) : "main",
         publishPullRequest,
+        ...(harness !== undefined ? { harness } : {}),
+        // Worker-vouched principal (X-Agent-Principal) — never the raw body,
+        // so an operator-queued record can't be claimed by an agent token.
+        ...(typeof input.queuedBy === "string" && input.queuedBy.trim()
+          ? { queuedBy: input.queuedBy.trim().slice(0, 200) }
+          : {}),
         createdAt: Date.now(),
       }));
     } catch (error) {
@@ -640,11 +726,14 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     } catch (error) {
       return Response.json({ error: error instanceof Error ? error.message : "Could not queue approval." }, { status: 409 });
     }
+    const body = kind === "email_send" ? String(fields.body_text).trim() : "";
+    const excerpt = body.length > 500 ? `${body.slice(0, 499)}…` : body;
     this.postEmailApprovalCard({
       threadKey,
       approvalId,
       repoUrl: mailbox,
-      task,
+      // The card builder mrkdwn-escapes `task`, so the untrusted body excerpt is escaped with it.
+      task: excerpt ? `${task}\n${excerpt}` : task,
       kind,
       ...(registration.agent ? { agent: registration.agent } : {}),
     });
@@ -668,9 +757,11 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ channel, text: approvalCardText(input).slice(0, 3000), blocks: buildApprovalBlocks(input) }),
-    }).then((response) => {
-      if (!response.ok) {
-        console.error(`Slack email approval card post failed (${response.status})`);
+    }).then(async (response) => {
+      // Slack reports app-level failures (not_in_channel, …) as HTTP 200 with ok:false.
+      const body = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+      if (!response.ok || body?.ok !== true) {
+        console.error(`Slack email approval card post failed (${response.status}): ${body?.error ?? "unparseable response"}`);
       }
     }).catch((error) => {
       console.error("Slack email approval card post failed", redactSecrets(String(error)));
@@ -748,6 +839,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       task: record.task,
       baseBranch: record.baseBranch ?? "main",
       publishPullRequest: record.publishPullRequest ?? false,
+      queuedBy: record.queuedBy,
     }) : undefined;
     // One state write reserves capacity and records the decision before any await.
     this.setState({
@@ -767,6 +859,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
             task: run.task,
             baseBranch: run.baseBranch,
             publishPullRequest: run.publishPullRequest,
+            ...(record?.harness ? { harness: record.harness } : {}),
           }, { toolCallId: approvalId });
         } catch (error) {
           // delegate.execute can throw before its inner `finish` seam ran;
@@ -780,12 +873,25 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
             error: redactSecrets(failure.message).slice(0, 4000),
             errorCode: failure.code,
           }, generation);
-          if (updated !== null && (status === "completed" || status === "error")) {
-            this.dispatchSessionDistill(updated);
+          if (updated !== null) {
+            // A pre-start failure never reaches `finish`'s slackText seam —
+            // post here or the thread sees ack + card + approved, then silence.
+            this.postToSlackThread(slackRunFailed({
+              repoUrl: run.repoUrl,
+              userMessage: runErrorWire(failure.code).userMessage,
+              detail: redactSecrets(failure.message).slice(0, 1000),
+              unknown: status === "unknown",
+            }));
+            if (status === "completed" || status === "error") {
+              this.dispatchSessionDistill(updated);
+            }
           }
         }
       };
-      void dispatch();
+      // Slack/dashboard approvals hold no socket open, so without the heartbeat the DO can idle out mid-run.
+      this.keepAliveWhile(dispatch).catch((error) => {
+        console.error(`Run ${run.runId} dispatch failed`, redactSecrets(String(error)));
+      });
     }
     if (record && isEmailRecord) {
       this.dispatchApprovedEmail(record);
@@ -890,7 +996,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     // Cancellation is deliberately unfenced: it is allowed to win races.
     const updated = this.store.transition(runId, "cancelled", { errorCode: "cancelled" });
     this.runControllers.get(runId)?.abort();
-    this.postToSlackThread(`Run cancelled for ${run.repoUrl}. If a publish was in flight it may still land — check the repository before retrying.`);
+    this.postToSlackThread(slackRunCancelled({ repoUrl: run.repoUrl }));
     await this.destroySandbox(run.sandboxId);
     return updated;
   }
@@ -905,16 +1011,21 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     const token = this.env.SLACK_BOT_TOKEN?.trim();
     if (!ids || !token) return;
     this.ctx.waitUntil(
-      fetch("https://slack.com/api/chat.postMessage", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ channel: ids.channelId, thread_ts: ids.threadTs, text: text.slice(0, 3000) }),
-      })
-        .then((response) => {
-          if (!response.ok) console.error(`Slack post-back failed (${response.status})`);
-        })
-        .catch(() => { /* best-effort */ }),
+      postSlackMessage(token, { channel: ids.channelId, threadTs: ids.threadTs, text: text.slice(0, 3000) })
+        .catch((error: unknown) => {
+          console.error(`Slack post-back failed: ${redactSecrets(error instanceof Error ? error.message : String(error))}`);
+        }),
     );
+  }
+
+  /** Terminal "unknown" notice for runs that end outside `finish` (restart, reclaim). */
+  private postOutcomeUnknown(run: DelegatedRun): void {
+    this.postToSlackThread(slackRunFailed({
+      repoUrl: run.repoUrl,
+      userMessage: runErrorWire(run.errorCode ?? "outcome_unknown").userMessage,
+      detail: run.error?.slice(0, 1000),
+      unknown: true,
+    }));
   }
 
   /** Wire projection for API responses: errorCode -> {status, code, userMessage}. */
@@ -951,12 +1062,14 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     await destroyManagedContainer(this.env, sandboxId);
   }
 
-  private async reclaimRuns(): Promise<void> {
+  /** Public: also the `schedule()` callback armed when a run starts. */
+  async reclaimRuns(): Promise<void> {
     this.armLeakPersistence();
     const { runs, reclaimed } = reclaimStaleRuns(this.store.list(), Date.now());
     if (reclaimed.length > 0) {
       this.setState({ ...this.state, runs });
       await Promise.all(runs.filter((run) => reclaimed.includes(run.runId)).map(async (run) => {
+        this.postOutcomeUnknown(run);
         this.runControllers.get(run.runId)?.abort();
         await this.destroySandbox(run.sandboxId);
       }));
@@ -1134,7 +1247,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
    * aged out. Decided records are dropped from the listing — a
    * resolved pointer must never be re-listed.
    */
-  private listApprovals(): Response {
+  private listApprovals(agentPrincipal: string | null): Response {
     const now = Date.now();
     const expiredSends = this.expiredEmailSends(now);
     const pruned = pruneExpiredApprovals(this.approvals, now);
@@ -1143,17 +1256,27 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       this.releaseEmailApprovalDrafts(expiredSends, this.liveApprovalDrafts(now));
     }
     this.sweepStaleDrafts(expiredSends.length > 0);
+    // Agent principals see only records they queued; operator surfaces
+    // (no principal header) keep the full listing.
+    const visible = agentPrincipal === null
+      ? pruned
+      : pruned.filter((approval) => approval.queuedBy === agentPrincipal);
     return Response.json({
-      approvals: pruned.filter((approval) => approval.status === "pending"),
+      approvals: visible.filter((approval) => approval.status === "pending"),
       // Decided records leave the pending arm but stay listed — the
       // execution stamp (including a failed send) is durable state no
       // other surface renders, so the listing returns recent ones.
-      decided: decidedApprovals(pruned),
+      decided: decidedApprovals(visible),
     });
   }
 
   override async onRequest(request: Request): Promise<Response> {
     const url = new URL(request.url);
+    // Worker-vouched agent identity: only mcp-run-tools sets this after
+    // bearer auth, so it scopes reads/cancels to records that principal
+    // queued. External callers never reach this DO without an Access or
+    // signature-authenticated identity on the Worker first.
+    const agentPrincipal = request.headers.get(AGENT_PRINCIPAL_HEADER)?.trim() || null;
     // Cron backstop for the poll-driven stale-draft sweep — in a quiet
     // system no approvals fetch or DO restart ever calls it, so a human
     // who stops polling would leave `sending`-locked drafts held forever.
@@ -1162,9 +1285,13 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       return Response.json({ ok: true });
     }
     if (url.pathname === "/api/approvals" && request.method === "GET") {
-      return this.listApprovals();
+      return this.listApprovals(agentPrincipal);
     }
     if (request.method === "POST" && url.pathname === "/api/approvals") {
+      // Approving is a human act — an agent principal can never decide.
+      if (agentPrincipal !== null) {
+        return Response.json({ error: "Agent principals cannot decide approvals." }, { status: 403 });
+      }
       let approvalBody: unknown;
       try {
         approvalBody = await request.json();
@@ -1193,7 +1320,9 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       if (typeof queueBody !== "object" || queueBody === null || Array.isArray(queueBody)) {
         return Response.json({ error: "Request body must be a JSON object." }, { status: 400 });
       }
-      return this.queueSlackRun(queueBody as Record<string, unknown>);
+      // queuedBy comes only from the vouched header — a body field would
+      // let any caller attribute its run to another principal.
+      return this.queueSlackRun({ ...(queueBody as Record<string, unknown>), queuedBy: agentPrincipal ?? undefined });
     }
     if (request.method !== "GET" && request.method !== "DELETE") {
       return Response.json({ error: "Method not allowed." }, { status: 405 });
@@ -1206,19 +1335,39 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     }
     await this.reclaimRuns();
     if (request.method === "GET" && id === null) {
-      return Response.json({ runs: this.store.list().map((run) => this.serializeRun(run)) });
+      const visible = agentPrincipal === null
+        ? this.store.list()
+        : this.store.list().filter((run) => run.queuedBy === agentPrincipal);
+      const limitParam = url.searchParams.get("limit");
+      if (limitParam !== null) {
+        const limit = Number(limitParam);
+        if (!Number.isInteger(limit) || limit < 1) {
+          return Response.json({ error: "limit must be a positive integer." }, { status: 400 });
+        }
+        // Store order is oldest-first; a bounded listing serves newest first.
+        return Response.json({ runs: visible.slice(-Math.min(limit, 500)).reverse().map((run) => this.serializeRun(run)) });
+      }
+      return Response.json({ runs: visible.map((run) => this.serializeRun(run)) });
     }
     if (request.method === "DELETE" && id === null) {
+      // Registry clear is an operator action — never agent-bulk-deletable.
+      if (agentPrincipal !== null) {
+        return Response.json({ error: "Agent principals cannot clear the run registry." }, { status: 403 });
+      }
       await this.clearRuns();
       return Response.json({ ok: true });
     }
     if (id !== null && request.method === "GET") {
       const run = this.store.get(id);
-      return run
+      return run && (agentPrincipal === null || run.queuedBy === agentPrincipal)
         ? Response.json({ run: this.serializeRun(run) })
         : Response.json({ error: "Run not found." }, { status: 404 });
     }
     if (id !== null && request.method === "DELETE") {
+      const existing = this.store.get(id);
+      if (!existing || (agentPrincipal !== null && existing.queuedBy !== agentPrincipal)) {
+        return Response.json({ error: "Run not found." }, { status: 404 });
+      }
       const run = await this.cancelRun(id);
       return run
         ? Response.json({ run: this.serializeRun(run) })

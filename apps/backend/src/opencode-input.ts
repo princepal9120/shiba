@@ -18,6 +18,17 @@ const codingTaskInputSchema = z.object({
   codingModel: z.string().min(1),
   /** Which coding agent runs the task. Validated at approval time, never in the container. */
   harness: z.enum(["opencode", "claude-code", "codex", "devin"]).optional(),
+  /**
+   * Slack thread to post progress into while the run executes. Set only for
+   * Slack-originated runs; the child posts throttled coworker-voice updates
+   * with the bot token — channel/ts are routing data, not credentials.
+   */
+  slackThread: z
+    .object({
+      channelId: z.string().min(1),
+      threadTs: z.string().min(1),
+    })
+    .optional(),
 });
 
 export type CodingTaskInput = z.infer<typeof codingTaskInputSchema>;
@@ -36,6 +47,12 @@ const codingTaskResultSchema = z.object({
   diff: z.string(),
   files: z.array(changedFileSchema),
   summary: z.string(),
+  /**
+   * The PR the child published, when it did. Carried on the envelope so the
+   * parent reads it from structured output — never scraped out of rendered
+   * text, where agent stdout could plant a fake `Pull request:` line.
+   */
+  pullUrl: z.string().optional(),
 });
 
 export type CodingTaskResult = z.infer<typeof codingTaskResultSchema>;

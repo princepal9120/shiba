@@ -52,7 +52,7 @@ export async function readSetupStatus(env: Env, probe = true): Promise<SetupStat
       token: Boolean(env.AI_GATEWAY_TOKEN),
       reachable: probe ? await probeGateway(env) : "unknown",
     },
-    access: { required: Boolean(env.REQUIRE_ACCESS) },
+    access: { required: Boolean(env.REQUIRE_ACCESS || env.ACCESS_AUD) },
     models: {
       orchestrator: env.ORCHESTRATOR_MODEL,
       coding: env.CODING_MODEL,

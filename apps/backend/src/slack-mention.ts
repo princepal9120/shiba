@@ -4,6 +4,7 @@
  */
 import type { Env } from "./env.js";
 import { redactSecrets } from "./security.js";
+import { postSlackMessage, SLACK_POST_TIMEOUT_MS } from "./slack.js";
 import { postSystemOne, readChoiceAnswer, type TypeSafeFetch } from "./typesafe.js";
 import { buildApprovalBlocks } from "./slack-approval.js";
 import {
@@ -14,13 +15,19 @@ import {
 } from "./slack-context.js";
 import type { SlackEventCallbackBody } from "./slack-events.js";
 import {
+  slackAck,
+  slackAskForRepo,
+  slackAskForTask,
+  slackQueueFailed,
+} from "./slack-persona.js";
+import {
   buildSlackRunPayload,
   buildSlackThreadName,
   getSlackThreadStub,
+  resolveSlackHarness,
   resolveThreadTs,
 } from "./slack-thread.js";
 
-const SLACK_POST_MESSAGE = "https://slack.com/api/chat.postMessage";
 const SLACK_REPLIES = "https://slack.com/api/conversations.replies";
 
 export interface SlackMentionQueueResult {
@@ -34,6 +41,7 @@ export interface SlackMentionDeps {
     task: string;
     channelId: string;
     userId: string;
+    harness: string;
   }) => Promise<SlackMentionQueueResult>;
   postMessage?: (input: {
     channel: string;
@@ -47,7 +55,7 @@ export interface SlackMentionDeps {
 }
 
 interface AppMentionEvent {
-  type: "app_mention";
+  type: "app_mention" | "message";
   user?: string;
   text?: string;
   ts?: string;
@@ -62,27 +70,47 @@ function asAppMention(event: unknown): AppMentionEvent | null {
   return event as AppMentionEvent;
 }
 
+/**
+ * A top-level DM to the intern is a task request, same as a channel
+ * @mention. Only `message` events in an IM channel with no bot_id and no
+ * subtype qualify — bot echoes and edits/joins/leaves are not tasks.
+ * Thread replies are ignored: "thanks" or "ok" under an old card must not
+ * queue a new run.
+ */
+function asDirectMessage(event: unknown): AppMentionEvent | null {
+  if (typeof event !== "object" || event === null) return null;
+  const candidate = event as Record<string, unknown>;
+  if (candidate.type !== "message" || candidate.channel_type !== "im") return null;
+  if (typeof candidate.bot_id === "string" || typeof candidate.subtype === "string") return null;
+  if (typeof candidate.thread_ts === "string") return null;
+  return event as AppMentionEvent;
+}
+
 function stripMentionMarkers(text: string): string {
   return text.replace(/<@[A-Z0-9]+>/gi, " ").replace(/\s+/g, " ").trim();
 }
 
-async function slackApi(
-  token: string,
-  url: string,
-  body: Record<string, unknown>,
-): Promise<Record<string, unknown>> {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json; charset=utf-8",
-    },
-    body: JSON.stringify(body),
-  });
-  const json = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+function requireSlackOk(response: Response, json: Record<string, unknown>): void {
+  // Slack answers HTTP 200 with {ok:false, error} — check both.
   if (!response.ok || json.ok !== true) {
     throw new Error(typeof json.error === "string" ? json.error : `Slack API ${response.status}`);
   }
+}
+
+// conversations.replies is a GET method — query params, not a JSON body.
+async function slackApiGet(
+  token: string,
+  url: string,
+  params: Record<string, string>,
+): Promise<Record<string, unknown>> {
+  const query = new URLSearchParams(params);
+  const response = await fetch(`${url}?${query.toString()}`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(SLACK_POST_TIMEOUT_MS),
+  });
+  const json = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  requireSlackOk(response, json);
   return json;
 }
 
@@ -90,16 +118,11 @@ async function defaultPostMessage(
   token: string,
   input: { channel: string; threadTs: string; text: string; blocks?: unknown[] },
 ): Promise<void> {
-  await slackApi(token, SLACK_POST_MESSAGE, {
-    channel: input.channel,
-    thread_ts: input.threadTs,
-    text: input.text,
-    ...(input.blocks ? { blocks: input.blocks } : {}),
-  });
+  await postSlackMessage(token, input);
 }
 
 async function defaultFetchThread(token: string, channel: string, threadTs: string): Promise<SlackThreadMessage[]> {
-  const json = await slackApi(token, SLACK_REPLIES, { channel, ts: threadTs, limit: 50 });
+  const json = await slackApiGet(token, SLACK_REPLIES, { channel, ts: threadTs, limit: "50" });
   const messages = Array.isArray(json.messages) ? json.messages : [];
   const out: SlackThreadMessage[] = [];
   for (const raw of messages) {
@@ -193,7 +216,9 @@ export async function handleSlackEvent(
   env: Env,
   deps: SlackMentionDeps = {},
 ): Promise<void> {
-  const event = asAppMention(body.event);
+  // @mentions in channels and direct messages both start work; everything
+  // else (channel chatter, bot echoes, edits) is ignored.
+  const event = asAppMention(body.event) ?? asDirectMessage(body.event);
   if (!event) return;
 
   const token = env.SLACK_BOT_TOKEN?.trim() ?? "";
@@ -232,7 +257,7 @@ export async function handleSlackEvent(
     channelRepos: parseChannelRepoMap(env.SLACK_CHANNEL_REPOS),
   });
   if (resolution.kind === "ask") {
-    await postMessage({ channel: channelId, threadTs, text: resolution.message });
+    await postMessage({ channel: channelId, threadTs, text: slackAskForRepo() });
     return;
   }
 
@@ -241,7 +266,7 @@ export async function handleSlackEvent(
     await postMessage({
       channel: channelId,
       threadTs,
-      text: "What should I do in that repo? Reply with a short task.",
+      text: slackAskForTask(),
     });
     return;
   }
@@ -260,17 +285,20 @@ export async function handleSlackEvent(
   const hint = intentHint(intentClassification);
 
   const threadKey = buildSlackThreadName(teamId, channelId, threadTs);
-  // Prepend the TypeSafe intent hint to the task when available.
-  // The hint is a single sentence that sharpens the orchestrator system prompt;
-  // it does not change the approval card — the human still sees exact arguments.
+  // The hint becomes part of the task the run executes — the card renders
+  // taskWithHint verbatim so the human approves exactly what will run.
   const taskWithHint = hint ? `${hint}
 ${task}` : task;
 
+  // Slack tasks launch Claude Code by default (resolveSlackHarness) — the
+  // card shows the exact agent the human is approving.
+  const harness = resolveSlackHarness(env);
   const payload = buildSlackRunPayload({
     repoUrl: resolution.repoUrl,
     task: taskWithHint,
     channelId,
     userId,
+    harness,
   });
   const queueRun =
     deps.queueRun ??
@@ -300,16 +328,18 @@ ${task}` : task;
       task: taskWithHint,
       channelId,
       userId,
+      harness,
     });
     await postMessage({
       channel: channelId,
       threadTs,
-      text: `Task queued for ${resolution.repoUrl}`,
+      text: slackAck({ repoUrl: resolution.repoUrl, harness }),
       blocks: buildApprovalBlocks({
         threadKey,
         approvalId,
         repoUrl: resolution.repoUrl,
-        task,
+        task: taskWithHint,
+        harness,
       }),
     });
   } catch (error) {
@@ -317,7 +347,7 @@ ${task}` : task;
     await postMessage({
       channel: channelId,
       threadTs,
-      text: "Could not queue that task. Try again or use `/shiba-ai-coworker`.",
+      text: slackQueueFailed(),
     });
   }
 }

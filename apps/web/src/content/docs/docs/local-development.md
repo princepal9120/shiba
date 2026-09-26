@@ -11,7 +11,7 @@ Use Node.js **22.12.0 or newer** and pnpm **10.0.0 or newer**. Install dependenc
 pnpm dev
 ```
 
-Vite serves the dashboard at `http://localhost:5173`. It does not start the Worker and has no API/WebSocket proxy configured. Connection and run-fetch errors are expected in this UI-only mode. This is not a working local coding backend.
+Vite serves the dashboard at `http://localhost:5173/app/`. It does not start the Worker, but it does proxy `/api` and `/agents` (WebSocket) to a Worker on port 8788. Start that Worker separately for a working local backend; without it the dashboard shows its 'Backend not connected' banner.
 
 ## Worker and built assets
 

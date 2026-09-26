@@ -29,6 +29,7 @@ import type {
 import { encodePrincipal, McpGateway, MCP_PRINCIPAL_HEADER } from "./mcp-gateway.js";
 import { Memory, memoryRegistryStub } from "./memory-do.js";
 import { Sandbox } from "./sandbox.js";
+import { withVerifiedAccessIdentity } from "./access-jwt.js";
 import { InputError, NotFoundError, redactSecrets, verifyGitHubWebhookSignature } from "./security.js";
 import { handleSlackInteract } from "./slack-approval.js";
 import { handleSlackEvents } from "./slack-events.js";
@@ -80,7 +81,7 @@ export function isAuthenticated(request: Request, env: Env): boolean {
   // `/mcp` runs on bearer tokens, not Access identity — the handler itself
   // verifies before any MCP traffic is served.
   if (isMcpPath(pathname)) return true;
-  if (!env.REQUIRE_ACCESS) return true; // opt-out for `wrangler dev`
+  if (!env.REQUIRE_ACCESS && !env.ACCESS_AUD) return true; // opt-out for `wrangler dev`
   return getUserId(request) !== null;
 }
 
@@ -357,6 +358,15 @@ async function handleInbox(request: Request, env: Env): Promise<Response | null>
   }
   try {
     if (pathname === "/api/mailboxes") {
+      if (request.method === "POST") {
+        // Without a registered address, inbound mail bounces and sends 400.
+        const body = await mailboxDoJson<{ mailbox: MailboxRecord }>(
+          mailboxDirectoryStub(env),
+          "/mailboxes",
+          { method: "POST", headers: { "content-type": "application/json" }, body: await request.text() },
+        );
+        return Response.json(body, { status: 201 });
+      }
       if (request.method !== "GET") return methodNotAllowed();
       return Response.json({ mailboxes: await registeredMailboxes(env) });
     }
@@ -962,6 +972,7 @@ export default {
   },
   async fetch(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
     try {
+      request = await withVerifiedAccessIdentity(request, env);
       const url = new URL(request.url);
       if (!isAuthenticated(request, env)) {
         return Response.json({ error: "Authentication required." }, { status: 401 });
@@ -1082,7 +1093,7 @@ export default {
       if (slackEventsResponse) {
         return slackEventsResponse;
       }
-      const slackResponse = await handleSlackCommand(request, env);
+      const slackResponse = await handleSlackCommand(request, env, {}, ctx);
       if (slackResponse) {
         return slackResponse;
       }

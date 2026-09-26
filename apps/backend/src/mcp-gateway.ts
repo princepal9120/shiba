@@ -43,6 +43,7 @@ import {
 import { audit } from "./audit.js";
 import { registerEmailTools } from "./mcp-email-tools.js";
 import { registerMemoryTools } from "./mcp-memory-tools.js";
+import { registerRunTools } from "./mcp-run-tools.js";
 import type { Env } from "./env.js";
 import { redactSecrets } from "./security.js";
 
@@ -193,7 +194,7 @@ export function principalFromInfo(info: RequestInfo | undefined): TokenRecord | 
 
 /**
  * Create the tool registry the gateway serves. Domain modules register
- * their tools here (T6 email, T9 memory) before the DO publishes them.
+ * their tools here (T6 email, T9 memory, run tools) before the DO publishes them.
  */
 export function createToolRegistry(env: McpGatewayEnv): ToolRegistry {
   const tools = new Map<string, RegisteredTool>();
@@ -292,6 +293,7 @@ export class McpGateway extends McpAgent<Env> {
     const registry = createToolRegistry(this.env);
     registerEmailTools(registry, this.env);
     registerMemoryTools(registry, this.env);
+    registerRunTools(registry, this.env);
     for (const tool of registry.tools()) {
       this.server.registerTool(
         tool.name,

@@ -1,5 +1,5 @@
 // @ts-check
-import { defineConfig } from 'astro/config';
+import { defineConfig, passthroughImageService } from 'astro/config';
 import tailwind from "@astrojs/tailwind";
 import starlight from '@astrojs/starlight';
 
@@ -10,6 +10,8 @@ export default defineConfig({
 	srcDir: './src',
 	outDir: 'dist',
 	output: 'static',
+	// sharp's native dep is unavailable in CI; marketing images ship as authored.
+	image: { service: passthroughImageService() },
 	redirects: {
 		'/docs': '/docs/overview/',
 		'/docs/': '/docs/overview/',
@@ -64,6 +66,7 @@ export default defineConfig({
 						{ label: 'HTTP Triggers (iPhone)', slug: 'docs/triggers' },
 						{ label: 'GitHub Pull Requests', slug: 'docs/github' },
 						{ label: 'Automations & Cron', slug: 'docs/automations' },
+						{ label: 'Use from Claude Code', slug: 'docs/mcp' },
 					],
 				},
 				{

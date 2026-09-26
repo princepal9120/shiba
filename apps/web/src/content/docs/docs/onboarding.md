@@ -96,13 +96,12 @@ Protect your Worker application using Cloudflare Zero Trust Access:
 Slack and GitHub cannot complete an interactive Cloudflare Access browser login! If you do not create a bypass policy, Slack mentions and GitHub webhooks will fail silently with HTTP 302 / 403.
 :::
 
-In your Access Application policies:
-- **Add a Bypass Policy**:
-  - Selector: **Path Begins With**
-  - Paths:
-    - `/api/slack/` (covers `/api/slack/events`, `/api/slack/interact`, and `/api/slack/command`)
-    - `/api/github/webhook`
-- These endpoints are protected by cryptographic HMAC signatures (`X-Slack-Signature` and `X-Hub-Signature-256`) evaluated fail-closed inside the Worker code.
+`pnpm run bootstrap` creates this for you. By hand: add a **second self-hosted Access application** whose destinations are the exact paths below on your Worker host, with one policy: Action **Bypass**, Include **Everyone**. Path-specific applications take precedence over the host-wide one.
+- `/api/slack/events`, `/api/slack/command`, `/api/slack/interact`
+- `/api/github/webhook`
+- `/mcp`, `/mcp/*` (Claude Code, bearer token)
+- `/api/automations/*/trigger` (shared secret)
+- The Worker authenticates each of these itself — Slack/GitHub HMAC signatures, MCP bearer tokens, the automation secret — fail-closed.
 
 In your environment or `.dev.vars`:
 ```sh
@@ -142,13 +141,14 @@ AI Coworker can be operated directly from incident and development channels via 
    - `chat:write`
    - `channels:history`
    - `groups:history`
+   - `im:history`
    - `reactions:write`
 3. Install the app to your workspace and copy the **Bot User OAuth Token** (`xoxb-...`) and **Signing Secret**.
 
 ### 2. Configure Endpoints:
 - **Event Subscriptions**: Enable events, set Request URL to:
   `https://<your-worker-domain>/api/slack/events`
-  (Subscribes to `app_mention`)
+  (Subscribes to `app_mention` and `message.im` — the latter lets teammates DM the coworker)
 - **Interactivity & Shortcuts**: Enable interactivity, set Request URL to:
   `https://<your-worker-domain>/api/slack/interact`
 
@@ -203,6 +203,7 @@ Once configured, verify the deployment end-to-end with the **first acceptance ru
 | `CLAUDE_CODE_MODEL` | Var | `anthropic/claude-sonnet-4-6` | Model for Claude Code harness |
 | `CODEX_MODEL` | Var | `openai/gpt-5.3-codex` | Model for Codex harness |
 | `AGENT_HARNESS` | Var | `opencode` | Default coding engine (`opencode`, `claude-code`, `codex`) |
+| `SLACK_AGENT_HARNESS` | Var | `AGENT_HARNESS`, then `claude-code` | Coding engine for Slack-originated runs |
 | `REQUIRE_ACCESS` | Var | `false` | Enforces `cf-access-authenticated-user-email` header |
 | `GITHUB_TOKEN` | Secret | Unset | Scoped GitHub PAT for PR publishing |
 | `GITHUB_WEBHOOK_SECRET` | Secret | Unset | HMAC secret for GitHub webhooks |

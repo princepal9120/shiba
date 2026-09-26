@@ -10,6 +10,16 @@
 import { appendReceipt, makeReceipt, type Receipt } from "./receipts.js";
 import type { RunErrorCode } from "./run-errors.js";
 
+/**
+ * Worker-vouched agent identity for run/approval reads: only the MCP
+ * gateway's run tools set this after bearer-token auth. When present,
+ * /api/runs and /api/approvals reads scope to records that principal
+ * queued — operator surfaces never send it and keep the full listing.
+ * Lives here (not the orchestrator) so mcp-run-tools can import it
+ * without pulling the agent runtime into the MCP gateway.
+ */
+export const AGENT_PRINCIPAL_HEADER = "X-Agent-Principal";
+
 export type RunStatus =
   | "pending"
   | "running"
@@ -40,7 +50,15 @@ export interface DelegatedRun {
   /** Classified error code; set on every error/unknown transition. */
   errorCode?: RunErrorCode;
   diff?: string;
+  /** Published PR, kept apart from `summary` where a long diff would truncate it away. */
+  pullUrl?: string;
   receipts?: Receipt[];
+  /**
+   * MCP principal that queued this run (X-Agent-Principal at intake).
+   * Absent on operator-queued runs (dashboard/Slack/automation) — agent
+   * tokens only ever see their own runs through the run tools.
+   */
+  queuedBy?: string;
 }
 
 export type RunPatch = {
@@ -48,6 +66,7 @@ export type RunPatch = {
   error?: string;
   errorCode?: RunErrorCode;
   diff?: string;
+  pullUrl?: string;
   receipts?: Receipt[];
   sandboxId?: string;
 };
@@ -72,6 +91,7 @@ export function createRun(args: {
   task: string;
   baseBranch: string;
   publishPullRequest: boolean;
+  queuedBy?: string;
   now?: number;
 }): DelegatedRun {
   const now = args.now ?? Date.now();
@@ -82,6 +102,7 @@ export function createRun(args: {
     task: args.task,
     baseBranch: args.baseBranch,
     publishPullRequest: args.publishPullRequest,
+    ...(args.queuedBy !== undefined ? { queuedBy: args.queuedBy } : {}),
     status: "pending",
     generation: 0,
     createdAt: now,
@@ -111,6 +132,7 @@ function applyPatch(run: DelegatedRun, patch: RunPatch | undefined): DelegatedRu
   if (patch.error !== undefined) next.error = patch.error;
   if (patch.errorCode !== undefined) next.errorCode = patch.errorCode;
   if (patch.diff !== undefined) next.diff = patch.diff;
+  if (patch.pullUrl !== undefined) next.pullUrl = patch.pullUrl;
   if (patch.receipts !== undefined) next.receipts = patch.receipts;
   if (patch.sandboxId !== undefined) next.sandboxId = patch.sandboxId;
   return next;
@@ -246,4 +268,3 @@ export class RunStore {
     this.write([]);
   }
 }
-

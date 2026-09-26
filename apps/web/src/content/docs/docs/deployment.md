@@ -5,7 +5,7 @@ description: Prepare an account-owned installation and verify it before live use
 
 ## Readiness first
 
-**Do not treat this as production until T10 is dated in `VERIFICATION.md`.** Put Cloudflare Access on the Worker, with a bypass only for the signature-authenticated callbacks: `/api/slack/events`, `/api/slack/command`, `/api/slack/interact`, and `/api/github/webhook`. Read [Security](/docs/security/) and [Readiness](/docs/readiness/) first.
+**Do not treat this as production until T10 is dated in `VERIFICATION.md`.** Put Cloudflare Access on the Worker, with a bypass only for callers the Worker authenticates itself: `/api/slack/events`, `/api/slack/command`, `/api/slack/interact`, `/api/github/webhook`, `/mcp`, and `/api/automations/*/trigger`. `pnpm run bootstrap` creates both Access apps for you. Read [Security](/docs/security/) and [Readiness](/docs/readiness/) first.
 
 Live operation requires a Cloudflare account with Workers, Durable Objects, Workers AI, and Containers/Sandbox access. Check current eligibility, quotas, and pricing in the [Containers](https://developers.cloudflare.com/containers/) and [Sandbox](https://developers.cloudflare.com/sandbox/) documentation. No provisioning time is guaranteed.
 
@@ -39,10 +39,10 @@ The dry run is packaging validation, not deployment. Record missing Docker, imag
 npx wrangler login
 # Configure optional GitHub secrets described in Configuration.
 pnpm build
-pnpm deploy
+pnpm run deploy
 ~~~
 
-These commands change your Cloudflare account. `pnpm deploy` does not automatically build assets, so run `pnpm build` first. Wrangler uses `./Dockerfile` for the image and `./public` for assets; the dashboard is at `/app/` and docs are at `/docs/`. Static missing paths use `404-page` rather than an SPA catch-all.
+These commands change your Cloudflare account. `pnpm run deploy` builds first, then runs `alchemy deploy`. Wrangler uses `./Dockerfile` for the image and `./public` for assets; the dashboard is at `/app/` and docs are at `/docs/`. Static missing paths use `404-page` rather than an SPA catch-all.
 
 Protect every reachable hostname, including alternate workers.dev routes, with reviewed authentication. Browser login alone does not authenticate service callbacks. Never expose the Worker origin outside Access. Complete the [acceptance procedure](/docs/readiness/) in an isolated test installation before inviting users.
 

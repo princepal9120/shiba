@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type JSX } from "react";
+import { LoadErrorState } from "./LoadErrorState";
 
 interface MissionRecord {
   id: string;
@@ -31,14 +32,21 @@ export function MissionsView(): JSX.Element {
   const [cron, setCron] = useState(CADENCES[2]!.cron);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const refresh = useCallback(() => {
+    setLoadError(null);
     fetch("/api/automations")
-      .then(async (r) => (r.ok ? ((await r.json()) as { automations?: MissionRecord[] }) : null))
-      .then((body) => {
-        setMissions((body?.automations ?? []).filter((a) => a.mission === true));
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`Missions could not be loaded (${r.status}).`);
+        return (await r.json()) as { automations?: MissionRecord[] };
       })
-      .catch(() => {});
+      .then((body) => {
+        setMissions((body.automations ?? []).filter((a) => a.mission === true));
+      })
+      .catch((error: unknown) => {
+        setLoadError(error instanceof Error ? error.message : "Missions could not be loaded.");
+      });
   }, []);
 
   useEffect(refresh, [refresh]);
@@ -77,6 +85,8 @@ export function MissionsView(): JSX.Element {
         setGoal("");
         refresh();
       }
+    } catch {
+      setNotice("Deploy failed: the backend could not be reached.");
     } finally {
       setBusy(false);
     }
@@ -92,6 +102,8 @@ export function MissionsView(): JSX.Element {
         : body.fired ? `Mission "${id}" fired — approval queued.`
         : `Skipped — the goal gate judged it not needed.`);
       refresh();
+    } catch {
+      setNotice("Trigger failed: the backend could not be reached.");
     } finally {
       setBusy(false);
     }
@@ -178,7 +190,9 @@ export function MissionsView(): JSX.Element {
               Refresh
             </button>
           </div>
-          {missions === null ? (
+          {loadError !== null ? (
+            <LoadErrorState message={loadError} onRetry={refresh} />
+          ) : missions === null ? (
             <div className="flex items-center gap-2 text-xs text-[#6a6f63] font-mono py-2">
               <span className="animate-spin inline-block w-3 h-3 border-2 border-[#6a6f63] border-t-transparent rounded-full" />
               <span>Loading…</span>

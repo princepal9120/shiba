@@ -35,7 +35,7 @@ Open http://localhost:4321/docs/. Production builds include Pagefind search; the
 The fastest path is the interactive bootstrap:
 
 ~~~sh
-pnpm setup
+pnpm run bootstrap
 ~~~
 
 It checks `wrangler` auth, deploys the Worker and container image, prompts for each secret (skippable), and prints the Slack app manifest import path and the URLs to paste into your Slack app. Afterwards the dashboard's onboarding modal shows live status from `GET /api/setup/status`.

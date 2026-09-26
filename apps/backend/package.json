@@ -18,6 +18,7 @@
     "agents": "0.23.0",
     "ai": "7.0.102",
     "effect": "4.0.0-rc.117",
+    "jose": "6.2.12",
     "postal-mime": "2.7.6",
     "workers-ai-provider": "4.0.0",
     "zod": "4.3.2"

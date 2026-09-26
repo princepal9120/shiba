@@ -46,11 +46,11 @@ export function ApprovalCard({ approval, decided, onDecideApproval, agentName }:
         Approving starts an isolated sandbox run. Rejecting stops the tool call.
       </p>
 
-      <div className="flex items-center gap-3 pt-1">
+      <div className="flex flex-wrap items-center gap-3 pt-1">
         <Tooltip content="Approve tool execution inside isolated container" side="top">
           <button
             type="button"
-            className="bg-[#15803d] hover:bg-[#166534] text-[#fffef8] font-semibold py-2 px-5 rounded-lg transition-all disabled:opacity-50 text-sm shadow-sm flex items-center gap-1.5 active:scale-[0.98]"
+            className="bg-[#15803d] hover:bg-[#166534] text-[#fffef8] font-semibold py-2 px-5 touch:min-h-11 rounded-lg transition-all disabled:opacity-50 text-sm shadow-sm flex items-center gap-1.5 active:scale-[0.98]"
             disabled={decided}
             onClick={() => onDecideApproval(approval.approvalId, true)}
           >
@@ -64,7 +64,7 @@ export function ApprovalCard({ approval, decided, onDecideApproval, agentName }:
         <Tooltip content="Reject tool execution and cancel operation" side="top">
           <button
             type="button"
-            className="bg-transparent border border-[#fb2c36] text-[#fb2c36] hover:bg-[#fb2c36]/10 font-semibold py-2 px-5 rounded-lg transition-all disabled:opacity-50 text-sm flex items-center gap-1.5 active:scale-[0.98]"
+            className="bg-transparent border border-[#fb2c36] text-[#fb2c36] hover:bg-[#fb2c36]/10 font-semibold py-2 px-5 touch:min-h-11 rounded-lg transition-all disabled:opacity-50 text-sm flex items-center gap-1.5 active:scale-[0.98]"
             disabled={decided}
             onClick={() => onDecideApproval(approval.approvalId, false)}
           >

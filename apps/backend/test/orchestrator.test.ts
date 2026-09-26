@@ -1,19 +1,27 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CodingOrchestrator } from "../src/agents/orchestrator.js";
 import type { OrchestratorState } from "../src/agents/orchestrator.js";
 import { createRun, RUN_DEADLINE_MS, type DelegatedRun } from "../src/runs.js";
-import { parseAgentToolInput } from "../src/opencode-input.js";
+import { formatAgentResult, parseAgentToolInput } from "../src/opencode-input.js";
+import { createPendingApproval, resolvePendingApproval } from "../src/pending-approvals.js";
 import {
   destroyManagedContainer,
   leakedContainers,
   setSandboxHandleResolver,
 } from "../src/sandbox/lifecycle.js";
 
-const mocks = vi.hoisted(() => ({ destroy: vi.fn(), execute: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  destroy: vi.fn(),
+  execute: vi.fn(),
+  keepAliveWhile: vi.fn((fn: () => Promise<unknown>) => fn()),
+  schedule: vi.fn(async (..._args: unknown[]) => ({})),
+}));
 vi.mock("@cloudflare/think", () => ({ Think: class {
   onStart() {}
   getTools() { return {}; }
   onRequest() { return new Response(null, { status: 404 }); }
+  keepAliveWhile(fn: () => Promise<unknown>) { return mocks.keepAliveWhile(fn); }
+  schedule(...args: unknown[]) { return mocks.schedule(...args); }
 } }));
 vi.mock("agents/agent-tools", () => ({ agentTool: () => ({ execute: mocks.execute }) }));
 vi.mock("../src/agents/opencode-agent.js", () => ({ OpenCodeAgent: class {} }));
@@ -393,5 +401,174 @@ describe("combined cancellation signals", () => {
       { toolCallId: "pre-abort", abortSignal: caller.signal })).rejects.toThrow("already cancelled");
     expect(mocks.execute).not.toHaveBeenCalled();
     expect(instance.state.runs).toEqual([]);
+  });
+});
+
+describe("slack thread wiring", () => {
+  it("freezes the queued harness and thread into the executed envelope", async () => {
+    const threadKey = "slack:T1:C1:1758217400.000100";
+    const instance = agent();
+    // In production this DO instance is resolved by thread name; the
+    // fabricated test instance gets the same name pinned on directly.
+    Object.assign(instance, { name: threadKey });
+    const queued = await instance.onRequest(new Request("https://internal/api/runs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ repoUrl: "https://github.com/o/r", task: "fix", harness: "claude-code", threadKey }),
+    }));
+    expect(queued.status).toBe(200);
+    const { approvalId } = await queued.json() as { approvalId: string };
+    const approved = await instance.onRequest(new Request("https://internal/api/approvals", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ threadKey: "slack:T1:C1:1758217400.000100", approvalId, approved: true, decidedBy: "U1" }),
+    }));
+    expect(approved.status).toBe(200);
+    await vi.waitFor(() => expect(mocks.execute).toHaveBeenCalled());
+    const calls = mocks.execute.mock.calls as unknown as [[string]];
+    expect(parseAgentToolInput([{ role: "user", text: calls[0]![0]! }])).toMatchObject({
+      harness: "claude-code",
+      slackThread: { channelId: "C1", threadTs: "1758217400.000100" },
+    });
+  });
+
+  it("rejects a queue request naming an unknown harness", async () => {
+    const instance = agent();
+    const queued = await instance.onRequest(new Request("https://internal/api/runs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ repoUrl: "https://github.com/o/r", task: "fix", harness: "bogus-agent" }),
+    }));
+    expect(queued.status).toBe(400);
+    expect(instance.state.pendingApprovals ?? []).toHaveLength(0);
+  });
+});
+
+describe("run reliability", () => {
+  const INPUT = { repoUrl: "https://github.com/o/r", task: "fix", baseBranch: "main", publishPullRequest: false };
+
+  /** Slack-thread orchestrator whose post-backs and waitUntil work are captured. */
+  function slackAgent(slackReply: Record<string, unknown> = { ok: true }) {
+    const instance = agent();
+    const pending: Promise<unknown>[] = [];
+    const waitUntil = vi.fn((p: Promise<unknown>) => { pending.push(p); });
+    Object.assign(instance, { name: "slack:T1:C9:1700.0001", ctx: { waitUntil } });
+    Object.assign(instance.env, { SLACK_BOT_TOKEN: "xoxb-test" });
+    const posts: { text: string }[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (_url: unknown, init?: { body?: unknown }) => {
+      posts.push(JSON.parse(String(init?.body)) as { text: string });
+      return Response.json(slackReply);
+    }));
+    return { instance, posts, waitUntil, settled: () => Promise.all(pending) };
+  }
+
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it("runs an approved dispatch under keepAliveWhile so the DO cannot idle out mid-run", async () => {
+    const instance = agent();
+    let held = false;
+    let heldDuringExecute: boolean | undefined;
+    mocks.keepAliveWhile.mockImplementation(async (fn: () => Promise<unknown>) => {
+      held = true;
+      try { return await fn(); } finally { held = false; }
+    });
+    mocks.execute.mockImplementation(async () => { heldDuringExecute = held; return "ok"; });
+    const queued = await instance.onRequest(new Request("https://internal/api/runs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ repoUrl: "https://github.com/o/r", task: "fix" }),
+    }));
+    const { approvalId } = await queued.json() as { approvalId: string };
+    const approved = await instance.onRequest(new Request("https://internal/api/approvals", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ threadKey: "default", approvalId, approved: true, decidedBy: "U1" }),
+    }));
+    expect((await approved.json() as { result: string }).result).toBe("approved");
+    await vi.waitFor(() => expect(mocks.execute).toHaveBeenCalledOnce());
+    expect(mocks.keepAliveWhile).toHaveBeenCalledOnce();
+    expect(heldDuringExecute).toBe(true);
+    await vi.waitFor(() => expect(held).toBe(false));
+  });
+
+  it("schedules a deadline reclaim when a run starts, targeting a real method", async () => {
+    const instance = agent();
+    mocks.execute.mockResolvedValue(formatAgentResult({
+      status: "completed", exitCode: 0, stderrTail: "", changedFiles: [], diff: "", files: [], summary: "done",
+    }));
+    const delegate = instance.getTools()["delegate_coding_task"] as {
+      execute: (input: unknown, options?: unknown) => Promise<unknown>;
+    };
+    await delegate.execute(INPUT, { toolCallId: "sched" });
+    expect(mocks.schedule).toHaveBeenCalledWith(Math.ceil(RUN_DEADLINE_MS / 1000) + 60, "reclaimRuns");
+    const callback = mocks.schedule.mock.calls[0]![1] as keyof CodingOrchestrator;
+    expect(typeof instance[callback]).toBe("function");
+  });
+
+  it("the scheduled reclaim reaps a stale run without traffic and tells its Slack thread", async () => {
+    const { instance, posts } = slackAgent();
+    instance.setState({ runs: [retained()] });
+    await instance.reclaimRuns();
+    expect(instance.state.runs[0]?.status).toBe("unknown");
+    expect(mocks.destroy).toHaveBeenCalledOnce();
+    expect(posts).toHaveLength(1);
+    expect(posts[0]!.text).toContain("not sure how the o/r run ended");
+    expect(posts[0]!.text).toContain("deadline");
+  });
+
+  it("on restart, posts outcome unknown to the Slack thread and tears down without blocking start", async () => {
+    const { instance, posts, waitUntil } = slackAgent();
+    const approvalId = "ap-restart";
+    const approvals = resolvePendingApproval(createPendingApproval([], {
+      threadKey: "default", approvalId, repoUrl: "https://github.com/o/r", task: "fix", createdAt: Date.now(),
+    }), { threadKey: "default", approvalId, approved: true, decidedBy: "U1" }, Date.now()).approvals;
+    instance.setState({
+      runs: [{ ...createRun({ runId: `agent-tool:${approvalId}`, sandboxId: "s-restart", repoUrl: "https://github.com/o/r",
+        task: "fix", baseBranch: "main", publishPullRequest: false }), status: "running" }],
+      pendingApprovals: approvals,
+    });
+    // A hung destroy must not hold onStart open.
+    mocks.destroy.mockImplementation(() => new Promise(() => {}));
+    await instance.onStart();
+    expect(instance.state.runs[0]?.status).toBe("unknown");
+    expect(mocks.destroy).toHaveBeenCalledOnce();
+    expect(waitUntil).toHaveBeenCalled();
+    const notice = posts.find((post) => post.text.includes("not sure how the o/r run ended"));
+    expect(notice?.text).toContain("orchestrator restart");
+  });
+
+  it("posts the PR link and a short summary even when a long diff precedes it in the log", async () => {
+    const { instance, posts } = slackAgent();
+    const pullUrl = "https://github.com/o/r/pull/7";
+    const diff = "+line\n".repeat(5000);
+    mocks.execute.mockResolvedValue(`Diff:\n${diff}\n${formatAgentResult({
+      status: "completed", exitCode: 0, stderrTail: "", changedFiles: ["a.ts"], diff, files: [],
+      summary: "OpenCode completed for https://github.com/o/r (main): 1 changed files.", pullUrl,
+    })}`);
+    const delegate = instance.getTools()["delegate_coding_task"] as {
+      execute: (input: unknown, options?: unknown) => Promise<unknown>;
+    };
+    await delegate.execute(INPUT, { toolCallId: "pr" });
+    const run = instance.state.runs[0]!;
+    expect(run.status).toBe("completed");
+    expect(run.pullUrl).toBe(pullUrl);
+    expect(run.summary).not.toContain(pullUrl);
+    const completed = posts.find((post) => post.text.startsWith("done — here's what changed in o/r"));
+    expect(completed?.text).toContain(`PR: ${pullUrl}`);
+    expect(completed?.text).toContain("1 changed files.");
+    expect(completed!.text.length).toBeLessThan(1200);
+  });
+
+  it("logs Slack ok:false post-back failures that arrive as HTTP 200", async () => {
+    const { instance, settled } = slackAgent({ ok: false, error: "not_in_channel" });
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      instance.setState({ runs: [{ ...retained(), updatedAt: Date.now() }] });
+      await instance.cancelRun("r1");
+      await settled();
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("not_in_channel"));
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 });

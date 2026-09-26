@@ -1,4 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
+import { fakeSqlStorage } from "./fixtures/do-sql-storage.js";
 import { describe, expect, it, vi } from "vitest";
 import {
   handleInboundEmail,
@@ -8,7 +9,7 @@ import {
 } from "../src/email-handler.js";
 import type { Env } from "../src/env.js";
 import { MAILBOX_DIRECTORY_NAME, Mailbox } from "../src/mailbox-do.js";
-import type { SqlRow, StoredAttachment, StoredEmail } from "../src/mailbox-store.js";
+import type { StoredAttachment, StoredEmail } from "../src/mailbox-store.js";
 
 /**
  * Pure-boundary harness: the handler's only seams are `env.Mailbox` (real
@@ -41,13 +42,7 @@ function makeEnv(): Env & { r2: Map<string, FakeR2Object>; stubs: Map<string, Fa
           const db = new DatabaseSync(":memory:");
           const ctx = {
             id: { name },
-            storage: {
-              sql: {
-                exec: (sql: string, ...params: unknown[]) => ({
-                  toArray: () => db.prepare(sql).all(...(params as any[])) as SqlRow[],
-                }),
-              },
-            },
+            storage: fakeSqlStorage(db),
             blockConcurrencyWhile: async (fn: () => Promise<unknown>) => fn(),
             waitUntil: () => {},
           };
@@ -258,28 +253,30 @@ describe("handleInboundEmail", () => {
     ]);
   });
 
-  it("drops the manifest row when an attachment body's R2 put fails", async () => {
+  it("throws when an attachment body's R2 put fails — nothing stored, landed parts cleaned", async () => {
+    resetInboundEmailStats();
     const env = makeEnv();
     await registerMailbox(env);
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    env.ATTACHMENTS.put = async () => {
-      throw new Error("r2 unavailable");
-    };
+    const realPut = env.ATTACHMENTS.put.bind(env.ATTACHMENTS);
+    // part-0 lands, part-1 fails: the landed body must not orphan.
+    env.ATTACHMENTS.put = (async (key: string, ...rest: unknown[]) => {
+      if (key.endsWith("/part-1")) throw new Error("r2 unavailable");
+      return (realPut as (...args: unknown[]) => Promise<unknown>)(key, ...rest);
+    }) as typeof env.ATTACHMENTS.put;
     try {
       const raw =
         `From: a@example.com\nTo: ${REGISTERED}\nSubject: with file\nMIME-Version: 1.0\n` +
         `Content-Type: multipart/mixed; boundary=y\n\n` +
         `--y\nContent-Type: text/plain; charset=utf-8\n\nsee attached\n\n` +
-        `--y\nContent-Type: text/csv; name="data.csv"\nContent-Disposition: attachment; filename="data.csv"\nContent-Transfer-Encoding: base64\n\nY29sMSxjbGwyCjEsMgo=\n\n--y--\n`;
+        `--y\nContent-Type: text/csv; name="a.csv"\nContent-Disposition: attachment; filename="a.csv"\nContent-Transfer-Encoding: base64\n\nY29sMSxjbGwyCjEsMgo=\n\n` +
+        `--y\nContent-Type: text/csv; name="b.csv"\nContent-Disposition: attachment; filename="b.csv"\nContent-Transfer-Encoding: base64\n\nY29sMSxjbGwyCjEsMgo=\n\n--y--\n`;
       const { message, rejectReason } = makeMessage(raw);
-      await handleInboundEmail(message, env);
-      // The email still stores — the failed part simply gets no manifest
-      // row, so consumers never see an r2_key pointing at a missing object.
+      await expect(handleInboundEmail(message, env)).rejects.toThrow("Attachment body write failed");
+      // A thrown delivery is retried, never acked minus an attachment.
       expect(rejectReason()).toBeUndefined();
-      const [email] = await listEmails(env);
-      expect(email).toBeTruthy();
-      const { attachments } = await getEmailDetail(env, email!.id);
-      expect(attachments).toEqual([]);
+      expect(inboundEmailStats().stored).toBe(0);
+      expect(await listEmails(env)).toHaveLength(0);
       expect(env.r2.size).toBe(0);
       expect(warn).toHaveBeenCalledWith(
         expect.stringContaining("inbound_email_attachment_write_failed"),

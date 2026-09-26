@@ -92,6 +92,8 @@ export interface Env {
   MEMORY_ENABLED?: string;
   /** Agent harness: "opencode" (default), "claude-code", or "codex". */
   AGENT_HARNESS?: string;
+  /** Optional. Harness for Slack-originated runs; defaults to AGENT_HARNESS, then "claude-code". */
+  SLACK_AGENT_HARNESS?: string;
   /** "sandbox" (default) or "computer" (preview-only refusal). */
   RUNTIME?: string;
   /**
@@ -140,4 +142,9 @@ export interface Env {
    * except SIGNATURE_AUTHENTICATED. Unset for `wrangler dev`.
    */
   REQUIRE_ACCESS?: string;
+  /**
+   * Optional. Access application AUD tag. When set, identity comes only from a
+   * verified `Cf-Access-Jwt-Assertion`, and Access is required as with REQUIRE_ACCESS.
+   */
+  ACCESS_AUD?: string;
 }
