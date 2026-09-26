@@ -6,7 +6,7 @@
  *
  * Visually harmonized with the warm paper / navy / serif + mono dashboard design.
  */
-import { useCallback, useEffect, useMemo, useState, type JSX } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from "react";
 import type { MemoryFact, MemorySession } from "../types";
 import { formatTimeAgo } from "../ui-helpers";
 
@@ -89,7 +89,13 @@ export function MemoryTab(props: MemoryTabProps): JSX.Element {
   const [sourceFilter, setSourceFilter] = useState("all");
   const [agentFilter, setAgentFilter] = useState("all");
 
+  // A recall and a reload racing can resolve out of order; the token drops
+  // whichever response isn't the latest request (same idiom as InboxTab).
+  const listRequestRef = useRef(0);
+  const noticeTimerRef = useRef<number | null>(null);
+
   const load = useCallback(async () => {
+    const request = ++listRequestRef.current;
     setLoading(true);
     setError(null);
     try {
@@ -97,14 +103,17 @@ export function MemoryTab(props: MemoryTabProps): JSX.Element {
         apiJson<{ facts?: MemoryFact[] }>("/api/memory/facts"),
         apiJson<{ sessions?: MemorySession[] }>("/api/memory/sessions"),
       ]);
+      if (listRequestRef.current !== request) return;
       setFacts(Array.isArray(factsBody.facts) ? factsBody.facts : []);
       setSessions(Array.isArray(sessionsBody.sessions) ? sessionsBody.sessions : []);
       setSearchActive(false);
       setLastRecallQuery("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (listRequestRef.current === request) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
     } finally {
-      setLoading(false);
+      if (listRequestRef.current === request) setLoading(false);
     }
   }, []);
 
@@ -117,20 +126,24 @@ export function MemoryTab(props: MemoryTabProps): JSX.Element {
   const runRecall = useCallback(async () => {
     const q = query.trim();
     if (q === "") return;
+    const request = ++listRequestRef.current;
     setSearching(true);
     setError(null);
     try {
       const body = await apiJson<{ facts?: MemoryFact[] }>(
         `/api/memory/facts?q=${encodeURIComponent(q)}`,
       );
+      if (listRequestRef.current !== request) return;
       setFacts(Array.isArray(body.facts) ? body.facts : []);
       setSearchActive(true);
       setLastRecallQuery(q);
       setViewMode("facts");
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (listRequestRef.current === request) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
     } finally {
-      setSearching(false);
+      if (listRequestRef.current === request) setSearching(false);
     }
   }, [query]);
 
@@ -143,7 +156,13 @@ export function MemoryTab(props: MemoryTabProps): JSX.Element {
         setFacts((prev) => prev.filter((fact) => fact.id !== factId));
         setNotice("Fact forgotten from agent memory.");
         onForgetFact?.(factId);
-        setTimeout(() => setNotice(null), 4000);
+        // A second delete restarts the notice countdown instead of the stale
+        // timer clearing the new notice early.
+        if (noticeTimerRef.current !== null) window.clearTimeout(noticeTimerRef.current);
+        noticeTimerRef.current = window.setTimeout(() => {
+          noticeTimerRef.current = null;
+          setNotice(null);
+        }, 4000);
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
       } finally {

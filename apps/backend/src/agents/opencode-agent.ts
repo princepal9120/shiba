@@ -282,7 +282,12 @@ export class OpenCodeAgent extends AIChatAgent<Env> {
       token,
       message: `AI Coworker: ${this.safeText(input.task, 120)}`,
     });
-    await this.syncProjectBoard(input.repoUrl, published.pullNumber);
+    // Board sync is best-effort and chains up to ~150s of GraphQL calls —
+    // never let it delay the run's terminal transition or PR post-back.
+    // this.ctx is absent on test stubs, hence the optional call.
+    (this.ctx as DurableObjectState | undefined)?.waitUntil?.(
+      this.syncProjectBoard(input.repoUrl, published.pullNumber),
+    );
     return published.pullUrl;
   }
 

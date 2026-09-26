@@ -67,7 +67,7 @@ import {
 import { postSlackMessage } from "../slack.js";
 import { extractPullRequestUrl } from "../transcript.js";
 import { HARNESS_DEFAULT_MODELS, allowedHostsFor, resolveHarness } from "../harness/index.js";
-import { isApprovedRoute, type ApprovedRoute } from "../model-connections.js";
+import { describeRoute, isApprovedRoute, type ApprovedRoute } from "../model-connections.js";
 import { readModelConfig, revalidateCodingRoute, resolveCodingRoute } from "../model-policy.js";
 import { OpenCodeAgent } from "./opencode-agent.js";
 
@@ -145,9 +145,14 @@ const STALE_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 function repoPullUrl(output: string, repoUrl: string): string | undefined {
   const url = extractPullRequestUrl(output);
   if (!url) return undefined;
+  // Structural match, not a prefix check: ../ or %2e%2e segments could
+  // otherwise smuggle a different repo past startsWith.
+  const match = /^https:\/\/github\.com\/([^/?#]+)\/([^/?#]+)\/pull\/(\d+)(?:[/?#]|$)/i.exec(url);
+  if (!match) return undefined;
   const { owner, repo } = parseGitHubRepoUrl(repoUrl);
-  const expected = `https://github.com/${owner}/${repo}/pull/`;
-  return url.toLowerCase().startsWith(expected.toLowerCase()) ? url : undefined;
+  return match[1]!.toLowerCase() === owner.toLowerCase() && match[2]!.toLowerCase() === repo.toLowerCase()
+    ? url
+    : undefined;
 }
 
 export class CodingOrchestrator extends Think<Env, OrchestratorState> {
@@ -719,7 +724,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     } catch (error) {
       return Response.json({ error: error instanceof Error ? error.message : "Could not queue approval." }, { status: 409 });
     }
-    return Response.json({ ok: true, approvalId, repoUrl, task: task.slice(0, 4000) });
+    return Response.json({ ok: true, approvalId, repoUrl, task: task.slice(0, 4000), route: describeRoute(route) });
   }
 
   /**
@@ -947,14 +952,18 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
             baseBranch: run.baseBranch,
             publishPullRequest: run.publishPullRequest,
             // The frozen route is the exact approved input: harness, model,
-            // and connection ride the pointer, never a fresh lookup.
+            // and connection ride the pointer, never a fresh lookup. Pending
+            // approvals queued before route freezing carry `harness` only —
+            // pass it so the approved agent is not silently re-defaulted.
             ...(run.route
               ? {
                   harness: run.route.harness,
                   codingModel: run.route.modelId,
                   ...(run.route.connectionId ? { connectionId: run.route.connectionId } : {}),
                 }
-              : {}),
+              : record?.harness
+                ? { harness: record.harness as DelegateInput["harness"] }
+                : {}),
           }, { toolCallId: approvalId });
         } catch (error) {
           // delegate.execute can throw before its inner `finish` seam ran;

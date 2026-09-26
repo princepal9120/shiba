@@ -167,6 +167,12 @@ export function Tooltip({
     setIsOpen(false);
   }, []);
 
+  // Re-measure once the portal has mounted: the first open positions with a
+  // fallback width because tooltipRef.current is still null at show time.
+  useEffect(() => {
+    if (isOpen) updatePosition();
+  }, [isOpen, updatePosition]);
+
   useEffect(() => {
     if (!isOpen) return;
 

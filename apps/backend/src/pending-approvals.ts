@@ -82,7 +82,10 @@ export interface PendingApproval {
    * dispatch revalidates it and never substitutes another model.
    */
   route?: ApprovedRoute;
-  /** Coding agent the human approved (e.g. "claude-code"). */
+  /**
+   * Legacy-only: records queued before route freezing carry this instead of
+   * `route`. Dispatch falls back to it so an old approval keeps its agent.
+   */
   harness?: string;
   /** Approval kind; absent on records written before email kinds landed — treated as `"run"`. */
   kind?: ApprovalKind;

@@ -44,7 +44,7 @@ export function ApprovalsView({
       if (outcomeFilter === "rejected") return a.status === "rejected";
       if (outcomeFilter === "executed") return a.execution?.status === "executed";
       if (outcomeFilter === "approved") {
-        return a.status === "approved" || a.execution?.status !== "failed";
+        return a.status === "approved" && a.execution?.status !== "failed";
       }
       return true;
     });

@@ -187,7 +187,11 @@ export class Automations {
       await this.ctx.storage.put(storageKey, now);
       const all = await this.ctx.storage.list<number>({ prefix: "dedupe:" });
       const stale = [...all.keys()].filter((k) => (all.get(k) ?? 0) < now - 3_600_000);
-      if (stale.length) await this.ctx.storage.delete(stale);
+      // storage.delete caps at 128 keys per call — chunk the sweep so a large
+      // backlog can't throw and silently disable dedupe.
+      for (let i = 0; i < stale.length; i += 128) {
+        await this.ctx.storage.delete(stale.slice(i, i + 128));
+      }
       return Response.json({ seen: false });
     }
     if (request.method === "POST" && url.pathname === "/internal/slack") {

@@ -16,6 +16,7 @@ import {
   buildChatThreadName,
   buildDecisionData,
   chatApprovalText,
+  chatTaskChunks,
   decideChatApproval,
   decisionLine,
   discordApi,
@@ -205,10 +206,15 @@ export async function handleDiscordInteractions(
         return;
       }
       await send("PATCH", `${webhook}/messages/@original`, {
-        content: chatApprovalText({ ...parsed, approvalId: queued.approvalId }),
+        content: chatApprovalText({ ...parsed, approvalId: queued.approvalId, route: queued.route }),
         components: decisionButtons(queued.approvalId),
         allowed_mentions: NO_MENTIONS,
       });
+      // Discord's cap is 2000; the full task follows the card so an approver
+      // never signs off on text hidden by the truncation.
+      for (const chunk of chatTaskChunks(parsed.task, 1900)) {
+        await send("POST", webhook, { content: chunk, allowed_mentions: NO_MENTIONS });
+      }
     });
     return Response.json({ type: 5 });
   }

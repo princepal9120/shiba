@@ -3,6 +3,7 @@ import {
   buildChatThreadName,
   buildDecisionData,
   chatApprovalText,
+  chatTaskChunks,
   createSeenRing,
   decideChatApproval,
   decisionLine,
@@ -196,12 +197,30 @@ describe("chatApprovalText / decisionLine", () => {
     expect(text).toContain(APPROVAL_ID);
   });
 
-  it("truncates a task past the card limit and points at the dashboard", () => {
+  it("truncates a task past the card limit and points at the thread", () => {
     const task = "x".repeat(2000);
     const text = chatApprovalText({ repoUrl: REPO, task, approvalId: APPROVAL_ID });
     expect(text).toContain("500 more chars");
-    expect(text).toContain("dashboard");
+    expect(text).toContain("full task in this thread");
     expect(text).not.toContain("x".repeat(1501));
+  });
+
+  it("renders the frozen route when the orchestrator returns one", () => {
+    const text = chatApprovalText({
+      repoUrl: REPO,
+      task: "fix it",
+      approvalId: APPROVAL_ID,
+      route: "opencode · google/gemini-3.5-flash-lite · via deployment default",
+    });
+    expect(text).toContain("Route: opencode · google/gemini-3.5-flash-lite");
+  });
+
+  it("splits an oversized task into chunks the lane posts after the card", () => {
+    const task = "x".repeat(5000);
+    const chunks = chatTaskChunks(task, 1900);
+    expect(chunks).toHaveLength(3);
+    expect(chunks.join("")).toBe(task);
+    expect(chatTaskChunks("short", 1900)).toEqual([]);
   });
 
   it("does not truncate a task at the limit", () => {

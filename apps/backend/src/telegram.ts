@@ -18,6 +18,7 @@ import {
   buildChatThreadName,
   buildDecisionData,
   chatApprovalText,
+  chatTaskChunks,
   createSeenRing,
   decideChatApproval,
   decisionLine,
@@ -128,7 +129,7 @@ async function handleMessage(message: TelegramMessage, env: Env, call: TelegramC
     return;
   }
   await reply({
-    text: chatApprovalText({ ...parsed, approvalId: queued.approvalId }),
+    text: chatApprovalText({ ...parsed, approvalId: queued.approvalId, route: queued.route }),
     reply_markup: {
       inline_keyboard: [[
         { text: "Approve", callback_data: buildDecisionData(true, queued.approvalId) },
@@ -136,6 +137,11 @@ async function handleMessage(message: TelegramMessage, env: Env, call: TelegramC
       ]],
     },
   });
+  // Telegram's message cap is 4096; a task over the card limit posts in full
+  // right after the card so Approve never signs off on hidden text.
+  for (const chunk of chatTaskChunks(parsed.task, 3900)) {
+    await call("sendMessage", { chat_id: chatId, text: chunk });
+  }
 }
 
 async function handleCallback(query: TelegramCallbackQuery, env: Env, call: TelegramCall, deps: TelegramDeps): Promise<void> {
