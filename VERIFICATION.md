@@ -195,3 +195,8 @@ And one repo bug that only surfaces at runtime:
 - Added an Access-gated OpenAPI 3.1 contract at `GET /api/email/openapi.json` for the existing mailbox, email, thread, and draft routes. It explicitly documents that `POST /api/drafts/:id/send` queues approval rather than sending.
 - Closed the attachment path: the Inbox links to `GET /api/emails/:id/attachments/:partId`; the Worker resolves the R2 key only from a registered mailbox's attachment manifest and forces a no-store binary download. Tests cover a valid download, a forged part id, a missing object, and an unauthenticated request.
 - Local verification: six focused email test files passed (193 tests); `pnpm typecheck`, `pnpm lint`, `pnpm test` (1174 passed, 6 skipped), `pnpm build` (including docs verification), and `npx wrangler deploy --dry-run --config apps/backend/wrangler.jsonc` all passed. `wrangler dev` served `GET /api/email/openapi.json` with HTTP 200 and the expected `downloadAttachment` operation. No deployment or live Email Routing/Email Sending test was performed; account provisioning and real delivery remain unverified.
+
+# 2026-09-26 — ACP harnesses + connected-agent accounts (in progress)
+
+- Shared ACP transport with Cursor/Grok adapters and per-user connected-agent accounts are landing on `feat/acp-cursor-grok-harnesses`. Evidence: `apps/backend/test/harness-accounts.test.ts` plus the harness suite (`apps/backend/test/harness*.test.ts`).
+

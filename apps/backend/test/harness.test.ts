@@ -290,7 +290,9 @@ describe("devin harness", () => {
 describe("agent cli catalog", () => {
   it("lists every registered harness with its pinned version", () => {
     const catalog = agentCliCatalog({});
-    expect(catalog.map((a) => a.id)).toEqual(["opencode", "claude-code", "codex", "devin"]);
+    expect(catalog.map((a) => a.id)).toEqual(["opencode", "claude-code", "codex", "cursor", "devin", "grok"]);
+    expect(catalog.find((a) => a.id === "cursor")?.version).toBe("0.50.0");
+    expect(catalog.find((a) => a.id === "grok")?.version).toBe("0.1.0");
     expect(catalog.find((a) => a.id === "devin")?.version).toBe("3000.10.31");
     expect(catalog.find((a) => a.id === "devin")?.defaultModel).toBe("devin/swe-2");
   });

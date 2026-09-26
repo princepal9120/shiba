@@ -65,6 +65,8 @@ Baseline: **1178 tests passing across 74 files**, typecheck and lint clean.
 | Model connections + frozen routes | **Done.** `model-config-do.ts` persists the catalog (SECRET_SHAPED refs rejected), `model-policy.ts` resolves/revalidates; dashboard composer picks harness; `queue_run` MCP tool accepts `harness`. |
 | GitHub Projects v2 sync | **Done.** `github-project.ts` + `opencode-agent.syncProjectBoard` (ctx.waitUntil — never delays the terminal transition). Requires GITHUB_PROJECT_TOKEN + GITHUB_PROJECT_NUMBER. |
 | Marketing site (theme tokens, why-shiba, tooltip/touch/focus fixes) | **Done.** bezalel-style navy/cream tokens, both light/dark; coarse-pointer tap targets. |
+| Cursor/Grok ACP harnesses | **In progress.** Both adapters ride the shared ACP transport (t3code method: one transport module + per-harness support shims) rather than bespoke argv/event parsers. |
+| Connected agent accounts (dashboard) | **In progress.** Per-user credential accounts for connected agents — Worker API (`harness-accounts`) plus a dashboard surface to add/list/revoke. |
 
 ### 2.0 Status as of rev 7 (2026-09-19)
 
@@ -82,7 +84,7 @@ Baseline: **405 tests passing across 32 files**, typecheck and lint clean, `wran
 | **B10 concurrency** | **Fixed in rev 4.** `MAX_CONCURRENT_RUNS` was still 3 while `max_instances` was already 5 — T2 had only been half-applied. |
 | **T22 Claude Code / Codex adapters · T23 provider choice (B11)** | **Done in rev 4.** The seam had to widen first: `configPath` and the container env were still OpenCode-hardcoded in `runtime.ts`, so a second harness could not have worked. `AgentHarness` now owns `supportedProviders`, `egressHosts(model)`, `configFile()`, and `env()`. `allowedHosts` is narrowed per run via `approveHarnessEgress` to the selected harness's provider host plus git — never the union. All three CLIs ship in the image and the dry run verifies each binary. Caveat: only OpenCode has run live (locally, to the model call); the other two are unit-tested against their documented stream formats. |
 | **T10 live acceptance run** | **Partially done locally (rev 6, 2026-09-19).** `wrangler dev` + OrbStack ran the full chain to the model call: queue → signed Slack approval → DO dispatch → real container → scoped GitHub clone → `opencode run` → AI Gateway **401** (needs `AI_GATEWAY_TOKEN` or BYOK key in gateway `default`). Cloud deploy still not performed — `spec/GOAL.md` forbids it from this environment. Evidence in VERIFICATION.md. |
-| **Missions · Quality Gates (rev 7)** | **Done in code.** Missions = `mission: true` automations (standing goal, `run_when` gate per cadence, manual check-in) on a dedicated dashboard tab — recurring gated check-ins, not checkpointed multi-day agents. Gates tab queues Code Review/QA/Security task templates through the same `/api/runs` approval path. Both verified live locally. Devin CLI not wired — no published CLI exists; subscription-credential passthrough (Claude Max/ChatGPT) deliberately unsupported per provider terms. |
+| **Missions · Quality Gates (rev 7)** | **Done in code.** Missions = `mission: true` automations (standing goal, `run_when` gate per cadence, manual check-in) on a dedicated dashboard tab — recurring gated check-ins, not checkpointed multi-day agents. Gates tab queues Code Review/QA/Security task templates through the same `/api/runs` approval path. Both verified live locally. Devin now ships as a CLI harness adapter (`harness/devin.ts`, catalog entry, Dockerfile binary); subscription-credential passthrough (Claude Max/ChatGPT) stays deliberately unsupported per provider terms. |
 
 **The honest summary:** every task that can be completed without a cloud account is done, and the local dev run now proves the pipeline mechanics end to end. **What remains is a cloud deploy plus an AI Gateway credential** (`AI_GATEWAY_TOKEN`, or a BYOK key on the `default` gateway) — account work, not more code.
 
@@ -648,6 +650,8 @@ Both are **API-key** harnesses here, not subscription — §3 explains why that 
 **Why this outranks every compute optimization in this plan:** §8 shows tokens are 20–40× the Cloudflare bill. A user who can point at Flash-Lite, a cached prompt, or their own OpenRouter account controls the only number that matters. Shaving container seconds saves them four dollars a month.
 
 **Tests:** each harness round-trips its argv and config · an unsupported provider for the selected harness is refused with a clear message · `allowedHosts` reflects only the selected harness · the OpenCode path produces byte-identical output to pre-refactor.
+
+**Adopted method (t3code).** ACP harnesses (Cursor, Grok, and any future ACP agent) plug in through a single shared ACP transport module plus small per-harness support shims — one JSON-RPC session lifecycle for all of them, so a new ACP adapter is config + capability negotiation, not another parser. Credentials live in per-user connected-agent accounts (`harness-accounts`), resolved at run dispatch the same way model connections are — the container still sees only the egress-scoped forwarder, never the raw key.
 
 ---
 

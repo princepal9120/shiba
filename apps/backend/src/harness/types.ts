@@ -13,7 +13,7 @@
 import type { CodingTaskInput } from "../opencode-input.js";
 
 /** Implemented harnesses. Aider was in the original sketch but has no adapter — add it here with one, not before. */
-export type AgentHarnessName = "opencode" | "claude-code" | "codex" | "devin";
+export type AgentHarnessName = "opencode" | "claude-code" | "codex" | "devin" | "cursor" | "grok";
 
 /** Provider id → the single host its API lives on. Feeds allowedHosts (T5). */
 export const PROVIDER_HOSTS: Record<string, string> = {
@@ -30,6 +30,8 @@ export const PROVIDER_HOSTS: Record<string, string> = {
   // Gateway BYOK credential for the opencode-go custom provider; the
   // container still only ever sees the dummy key.
   "opencode-go": "opencode.ai",
+  // cursor: api2 is the control/API plane; repo2 is added by the harness via extraEgressHosts.
+  cursor: "api2.cursor.sh",
 };
 
 /** Container env var carrying the dummy key, per provider. */

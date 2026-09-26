@@ -22,6 +22,8 @@ const HARNESS_OPTIONS: { value: string; label: string; hint: string }[] = [
   { value: "opencode", label: "OpenCode (default)", hint: "Google / Anthropic / OpenAI models" },
   { value: "claude-code", label: "Claude Code", hint: "Anthropic models — needs the gateway's Anthropic key" },
   { value: "codex", label: "Codex", hint: "OpenAI models — needs the gateway's OpenAI key" },
+  { value: "cursor", label: "Cursor", hint: "Cursor models — needs the gateway's Cursor key" },
+  { value: "grok", label: "Grok", hint: "xAI models — needs the gateway's xAI key" },
 ];
 
 // Built with createElement (no JSX): the Astro tsconfig covering web/
