@@ -5,22 +5,20 @@ description: Authentication, credential boundaries, and known limitations.
 
 ## Installation boundary
 
-Each installation is single-tenant and account-owned. There is no multi-tenant isolation. Put Cloudflare Access in front of the Worker route before exposing it: an obscure URL is not protection.
+Each installation is account-owned; the application does not provide cross-customer multi-tenant isolation. Put Cloudflare Access in front of the Worker route before exposing it: an obscure URL is not protection. Deployment configuration and Access policies are account-owned and must be verified for every hostname.
 
-Live Alchemy deploys set `REQUIRE_ACCESS` so the Worker fails closed, and with `ACCESS_AUD` the identity comes only from a verified `Cf-Access-Jwt-Assertion` JWT: `/api/runs`, the agent WebSocket, and static assets all require a `cf-access-authenticated-user-email` identity. Paths the Worker authenticates itself (`/api/slack/events`, `/api/slack/command`, `/api/slack/interact`, `/api/github/webhook`, `/mcp`, `/api/automations/*/trigger`) are exempt by construction, because Slack, GitHub, and MCP clients cannot complete an Access login: those routes need a matching **bypass policy** on the Access application too.
-
-**Stated limit:** the Worker checks for the Access header, which is not JWT verification. Anyone who can reach the Worker origin directly can forge it. The route must not be exposed outside Access. JWT verification is filed for v0.2.
+When `REQUIRE_ACCESS` or `ACCESS_AUD` is enabled, the Worker requires an authenticated identity for ordinary routes. With `ACCESS_AUD`, `apps/backend/src/access-jwt.ts` verifies the RS256 Access JWT (issuer/JWKS and audience) and rebuilds the email identity from that token; a client-supplied email header is not trusted. Signature-authenticated Slack/GitHub routes, automation webhooks, and bearer-token MCP routes use their own authentication and are exempt from Access identity checks. Configure matching Access policies/bypasses for those integrations. This code-level behavior is tested; it does not prove that a deployed hostname is covered by the intended Access application. `VERIFICATION.md` records a deployed-Worker forged-header 401 check, but no cloud end-to-end coding run.
 
 ## The credential boundary
 
-No real credential ever enters a container. Egress is intercepted in the Worker (`apps/backend/src/egress.ts`), where the real key is swapped in:
+Provider credentials are not supplied to provider-backed harnesses in the container: they receive a dummy key and provider requests are forwarded at Sandbox egress (`apps/backend/src/egress.ts`). The Devin service harness is an exception: it uses a dummy in-container key and a Worker-side forwarder replaces authorization with `DEVIN_API_KEY`. These boundaries have unit coverage; do not treat that as proof of a cloud deployment:
 
-- **Model traffic.** The container is given a dummy key and calls `generativelanguage.googleapis.com` directly. The Worker forwards it through the account owner's AI Gateway binding, which injects the stored BYOK credential. There is no provider callback route.
+- **Model traffic.** The container is given a dummy key and calls its selected provider host. The Worker forwards supported provider requests through the configured AI Gateway binding; successful inference still depends on account configuration and credentials. There is no provider callback route.
 - **Repository traffic.** `GITHUB_TOKEN` is attached in the Worker, never in the container.
 
 ### Deny-by-default egress
 
-`Sandbox.allowedHosts` is an allowlist evaluated *before* any outbound handler. Anything unlisted cannot leave the container, including code the agent runs from the repository. `registry.npmjs.org` is deliberately **not** on the list in v0.1: it would enable `npm install` inside runs and is simultaneously the widest exfiltration channel available.
+`Sandbox.allowedHosts` is an allowlist evaluated *before* any outbound handler. The Sandbox allowlist restricts outbound hosts; tests exercise the configured policy and handlers. This is an implementation/test claim, not a cloud penetration-test result. `registry.npmjs.org` is deliberately **not** on the list in v0.1: it would enable `npm install` inside runs and is simultaneously the widest exfiltration channel available.
 
 ### The GitHub credential is scoped per run
 
@@ -34,7 +32,7 @@ An automation is an approval gate with nobody standing at it, so three controls 
 
 1. **Approval is required by default.** An automation schedules work; it does not authorize it.
 2. **Unattended mode is opt-in and narrow.** It is granted only when opening a pull request is the run's only mutation *and* the repo is on that automation's explicit allowlist. A PR is reviewable and revertible; nothing else is.
-3. **A daily run budget per automation.** A cron misconfiguration or a webhook loop otherwise burns tokens until somebody notices, and tokens, not compute, are the bill.
+3. **A daily run budget per automation.** A cron misconfiguration or a webhook loop otherwise burns tokens until somebody notices, and both provider inference and platform resource usage may incur account charges.
 
 The optional `run_when` gate asks the cheap Workers AI orchestrator model whether a plain-language condition holds before a run starts. It **fails closed**: a model error, an empty answer, or anything not clearly affirmative means no run, and the reason is recorded rather than dropped.
 

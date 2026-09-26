@@ -3,21 +3,29 @@ title: Readiness and acceptance checklist
 description: Known gaps and evidence required before production use.
 ---
 
-## Status
+## Evidence status (2026-09-24)
 
-**Local prototype — 397/397 tests passing, typecheck and lint clean, build verified.**
-The static documentation/dashboard build and mocked tests do not establish that a deployed coding task works end to end. Do not expose it publicly or call it production-ready without completing the live run (T10) and cloud acceptance criteria in PLAN.md §15.
+**Implemented** describes code present; **unit-tested** describes mocked/component tests; **locally exercised** describes the dated `wrangler dev` run below. None of these means cloud-live. The latest recorded checks in [`VERIFICATION.md`](/docs/verification/) report typecheck, lint, 995 tests, build, and frontend smoke passing. The Worker/container dry run was blocked because Docker was unavailable; the Worker/assets-only dry run passed with container rollout disabled. Alchemy planning reached the expected missing-Cloudflare-OAuth error. No cloud deployment or cloud end-to-end run is recorded.
 
-**Shipped in code (unverified live):** dashboard, approval gate, Sandbox egress allowlist, scoped GitHub credential, Cloudflare Access gating, result envelope, progress streaming, Slack mention + slash-command lanes, automations engine (cron/GitHub/webhook/Slack/manual triggers), run_when TypeSafe Noul gate, harness seam (OpenCode/Claude Code/Codex), TypeSafe Choice intent classification wired into Slack dispatch, TypeSafe Score result quality wired into run completion.
+### Implemented and unit-tested
 
-## Remaining blockers
+The repository contains the approval/run flow, dashboard, harness adapters, provider/GitHub egress handlers, Access JWT verification, Slack lanes, automation triggers and safety gates, and MCP run tools. Their behavior has targeted tests; the full suite result is the dated result above, not proof of a deployed integration. Claude Code and Codex harness configuration/parsers are tested, but neither CLI has completed a real provider-backed run.
 
-- **Live run (T10):** no dated cloud run is recorded. Local tests do not prove deploy, Access, or container billing. See `VERIFICATION.md`.
-- **Authorization:** `REQUIRE_ACCESS` only checks the Access email header — not JWT. Cover every hostname with Access; forge-header tests must still fail from outside Access.
-- **Harness run proof:** all three CLIs ship in the image (pinned in the `Dockerfile`); OpenCode has been exercised end to end, Claude Code and Codex parsers are unit-tested and unproven against a live CLI until T10.
-- **Private cloning:** path-scoped `GITHUB_TOKEN` is for github.com traffic of the approved repo; it is not a clone-time credential store.
-- **npm inside the sandbox:** `registry.npmjs.org` is off the egress allowlist on purpose.
-- **Lifecycle:** cancellation destroys the sandbox; idle tail is `sleepAfter = 1m`. Registry clear is not complete data erasure.
+### Locally exercised
+
+The 2026-09-19 `wrangler dev` run exercised queue → signed Slack approval → Durable Object dispatch → Docker container → scoped GitHub clone → OpenCode launch → provider-forwarding failure (401, because no gateway/BYOK credential was configured) → structured error and cleanup. The 2026-09-24 verification also reports a deployed-Worker check that forged Access identity headers are rejected. These are distinct from a cloud end-to-end coding run; model inference was not established by the local run.
+
+### Cloud-live
+
+**No cloud end-to-end run is recorded.** Do not describe the product as production-ready or claim cloud-live container execution, model inference, PR publication, or billing behavior. Deployment remains blocked pending Docker-capable validation and Cloudflare OAuth/profile setup. `VERIFICATION.md` is the dated source of truth for later status.
+
+## Remaining gaps
+
+- **Deployment/e2e:** complete a dated cloud run against the acceptance bar in PLAN.md §15; record deploy revision, environment, outcome, and failures.
+- **Provider-backed execution:** local OpenCode reached the provider boundary but received 401; configure and verify a valid Gateway/BYOK credential before claiming inference works.
+- **Other harnesses:** Claude Code and Codex have not run against live APIs.
+- **Resource measurements:** peak memory, cold start, and WebSocket Hibernation behavior are unmeasured; do not infer cost/performance from local tests.
+- **Retention/lifecycle:** cancellation requests best-effort sandbox destruction; clearing history is not complete data erasure.
 
 ## Local acceptance
 
@@ -26,13 +34,11 @@ pnpm install
 pnpm typecheck
 pnpm lint
 pnpm test
-pnpm docs:check
 pnpm build
-pnpm docs:verify
 npx wrangler deploy --dry-run --config apps/backend/wrangler.jsonc
 ~~~
 
-Record actual failures, including missing container runtime/image support. Do not replace a dry run with a real deployment to get a green result. Review package audit findings separately; do not force dependency upgrades without compatibility review.
+Record actual failures and date. A dry run is not a live deployment. Review package audit findings separately; do not force dependency upgrades without compatibility review.
 
 ## Account-owned integration acceptance (not executed by these docs)
 

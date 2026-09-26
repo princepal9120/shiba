@@ -11,7 +11,7 @@ description: Components, data flow, and unfinished integration boundaries.
 </div>
 <div class="arch-badge-live">
   <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-  <span>Single-Tenant Cloudflare Perimeter</span>
+  <span>Account-owned deployment · cloud validation pending</span>
 </div>
   </div>
 
@@ -68,14 +68,14 @@ description: Components, data flow, and unfinished integration boundaries.
         <span class="arch-card-name">CodingOrchestrator DO</span>
         <span class="arch-card-pill pill-active">Think + Durable Object</span>
       </div>
-      <p class="arch-card-desc">Analyzes issue context, synthesizes multi-step delegation plan using Workers AI.</p>
+      <p class="arch-card-desc">Coordinates run state and approval-gated delegation; planning behavior depends on configured model/bindings.</p>
     </div>
     <div class="arch-card" style="border-color: rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.05);">
       <div class="arch-card-header">
         <span class="arch-card-name">Human Approval Gate</span>
         <span class="arch-card-pill pill-gate">needsApproval: true</span>
       </div>
-      <p class="arch-card-desc">Synchronous human sign-off required. No container boots and no code runs without approval.</p>
+      <p class="arch-card-desc">Approval is required by default before dispatch; narrowly configured unattended automation is an exception.</p>
     </div>
     <div class="arch-card">
       <div class="arch-card-header">
@@ -115,14 +115,14 @@ description: Components, data flow, and unfinished integration boundaries.
         <span class="arch-card-name">Cloudflare Sandbox</span>
         <span class="arch-card-pill">gVisor MicroVM</span>
       </div>
-      <p class="arch-card-desc">Ephemeral container (standard-1 to standard-4). Full Linux isolation with Git and Node.</p>
+      <p class="arch-card-desc">Sandbox container with configured instance type, Git, and Node. The 2026-09-24 container dry run was blocked; cloud runtime validation is pending.</p>
     </div>
     <div class="arch-card">
       <div class="arch-card-header">
         <span class="arch-card-name">Multi-Harness Runtime</span>
         <span class="arch-card-pill">OpenCode / Claude / Codex</span>
       </div>
-      <p class="arch-card-desc">Executes code changes, writes regression tests, and validates with test runner.</p>
+      <p class="arch-card-desc">Harness adapters are implemented; OpenCode was exercised locally through launch, while Claude Code and Codex have not completed live API runs.</p>
     </div>
   </div>
 </div>
@@ -132,7 +132,7 @@ description: Components, data flow, and unfinished integration boundaries.
   <div class="arch-connector-line"></div>
   <div class="arch-connector-label">
     <span>↓</span>
-    <span>Egress Proxy: Real Provider Keys Swapped at Boundary</span>
+    <span>Provider egress forwarding (account credentials required)</span>
   </div>
 </div>
 
@@ -148,7 +148,7 @@ description: Components, data flow, and unfinished integration boundaries.
         <span class="arch-card-name">Cloudflare AI Gateway</span>
         <span class="arch-card-pill pill-active">BYOK Credentials</span>
       </div>
-      <p class="arch-card-desc">Container uses dummy API key; egress gateway injects stored secret securely.</p>
+      <p class="arch-card-desc">Provider-backed harnesses receive dummy keys; Worker forwards supported provider traffic via the configured AI Gateway. Successful inference depends on account configuration.</p>
     </div>
     <div class="arch-card">
       <div class="arch-card-header">
@@ -162,14 +162,14 @@ description: Components, data flow, and unfinished integration boundaries.
         <span class="arch-card-name">GitHub Pull Request</span>
         <span class="arch-card-pill">REST Publication</span>
       </div>
-      <p class="arch-card-desc">Opens ready-to-merge PR with summary and links results back to Slack thread.</p>
+      <p class="arch-card-desc">Can publish an approved result as a PR when configured; cloud publication is not established by current verification.</p>
     </div>
   </div>
 </div>
   </div>
 </div>
 
-The parent uses Workers AI for planning. Real model-provider and GitHub credentials are not supplied to the container by this implementation. Provider traffic is intercepted at Sandbox egress; there is no public `/api/provider/google` route. The callback's authentication remains incomplete; the diagram is not a validated production security boundary.
+The parent uses Workers AI for planning. Real model-provider and GitHub credentials are not supplied to the container by this implementation. Provider traffic is intercepted at Sandbox egress; there is no public `/api/provider/google` route. Access JWT verification and provider-forwarding controls are implemented and unit-tested. A forged Access identity header was rejected in a deployed-Worker check recorded 2026-09-24; no cloud end-to-end coding run is recorded. The diagram is an implementation map, not a production security certification.
 
 ## Source map
 
@@ -178,10 +178,10 @@ The parent uses Workers AI for planning. Real model-provider and GitHub credenti
 | apps/backend/src/index.ts | Assets, SDK routes, run API, provider forwarding, webhook |
 | apps/backend/src/agents/orchestrator.ts | Planning, approval, delegation, retained registry |
 | apps/backend/src/agents/opencode-agent.ts | Sandbox SDK operations, progress and publishing |
-| src/runtime.ts | Clone, OpenCode execution, bounded file/diff collection |
-| src/provider-gateway.ts | Server-side provider forwarding |
+| apps/backend/src/runtime.ts | Clone, harness execution, bounded file/diff collection |
+| apps/backend/src/provider-gateway.ts | Provider request sanitization and forwarding helpers |
 | apps/backend/src/github.ts | GitHub REST publication |
-| src/runs.ts and src/transcript.ts | State and transcript helpers |
+| apps/backend/src/runs.ts and src/transcript.ts | State and transcript helpers |
 | apps/frontend/src/router.tsx, src/routes/__root.tsx, and src/routes/app.tsx | TanStack Start dashboard shell and /app route |
 | docs/ and scripts/ | Static documentation and build checks |
 

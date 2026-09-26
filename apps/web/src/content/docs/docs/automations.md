@@ -1,9 +1,9 @@
 ---
 title: Automations
-description: Learn how AI Coworker runs autonomous background sweeps, scheduled maintenance, and webhook triggers on Cloudflare Workers.
+description: Configure approval-gated scheduled, webhook, Slack, GitHub, and manual automation triggers.
 ---
 
-Automations allow AI Coworker to perform ongoing, unattended engineering tasks (like routine dependency audits, framework migrations, test flake investigations, and scheduled code health sweeps) without waiting for a human prompt.
+Automations evaluate configured triggers and queue approval-gated runs. They do not establish that an unattended task is cloud-live; the dated [`VERIFICATION.md`](/docs/verification/) reports no cloud end-to-end run.
 
 ---
 
@@ -21,9 +21,9 @@ Automations support up to 20 triggers evaluated together (`OR` semantics). When 
 
 ---
 
-## Status: fire path is shipped
+## Implementation and verification status
 
-The trigger engine (`apps/backend/src/automations.ts`) is wired to a production runner (`apps/backend/src/automation-runner.ts`) and an `Automations` Durable Object. Cloudflare Triggers fire `*/5 * * * *`; the Worker `scheduled()` handler ticks due schedules. Verified GitHub webhooks and `POST /api/automations/{id}/trigger` fan out through the same gate: match → optional TypeSafe/`run_when` → T20 safety → queue an approval (or auto-approve only when unattended is granted). Create records with `POST /api/automations`.
+The trigger engine (`apps/backend/src/automations.ts`), runner (`apps/backend/src/automation-runner.ts`), and `Automations` Durable Object are implemented and covered by unit tests. The Worker has a scheduled handler and configured five-minute cron; this configuration is not evidence of a live Cloudflare cron firing. Tests exercise trigger matching, gates, authorization, and queue behavior. Do not describe the automation path as cloud-live: the dated verification records no cloud end-to-end run. Create records with `POST /api/automations`.
 
 The per-automation webhook secret is returned once on create and never again, and must be sent as the `x-automation-secret` header. It is never accepted as a `?secret=` query parameter — query strings land in proxy and access logs, which is exactly where a credential must not appear.
 
@@ -93,7 +93,7 @@ An automation is an approval gate with nobody standing at it. Three controls app
 
 - **Approval by default.** Every automated run posts an approval card and starts no container until a human approves it. An automation schedules work; it does not authorize it.
 - **Unattended mode is opt-in and narrow.** Set `unattended: true` *and* list the repo in `unattendedRepos`. It is refused unless opening a pull request is the run's only mutation: a PR is reviewable and revertible, nothing else is.
-- **Daily run budget.** `dailyRunLimit` (default 20) per automation per UTC day. A cron misconfiguration or a webhook loop otherwise burns tokens until somebody notices, and tokens are 20–40× the compute bill. Run N+1 is refused with the reason.
+- **Daily run budget.** `dailyRunLimit` (default 20) per automation per UTC day. A cron misconfiguration or a webhook loop otherwise burns tokens until somebody notices, and provider inference and platform compute may both incur charges; no ratio or per-run price is claimed here. Run N+1 is refused with the reason.
 - **Schedule floor.** A strict minimum of 5 minutes between firings (`SCHEDULE_FLOOR_MINUTES = 5`); missed ticks coalesce into one run, never a backlog.
-- **Concurrency.** Automations share the global limiter (`MAX_CONCURRENT_RUNS = 5`, matching `max_instances`). New runs wait for a slot. Parallelism costs no more, because billing is container-seconds.
+- **Concurrency.** Automations share the global limiter (`MAX_CONCURRENT_RUNS = 5`, matching `max_instances`). The global run limit is five, matching configured `max_instances`; requests over the limit are refused by the run queue rather than guaranteed to wait. Actual billing depends on account usage and pricing.
 - **Kill switches.** `enabled: false` per automation, and the `AUTOMATIONS_ENABLED` var globally.

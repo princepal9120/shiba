@@ -15,7 +15,7 @@ The parent currently treats string child output as completed, including possible
 
 ## Missions and Quality Gates
 
-The **Missions** tab deploys standing goals — recurring automations (`mission: true`) whose `run_when` gate re-queues work only while the goal is unfinished. The **Gates** tab offers typed entry points for Code Review, QA (test generation), and Security Review; each builds a task prompt and queues it through the same `/api/runs` approval path. Neither surface bypasses the approval gate, and both publish as PRs only when `GITHUB_TOKEN` is configured.
+The **Missions** tab presents standing goals — recurring automations (`mission: true`) whose `run_when` gate re-queues work only while the goal is unfinished. The **Gates** tab presents typed entry points for Code Review, QA (test generation), and Security Review; each builds a task prompt and queues it through the same `/api/runs` approval path. Both use the ordinary run/approval path; PR publication is an optional run setting and also requires configured GitHub credentials. These surfaces are implemented and covered by component/API tests; their presence does not demonstrate cloud-live execution.
 
 ## Cancel and clear
 
