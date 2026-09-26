@@ -112,6 +112,7 @@ Rollback to wrangler (same bindings): `npx wrangler deploy --config apps/backend
 | Web dashboard | `https://<worker-host>/app/` — Access login with an allowed email |
 | iPhone | Same URL in Safari → Share → **Add to Home Screen** (standalone app). Slack mobile works for approvals too. |
 | Slack | `@shiba-ai-coworker` in a thread or `/shiba-ai-coworker <repo> <task>`; approve on the card |
+| Telegram & Discord | *Coming soon* — end-to-end task delegation and interactive approval bots |
 | Claude Code | MCP over `https://<worker-host>/mcp` with a bearer token — see below |
 
 ### Use from Claude Code
