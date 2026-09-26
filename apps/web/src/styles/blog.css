@@ -261,54 +261,7 @@ html[data-theme='dark'] .blog-filter[aria-current='true'] {
 	font-variant-numeric: tabular-nums;
 }
 
-/* ASCII banner. Rendered as text, not an image, so it stays legible at any zoom
-   and inherits the theme. Overflow scrolls rather than wrapping — wrapping an
-   ASCII figure destroys it. */
-.ascii-banner {
-	margin: 28px 0 0;
-	border: 1px solid var(--line-2);
-	background: var(--card);
-	box-shadow: 3px 3px 0 var(--paper-shadow);
-}
-
-.ascii-banner-bar {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	min-height: 28px;
-	padding: 0 10px;
-	border-bottom: 1px solid var(--line-2);
-	font-family: 'Geist Mono', monospace;
-	font-size: 9px;
-	text-transform: uppercase;
-	letter-spacing: 0.14em;
-	color: var(--ink-2);
-}
-
-.ascii-banner-dot {
-	width: 6px;
-	height: 6px;
-	flex: none;
-	background: var(--navy);
-}
-
-.ascii-banner pre {
-	margin: 0;
-	padding: 16px 14px;
-	overflow-x: auto;
-	font-family: 'Geist Mono', ui-monospace, monospace;
-	font-size: 9px;
-	line-height: 1.25;
-	color: var(--navy);
-	background: transparent;
-}
-
-.ascii-banner-missing {
-	padding: 16px 14px;
-	font-family: 'Geist Mono', monospace;
-	font-size: 10px;
-	color: var(--ink-2);
-}
+/* ASCII banners removed — posts carry dithered hero images instead. */
 
 /* Article body: a two-column measure on wide screens so the TOC sits beside the
    prose rather than pushing it down. Single column below 62rem. */

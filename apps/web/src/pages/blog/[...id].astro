@@ -29,16 +29,6 @@ interface Props {
 
 const { post: entry, older, newer } = Astro.props;
 const post = await renderPost(entry);
-
-// Banners are authored text, imported at build time rather than fetched, so
-// they cost no request and inherit the active theme. A missing file renders an
-// explicit notice on the page instead of failing the build.
-const banners = import.meta.glob<string>('../../assets/blog/*.txt', {
-	query: '?raw',
-	import: 'default',
-	eager: true,
-});
-const banner = banners[`../../assets/blog/${post.post.id}.txt`]?.trim();
 ---
 
-<JournalArticle post={post} banner={banner} prev={older} next={newer} />
+<JournalArticle post={post} prev={older} next={newer} />

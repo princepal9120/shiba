@@ -9,14 +9,12 @@ import {
 
 interface Props {
 	post: RenderedPost;
-	/** ASCII art, already trimmed. Omitted posts render an explicit notice. */
-	banner?: string;
 	/** Older and newer posts, for the continue-reading rail. */
 	prev?: { path: string; title: string } | null;
 	next?: { path: string; title: string } | null;
 }
 
-const { post, banner, prev, next } = Astro.props;
+const { post, prev, next } = Astro.props;
 const { Content, toc, minutes } = post;
 const data = post.post.data;
 const { title, description, pubDate, updatedDate } = data;
@@ -91,22 +89,6 @@ const articleSchema = {
 					)}
 				</div>
 			</header>
-
-			{banner ? (
-				<figure class="ascii-banner">
-					<figcaption class="ascii-banner-bar">
-						<span class="ascii-banner-dot" aria-hidden="true"></span>
-						<span>ascii/{post.post.id}.txt</span>
-					</figcaption>
-					<pre aria-label={`ASCII banner for ${title}`}>{banner}</pre>
-				</figure>
-			) : (
-				<p class="callout">
-					<span class="callout-label">Missing asset</span>
-					No ASCII banner was found for this post. That is a build gap, not a
-					statement about the product.
-				</p>
-			)}
 
 			<div class="article-body">
 				{toc.length > 0 && (

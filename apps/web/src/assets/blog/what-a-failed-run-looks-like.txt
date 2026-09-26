@@ -1,9 +1,0 @@
-  .---------------------------------------.
-  |  A FAILED RUN                        |
-  |                                        |
-  |   exit code   (real)                  |
-  |   stderr tail (bounded, redacted)     |
-  |   envelope    = error                 |
-  |                                        |
-  |   never: silent success               |
-  '---------------------------------------'

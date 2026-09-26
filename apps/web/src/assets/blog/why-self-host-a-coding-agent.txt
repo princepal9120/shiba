@@ -1,9 +1,0 @@
-        your harness    +    your account    +    your model
-               \               |               //
-                v               v               v
-        .------------------------------------------------.
-        |          A RUN THAT IS ACTUALLY YOURS          |
-        |                                                |
-        |   self-hosted with one leg missing just        |
-        |   saves the seat fee                           |
-        '------------------------------------------------'

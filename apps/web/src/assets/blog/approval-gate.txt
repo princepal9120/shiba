@@ -1,9 +1,0 @@
-  .-----------------------------------------.
-  |  APPROVAL GATE                          |
-  |                                         |
-  |   plan  ->  human  ->  container        |
-  |            |                            |
-  |            +-- approve --> provision    |
-  |                                         |
-  |   no container starts before approve    |
-  '-----------------------------------------'
