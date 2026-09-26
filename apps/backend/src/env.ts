@@ -96,9 +96,8 @@ export interface Env {
   MEMORY_ENABLED?: string;
   /** Agent harness: "opencode" (default), "claude-code", or "codex". */
   AGENT_HARNESS?: string;
-  /** Per-lane harness overrides; fall back to AGENT_HARNESS when unset. */
+  /** Optional harness override for Telegram-originated runs. */
   TELEGRAM_AGENT_HARNESS?: string;
-  DISCORD_AGENT_HARNESS?: string;
   /** Optional. Harness for Slack-originated runs; defaults to AGENT_HARNESS, then "claude-code". */
   SLACK_AGENT_HARNESS?: string;
   /** "sandbox" (default) or "computer" (preview-only refusal). */
@@ -123,22 +122,14 @@ export interface Env {
   SLACK_APPROVALS_CHANNEL?: string;
   /** Optional. JSON map `{channelId: "https://github.com/owner/repo"}` for bare mentions. */
   SLACK_CHANNEL_REPOS?: string;
-  /** Optional. Telegram bot token from BotFather; unset disables the Telegram route. */
+  /** Optional Telegram bot token; unset disables the webhook route. */
   TELEGRAM_BOT_TOKEN?: string;
-  /** Optional. setWebhook secret_token, checked on the X-Telegram-Bot-Api-Secret-Token header only. */
+  /** Optional setWebhook secret checked only in X-Telegram-Bot-Api-Secret-Token. */
   TELEGRAM_WEBHOOK_SECRET?: string;
-  /** Optional. Comma-separated Telegram numeric user ids allowed to approve; unset = nobody. */
+  /** Optional comma-separated numeric Telegram user ids allowed to approve. */
   TELEGRAM_APPROVERS?: string;
-  /** Optional. JSON map `{chatId: "https://github.com/owner/repo"}` for commands without a URL. */
+  /** Optional JSON map of chat ids to repository URLs. */
   TELEGRAM_CHAT_REPOS?: string;
-  /** Optional. Discord application public key (hex); verifies interactions, unset disables the route. */
-  DISCORD_PUBLIC_KEY?: string;
-  /** Optional. Discord bot token, used only to post run progress back into the channel. */
-  DISCORD_BOT_TOKEN?: string;
-  /** Optional. Comma-separated Discord user ids allowed to approve; unset = nobody. */
-  DISCORD_APPROVERS?: string;
-  /** Optional. JSON map `{channelId: "https://github.com/owner/repo"}` for commands without a repo. */
-  DISCORD_CHANNEL_REPOS?: string;
   /** Optional. TypeSafe System One key for `run_when`; unset falls back to Workers AI. */
   TYPESAFE_API_KEY?: string;
   /** Optional. Required only to open pull requests. Never sent to containers. */

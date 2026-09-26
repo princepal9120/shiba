@@ -12,7 +12,6 @@ import { extractGitHubRepoUrl, parseChannelRepoMap } from "./slack-context.js";
 export type ChatPlatform = "telegram" | "discord";
 
 export const TELEGRAM_API = "https://api.telegram.org";
-export const DISCORD_API = "https://discord.com/api/v10";
 
 /** Empty allow-list: task text echoed into a message can never ping anyone. */
 export const NO_MENTIONS = { parse: [] as string[] };
@@ -229,52 +228,15 @@ export async function telegramApi(
   return json;
 }
 
-export interface DiscordRequestInit {
-  method: string;
-  body?: unknown;
-  botToken?: string;
-}
-
-/** Discord REST call. Webhook paths embed the interaction token, so errors name only `label`. */
-export async function discordApi(label: string, path: string, init: DiscordRequestInit): Promise<void> {
-  let response: Response;
-  try {
-    response = await fetch(`${DISCORD_API}${path}`, {
-      method: init.method,
-      headers: {
-        "Content-Type": "application/json",
-        ...(init.botToken ? { Authorization: `Bot ${init.botToken}` } : {}),
-      },
-      ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
-    });
-  } catch {
-    throw new Error(`Discord ${label} request failed.`);
-  }
-  if (!response.ok) {
-    const json = (await response.json().catch(() => ({}))) as { message?: unknown };
-    const reason = typeof json.message === "string" ? json.message : "unparseable response";
-    throw new Error(`Discord ${label} failed (${response.status}): ${reason}`);
-  }
-}
-
 /**
- * Relay run progress into the chat a thread-keyed orchestrator came from.
- * Returns null when `threadName` is not a chat conversation or the lane has
- * no bot token, so the caller can fall through to its other post-backs.
+ * Relay run progress into a Telegram conversation. Returns null for other
+ * platforms or when the bot token is unset so the Slack caller can fall back.
  */
 export function postToChatThread(env: Env, threadName: string, text: string): Promise<void> | null {
   const ids = parseChatThreadName(threadName);
   if (!ids) return null;
-  if (ids.platform === "telegram") {
-    const token = env.TELEGRAM_BOT_TOKEN?.trim();
-    if (!token) return null;
-    return telegramApi(token, "sendMessage", { chat_id: ids.conversationId, text: text.slice(0, 4000) }).then(() => undefined);
-  }
-  const token = env.DISCORD_BOT_TOKEN?.trim();
+  if (ids.platform !== "telegram") return null;
+  const token = env.TELEGRAM_BOT_TOKEN?.trim();
   if (!token) return null;
-  return discordApi("post-back", `/channels/${ids.conversationId}/messages`, {
-    method: "POST",
-    botToken: token,
-    body: { content: text.slice(0, 2000), allowed_mentions: NO_MENTIONS },
-  });
+  return telegramApi(token, "sendMessage", { chat_id: ids.conversationId, text: text.slice(0, 4000) }).then(() => undefined);
 }

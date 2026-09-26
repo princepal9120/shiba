@@ -35,7 +35,6 @@ import { handleSlackInteract } from "./slack-approval.js";
 import { handleSlackEvents } from "./slack-events.js";
 import { handleSlackEvent } from "./slack-mention.js";
 import { ORCHESTRATOR_NAME, handleSlackCommand } from "./slack-routes.js";
-import { handleDiscordInteractions } from "./discord.js";
 import { handleTelegramWebhook } from "./telegram.js";
 import { handleTrigger } from "./trigger.js";
 import { handleSandboxRoutes } from "./sandbox-routes.js";
@@ -62,7 +61,6 @@ export const SIGNATURE_AUTHENTICATED = [
   "/api/slack/command",
   "/api/slack/interact",
   "/api/telegram/webhook",
-  "/api/discord/interactions",
   "/api/github/webhook",
   "/api/trigger",
 ];
@@ -1131,6 +1129,20 @@ export default {
       }, ctx ? { waitUntil: (promise) => ctx.waitUntil(promise) } : undefined);
       if (slackInteractResponse) {
         return slackInteractResponse;
+      }
+      const telegramResponse = await handleTelegramWebhook(request, env, ctx ? { waitUntil: (promise) => ctx.waitUntil(promise) } : undefined, {
+        dedupe: async (updateId) => {
+          const response = await automationsStub(env).fetch(new Request("https://internal/internal/dedupe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ key: `telegram-update:${updateId}` }),
+          }));
+          const body = (await response.json().catch(() => ({}))) as { seen?: boolean };
+          return response.ok && body.seen === true;
+        },
+      });
+      if (telegramResponse) {
+        return telegramResponse;
       }
       const automationsResponse = await handleAutomations(request, env);
       if (automationsResponse) {

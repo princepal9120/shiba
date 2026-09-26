@@ -56,8 +56,6 @@ import { classifyExecutorError, classifyRunError, runErrorWire, toTaggedError, t
 import { DEFAULT_ORCHESTRATOR_MODEL, distillSession } from "../session-distill.js";
 import { parseSlackThreadName } from "../slack-thread.js";
 import { postToChatThread } from "../chat-lane.js";
-import { evaluateResultQuality } from "../result-quality.js";
-import { evaluateSessionTriage } from "../session-triage.js";
 import {
   slackRunCancelled,
   slackRunCompleted,
@@ -450,8 +448,8 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         // child was running) drops the transition AND every side effect.
         const updated = this.store.transition(runId, status, patch, generation);
         if (updated === null) return null;
-        if (threadText) {
-          this.postToThread(threadText);
+        if (slackText) {
+          this.postToThread(slackText);
         }
         // Megaplan T10: a retained run landing completed/error distills its
         // transcript into long-term memory — best-effort under waitUntil.
@@ -1097,10 +1095,9 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
   }
 
   /**
-   * Chat post-back: thread-keyed orchestrators (`slack:{team}:{channel}:{ts}`,
-   * `telegram:{chat}`, `discord:{channel}`) relay run start + terminal outcome
-   * into the conversation they came from. Best-effort — the ack already went
-   * out and failure must not touch the run.
+   * Chat post-back: thread-keyed orchestrators (`slack:{team}:{channel}:{ts}`, `telegram:{chat}`)
+   * relay run start + terminal outcome into the thread they came from.
+   * Best-effort — the ack already went out and failure must not touch the run.
    */
   private postToThread(text: string): void {
     const chat = postToChatThread(this.env, this.name, text);
