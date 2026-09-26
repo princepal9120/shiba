@@ -24,6 +24,10 @@ const { title, description, pubDate, updatedDate } = data;
 const category: JournalPost['data']['category'] = data.category;
 const pattern: JournalPost['data']['pattern'] = data.pattern;
 const path = post.path;
+// Convention: every post's body opens with a hero image. Lift it into the
+// header (the inline copy in .prose is hidden in blog.css).
+const heroMatch = (post.post.body ?? '').match(/!\[([^\]]*)\]\(([^)\s]+)\)/);
+const hero = heroMatch ? { alt: heroMatch[1] ?? '', src: heroMatch[2] ?? '' } : null;
 
 const fmt = (d: Date) =>
 	d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
@@ -89,6 +93,11 @@ const articleSchema = {
 						</>
 					)}
 				</div>
+				{hero && (
+					<figure class="article-hero">
+						<img src={hero.src} alt={hero.alt} loading="eager" />
+					</figure>
+				)}
 			</header>
 
 			<div class="article-body">

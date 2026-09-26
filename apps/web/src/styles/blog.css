@@ -294,7 +294,25 @@ html[data-theme='dark'] .blog-filter[aria-current='true'] {
 	font-variant-numeric: tabular-nums;
 }
 
-/* ASCII banners removed — posts carry dithered hero images instead. */
+/* The post's lead image is lifted into the header as a full-width hero
+   (.article-hero), so the inline copy in the prose is hidden. */
+.article-hero {
+	margin: clamp(24px, 3.5vw, 40px) 0 0;
+	border: 1px solid var(--line-2);
+	box-shadow: 3px 3px 0 var(--paper-shadow);
+}
+
+.article-hero img {
+	display: block;
+	width: 100%;
+	height: auto;
+	image-rendering: pixelated;
+}
+
+.prose > p:first-child:has(img),
+.prose > p:first-child > img {
+	display: none !important;
+}
 
 /* Article body: a two-column measure on wide screens so the TOC sits beside the
    prose rather than pushing it down. Single column below 62rem. */
