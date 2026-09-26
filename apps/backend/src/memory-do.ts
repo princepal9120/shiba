@@ -7,16 +7,22 @@
  * owns that agent's `facts`. The reserved `global` stub
  * (`idFromName(MEMORY_REGISTRY_NAME)`) owns `fact_registry` — one row per
  * fact mapping id → owning agent — and `sessions`, the cross-agent run log.
- * `bank` on an agent stub inserts the fact row, claims the fact id on
- * `global` (the single serialization point for cross-agent uniqueness —
- * a foreign owner conflicts the write before any vector lands), then
- * upserts a bge-base 768-dim vector keyed by the fact id.
- * `recall` (`GET /facts/search`) embeds the query, queries `MEMORY_VECTORS`,
- * and joins each hit back to its owning agent stub through the registry.
+ * `bank` on an agent stub dedupes the candidate against the agent's own
+ * bankings (a ≥ {@link DEDUPE_THRESHOLD} match returns the existing fact
+ * marked `duplicate_of` instead of writing), inserts the fact row, claims
+ * the fact id on `global` (the single serialization point for cross-agent
+ * uniqueness — a foreign owner conflicts the write before any vector
+ * lands), then upserts a bge-base 768-dim vector keyed by the fact id with
+ * the fact row itself stored as metadata.
+ * `recall` (`GET /facts/search`) embeds the query, queries `MEMORY_VECTORS`
+ * with `returnMetadata`, and answers each hit straight from the stored
+ * metadata — zero stub joins. Vectors written before metadata existed
+ * still join back to the owning agent stub through the registry.
  * Forget and TTL purge drop all three copies — row, vector, registry row —
  * and the registry's self-heal unregisters (a vanished fact behind an
  * index row) drop the vector too, so the index never accumulates
- * un-joinable orphans.
+ * un-joinable orphans. Every stub also arms a daily `storage.setAlarm`
+ * sweep that purges TTL-dead rows eagerly and merges near-duplicates.
  *
  * All routes live under `/internal/memory/*` and are reachable only through
  * `stub.fetch` inside the worker — index.ts returns 404 for external
@@ -59,6 +65,72 @@ const MAX_FACT_CHARS = 8_000;
 const MAX_QUERY_CHARS = 2_000;
 const MAX_SUMMARY_CHARS = 16_000;
 const MAX_ID_CHARS = 200;
+
+/**
+ * bge-base cosine score at or above which two facts count as the same
+ * fact — bank dedupes on it and the alarm sweep merges on it.
+ */
+const DEDUPE_THRESHOLD = 0.92;
+
+/**
+ * `MEMORY_ENABLED` kill switch. Unset means enabled; "false"/"0"/"off"/"no"
+ * disable. Bank-side dedupe and the alarm sweep honor it — the DO serves
+ * internal fetches only, so reads and writes stay up either way.
+ */
+export function memoryEnabled(value: string | undefined): boolean {
+  if (value === undefined || value.trim() === "") return true;
+  return !["false", "0", "off", "no"].includes(value.trim().toLowerCase());
+}
+
+/**
+ * The fact payload stored as Vectorize metadata at upsert — recall serves
+ * hits straight off it, so a vector written this way needs no stub join.
+ */
+type FactMetadata = Record<string, string | number | boolean | string[]> & {
+  agent?: string;
+  fact?: string;
+  source?: string;
+  created_at?: number;
+  ttl?: number | null;
+};
+
+function factMetadata(agent: string, fact: FactRecord): FactMetadata {
+  const m: FactMetadata = {
+    agent,
+    fact: fact.fact,
+    source: fact.source,
+    created_at: fact.created_at,
+  };
+  // null ttl means "no expiry" — omit rather than storing a non-serialisable null
+  if (fact.ttl !== null && fact.ttl !== undefined) m.ttl = fact.ttl;
+  return m;
+}
+
+/** A metadata payload complete enough to answer recall without a join. */
+function recallableMetadata(
+  meta: FactMetadata | undefined,
+): meta is FactMetadata & { agent: string; fact: string; source: string; created_at: number } {
+  return (
+    typeof meta?.agent === "string" &&
+    typeof meta?.fact === "string" &&
+    typeof meta?.source === "string" &&
+    typeof meta?.created_at === "number"
+  );
+}
+
+/** bge-base cosine similarity — the merge check the sweep does locally. */
+function cosineSimilarity(a: number[], b: number[]): number {
+  let dot = 0;
+  let na = 0;
+  let nb = 0;
+  for (const [i, x] of a.entries()) {
+    const y = b[i] ?? 0;
+    dot += x * y;
+    na += x * x;
+    nb += y * y;
+  }
+  return na === 0 || nb === 0 ? 0 : dot / (Math.sqrt(na) * Math.sqrt(nb));
+}
 
 /** Per-agent stub — the unit every fact write/scoped read goes through. */
 export function memoryStub(env: Env, agent: string): DurableObjectStub {
@@ -212,7 +284,29 @@ export class Memory {
     this.store = new MemoryStore(exec);
     ctx.blockConcurrencyWhile(async () => {
       this.store.init();
+      await this.ensureSweepScheduled();
     });
+  }
+
+  /**
+   * The DO alarm fires the daily sweep, then re-arms for the next UTC
+   * midnight. A failed sweep still re-arms — one bad merge must not stop
+   * housekeeping on this stub forever.
+   */
+  async alarm(): Promise<void> {
+    try {
+      await this.sweep();
+    } catch (error) {
+      console.warn(
+        `memory_sweep_failed ${JSON.stringify({
+          instance: this.agent,
+          error: error instanceof Error ? error.message : String(error),
+        })}`,
+      );
+    }
+    if (memoryEnabled(this.env.MEMORY_ENABLED)) {
+      await this.ctx.storage.setAlarm(this.nextSweepAt());
+    }
   }
 
   /** The `idFromName` input this stub was created with ("" for unique ids). */
@@ -239,23 +333,46 @@ export class Memory {
 
   // -- embedding + vector index -------------------------------------------------
 
-  /** Embed text to a 768-dim vector via Workers AI (bge-base-en-v1.5). */
-  private async embed(text: string): Promise<number[]> {
+  /**
+   * Embed one or more texts to 768-dim vectors via Workers AI
+   * (bge-base-en-v1.5) — the model accepts a text array, so callers with
+   * several facts embed them in one call.
+   */
+  private async embedMany(texts: string[]): Promise<number[][]> {
+    // A lone text goes as the scalar form — the batch array is only for
+    // real batches (alarm sweep merges).
+    const text = texts.length === 1 ? texts[0]! : texts;
     const result = await this.env.AI.run(EMBEDDING_MODEL, { text });
     // Known-model overload returns `{data?: number[][]} | {request_id}`.
     const data = (result as { data?: number[][] }).data;
-    const vector = data?.[0];
-    if (!Array.isArray(vector) || vector.length !== EMBEDDING_DIMS) {
+    if (
+      !Array.isArray(data) ||
+      data.length !== texts.length ||
+      data.some((v) => !Array.isArray(v) || v.length !== EMBEDDING_DIMS)
+    ) {
       throw new Error(
-        `Embedding failed: ${EMBEDDING_MODEL} did not return a ${EMBEDDING_DIMS}-dim vector.`,
+        `Embedding failed: ${EMBEDDING_MODEL} did not return ${texts.length} ${EMBEDDING_DIMS}-dim vector(s).`,
       );
     }
-    return vector;
+    return data;
   }
 
-  private async upsertVector(factId: string, agent: string, values: number[]): Promise<void> {
-    // `agent` rides as metadata so recall can scope the query to one agent.
-    await this.env.MEMORY_VECTORS.upsert([{ id: factId, values, metadata: { agent } }]);
+  private async embed(text: string): Promise<number[]> {
+    return (await this.embedMany([text]))[0]!;
+  }
+
+  /**
+   * Upsert a fact's vector with the whole row as metadata — recall reads
+   * the hit back via `returnMetadata` without a stub join. `agent` also
+   * doubles as the metadata-filter field for scoped recall.
+   */
+  private async upsertVector(
+    factId: string,
+    agent: string,
+    values: number[],
+    metadata: FactMetadata,
+  ): Promise<void> {
+    await this.env.MEMORY_VECTORS.upsert([{ id: factId, values, metadata }]);
   }
 
   private async deleteVector(factId: string): Promise<void> {
@@ -358,6 +475,67 @@ export class Memory {
     }
   }
 
+  // -- alarm sweep ------------------------------------------------------------
+
+  /** Next daily sweep — the next UTC midnight. */
+  private nextSweepAt(): number {
+    const day = new Date();
+    day.setUTCHours(24, 0, 0, 0);
+    return day.getTime();
+  }
+
+  /**
+   * Arm the daily alarm once — reads stay lazy-purged too, so the sweep is
+   * housekeeping, not correctness. `MEMORY_ENABLED=off` leaves it unarmed:
+   * a killed memory system should not keep waking DOs to sweep it.
+   */
+  private async ensureSweepScheduled(): Promise<void> {
+    if (!memoryEnabled(this.env.MEMORY_ENABLED)) {
+      return;
+    }
+    if ((await this.ctx.storage.getAlarm()) === null) {
+      await this.ctx.storage.setAlarm(this.nextSweepAt());
+    }
+  }
+
+  /**
+   * Daily sweep: eagerly purge TTL-dead facts (reads purge lazily too — the
+   * alarm just keeps a never-read stub from accumulating the backlog), then
+   * merge near-duplicates inside this stub's own facts: every surviving
+   * fact keeps the newest embeddings, and a pair scoring ≥
+   * {@link DEDUPE_THRESHOLD} (bge-base cosine — the index's metric) drops
+   * the later fact's row, vector, and registry entry like a forget.
+   * The registry stub's facts table is empty by design, so both steps are
+   * a no-op there.
+   */
+  private async sweep(): Promise<void> {
+    if (!memoryEnabled(this.env.MEMORY_ENABLED)) {
+      return;
+    }
+    await this.collectPurged(this.store.purgeExpiredFacts());
+    // Oldest first — a later near-duplicate merges away, never the original.
+    const facts = this.store.listFacts({ nowMs: Date.now() }).reverse();
+    if (facts.length < 2) {
+      return;
+    }
+    const vectors = await this.embedMany(facts.map((f) => f.fact));
+    const kept: number[][] = [];
+    for (const [index, fact] of facts.entries()) {
+      const vector = vectors[index]!;
+      const isDupe = kept.some(
+        (other) => cosineSimilarity(vector, other) >= DEDUPE_THRESHOLD,
+      );
+      if (isDupe) {
+        if (this.store.forgetFact(fact.id)) {
+          await this.deleteVector(fact.id);
+          await this.dropRegistryEntry(fact.id);
+        }
+        continue;
+      }
+      kept.push(vector);
+    }
+  }
+
   // -- routes -------------------------------------------------------------
 
   /**
@@ -408,6 +586,27 @@ export class Memory {
       factId = `fact_${randomHex(12)}`;
     }
     const vector = await this.embed(factText);
+    // Dedupe-on-bank: the candidate vector already exists, so one scoped
+    // query finds a same-agent near-duplicate before any row lands. The
+    // existing fact answers as itself marked `duplicate_of` — a successful
+    // (idempotent) bank that never wrote, not a conflict.
+    if (memoryEnabled(this.env.MEMORY_ENABLED)) {
+      const matches = await this.env.MEMORY_VECTORS.query(vector, {
+        topK: 1,
+        filter: { agent: this.agent },
+      });
+      const nearest = matches.matches[0];
+      if (nearest !== undefined && nearest.score >= DEDUPE_THRESHOLD) {
+        await this.collectPurged(this.store.purgeExpiredFacts());
+        const existing = this.store.getFact(nearest.id);
+        if (existing !== null) {
+          return json(
+            { fact: { ...factJson(existing, this.agent), duplicate_of: existing.id } },
+            { status: 200 },
+          );
+        }
+      }
+    }
     // The `await this.embed` between the existence check and this insert
     // lets a concurrent same-id bank race in first — the loser must still
     // get the 409 contract, not a surfaced UNIQUE-constraint 500.
@@ -436,7 +635,7 @@ export class Memory {
       throw error;
     }
     try {
-      await this.upsertVector(fact.id, this.agent, vector);
+      await this.upsertVector(fact.id, this.agent, vector, factMetadata(this.agent, fact));
     } catch (error) {
       this.store.forgetFact(fact.id);
       await this.dropRegistryEntry(fact.id);
@@ -454,8 +653,10 @@ export class Memory {
 
   /**
    * `GET /facts/search` — recall: embed the query, `topK` the Vectorize
-   * index, then join each hit to its fact row through the owning agent's
-   * stub (via the global registry for cross-agent calls).
+   * index, then answer each hit off the fact row stored in the vector's
+   * metadata. Vectors written before metadata existed still join back to
+   * their fact row — a same-DO store read on an agent stub, a stub fetch
+   * through the registry for cross-agent calls.
    */
   private async recall(url: URL): Promise<Response> {
     const query = url.searchParams.get("q")?.trim() ?? "";
@@ -480,12 +681,17 @@ export class Memory {
       // the live index needs `wrangler vectorize create-metadata-index
       // shiba-memory --property-name=agent --type=string` (wrangler.jsonc).
       ...(scopedAgent !== undefined ? { filter: { agent: scopedAgent } } : {}),
+      // Vectors banked after metadata landed carry the whole fact row —
+      // most hits answer below without a single stub fetch.
+      returnMetadata: true,
     });
     const hits: Array<Record<string, unknown>> = [];
     for (const match of matches.matches) {
       const factId = match.id;
       if (!this.isRegistry) {
         // Agent stub — the scoped query only returns this stub's own rows.
+        // The local row read is a same-DO SQLite call, not a subrequest:
+        // keep it authoritative so expiry/orphans self-heal as before.
         const fact = this.store.getFact(factId);
         if (fact !== null) {
           hits.push({ ...factJson(fact, this.agent), score: match.score });
@@ -506,8 +712,32 @@ export class Memory {
         await this.deleteVector(factId);
         continue;
       }
-      // One sequential stub fetch per hit — bounded by MAX_RECALL_TOP_K
-      // (≤100 subrequests); the plan deliberately keeps this join simple.
+      // Vectors banked after metadata landed carry the whole fact row —
+      // the registry answers straight off it instead of spending one
+      // sequential stub fetch per hit (up to ~100 subrequests before).
+      const meta = match.metadata as FactMetadata | undefined;
+      if (recallableMetadata(meta) && meta.agent === agent) {
+        // The row join used to filter expiry and then collect the dead
+        // vector; the stored ttl serves the same contract here — an
+        // expired fact's vector and registry row drop now rather than
+        // waiting for the owning stub's next sweep.
+        if (typeof meta.ttl === "number" && meta.ttl <= Date.now()) {
+          this.store.unregisterFact(factId);
+          await this.deleteVector(factId);
+          continue;
+        }
+        hits.push({
+          id: factId,
+          fact: meta.fact,
+          source: meta.source,
+          agent,
+          created_at: meta.created_at,
+          score: match.score,
+        });
+        continue;
+      }
+      // Pre-metadata vector — one sequential stub fetch per hit, bounded
+      // by MAX_RECALL_TOP_K (≤100 subrequests).
       let fact: FactRecord | null;
       try {
         fact = await this.fetchFact(agent, factId);
@@ -797,6 +1027,9 @@ export class Memory {
   }
 
   async fetch(request: Request): Promise<Response> {
+    // A stub that slept through its scheduled alarm re-arms on the next
+    // request — the constructor only covers fresh instances.
+    await this.ensureSweepScheduled();
     const url = new URL(request.url);
     if (url.pathname !== ROUTE_PREFIX && !url.pathname.startsWith(`${ROUTE_PREFIX}/`)) {
       return notFound();
