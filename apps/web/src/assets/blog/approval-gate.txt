@@ -1,16 +1,9 @@
 +------------------------------------------------------------+
+|  [ PROPOSAL ]   delegate_coding_task                        |
+|  repoUrl ......... https://github.com/owner/repo            |
+|  task ............ fix input sanitization in auth.ts        |
+|  baseBranch ...... main                                      |
+|  publishPR ....... false                                     |
 |                                                            |
-|        [ PROPOSAL ]  delegate_coding_task                   |
-|                                                            |
-|        repoUrl   .......  https://github.com/o/r          |
-|        task      .......  fix input sanitization          |
-|        baseBranch .......  main                            |
-|        publishPR .......  false                           |
-|                                                            |
-|   +--------------------+   +----------------------------+  |
-|   |   no container     |   |      a human decides       |  |
-|   |   starts until     |   |      before anything       |  |
-|   |   approval         |   |      runs                 |  |
-|   +--------------------+   +----------------------------+  |
-|                                                            |
+|     no container starts until a human approves this          |
 +------------------------------------------------------------+
