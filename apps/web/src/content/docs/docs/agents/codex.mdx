@@ -1,0 +1,80 @@
+---
+title: Codex
+description: Run OpenAI's Codex CLI autonomously within approval-gated Cloudflare Sandboxes.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Shiba packages OpenAI's [Codex CLI](https://github.com/openai/codex) inside the container image, providing fast, automated execution for tasks optimized for OpenAI coding models.
+
+## Agent Overview
+
+| Attribute | Specification |
+| --- | --- |
+| **Harness ID** | `codex` |
+| **CLI Binary** | `codex` |
+| **Pinned Version** | `0.155.0` (in Dockerfile) |
+| **Default Model** | `openai/gpt-5.3-codex` |
+| **Supported Models** | `openai/gpt-5.3-codex`, `openai/o3-mini`, `openai/gpt-4o`, `openai/gpt-4.5-preview` |
+| **Credential Model** | AI Gateway BYOK (dummy key inside sandbox; real key injected at egress) |
+| **Invocation** | `codex exec --json --dangerously-bypass-approvals-and-sandbox "<task>"` |
+
+## How It Works
+
+```
+Developer Request
+  └── CodingOrchestrator generates delegate_coding_task({ harness: "codex" })
+      └── Human signs off on exact prompt & repository
+          └── Ephemeral Cloudflare Sandbox boots
+              ├── Clones repository via scoped git token
+              ├── Executes: codex exec --json "<task>"
+              ├── Streams structured JSON output to the Worker
+              └── Emits diff and pull request receipts
+```
+
+<Aside type="note" title="API Key Security">
+Just like Claude Code, Codex authenticates with an OpenAI API key managed in Cloudflare AI Gateway. The container holds dummy credentials, preventing any repository scripts from exfiltrating account credentials.
+</Aside>
+
+## Configuration & Deployment
+
+### 1. Configure the Provider Key in AI Gateway
+Store your OpenAI API key in your Cloudflare AI Gateway under the provider ID `openai`. Egress traffic to `api.openai.com` is intercepted and authorized at the Cloudflare edge.
+
+### 2. Set Default Model
+In your environment or `wrangler.jsonc`:
+
+```bash
+# Set default harness to Codex
+pnpm wrangler secret put AGENT_HARNESS # enter "codex"
+
+# Set default model for Codex
+pnpm wrangler secret put CODEX_MODEL # enter "openai/gpt-5.3-codex"
+```
+
+## Selecting Codex in a Task
+
+Specify `harness: "codex"` in any task request:
+
+```json
+{
+  "repoUrl": "https://github.com/acme/frontend",
+  "task": "Add optimistic UI updates to the checkout mutation",
+  "baseBranch": "main",
+  "harness": "codex",
+  "codingModel": "openai/gpt-5.3-codex"
+}
+```
+
+## Event Parsing & Safety
+
+Codex runs non-interactively with `codex exec --json`. Each emitted line is parsed for:
+- Command and execution steps
+- Modified files and staged changes
+- Structured error envelopes (surfaced directly as honest failures)
+
+## Related Documentation
+
+- [Coding Harnesses Overview](/docs/claude-code/)
+- [Approval Gates](/docs/approval-gates/)
+- [Security & Credential Boundaries](/docs/security/)

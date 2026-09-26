@@ -1,0 +1,465 @@
+---
+import MarketingPage from '../layouts/MarketingPage.astro';
+
+const articleSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'TechArticle',
+  headline: 'Open source Devin alternative: a guide to Shiba',
+  description:
+    'How to evaluate an account-owned, approval-gated AI software engineer — and how to run one bounded task before you switch a workflow.',
+  author: {
+    '@type': 'Organization',
+    name: 'Shiba',
+    url: 'https://tryshiba.dev',
+  },
+  publisher: {
+    '@type': 'Organization',
+    name: 'Shiba',
+    logo: {
+      '@type': 'ImageObject',
+      url: 'https://tryshiba.dev/assets/mascot/pet-logo.png',
+    },
+  },
+  datePublished: '2026-09-26',
+  dateModified: '2026-09-26',
+  mainEntityOfPage: 'https://tryshiba.dev/open-source-devin-alternative/',
+  image: 'https://tryshiba.dev/assets/mascot/pet-logo.png',
+};
+---
+
+<MarketingPage
+  title="Open source Devin alternative: a guide to Shiba"
+  description="How to evaluate an account-owned, approval-gated AI software engineer — how to run one bounded task before you switch a workflow."
+  path="/open-source-devin-alternative/"
+  type="article"
+  publishedTime="2026-09-26T00:00:00Z"
+  modifiedTime="2026-09-26T00:00:00Z"
+  schema={articleSchema}
+  breadcrumbs={[
+    { name: 'Home', path: '/' },
+    { name: 'Open source Devin alternative', path: '/open-source-devin-alternative/' },
+  ]}
+>
+  <section class="shell hero">
+    <div class="inline-flex items-center gap-2 px-3 py-1.5 bg-[var(--card)] border border-[var(--line-2)] text-[10px] font-mono uppercase tracking-[0.14em] text-[var(--navy)] mb-6 shadow-[2px_2px_0_var(--paper-shadow)]">
+      <span class="w-2 h-2 bg-[var(--navy)] animate-pulse"></span>
+      <span>EVALUATION GUIDE · SEPTEMBER 2026</span>
+    </div>
+    <h1 class="manifesto-title text-[var(--ink)]">
+      Looking for an <span class="text-[var(--navy)]">open source Devin alternative</span>?
+    </h1>
+    <p class="lead text-[var(--ink-2)]">
+      Most people searching for that phrase are not looking for one specific product. They are looking for one of five
+      things: source you can inspect, a choice of coding agent, execution that happens off your laptop, isolation between
+      tasks, or a way to review changes before they merge. This guide is about how to evaluate <strong>Shiba</strong>
+      against the requirements you actually have.
+    </p>
+    <div class="hero-actions">
+      <a class="button" href="https://github.com/princepal9120/shiba" target="_blank" rel="noopener noreferrer">
+        <span>Inspect the source</span>
+        <span aria-hidden="true">↗</span>
+      </a>
+      <a class="button button-outline" href="/docs/overview/">
+        <span>Read the docs</span>
+      </a>
+      <a class="button button-outline" href="/docs/approval-gates/">
+        <span>How the approval gate works</span>
+      </a>
+    </div>
+  </section>
+
+  <div class="shell">
+    <section class="story-section" aria-labelledby="bias-title">
+      <div class="section-label"><span class="micro">00 / Read this first</span></div>
+      <div class="prose-body">
+        <h2 id="bias-title" class="text-[var(--ink)]">This guide is written by the people building Shiba</h2>
+        <p class="text-[var(--ink-2)]">
+          That is an obvious bias, so we will not dress it up. We are not claiming feature parity with Devin or any other
+          product, and this is not a benchmark. We have not run a controlled comparison against Devin, so we make no
+          claims about relative success rates, speed, or cost.
+        </p>
+        <p class="text-[var(--ink-2)]">
+          The goal is narrower and more useful: help you decide whether Shiba fits the repository work you actually want
+          to delegate. The repository is published under AGPL-3.0-only, so you can read the implementation, record the
+          revision you evaluated, and connect any reproducible problem to a specific commit. That is the main practical
+          advantage of an inspectable implementation: when something behaves oddly, you can find out why instead of filing
+          a ticket.
+        </p>
+        <p class="text-[var(--ink-2)]">
+          One boundary worth stating early. An open-source workspace is not a promise of free execution. It does not hand
+          you model access, it does not make compute free, and it does not turn a managed service into a turnkey
+          self-hosted one. We will come back to what that costs.
+        </p>
+      </div>
+    </section>
+
+    <section class="story-section" aria-labelledby="priorities-title">
+      <div class="section-label"><span class="micro">01 / Start here</span></div>
+      <div class="prose-body">
+        <h2 id="priorities-title" class="text-[var(--ink)]">What that phrase usually means</h2>
+        <p class="text-[var(--ink-2)]">
+          Those five requirements overlap, and they are not interchangeable. A tool can match your preferred interface
+          and still be wrong for your access model. Write down which one matters most before you compare anything.
+        </p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 my-8 font-mono text-xs">
+          <div class="p-4 bg-[var(--card)] border border-[var(--line-2)] shadow-[2px_2px_0_var(--paper-shadow)]">
+            <h3 class="font-bold text-[var(--ink)] mb-2">Inspect the implementation</h3>
+            <p class="text-[var(--ink-2)]">Look at the repository and its license first. Is the component you would actually depend on published?</p>
+          </div>
+          <div class="p-4 bg-[var(--card)] border border-[var(--line-2)] shadow-[2px_2px_0_var(--paper-shadow)]">
+            <h3 class="font-bold text-[var(--ink)] mb-2">Pick your own coding agent</h3>
+            <p class="text-[var(--ink-2)]">Check the agent catalog and the credential model. Can the agent you want authenticate in your environment?</p>
+          </div>
+          <div class="p-4 bg-[var(--card)] border border-[var(--line-2)] shadow-[2px_2px_0_var(--paper-shadow)]">
+            <h3 class="font-bold text-[var(--ink)] mb-2">Run it off your laptop</h3>
+            <p class="text-[var(--ink-2)]">Find out where compute runs, and whether your data ever leaves your account.</p>
+          </div>
+          <div class="p-4 bg-[var(--card)] border border-[var(--line-2)] shadow-[2px_2px_0_var(--paper-shadow)]">
+            <h3 class="font-bold text-[var(--ink)] mb-2">Isolate concurrent tasks</h3>
+            <p class="text-[var(--ink-2)]">Look at orchestrator identity and the run registry. Can two tasks collide?</p>
+          </div>
+          <div class="p-4 bg-[var(--card)] border border-[var(--navy)] shadow-[2px_2px_0_var(--paper-shadow)] md:col-span-2">
+            <h3 class="font-bold text-[var(--navy)] mb-2">Review before merge</h3>
+            <p class="text-[var(--ink-2)]">Check the diff surface and the approval gate. Most importantly: can you refuse a run and start nothing at all?</p>
+          </div>
+        </div>
+        <p class="text-[var(--ink-2)]">
+          A missing requirement is a reason to investigate, not a reason to assume a workaround exists. If your test
+          suite depends on GPU hardware, a passing remote unit test does not replace running the application on that
+          hardware.
+        </p>
+      </div>
+    </section>
+
+    <section class="story-section" aria-labelledby="agents-title">
+      <div class="section-label"><span class="micro">02 / Agent choice</span></div>
+      <div class="prose-body">
+        <h2 id="agents-title" class="text-[var(--ink)]">Choose the agent, not just the workspace</h2>
+        <p class="text-[var(--ink-2)]">
+          Shiba ships an agent catalog. The sandbox image pins each agent CLI, and the orchestrator delegates to whichever
+          one you select, so switching agents is a configuration change rather than a migration.
+        </p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 my-6 font-mono text-xs">
+          <div class="p-4 bg-[var(--card)] border border-[var(--line-2)] shadow-[2px_2px_0_var(--paper-shadow)]">
+            <h4 class="font-bold text-[var(--ink)] mb-2">Available harnesses</h4>
+            <ul class="text-[var(--ink-2)] space-y-1.5 list-disc pl-4">
+              <li><code>opencode</code> — the default open coding agent</li>
+              <li><code>claude-code</code> — Anthropic CLI, default for the Slack and Telegram lanes</li>
+              <li><code>codex</code> — OpenAI CLI</li>
+              <li><code>devin</code> — Devin CLI, when you already have access</li>
+            </ul>
+          </div>
+          <div class="p-4 bg-[var(--card)] border border-[var(--line-2)] shadow-[2px_2px_0_var(--paper-shadow)]">
+            <h4 class="font-bold text-[var(--ink)] mb-2">Credential reporting is honest</h4>
+            <p class="text-[var(--ink-2)]">
+              Gateway-backed agents authenticate through AI Gateway BYOK, which the Worker cannot introspect, so the
+              dashboard says AI Gateway instead of pretending to know. The <code>devin</code> harness needs a Worker
+              secret, and the Worker can observe whether it is present, never its value.
+            </p>
+          </div>
+        </div>
+        <p class="text-[var(--ink-2)]">
+          For an evaluation, start with one agent you already know how to authenticate. Changing the agent, the
+          repository, and the execution environment at the same time makes it very hard to tell which one caused the
+          failure.
+        </p>
+      </div>
+    </section>
+
+    <section class="story-section" aria-labelledby="runs-title">
+      <div class="section-label"><span class="micro">03 / Where the work runs</span></div>
+      <div class="prose-body">
+        <h2 id="runs-title" class="text-[var(--ink)]">Decide where the work actually runs</h2>
+        <p class="text-[var(--ink-2)]">
+          This is the decision most open-source comparisons skip. Shiba runs the agent inside a Cloudflare Sandbox
+          container on <strong>your</strong> Cloudflare account. The run clones the repository, edits files, runs commands,
+          and produces a diff. Nothing executes on your laptop, and there is no per-seat subscription to a vendor's
+          servers.
+        </p>
+        <p class="text-[var(--ink-2)]">
+          The container is ephemeral per run, and the compute tier is a deploy-time choice from <code>lite</code> up to
+          <code>standard-4</code>. Larger repositories can move up a tier without a code change.
+        </p>
+        <p class="text-[var(--ink-2)]">
+          The trade-off is honest: you are responsible for the Cloudflare resources your runs consume. Set account budgets
+          and alerts. Clearing history does not stop billing, and cancellation is best-effort rather than instantaneous.
+        </p>
+      </div>
+    </section>
+
+    <section class="story-section" aria-labelledby="gate-title">
+      <div class="section-label"><span class="micro">04 / The important part</span></div>
+      <div class="prose-body">
+        <h2 id="gate-title" class="text-[var(--ink)]">A human approves first</h2>
+        <p class="text-[var(--ink-2)]">
+          Most autonomous engineer tools treat the human as a notification recipient. Shiba treats the human as a gate.
+          Every request, from any surface, becomes a <strong>pending approval</strong> before anything runs.
+        </p>
+        <div class="p-4 my-6 bg-[var(--card)] border border-[var(--line-2)] shadow-[2px_2px_0_var(--paper-shadow)] font-mono text-xs text-[var(--ink-2)] overflow-x-auto">
+          Dashboard · Slack · Telegram · POST /api/trigger<br />
+          &nbsp;&nbsp;└── pending approval &nbsp;(repo, base branch, exact task text, harness)<br />
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── human approves<br />
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── Durable Object resolves it and starts a Sandbox run<br />
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└── diff, exit code, optional pull request
+        </div>
+        <p class="text-[var(--ink-2)]">
+          Four properties of that gate are worth stating precisely, because they are the difference between a gate and a
+          checkbox.
+        </p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 my-6 font-mono text-xs">
+          <div class="p-4 bg-[var(--card)] border border-[var(--line-2)] shadow-[2px_2px_0_var(--paper-shadow)]">
+            <h4 class="font-bold text-[var(--ink)] mb-2">01 / Approved text is executed text</h4>
+            <p class="text-[var(--ink-2)]">The repo URL, base branch, task, and harness are frozen into the approval record. On approval, that frozen input is what runs.</p>
+          </div>
+          <div class="p-4 bg-[var(--card)] border border-[var(--line-2)] shadow-[2px_2px_0_var(--paper-shadow)]">
+            <h4 class="font-bold text-[var(--ink)] mb-2">02 / Rejecting starts nothing</h4>
+            <p class="text-[var(--ink-2)]">A rejected approval resolves the record and provisions no container. There is no partial state to clean up.</p>
+          </div>
+          <div class="p-4 bg-[var(--card)] border border-[var(--line-2)] shadow-[2px_2px_0_var(--paper-shadow)]">
+            <h4 class="font-bold text-[var(--ink)] mb-2">03 / A button is a pointer</h4>
+            <p class="text-[var(--ink-2)]">Slack and Telegram cards carry an approval id, re-resolved server-side. Last week's card cannot start a run.</p>
+          </div>
+          <div class="p-4 bg-[var(--card)] border border-[var(--navy)] shadow-[2px_2px_0_var(--paper-shadow)]">
+            <h4 class="font-bold text-[var(--navy)] mb-2">04 / Seeing is not permission</h4>
+            <p class="text-[var(--ink-2)]">A signature proves the request came from Slack or Telegram, not who clicked. Each chat lane has an approver allowlist, and an unset list means nobody.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="story-section" aria-labelledby="creds-title">
+      <div class="section-label"><span class="micro">05 / The credential boundary</span></div>
+      <div class="prose-body">
+        <h2 id="creds-title" class="text-[var(--ink)]">Where credentials are, and where they are not</h2>
+        <p class="text-[var(--ink-2)]">
+          This is the part to read twice. <strong>No real credential ever enters the container.</strong> Egress is
+          intercepted in the Worker, where the real key is swapped in.
+        </p>
+        <ul class="text-[var(--ink-2)] space-y-2 list-disc pl-5 my-4">
+          <li><strong>Model traffic.</strong> The container holds a dummy key and calls the provider directly. The Worker forwards it through your AI Gateway binding, which injects the stored credential.</li>
+          <li><strong>Repository traffic.</strong> <code>GITHUB_TOKEN</code> is attached in the Worker, never inside the sandbox.</li>
+        </ul>
+        <p class="text-[var(--ink-2)]">
+          Outbound traffic is allowlisted <em>before</em> any handler runs. Anything not on the list cannot leave the
+          container, including code the agent pulled from your repository. One exclusion is deliberate:
+          <code>registry.npmjs.org</code> is <strong>not</strong> allowed in this version. It would enable
+          <code>npm install</code> inside a run, and it is simultaneously the widest exfiltration channel available. The
+          allowlist is intentionally smaller than your convenience.
+        </p>
+        <p class="text-[var(--ink-2)]">
+          The GitHub credential is also scoped per run. <code>github.com</code> defaults to refusal; before a clone, the
+          run scopes the forwarder to the one approved repository path. A request for any other repository gets a 403 with
+          no <code>Authorization</code> header attached. Sibling repositories that share a prefix are refused too. A run
+          that never scoped itself gets no credential at all.
+        </p>
+      </div>
+    </section>
+
+    <section class="story-section" aria-labelledby="auto-title">
+      <div class="section-label"><span class="micro">06 / Automations</span></div>
+      <div class="prose-body">
+        <h2 id="auto-title" class="text-[var(--ink)]">Automations are a gate with nobody standing at it</h2>
+        <p class="text-[var(--ink-2)]">
+          Scheduled and webhook-triggered work cannot wait for a human who is awake, so it gets the same gate with
+          stricter rules. Three controls apply together.
+        </p>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 my-8 font-mono text-xs">
+          <div class="p-4 bg-[var(--card)] border border-[var(--line-2)] shadow-[2px_2px_0_var(--paper-shadow)]">
+            <h4 class="font-bold text-[var(--ink)] mb-2">Approval by default</h4>
+            <p class="text-[var(--ink-2)]">A schedule requests work. It does not authorize it.</p>
+          </div>
+          <div class="p-4 bg-[var(--card)] border border-[var(--line-2)] shadow-[2px_2px_0_var(--paper-shadow)]">
+            <h4 class="font-bold text-[var(--ink)] mb-2">Unattended is opt-in and narrow</h4>
+            <p class="text-[var(--ink-2)]">Only when opening a pull request is the run's only mutation, and only for repos on an explicit allowlist. A PR is reviewable and revertible. Nothing else is.</p>
+          </div>
+          <div class="p-4 bg-[var(--card)] border border-[var(--navy)] shadow-[2px_2px_0_var(--paper-shadow)]">
+            <h4 class="font-bold text-[var(--navy)] mb-2">A daily run budget</h4>
+            <p class="text-[var(--ink-2)]">A cron typo or a webhook loop otherwise burns tokens until somebody notices, and tokens, not compute, are the bill.</p>
+          </div>
+        </div>
+        <p class="text-[var(--ink-2)]">
+          The optional <code>run_when</code> condition asks a cheap model whether a plain-language precondition holds
+          before the run starts. It fails closed: a model error, an empty answer, or anything not clearly affirmative
+          means no run, and the reason is recorded rather than dropped.
+        </p>
+      </div>
+    </section>
+
+    <section class="story-section" aria-labelledby="honest-title">
+      <div class="section-label"><span class="micro">07 / Failure modes</span></div>
+      <div class="prose-body">
+        <h2 id="honest-title" class="text-[var(--ink)]">Failures are allowed to look like failures</h2>
+        <p class="text-[var(--ink-2)]">
+          An agent tool that reports cheerful success when a run actually failed is worse than no tool, because it moves
+          the discovery work to review time. The rules here are blunt.
+        </p>
+        <ul class="text-[var(--ink-2)] space-y-2 list-disc pl-5 my-4">
+          <li>A run that fails reports <code>error</code> with the real reason. It is never marked completed on unverified output.</li>
+          <li>Results are parsed from a structured envelope, so a failed run cannot render as a successful one.</li>
+          <li>A reclaimed run, one whose container disappeared while it was running, goes terminal with an explicit <code>outcome_unknown</code> rather than pretending it finished.</li>
+          <li>Output is bounded and redacted for known secret patterns. This is not a guarantee against arbitrary secrets or binary data, so never put secrets in task text or in a repository.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="story-section" aria-labelledby="compare-title">
+      <div class="section-label"><span class="micro">08 / Compare fairly</span></div>
+      <div class="prose-body">
+        <h2 id="compare-title" class="text-[var(--ink)]">Compare against your actual requirements</h2>
+        <p class="text-[var(--ink-2)]">
+          Use this table to decide what to inspect. The last point in each card lists evidence to gather, not results we
+          have measured for you.
+        </p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 my-8 font-mono text-xs">
+          <div class="p-4 bg-[var(--card)] border border-[var(--line-2)] shadow-[2px_2px_0_var(--paper-shadow)]">
+            <h4 class="font-bold text-[var(--ink)] mb-2">Inspectable implementation</h4>
+            <p class="text-[var(--ink-2)]">Full Worker, Durable Objects, dashboard, and deploy stack under AGPL-3.0. <em>Verify:</em> the component, revision, and setup you intend to use.</p>
+          </div>
+          <div class="p-4 bg-[var(--card)] border border-[var(--line-2)] shadow-[2px_2px_0_var(--paper-shadow)]">
+            <h4 class="font-bold text-[var(--ink)] mb-2">Agent choice</h4>
+            <p class="text-[var(--ink-2)]">Four pinned agent CLIs with per-harness credential handling. <em>Verify:</em> authentication and tool availability in your environment.</p>
+          </div>
+          <div class="p-4 bg-[var(--card)] border border-[var(--line-2)] shadow-[2px_2px_0_var(--paper-shadow)]">
+            <h4 class="font-bold text-[var(--ink)] mb-2">Isolated tasks</h4>
+            <p class="text-[var(--ink-2)]">Per-conversation Durable Object run registry and approval queue. <em>Verify:</em> a fresh checkout succeeds and concurrent tasks do not collide.</p>
+          </div>
+          <div class="p-4 bg-[var(--card)] border border-[var(--line-2)] shadow-[2px_2px_0_var(--paper-shadow)]">
+            <h4 class="font-bold text-[var(--ink)] mb-2">Human gate before execution</h4>
+            <p class="text-[var(--ink-2)]">Pending approval on every surface; reject starts nothing. <em>Verify:</em> the frozen input that runs is the input you approved.</p>
+          </div>
+          <div class="p-4 bg-[var(--card)] border border-[var(--line-2)] shadow-[2px_2px_0_var(--paper-shadow)]">
+            <h4 class="font-bold text-[var(--ink)] mb-2">No credentials in the sandbox</h4>
+            <p class="text-[var(--ink-2)]">Egress interception, dummy model key, per-run GitHub scope. <em>Verify:</em> reachability of hosts you actually need, and the npm exclusion.</p>
+          </div>
+          <div class="p-4 bg-[var(--card)] border border-[var(--navy)] shadow-[2px_2px_0_var(--paper-shadow)]">
+            <h4 class="font-bold text-[var(--navy)] mb-2">Honest cost</h4>
+            <p class="text-[var(--ink-2)]">Account-owned compute; budgets and alerts are your responsibility. <em>Verify:</em> current plan terms and usage for a representative task.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="story-section" aria-labelledby="bounded-title">
+      <div class="section-label"><span class="micro">09 / Do this first</span></div>
+      <div class="prose-body">
+        <h2 id="bounded-title" class="text-[var(--ink)]">Run one bounded task before you change anything</h2>
+        <p class="text-[var(--ink-2)]">
+          Pick a bug or a small improvement you understand well enough to review yourself. Give the agent a reproducible
+          trigger, the expected result, and a boundary around the change. Include the checks that matter, and ask it to
+          explain any check it could not run.
+        </p>
+        <div class="p-4 my-6 bg-[var(--card)] border border-[var(--navy)] shadow-[2px_2px_0_var(--paper-shadow)] font-mono text-xs text-[var(--ink-2)]">
+          Fix the duplicate status message after reconnecting. Reproduce it by interrupting the connection during
+          delivery and then reconnecting. Keep the existing status labels. Run the focused delivery tests, inspect the
+          final diff, and report any verification you could not complete.
+        </div>
+        <p class="text-[var(--ink-2)]">
+          Before approving, confirm the repository and the selected checkout. Run setup and a baseline check first. If the
+          environment cannot install dependencies, fix that before evaluating anything, or you will judge the agent's work
+          against an environment that was already broken.
+        </p>
+        <p class="text-[var(--ink-2)]">
+          Then compare the result against the original request, and record four things: setup effort, manual
+          interventions, checks completed, and review time. A successful task should produce an understandable patch and
+          enough evidence for you to decide what to do next.
+        </p>
+      </div>
+    </section>
+
+    <section class="story-section" aria-labelledby="parallel-title">
+      <div class="section-label"><span class="micro">10 / Scale carefully</span></div>
+      <div class="prose-body">
+        <h2 id="parallel-title" class="text-[var(--ink)]">Increase parallelism only when ownership is clear</h2>
+        <p class="text-[var(--ink-2)]">
+          Once one task works end to end, try two independent changes. Give each a separate area of responsibility.
+          Different chat conversations already map to different orchestrators, which is the natural isolation boundary, but
+          a Durable Object separates run state rather than architectural disagreement. If both tasks need to change the
+          same contract, settle the contract first, or sequence the dependent work.
+        </p>
+        <p class="text-[var(--ink-2)]">
+          Test the integrated result even when the individual branches passed their own checks. For a second opinion,
+          have another session review with a read-only assignment, and keep the writer and reviewer roles clearly
+          separate.
+        </p>
+      </div>
+    </section>
+
+    <section class="story-section" aria-labelledby="recovery-title">
+      <div class="section-label"><span class="micro">11 / Reliability</span></div>
+      <div class="prose-body">
+        <h2 id="recovery-title" class="text-[var(--ink)]">Check recovery as part of the evaluation</h2>
+        <p class="text-[var(--ink-2)]">
+          Remote work has states that are easy to confuse. A message can be queued without executing. A transcript can
+          stay readable while the compute behind it sleeps. A restored connection does not prove the agent process or the
+          working files recovered.
+        </p>
+        <p class="text-[var(--ink-2)]">
+          Run a small disposable task to test this. After a reconnect, inspect the message outcome, the branch, and the
+          current files before submitting the same request again. Keep the client version and workspace configuration with
+          your notes. Reliability matters here because review depends on knowing which commands ran against which files.
+        </p>
+      </div>
+    </section>
+
+    <section class="story-section" aria-labelledby="cost-title">
+      <div class="section-label"><span class="micro">12 / The real cost</span></div>
+      <div class="prose-body">
+        <h2 id="cost-title" class="text-[var(--ink)]">Separate software, compute, and model costs</h2>
+        <p class="text-[var(--ink-2)]">An open-source workspace is not zero-cost execution. Three things can each have a bill.</p>
+        <ul class="text-[var(--ink-2)] space-y-2 list-disc pl-5 my-4">
+          <li><strong>Compute</strong> — Workers, Durable Objects, and container time on your Cloudflare account.</li>
+          <li><strong>Models</strong> — inference through your AI Gateway arrangement, or a separate agent subscription if you use one.</li>
+          <li><strong>Your time</strong> — setup and review, which is usually the largest line item and the one nobody quotes.</li>
+        </ul>
+        <p class="text-[var(--ink-2)]">
+          Use one representative task to measure the whole workflow, including review time. More parallel tasks increase
+          throughput, and they also increase the number of changes waiting for a person to inspect. That queue is a real
+          cost with a real failure mode.
+        </p>
+      </div>
+    </section>
+
+    <section class="story-section" aria-labelledby="limits-title">
+      <div class="section-label"><span class="micro">13 / What is not here yet</span></div>
+      <div class="prose-body">
+        <h2 id="limits-title" class="text-[var(--ink)]">What is deliberately not here yet</h2>
+        <p class="text-[var(--ink-2)]">Honesty about limits is more useful than a feature list. Today:</p>
+        <ul class="text-[var(--ink-2)] space-y-2 list-disc pl-5 my-4">
+          <li>Each installation is single-tenant and account-owned. There is no multi-tenant isolation.</li>
+          <li><code>npm install</code> inside a run is not possible, by design.</li>
+          <li>Cancellation is best-effort.</li>
+          <li>The Worker checks for a Cloudflare Access header; that is not JWT verification. Keep the route behind Access and do not expose the origin.</li>
+          <li>Sessions resume and stop/resume are not implemented. They are a real architecture change, not a toggle.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="story-section" aria-labelledby="fit-title">
+      <div class="section-label"><span class="micro">14 / Is it a fit?</span></div>
+      <div class="prose-body">
+        <h2 id="fit-title" class="text-[var(--ink)]">When Shiba is worth evaluating</h2>
+        <p class="text-[var(--ink-2)]">
+          Evaluate Shiba when you want an AI software engineer that runs inside your own cloud account, that a human
+          approves before anything executes, and whose code you can read. It fits well if you already run Cloudflare, if
+          you need a per-repository credential boundary, and if you want agent choice without rebuilding the harness layer
+          yourself.
+        </p>
+        <p class="text-[var(--ink-2)]">
+          Look elsewhere if your deciding requirement is a specific third-party integration, a managed hosting
+          arrangement you do not want to operate, or byte-for-byte identical behavior with a different tool. An
+          alternative can serve the same goal without being a drop-in replacement, and we would rather you find the right
+          tool than ours.
+        </p>
+        <div class="hero-actions mt-8">
+          <a class="button" href="https://github.com/princepal9120/shiba" target="_blank" rel="noopener noreferrer">
+            <span>Clone the repository</span>
+            <span aria-hidden="true">↗</span>
+          </a>
+          <a class="button button-outline" href="/docs/overview/">
+            <span>Read the docs</span>
+          </a>
+        </div>
+      </div>
+    </section>
+  </div>
+</MarketingPage>

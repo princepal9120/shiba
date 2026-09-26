@@ -1,0 +1,89 @@
+---
+title: Claude Code
+description: Run Anthropic's Claude Code agent CLI in isolated Cloudflare Sandboxes with human approval gates.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Shiba supports [Claude Code](https://docs.anthropic.com/en/docs/claude-code) as a first-class coding agent harness. When selected, the orchestrator delegates the approved task to a Cloudflare Sandbox container running Anthropic's official `claude` CLI.
+
+Claude Code is the default agent for tasks originated from Slack mentions and Telegram chats, providing high reasoning capability and fluid multi-turn code refactoring.
+
+## Agent Overview
+
+| Attribute | Specification |
+| --- | --- |
+| **Harness ID** | `claude-code` |
+| **CLI Binary** | `claude` |
+| **Pinned Version** | `2.1.277` (in Dockerfile) |
+| **Default Model** | `anthropic/claude-sonnet-4-6` |
+| **Supported Models** | `anthropic/claude-sonnet-4-6`, `anthropic/claude-3-7-sonnet-20250219`, `anthropic/claude-3-5-haiku-20241022` |
+| **Credential Model** | AI Gateway BYOK (dummy key inside sandbox; real key injected at egress) |
+| **Invocation** | `claude -p "<task>" --print --output-format stream-json --dangerously-skip-permissions` |
+
+## How It Works
+
+```
+Developer Request
+  └── CodingOrchestrator generates delegate_coding_task({ harness: "claude-code" })
+      └── Human signs off on exact prompt & repository
+          └── Ephemeral Cloudflare Sandbox boots
+              ├── Clones repository via scoped git token
+              ├── Executes: claude -p "<task>" --output-format stream-json
+              ├── Streams newline-delimited JSON events back to Dashboard/Slack
+              └── Produces unified diff & optional pull request
+```
+
+<Aside type="note" title="No Subscription Credentials">
+Anthropic terms forbid third-party platforms from proxying consumer Free/Pro/Max subscription tokens. Shiba strictly requires API key authentication configured in your account's Cloudflare AI Gateway.
+</Aside>
+
+## Configuration & Deployment
+
+You can configure Claude Code globally across your deployment or select it on a per-task basis.
+
+### 1. Configure the Provider Key in AI Gateway
+Store your Anthropic API key in your Cloudflare AI Gateway under the provider ID `anthropic`. The Sandbox runtime provides a dummy key to the container environment, while Worker egress replaces it with the authentic key on calls to `api.anthropic.com`.
+
+### 2. Deployment Defaults
+Set your preferred harness and model defaults in `apps/backend/wrangler.jsonc` or via environment variables:
+
+```bash
+# Use Claude Code as the deployment-wide default harness
+pnpm wrangler secret put AGENT_HARNESS # enter "claude-code"
+
+# Set the default Anthropic model
+pnpm wrangler secret put CLAUDE_CODE_MODEL # enter "anthropic/claude-sonnet-4-6"
+```
+
+### 3. Channel-Specific Overrides
+Slack and Telegram can independently pin their agent harness:
+- `SLACK_AGENT_HARNESS=claude-code`
+- `TELEGRAM_AGENT_HARNESS=claude-code`
+
+## Selecting Claude Code in a Task
+
+When delegating from the API, dashboard, or chat triggers, specify `harness: "claude-code"`:
+
+```json
+{
+  "repoUrl": "https://github.com/acme/backend",
+  "task": "Migrate database connection pool to PgBouncer syntax",
+  "baseBranch": "main",
+  "harness": "claude-code",
+  "codingModel": "anthropic/claude-sonnet-4-6"
+}
+```
+
+## Event Streaming & Progress
+
+Claude Code emits newline-delimited JSON envelopes via `--output-format stream-json`. The Shiba runtime parses each event in real time:
+- Tool invocations (file reads, bash commands, edits) are extracted and displayed in the run transcript.
+- Any envelope carrying `is_error: true` is treated as an immediate failure and surfaced honestly with the provider's exact error message.
+- Clean completion triggers git status collection, index-to-add staging, and diff computation.
+
+## Related Documentation
+
+- [Coding Harnesses Overview](/docs/claude-code/)
+- [Approval Gates](/docs/approval-gates/)
+- [Security & Credential Boundaries](/docs/security/)

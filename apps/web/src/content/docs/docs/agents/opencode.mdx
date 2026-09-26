@@ -1,0 +1,88 @@
+---
+title: OpenCode
+description: The default open-source coding agent harness in Shiba, supporting multi-provider AI Gateway routing.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+[OpenCode](https://opencode.ai/docs/) is Shiba's default coding agent harness. It is open source, highly extensible, and supports multi-provider LLM backends through your Cloudflare AI Gateway.
+
+## Agent Overview
+
+| Attribute | Specification |
+| --- | --- |
+| **Harness ID** | `opencode` (default) |
+| **CLI Binary** | `opencode` |
+| **Pinned Version** | `1.18.31` (in Dockerfile) |
+| **Default Model** | `google/gemini-3.5-flash-lite` |
+| **Supported Providers** | Google AI Studio, Anthropic, OpenAI, xAI (Grok), OpenCode Go |
+| **Credential Model** | AI Gateway BYOK (dummy key inside sandbox; real key injected at egress) |
+| **Invocation** | `opencode run "<task>" --format json` |
+
+## Multi-Provider Support
+
+OpenCode can route tasks across multiple AI providers by prefixing the model with the provider slug:
+
+```bash
+# Google Gemini
+google/gemini-3.5-flash-lite
+google/gemini-1.5-pro
+
+# xAI Grok
+xai/grok-4
+
+# Anthropic Claude
+anthropic/claude-sonnet-4-6
+
+# OpenAI
+openai/gpt-4o
+```
+
+## How It Works
+
+```
+Developer Request
+  └── CodingOrchestrator generates delegate_coding_task({ harness: "opencode" })
+      └── Human signs off on exact prompt & repository
+          └── Ephemeral Cloudflare Sandbox boots
+              ├── Writes per-run .opencode.json configuration
+              ├── Executes: opencode run "<task>" --format json
+              ├── Streams newline-delimited JSON events
+              └── Collects git status and builds unified diff
+```
+
+<Aside type="note" title="Egress Host Allowlists">
+Each run dynamically configures `Sandbox.allowedHosts` strictly to the selected model provider and GitHub. All unapproved external network destinations are dropped by default.
+</Aside>
+
+## Configuration & Deployment
+
+### 1. Configure Providers in AI Gateway
+Add your provider keys (Google, Anthropic, OpenAI, xAI) to your Cloudflare AI Gateway.
+
+### 2. Set Default Model
+In `wrangler.jsonc` or via environment variables:
+
+```bash
+pnpm wrangler secret put CODING_MODEL # enter "google/gemini-3.5-flash-lite"
+```
+
+## Selecting OpenCode in a Task
+
+OpenCode is used by default if no harness is explicitly provided:
+
+```json
+{
+  "repoUrl": "https://github.com/acme/web",
+  "task": "Add dark mode toggle to navigation bar",
+  "baseBranch": "main",
+  "harness": "opencode",
+  "codingModel": "xai/grok-4"
+}
+```
+
+## Related Documentation
+
+- [Coding Harnesses Overview](/docs/claude-code/)
+- [Models & Costs](/docs/costs/)
+- [Security & Credential Boundaries](/docs/security/)

@@ -14,15 +14,23 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
 <CardGrid>
   <Card title="OpenCode" icon="setting">
     Default. Multi-provider (google / anthropic / openai / xAI). Use a model such as `xai/grok-4`; dummy key in the container; Sandbox egress swaps in the AI Gateway BYOK credential.
+
+    [Read OpenCode Guide →](/docs/agents/opencode/)
   </Card>
   <Card title="Claude Code" icon="puzzle">
     `anthropic/*` models, e.g. `anthropic/claude-sonnet-4-6`. Stream format: `--print --output-format stream-json`.
+
+    [Read Claude Code Guide →](/docs/agents/claude-code/)
   </Card>
   <Card title="Codex" icon="puzzle">
     `openai/*` models, e.g. `openai/gpt-5.3-codex`. Stream format: `codex exec --json`.
+
+    [Read Codex Guide →](/docs/agents/codex/)
   </Card>
   <Card title="Devin CLI" icon="puzzle">
     `devin/*` models (default `devin/swe-2`); uses Devin's CLI and service API key.
+
+    [Read Devin Guide →](/docs/agents/devin/)
   </Card>
   <Card title="Cursor CLI" icon="puzzle">
     Not currently an installed or selectable harness. Cursor CLI requires its own Cursor API-key/authentication path, which is not wired into the approved-run credential egress boundary; the Cursor logo on the marketing page is not an integration claim.

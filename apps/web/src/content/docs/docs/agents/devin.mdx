@@ -1,0 +1,78 @@
+---
+title: Devin CLI
+description: Deploy Cognition's Devin CLI agent inside isolated micro-containers with least-privilege credential gating.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Shiba integrates Cognition's official [Devin CLI](https://cli.devin.ai/docs), allowing teams with Devin accounts to run Devin's frontier software engineer model (`devin/swe-2`) inside account-owned Cloudflare Sandbox containers.
+
+## Agent Overview
+
+| Attribute | Specification |
+| --- | --- |
+| **Harness ID** | `devin` |
+| **CLI Binary** | `devin` |
+| **Pinned Version** | `3000.10.31` (in Dockerfile) |
+| **Default Model** | `devin/swe-2` |
+| **Supported Models** | `devin/swe-2` |
+| **Credential Model** | Cloudflare Worker Secret (`DEVIN_API_KEY`) injected via Bearer header at egress |
+| **Invocation** | `devin -p "<task>"` |
+
+## How It Works
+
+Unlike model-direct harnesses, Devin is a service CLI that communicates with Cognition's orchestration cloud:
+
+```
+Developer Request
+  └── CodingOrchestrator generates delegate_coding_task({ harness: "devin" })
+      └── Human signs off on exact prompt & repository
+          └── Ephemeral Cloudflare Sandbox boots
+              ├── Provisioned with dummy credentials.toml in $XDG_DATA_HOME/devin/
+              ├── Egress proxy intercepts api.devin.ai & server.codeium.com
+              ├── Swaps real DEVIN_API_KEY into Authorization: Bearer header
+              └── Executes: devin -p "<task>"
+```
+
+<Aside type="caution" title="Credential Isolation">
+Your real `DEVIN_API_KEY` never enters the container filesystem. The container only ever sees dummy tokens in `$XDG_DATA_HOME/devin/credentials.toml`. The Worker egress filter intercepts outbound requests to `api.devin.ai` and injects the live key before forwarding.
+</Aside>
+
+## Configuration & Deployment
+
+### 1. Store the DEVIN_API_KEY Secret
+Obtain your Devin service API key from Cognition, then configure it as a Wrangler secret on your Worker:
+
+```bash
+pnpm wrangler secret put DEVIN_API_KEY --config apps/backend/wrangler.jsonc
+```
+
+### 2. Verify Credential Status
+Open your Shiba dashboard at `/app/` and navigate to **Agents**. The Devin CLI row will display a green **Configured** status chip when the secret is present (the secret value itself is never exposed).
+
+## Selecting Devin in a Task
+
+Specify `harness: "devin"`:
+
+```json
+{
+  "repoUrl": "https://github.com/acme/core-engine",
+  "task": "Investigate and resolve flaky worker heartbeat tests",
+  "baseBranch": "main",
+  "harness": "devin",
+  "codingModel": "devin/swe-2"
+}
+```
+
+## Event Parsing & Exit Codes
+
+Devin streams progress lines via stdout:
+- Welcome and organization banner lines are cleanly filtered.
+- Action and file edit lines are parsed into the unified run timeline.
+- Unauthenticated or session errors immediately reject the run with honest diagnostic feedback.
+
+## Related Documentation
+
+- [Coding Harnesses Overview](/docs/claude-code/)
+- [Security & Credential Boundaries](/docs/security/)
+- [Tasks & Runs Dashboard](/docs/dashboard/)

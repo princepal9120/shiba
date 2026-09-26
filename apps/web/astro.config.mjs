@@ -47,9 +47,18 @@ export default defineConfig({
 					items: [
 						{ label: 'Architecture', slug: 'docs/architecture' },
 						{ label: 'Approval Gates', slug: 'docs/approval-gates' },
-						{ label: 'Claude Code & OpenCode', slug: 'docs/claude-code' },
 						{ label: 'Security & credential boundaries', slug: 'docs/security' },
 						{ label: 'Models & costs', slug: 'docs/costs' },
+					],
+				},
+				{
+					label: 'Coding Agents',
+					items: [
+						{ label: 'Overview & Harnesses', slug: 'docs/claude-code' },
+						{ label: 'Claude Code', slug: 'docs/agents/claude-code' },
+						{ label: 'Codex', slug: 'docs/agents/codex' },
+						{ label: 'Devin CLI', slug: 'docs/agents/devin' },
+						{ label: 'OpenCode', slug: 'docs/agents/opencode' },
 					],
 				},
 				{
