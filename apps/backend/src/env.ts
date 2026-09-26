@@ -96,6 +96,9 @@ export interface Env {
   MEMORY_ENABLED?: string;
   /** Agent harness: "opencode" (default), "claude-code", or "codex". */
   AGENT_HARNESS?: string;
+  /** Per-lane harness overrides; fall back to AGENT_HARNESS when unset. */
+  TELEGRAM_AGENT_HARNESS?: string;
+  DISCORD_AGENT_HARNESS?: string;
   /** "sandbox" (default) or "computer" (preview-only refusal). */
   RUNTIME?: string;
   /**

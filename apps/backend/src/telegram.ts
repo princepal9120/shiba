@@ -121,6 +121,7 @@ async function handleMessage(message: TelegramMessage, env: Env, call: TelegramC
     repoUrl: parsed.repoUrl,
     task: parsed.task,
     userId: String(message.from?.id ?? ""),
+    harness: env.TELEGRAM_AGENT_HARNESS ?? env.AGENT_HARNESS,
   }, deps.resolveOrchestrator);
   if ("error" in queued) {
     await reply({ text: `Failed to queue the task. ${queued.error}` });

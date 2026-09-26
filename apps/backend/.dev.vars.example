@@ -17,6 +17,24 @@
 # SLACK_BOT_TOKEN=
 # JSON map {channelId: "https://github.com/owner/repo"} for bare @mentions.
 # SLACK_CHANNEL_REPOS=
+
+# Optional Telegram bot lane. TELEGRAM_APPROVERS empty means nobody can approve.
+# TELEGRAM_BOT_TOKEN=
+# Secret registered via Bot API setWebhook, echoed back as X-Telegram-Bot-Api-Secret-Token.
+# TELEGRAM_WEBHOOK_SECRET=
+# TELEGRAM_APPROVERS=
+# JSON map {chatId: "https://github.com/owner/repo"} for /shiba without a URL.
+# TELEGRAM_CHAT_REPOS=
+# Optional harness override, falls back to AGENT_HARNESS.
+# TELEGRAM_AGENT_HARNESS=
+
+# Optional Discord interactions lane. DISCORD_APPROVERS empty means nobody can approve.
+# Ed25519 public key from the Discord app's General Information page.
+# DISCORD_PUBLIC_KEY=
+# DISCORD_BOT_TOKEN=
+# DISCORD_APPROVERS=
+# DISCORD_CHANNEL_REPOS=
+# DISCORD_AGENT_HARNESS=
 # Optional TypeSafe System One key for run_when (falls back to Workers AI).
 # TYPESAFE_API_KEY=
 

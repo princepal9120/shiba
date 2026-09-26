@@ -195,6 +195,7 @@ export async function handleDiscordInteractions(
         repoUrl: parsed.repoUrl,
         task: parsed.task,
         userId,
+        harness: env.DISCORD_AGENT_HARNESS ?? env.AGENT_HARNESS,
       }, deps.resolveOrchestrator);
       if ("error" in queued) {
         await send("PATCH", `${webhook}/messages/@original`, {

@@ -111,7 +111,7 @@ function defaultResolver(env: Env): ResolveOrchestrator {
 /** Queue a pending approval on the conversation's orchestrator. Never throws. */
 export async function queueChatRun(
   env: Env,
-  input: { platform: ChatPlatform; threadKey: string; repoUrl: string; task: string; userId: string },
+  input: { platform: ChatPlatform; threadKey: string; repoUrl: string; task: string; userId: string; harness?: string },
   resolve: ResolveOrchestrator = defaultResolver(env),
 ): Promise<{ approvalId: string } | { error: string }> {
   let response: Response;
@@ -129,6 +129,7 @@ export async function queueChatRun(
           publishPullRequest: true,
           threadKey: input.threadKey,
           source: input.platform,
+          ...(input.harness ? { harness: input.harness } : {}),
           ...(input.userId ? { user_id: input.userId } : {}),
         }),
       }),
