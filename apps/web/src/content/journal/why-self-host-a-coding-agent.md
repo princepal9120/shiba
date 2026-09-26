@@ -74,6 +74,25 @@ you want.
 That is a slower road. It is also the only one where the model leg is
 actually yours rather than borrowed under terms someone else wrote.
 
+## Why I am building it
+
+The motivation is personal before it is strategic. I have used Devin, and I
+run my own Claude Code setup daily. Devin's coding quality is genuinely
+good, and that is exactly the problem: the quality made the tradeoffs
+visible, not the flaws.
+
+What I wanted was narrower than what any single tool sells. I wanted to
+pick the harness and the model per task, because different tasks deserve
+different combinations and no vendor defaults them the way I would. I
+wanted the runs to live in my own Cloudflare account, where the records,
+the bills, and the approval lists are mine to inspect. And I wanted to see
+the work and the failures directly — the diff, the exit code, the bounded
+stderr tail — rather than trust a hosted verdict about either.
+
+Shiba is what those three wants look like as code. It is also a prototype,
+and it behaves like one: the architecture holds, the verification record is
+honest about its level, and the rest is still being built.
+
 ## What it could be
 
 What is: a local prototype. Submit a task, hold it at a gate, dispatch to a

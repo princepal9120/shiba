@@ -750,9 +750,9 @@ starlight-toc a[aria-current] {
 
 .arch-stage-cards {
   display: grid;
-  /* auto-fit + 240px floor: fills the row width instead of leaving a dead
-     strip beside narrow cards at desktop widths. */
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  /* Keep cards at a readable 240px where space allows, but let the minimum
+     shrink to the available column width on narrow phones. */
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
   gap: 0.75rem;
   align-items: stretch;
 }
@@ -779,12 +779,15 @@ starlight-toc a[aria-current] {
   justify-content: space-between;
   margin-bottom: 0.35rem;
   gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .arch-card-name {
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--text-body-strong);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .arch-card-pill {
@@ -795,7 +798,7 @@ starlight-toc a[aria-current] {
   background: var(--card);
   color: var(--text-muted);
   border: 1px solid var(--border-strong);
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .arch-card-pill.pill-gate {

@@ -9,7 +9,6 @@ const articleSchema = {
   author: {
     '@type': 'Person',
     name: 'Prince Pal',
-    url: 'https://x.com/prince_twets',
   },
   publisher: {
     '@type': 'Organization',
@@ -376,7 +375,7 @@ const articleSchema = {
           You need Node 22.12+, pnpm 10+, and a Docker daemon — a missing Docker daemon fails even the local dry run. Cloud deployment depends on your account configuration and is not yet verified end-to-end.
         </p>
 
-        <div class="bg-[var(--card)] border border-[var(--line-2)] p-5 font-mono text-xs text-[var(--ink)] my-6 space-y-4 shadow-[2px_2px_0_var(--paper-shadow)]">
+        <div class="bg-[var(--card)] border border-[var(--line-2)] p-5 font-mono text-xs text-[var(--ink)] my-6 space-y-4 shadow-[2px_2px_0_var(--paper-shadow)] max-w-full overflow-x-auto">
           <div>
             <span class="text-[var(--ink-2)]"># 1. Clone the open-source repository</span><br/>
             <span class="text-[var(--navy)] font-bold">git clone</span> https://github.com/princepal9120/shiba.git<br/>

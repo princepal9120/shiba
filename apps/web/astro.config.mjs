@@ -29,7 +29,6 @@ export default defineConfig({
 			customCss: ['./src/styles/theme.css'],
 			social: [
 				{ icon: 'github', label: 'GitHub', href: 'https://github.com/princepal9120/shiba' },
-				{ icon: 'x.com', label: 'Twitter / X', href: 'https://x.com/prince_twets' },
 			],
 			editLink: {
 				baseUrl: 'https://github.com/princepal9120/shiba/edit/main/apps/web/',
