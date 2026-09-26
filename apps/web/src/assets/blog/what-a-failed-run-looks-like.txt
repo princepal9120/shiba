@@ -1,13 +1,13 @@
-   _   _      _                 _                 _                 _
-  | | | |    | |               | |               | |               | |
-  | |_| | ___| |__   ___  ___  | | __ _ _ __ ___ | | __ _ ___ ___  | |_ _ __
-  |  _  |/ _ \ '_ \ / _ \/ __| '_ \| '__/ _` | __/ _` | '_ ` _ \| __| '__|
-  |_| |_\___/_.__/_\___/\___|_|_.__/_|  \__,_||_| (_| | | | | | ||_||_|
-                                              |___/
-       exit code  ->  reported, not invented
-       stderr     ->  bounded tail, 8000 characters
-       envelope   ->  error | completed   ...never silent success
-       sandbox    ->  destroyed when the run fails
+   _   _      _                 _                 _
+  | | | |    | |               | |               | |
+  | |_| | ___| |__   ___  ___  | | __ _ ___ ___  | |_ _ __
+  |  _  |/ _ \ '_ \ / _ \/ __| '_ \| '__/ _` | __/ _` | '__|
+  |_| |_\___/_.__/_\___/\___|_|_.__/_|  \__,_||_| (_| | | |
 
-       2026-09-19 local e2e: 401 (code 2009, Unauthorized)
-       the run failed. we said so.
+   exit code -> reported, never invented
+   stderr    -> bounded tail, 8000 characters
+   envelope  -> error | completed, never silent success
+   sandbox   -> destroyed when the run fails
+
+   2026-09-19 local e2e: 401 (code 2009, Unauthorized)
+   the run failed. we said so.
