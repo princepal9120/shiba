@@ -320,14 +320,14 @@ const finalSchemas = schema
 
   /* ---------- top nav ---------- */
   .site-header { position: relative; z-index: 2; border-bottom: 1px solid var(--line); background: var(--paper); }
-  .header-inner { min-height: 58px; display: flex; align-items: center; gap: 14px; }
+  .header-inner { min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
   .brand-group, .nav-links, .nav-actions { display:flex; align-items:center; gap:12px; }
   .brand-group { flex:none; }
   .wordmark { text-decoration: none; white-space: nowrap; }
   .wordmark-name { font-family: 'Instrument Serif', Georgia, serif; font-size: 24px; letter-spacing: -0.01em; color: var(--ink); }
   .beta-badge { font-family: 'Geist Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--navy); border: 1px solid var(--line-2); background: var(--card); padding: 3px 7px; box-shadow: 2px 2px 0 var(--paper-shadow); }
-  .site-header nav { margin-left: auto; display:flex; align-items:center; min-width:0; gap:18px; font-size:12px; }
-  .nav-links { gap:18px; white-space:nowrap; }
+  .site-header nav { flex: 1; margin-left: 0; display:flex; align-items:center; justify-content:flex-end; min-width:0; gap:clamp(12px, 1.5vw, 20px); font-size:12px; }
+  .nav-links { gap:clamp(12px, 1.5vw, 18px); white-space:nowrap; }
   .nav-actions { flex:none; gap:10px; }
   .nav-link { text-decoration: none; color: var(--ink-2); }
   .nav-link:hover { color: var(--navy); }
@@ -366,7 +366,7 @@ const finalSchemas = schema
   .button-outline { background: var(--card); color: var(--navy); border-color: var(--navy); }
   .button-outline:hover { background: var(--panel-2); color: var(--navy); border-color: var(--navy-2); }
   html[data-theme='dark'] .button:not(.button-outline) { color: #152335; }
-  @media (max-width: 768px) {
+  @media (max-width: 960px) {
     .header-inner { align-items:stretch; padding-block:12px; flex-direction:column; gap:10px; }
     .brand-group { justify-content:space-between; }
     .site-header nav { margin-left:0; width:100%; display:grid; gap:10px; }

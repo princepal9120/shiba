@@ -1,1 +1,13 @@
-<svg role="img" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><title>iPhone</title><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" role="img" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+  <title>iPhone</title>
+  <!-- Rounded titanium body, inset glass, and Dynamic Island. -->
+  <rect x="4.75" y="1.25" width="14.5" height="21.5" rx="3.6"/>
+  <rect x="6.1" y="2.65" width="11.8" height="18.7" rx="2.35"/>
+  <rect x="9.15" y="3.55" width="5.7" height="1.55" rx=".8" fill="currentColor" stroke="none"/>
+  <circle cx="13.55" cy="4.32" r=".38" fill="currentColor" stroke="none"/>
+  <!-- Lock-screen clock and widgets hint at the display rather than a blank phone. -->
+  <path d="M9.1 9.15h5.8M10.2 10.15h3.6M8.1 12.1h7.8v3.1H8.1z"/>
+  <path d="M10.5 19.25h3" stroke-width="1.2"/>
+  <!-- Signature left-side volume controls and right-side power button. -->
+  <path d="M4.1 7.1v2.1m0 1.5v3.2M19.9 8.6v4.2" stroke-width="1.25"/>
+</svg>

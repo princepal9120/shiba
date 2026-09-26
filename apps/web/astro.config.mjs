@@ -14,7 +14,7 @@ export default defineConfig({
 		'/docs': '/docs/overview/',
 	},
 	integrations: [
-		tailwind(),
+		tailwind({ applyBaseStyles: false }),
 		starlight({
 			title: 'AI Coworker',
 			description:
