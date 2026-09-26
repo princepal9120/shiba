@@ -4,7 +4,6 @@ import {
   pullRequestNodeId,
   resolveProject,
   setItemStatus,
-  statusField,
 } from "../src/github-project.js";
 
 function fakeFetch(handler: (body: { query: string; variables: Record<string, unknown> }) => unknown) {
