@@ -161,3 +161,49 @@ const articleSchema = {
 		</div>
 	</article>
 </MarketingPage>
+
+<script>
+	// Progressive enhancement: reading progress bar + TOC scrollspy.
+	const article = document.querySelector('.article-shell');
+	const bar = document.querySelector('.reading-progress');
+	if (article instanceof HTMLElement && bar instanceof HTMLElement) {
+		const updateProgress = () => {
+			const rect = article.getBoundingClientRect();
+			const total = rect.height - window.innerHeight;
+			const scrolled = -rect.top;
+			const progress = total > 0 ? Math.min(1, Math.max(0, scrolled / total)) : 0;
+			bar.style.transform = `scaleX(${progress})`;
+		};
+		window.addEventListener('scroll', updateProgress, { passive: true });
+		updateProgress();
+	}
+
+	const tocLinks = document.querySelectorAll('.article-toc ol a[href^="#"]');
+	if (tocLinks.length > 0) {
+		const linkByHeadingId = new Map();
+		const headings = [];
+		for (const link of tocLinks) {
+			const id = link.hash.slice(1);
+			const heading = document.getElementById(id);
+			if (!heading) continue;
+			linkByHeadingId.set(id, link);
+			headings.push(heading);
+		}
+
+		if (headings.length > 0 && 'IntersectionObserver' in window) {
+			const observer = new IntersectionObserver(
+				(entries) => {
+					for (const entry of entries) {
+						if (!entry.isIntersecting) continue;
+						const link = linkByHeadingId.get(entry.target.id);
+						if (!link) continue;
+						for (const l of tocLinks) l.removeAttribute('aria-current');
+						link.setAttribute('aria-current', 'true');
+					}
+				},
+				{ rootMargin: '-80px 0px -70% 0px' },
+			);
+			for (const heading of headings) observer.observe(heading);
+		}
+	}
+</script>
