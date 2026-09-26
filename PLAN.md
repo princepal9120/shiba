@@ -1,6 +1,6 @@
 # AI Coworker — End-to-End Completion Plan
 
-**Revision:** 2026-09-27 (rev 9). Adds §17, Phase P7 — Roomote parity (T27–T36). Rev 3's §2 "genuinely broken" table is now largely historical — see §2.0 for what is actually left.
+**Revision:** 2026-09-27 (rev 10). Adds §17, Phase P7 — Roomote parity (T27–T39). **W4 multi-repo deferred: GitHub-only** (owner decision); T37–T39 added to finish GitHub end to end.
 
 **Target:** an open-source, self-hosted [Capy](https://capy.ai)/[Hoplite](https://hoplite.sh)-shaped coding agent that runs entirely on the user's own Cloudflare account. Scope is Capy's **spine plus review and automations** — not its workspace layer. See §4 for what is deliberately not being built.
 
@@ -840,9 +840,61 @@ So T28 is not a fix, it is a **re-audit**: walk the whole G1–G11 table, re-run
 
 **Open question, answer during T33:** Cloudflare Sandbox containers have no browser installed, and the image deliberately keeps `registry.npmjs.org` off the egress allowlist. Capture therefore needs *either* a pinned headless-browser layer in the image (image size vs. cold-start cost — the §8 concern) *or* an external capture service. **Decide with data, do not guess.**
 
-### 17.6 W4 — Repo providers (~8h)
+### 17.6 W4 — Repo providers — **DEFERRED (decision, 2026-09-27)**
 
-**T34 · Provider abstraction behind `github.ts`.** GitLab, Gitea, Bitbucket Cloud, Azure DevOps. The approval gate, run model, and harness seam are already provider-agnostic, so this is a provider interface plus implementations — but each new provider is a **new credential egress path**, which is the §16 risk that already bit once (B6). Sequence: GitLab (largest demand) → Gitea/Bitbucket (self-hosted, same auth shape) → ADO (different auth entirely, likely its own task). Per-provider token scoping is mandatory and separately tested — the T6 pattern generalizes.
+**Owner decision: GitHub only, for now.** W4 is not scheduled. T34 is deferred
+indefinitely, not cut — the note below is kept so a future reader knows the work
+was considered, priced, and deliberately sequenced *after* GitHub is proven
+live.
+
+The reasoning is §16's standing risk, not preference: every additional provider
+is a **new credential egress path**, and B6 is exactly how a GitHub token
+reached every repo it could see. One provider, thoroughly proven against a real
+repository, is worth more than four that are unit-tested.
+
+**T34 · (deferred) Provider abstraction behind `github.ts`.** GitLab, Gitea,
+Bitbucket Cloud, Azure DevOps. The approval gate, run model, and harness seam
+are already provider-agnostic, so this would be a provider interface plus
+implementations — but each one is a fresh credential path requiring its own
+scoping and its own cross-repo-refusal test. Sequence when it happens: GitLab
+(largest demand) → Gitea/Bitbucket (self-hosted, same auth shape) → ADO
+(different auth entirely, likely its own task).
+
+### 17.6.1 GitHub end to end — the actual focus (T37–T39)
+
+GitHub is the only provider, so "GitHub end to end" is now the deliverable. An
+audit of the path found it **structurally complete** — the work left is proof,
+not code:
+
+| Stage | Status | Evidence |
+|---|---|---|
+| URL validation | **Done** — https-only, `github.com` only, no embedded credentials, exactly 2 path segments | `security.ts:47-72` |
+| Scoped clone credential | **Done** — `github.com` defaults to *refusal*; `approveRepoScope` installs a per-repo forwarder before the clone | `sandbox.ts:52-62`, `opencode-agent.ts:53` |
+| Per-harness egress | **Done** — allowlist narrowed to the selected harness + git, never the union | `sandbox.ts:44` |
+| Publish as PR | **Done** — blob → tree → commit → ref → PR, unsafe paths refused, deletions via null-sha, **orphan branch deleted if the PR fails** | `github.ts:79-173` |
+| Token containment | **Done** — one `Authorization` header; never in the container, a clone URL, a command, env, logs, or UI | `github.ts:1-6` |
+| Webhook ingest | **Done** — HMAC-SHA256 verified, dedupe *after* verification, 503 when unconfigured | `index.ts:881-905` |
+| Projects v2 board sync | **Done** — best-effort, `waitUntil`, never delays the terminal transition | `github-project.ts` |
+
+**T37 · Record the GitHub acceptance run.** One dated run, in `VERIFICATION.md`:
+submit → approve → scoped clone → harness exec → diff matches the real working
+tree → PR opens on the real repo → board sync lands. The diff-matching and
+PR-opening steps are the two that only a live run can prove; everything above
+them is already unit-tested.
+
+**T38 · Prove a deletion and a binary file in that same run.** `github.ts:114`
+refuses `..` and absolute paths, and `:118-120` publishes a `null` sha for
+deletions — both are tested against a mock, and both are exactly the cases a
+real repository proves or disproves.
+
+**T39 · Confirm the cross-repo refusal live.** T6's scoping is verified by unit
+test only. The live check is that repo code executing *inside the container*
+cannot reach a second repository the same token can see. This is the single
+highest-value assertion in the whole GitHub path and it has never been run.
+
+**Sequencing:** T37–T39 need a GitHub token and a target repository, i.e. the
+same account-side prerequisites as T10. They are not blocked on more code.
+
 
 ### 17.7 W5 — Multi-user accounts (~12h) · *product decision, not just code*
 
@@ -862,13 +914,25 @@ So T28 is not a fix, it is a **re-audit**: walk the whole G1–G11 table, re-run
 | **W1** OAuth MCP | T29 | — | ~8h | **Do** — the unblocker |
 | **W2** web chat + steering | T30 · T31 · T32 | — | ~14h | **Do** — the real delta |
 | **W3** screenshot/preview | T33 | benefits from W2 | ~6h | **Do** — cheapest win |
-| **W4** multi-repo | T34 | — | ~8h | Optional |
+| **W4** multi-repo | T34 | — | ~8h | **Deferred** (owner, 2026-09-27) — GitHub only |
 | **W5** multi-user | T35 | — | ~12h | **Spec decision first** |
 | **W6** Teams | T36 | — | ~4h | **Recommend cut** |
+| **GH** GitHub e2e proof | T37 · T38 · T39 | needs a token + repo | ~2h | **Now the focus** |
 
-**Critical path:** T27 → T29 → T30 → T31. T28 is parallel. T33–T34 are independent of W1/W2 and can be pulled forward.
+**Critical path:** T27 → T29 → T30 → T31. T28 is parallel. T33 is independent of
+W1/W2 and can be pulled forward. T34 is deferred (§17.6); T37–T39 need a token
+and a repository, not code.
 
-**Recommended scope: W0–W3 only** (~43h). That is the honest "Roomote parity" for a Cloudflare-native single-tenant deployment. W4 is cheap polish; W5 is a product decision that changes who your customer is; W6 is a channel.
+**Recommended scope: W0–W3 + the GitHub proof (T37–T39), ~45h.** With W4
+deferred, that is the honest "Roomote parity" for a Cloudflare-native,
+single-tenant, **GitHub-only** deployment. W5 is a product decision that changes
+who your customer is; W6 is a channel.
+
+**GitHub-only (owner decision, 2026-09-27).** One provider, proven end to end,
+beats four that are unit-tested — B6 is the precedent for what an unproven
+credential path costs. T37–T39 exist because the GitHub path is *structurally
+complete but unproven in the cloud*, so the remaining work there is evidence,
+not code.
 
 **Standing constraint, unchanged:** W1–W6 are all *in front of* the same wall as everything else. Until T10's dated live acceptance is in `VERIFICATION.md`, none of this is proven in the cloud. **A wave does not ship because its unit tests pass** — that is the §16 standing risk, and it is why W0 exists before W1.
 

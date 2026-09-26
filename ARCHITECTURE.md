@@ -213,16 +213,18 @@ Not bugs — deliberate or inherited, recorded so they are not rediscovered:
   cannot connect. It gates other parity work (`PLAN.md` §17.3, T29).
 - **No interactive web chat.** The dashboard submits a task and polls; there is
   no conversational steering surface (§17.4).
-- **GitHub is the only repo provider.** The approval gate is already
-  provider-agnostic, so this is a provider layer, not a redesign (§17.6).
+- **GitHub is the only repo provider — by decision.** The approval gate is
+  already provider-agnostic, so adding one later is a provider layer, not a
+  redesign. Deferred until GitHub itself is proven live (`PLAN.md` §17.6).
 - **Single-tenant by contract.** Reversing that is a *product* decision that
   belongs in `spec/GOAL.md` before any code (§17.7).
 - **The spec contradicts the tree.** `spec/GOAL.md` forbids a monorepo; the
   repo is `apps/*` + turbo + alchemy. First thing to fix (§17.2, T27) —
   documentation debt with real cost.
 - **No dated live acceptance.** Every capability above is verified by unit
-  tests and a dry run, not a recorded cloud run. Until T10's acceptance is in
-  `VERIFICATION.md`, the honest status stays "local prototype" (§17.9).
+  tests and a dry run, not a recorded cloud run. Until T10's acceptance — and
+  the GitHub-specific T37–T39 — are in `VERIFICATION.md`, the honest status
+  stays "local prototype" (§17.9).
 
 ---
 
