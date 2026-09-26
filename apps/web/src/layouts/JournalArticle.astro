@@ -183,9 +183,7 @@ const articleSchema = {
 		const linkByHeadingId = new Map();
 		const headings = [];
 		for (const link of tocLinks) {
-			const href = link.getAttribute('href');
-			const id = href?.slice(1);
-			if (!id) continue;
+			const id = link.hash.slice(1);
 			const heading = document.getElementById(id);
 			if (!heading) continue;
 			linkByHeadingId.set(id, link);
