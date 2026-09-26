@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { getAgentByName } from "agents/routing";
 import {
   buildChatThreadName,
   buildDecisionData,
@@ -21,6 +22,12 @@ import {
 const REPO = "https://github.com/owner/repo";
 const APPROVAL_ID = "a1b2c3d4-e5f6-47a8-b9c0-d1e2f3a4b5c6";
 const USAGE = "Usage: /shiba <repo> <task>";
+
+// The default resolver is the only thing standing between an Approve press and a
+// run, and PR #14 shipped a version of it that re-prefixed an already-prefixed
+// thread key and threw on every press. These two tests drive the DEFAULT path —
+// no injected resolver — so that regression cannot come back unnoticed.
+vi.mock("agents/routing", () => ({ getAgentByName: vi.fn() }));
 
 function env(overrides: Record<string, unknown> = {}) {
   return { ...overrides } as never;
@@ -226,6 +233,18 @@ describe("queueChatRun", () => {
     userId: "42",
   };
 
+  it("resolves the default orchestrator with the already-prefixed thread key", async () => {
+    const { resolve } = fakeOrchestrator({ body: { ok: true, approvalId: APPROVAL_ID } });
+    vi.mocked(getAgentByName).mockResolvedValue(resolve("telegram:-100") as never);
+
+    const result = await queueChatRun(env({ CodingOrchestrator: {} }), input);
+
+    expect(result).toEqual({ approvalId: APPROVAL_ID });
+    // PR #14 called buildTelegramThreadName() on an already-prefixed key here,
+    // which threw `chat_id "telegram:-100" is malformed` on every queue.
+    expect(getAgentByName).toHaveBeenCalledWith({}, "telegram:-100");
+  });
+
   it("posts the run and returns the approvalId", async () => {
     const { requests, resolve } = fakeOrchestrator({ body: { ok: true, approvalId: APPROVAL_ID } });
     const result = await queueChatRun(env(), input, resolve);
@@ -293,6 +312,30 @@ describe("decideChatApproval", () => {
     approved: true,
     decidedBy: "discord:42",
   };
+
+  it("resolves the default orchestrator with the already-prefixed thread key", async () => {
+    // This is the exact path that made PR #14 unusable: the Telegram route's
+    // default resolver re-wrapped "telegram:-100" as a chat id and threw, so
+    // every Approve press died before reaching the orchestrator.
+    const { requests, resolve } = fakeOrchestrator({ body: { result: "approved" } });
+    vi.mocked(getAgentByName).mockResolvedValue(resolve("telegram:-100") as never);
+
+    const result = await decideChatApproval(env({ CodingOrchestrator: {} }), {
+      ...input,
+      platform: "telegram",
+      threadKey: "telegram:-100",
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(getAgentByName).toHaveBeenCalledWith({}, "telegram:-100");
+    expect(requests[0]!.url).toBe("https://internal/api/approvals");
+    expect(requests[0]!.body).toMatchObject({
+      threadKey: "telegram:-100",
+      approvalId: APPROVAL_ID,
+      approved: true,
+      source: "telegram",
+    });
+  });
 
   it("posts the decision and resolves on an approved result", async () => {
     const { requests, resolve } = fakeOrchestrator({ body: { result: "approved" } });
