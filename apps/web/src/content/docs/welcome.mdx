@@ -31,25 +31,23 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
       <span class="dot-yellow"></span>
       <span class="dot-green"></span>
     </div>
-    <div class="ai-terminal-title">shiba-ai-coworker · cloudflare-worker · sandbox-session #1042</div>
-    <div style="font-size: 0.7rem; color: #10b981; font-weight: 600;">● READY</div>
+  <div class="ai-terminal-title">Shiba · illustrative workflow (not a recorded live run)</div>
+    <div style="font-size: 0.7rem; color: #fbbf24; font-weight: 600;">● PROTOTYPE</div>
   </div>
   <div class="ai-terminal-body">
-    <div><span class="term-prompt">agent&gt;</span> <span style="color: #93c5fd;">delegate_coding_task</span> {"{"} task: "Fix auth token cookie expiration and add Vitest unit test", repoUrl: "https://github.com/org/web-app" {"}"}</div>
-    <div style="margin-top: 0.5rem;"><span class="term-tag plan">PLAN READY</span> Orchestrator analyzed codebase &amp; generated 3-step delegation plan.</div>
-    <div><span class="term-tag gate">GATE</span> Approval requested via Dashboard &amp; Slack. Waiting for human sign-off...</div>
-    <div><span class="term-tag gate" style="background: rgba(34, 197, 94, 0.2); color: #4ade80;">APPROVED</span> Approved by human reviewer (dev@company.com).</div>
-    <div><span class="term-tag dock">SANDBOX</span> Spun up ephemeral Cloudflare micro-container running OpenCode in 180ms.</div>
-    <div><span class="term-tag pass">VITEST</span> Ran test suite: 14 test files passed, 68 assertions green, 0 regressions.</div>
-    <div><span class="term-tag pass" style="background: rgba(11, 159, 149, 0.25); color: #2dd4bf;">PR READY</span> Publication is optional and requires a configured GitHub token.</div>
+    <div><span class="term-prompt">status&gt;</span> Local checks and unit tests are recorded in <code>VERIFICATION.md</code>.</div>
+    <div style="margin-top: 0.5rem;"><span class="term-tag plan">IMPLEMENTED</span> Approval-gated task orchestration and harness selection exist in source.</div>
+    <div><span class="term-tag gate">UNIT TESTED</span> Harness configuration and safety boundaries have test coverage.</div>
+    <div><span class="term-tag dock">LOCAL E2E</span> OpenCode container path exercised locally; provider returned 401.</div>
+    <div><span class="term-tag gate" style="background: rgba(251, 191, 36, 0.2); color: #fbbf24;">CLOUD</span> No end-to-end cloud run is recorded.</div>
   </div>
 </div>
 
 <div class="ai-callout">
   <div class="ai-callout-icon">⚡</div>
   <div class="ai-callout-content">
-    <h4>Zero Host Access · Ephemeral Containers · Single-Tenant Isolation</h4>
-    <p>Unlike tools that execute on a developer laptop, AI Coworker delegates every task to an isolated Cloudflare Sandbox container. Each installation is single-tenant and account-owned.</p>
+    <h4>Account-owned Cloudflare Sandbox architecture</h4>
+    <p>The intended runtime delegates repository work to Cloudflare Sandbox containers. Local unit tests and the recorded OpenCode local exercise are not evidence of cloud availability, isolation guarantees, or successful model inference. Review the security and readiness documentation before deployment.</p>
   </div>
 </div>
 
@@ -86,22 +84,22 @@ Delegate real engineering workflows with full human control, safety, and auditab
 
 <CardGrid stagger>
   <Card title="Approval-Gated Executions" icon="approve-check">
-    Never let an agent push code blindly. Inspect the delegation plan, affected files, and planned terminal commands before granting execution approval.
+    The implemented task flow requests human approval before sandbox execution. Review the approved input and resulting changes; do not treat approval as a guarantee of correct output.
   </Card>
   <Card title="Isolated Sandbox Containers" icon="laptop">
-    Every coding task runs in its own micro-container powered by Cloudflare Containers and OpenCode. Malicious packages or runaway processes cannot escape.
+    The configured runtime uses Cloudflare Sandbox containers. Isolation boundaries and operational limits require review; no claim that arbitrary malicious code cannot escape is implied.
   </Card>
   <Card title="Account-Owned Deployment" icon="seti:cloudflare">
-    Deploy directly to your own Cloudflare account. Your source code, API keys, repository secrets, and logs never touch third-party servers.
+    Deployment is intended for your Cloudflare account. Repository data and credentials cross the configured service boundaries; review [Security](/docs/security/) before use.
   </Card>
   <Card title="Automated Issue Triage & Bug Fixing" icon="puzzle">
-    Receive GitHub webhook events on new issues. AI Coworker reproduces the bug, writes a regression test, fixes the logic, and opens a ready-to-merge PR.
+    GitHub webhook automation paths are implemented. Results depend on configuration and still require human review; the repository has no recorded cloud acceptance run.
   </Card>
   <Card title="Interactive Diff Review" icon="magnifier">
-    Review live syntax-highlighted diffs in the built-in React dashboard or directly inside Slack before approving pull request publication.
+    Review run results and diffs in the dashboard; available surfaces depend on configuration. PR publication is optional and requires GitHub credentials.
   </Card>
   <Card title="Autonomous Scheduled Sweeps" icon="setting">
-    Fire runs from cron schedules, GitHub webhooks, Slack events, or per-automation webhook triggers. Approval gates, repo allowlists, and a daily run budget still apply to every trigger.
+    Automation trigger types are implemented and unit-tested. Configure and validate each integration in your own account; implementation is not evidence of successful cloud operation.
   </Card>
 </CardGrid>
 
@@ -124,7 +122,7 @@ Engineered specifically for Cloudflare's next-generation edge stack.
   </div>
   <div class="ai-step-card">
     <div class="ai-step-title">🤖 Workers AI & Flash Models</div>
-    <p class="ai-step-desc">Blazing-fast plan synthesis with Gemini 3.5 Flash Lite and Llama 3.1 Instruct, managed via Cloudflare AI Gateway.</p>
+    <p class="ai-step-desc">The configured planning default is Llama 3.1 Instruct through Workers AI; coding-provider access uses the configured gateway path. Model availability and successful inference are not guaranteed by these defaults.</p>
   </div>
 </div>
 
