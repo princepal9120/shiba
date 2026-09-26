@@ -54,38 +54,107 @@ const capabilities = [
 
     <div class="work-window" aria-label="Illustration of Shiba's approval-gated task flow">
       <div class="window-titlebar">
-        <span class="window-brand"><img src="/assets/mascot/pet-logo.png" alt="" width="18" height="18" /> shiba.workspace</span>
-        <span class="window-controls" aria-hidden="true"><i>–</i><i>□</i><i>×</i></span>
+        <div class="window-brand">
+          <img src="/assets/mascot/pet-logo.png" alt="" width="16" height="16" class="pixelated" />
+          <span class="brand-title">shiba.workspace</span>
+          <span class="status-indicator"><span class="status-dot"></span><span>AWAITING APPROVAL</span></span>
+        </div>
+        <div class="window-tabs" aria-hidden="true">
+          <span class="win-tab active">01 Plan Review</span>
+          <span class="win-tab">02 Sandbox</span>
+          <span class="win-tab">03 Diff</span>
+        </div>
+        <div class="window-controls" aria-hidden="true">
+          <span class="win-btn" title="Minimize">─</span>
+          <span class="win-btn" title="Maximize">□</span>
+          <span class="win-btn" title="Close">✕</span>
+        </div>
       </div>
-      <div class="window-menu" aria-hidden="true">Task&nbsp;&nbsp; Review&nbsp;&nbsp; Workspace</div>
+      <div class="window-subbar" aria-hidden="true">
+        <div class="repo-chip">
+          <span class="repo-icon">⌥</span>
+          <span class="repo-name">github.com/acme/api</span>
+          <span class="repo-branch">main → fix/auth-race</span>
+        </div>
+        <div class="runtime-badge">CLOUDFLARE SANDBOX · gVisor</div>
+      </div>
       <div class="window-body">
-        <div class="window-topline"><span>CODING TASK</span><span>01 / 03</span></div>
         <div class="approval-art" aria-hidden="true">
           <img src="/assets/shiba-working.png" alt="" width="1200" height="1200" fetchpriority="high" class="shiba-working-img" />
-          <div class="anim-overlay">
-            <!-- The pending tool input, verbatim. The agent is stopped here
-                 until a human answers — which is the whole product. -->
-            <div class="ask-card">
-              <div class="ask-head"><span class="ask-pulse"></span><span>APPROVAL REQUIRED</span></div>
-              <pre class="ask-cmd"><code><span class="ask-verb">delegate_coding_task</span>(&#123;
-  repo:   <span class="ask-str">"acme/api"</span>,
-  task:   <span class="ask-str">"fix token refresh race"</span>,
-  branch: <span class="ask-str">"fix/auth-race"</span>
-&#125;)</code></pre>
-              <div class="ask-actions"><span class="ask-yes">APPROVE</span><span class="ask-no">REJECT</span></div>
+          <div class="art-scrim"></div>
+          <div class="art-meta-tag">
+            <span class="micro">STAGE 02 / 03</span>
+            <span class="art-status">HUMAN VERIFICATION REQUIRED</span>
+          </div>
+          <span class="art-stamp">A CLEAR PLAN. YOUR CALL.</span>
+        </div>
+        <div class="approval-card">
+          <div class="card-header">
+            <div class="header-left">
+              <span class="pulse-marker" aria-hidden="true"></span>
+              <span class="tool-name">delegate_coding_task</span>
+              <span class="badge-frozen">FROZEN INPUT</span>
             </div>
+            <span class="harness-badge">harness: claude-code</span>
+          </div>
+          <div class="code-preview" tabindex="0" role="region" aria-label="Proposed tool execution plan">
+            <pre><code><span class="code-line"><span class="c-k">repo:</span>   <span class="c-s">"https://github.com/acme/api"</span></span>
+<span class="code-line"><span class="c-k">branch:</span> <span class="c-s">"fix/auth-race"</span> <span class="c-cmt">/* base: main */</span></span>
+<span class="code-line"><span class="c-k">task:</span>   <span class="c-s">"Fix token refresh race in auth.ts"</span></span>
+<span class="code-line"><span class="c-k">egress:</span> <span class="c-s">"zero-credentials-in-container"</span></span></code></pre>
+          </div>
+          <div class="card-actions">
+            <button type="button" class="btn-approve" aria-label="Simulate approving task">
+              <span class="action-icon">✓</span>
+              <span>Approve &amp; Start Sandbox</span>
+            </button>
+            <button type="button" class="btn-reject" aria-label="Simulate rejecting task">
+              <span class="action-icon">✕</span>
+              <span>Reject</span>
+            </button>
+          </div>
+          <div class="approval-guarantee">
+            <span class="lock-icon" aria-hidden="true">⚿</span>
+            <span>By default, zero code executes and no container boots until approved.</span>
           </div>
         </div>
-        <div class="task-paper">
-          <div class="task-icon"><img src="/assets/mascot/pet-logo.png" alt="" width="30" height="30" /></div>
-          <div><span class="micro">YOUR REPOSITORY</span><strong>Make a change. Keep control.</strong><small>Repository and task input are reviewed together.</small></div>
+        <div class="workflow-rail" role="list" aria-label="Workflow stages">
+          <div class="rail-step done" role="listitem">
+            <span class="rail-num">01</span>
+            <div class="rail-info">
+              <strong>Describe the task</strong>
+              <small>Repository · branch · instructions</small>
+            </div>
+            <span class="rail-badge ok">READY ✓</span>
+          </div>
+          <div class="rail-step active" role="listitem">
+            <span class="rail-num">02</span>
+            <div class="rail-info">
+              <strong>Approval before execution</strong>
+              <small>Review exact tool input</small>
+            </div>
+            <span class="rail-badge action">YOUR CALL ●</span>
+          </div>
+          <div class="rail-step standby" role="listitem">
+            <span class="rail-num">03</span>
+            <div class="rail-info">
+              <strong>Inspect the work</strong>
+              <small>Progress · changed files · diff</small>
+            </div>
+            <span class="rail-badge">QUEUED</span>
+          </div>
         </div>
-        <div class="workflow-step"><span class="step-num">01</span><span><strong>Describe the task</strong><small>Repository · branch · instructions</small></span><span class="step-state">READY</span></div>
-        <div class="workflow-step current"><span class="step-num">02</span><span><strong>Approval before execution</strong><small>Review the exact tool input</small></span><span class="step-state">YOUR CALL</span></div>
-        <div class="workflow-step"><span class="step-num">03</span><span><strong>Inspect the work</strong><small>Progress · changed files · diff</small></span><span class="step-state">AFTER APPROVAL</span></div>
         <div class="window-caption">The agent proposes. You decide when it runs.</div>
       </div>
-      <div class="window-status"><span>HUMAN IN THE LOOP</span><span>ISOLATED SANDBOX</span></div>
+      <div class="window-status">
+        <div class="status-left">
+          <span>HUMAN IN THE LOOP</span>
+          <span>ISOLATED SANDBOX</span>
+        </div>
+        <div class="status-right">
+          <span>EGRESS: CREDENTIALS MASKED</span>
+        </div>
+      </div>
     </div>
   </section>
 
