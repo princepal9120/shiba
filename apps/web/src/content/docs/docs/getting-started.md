@@ -1,50 +1,37 @@
 ---
 title: Getting started
-description: Install and build the local dashboard and documentation.
+description: Install and validate the local project, then review account deployment requirements.
 ---
 
 ## Prerequisites
 
-Use **Node.js 22.12.0 or newer** and **pnpm 10.0.0 or newer**. Run commands at the repository root.
+Use Node.js 22.12.0 or newer and pnpm 10 or newer. Run commands from the repository root. For local container runs or account deployment, also configure a Docker-compatible engine and the Cloudflare resources/credentials required by the deployment. Read [Readiness](/docs/readiness/) before provisioning.
 
-For live coding, you also need Cloudflare Workers, Workers AI, Durable Objects and Containers access, a compatible container engine, and a public GitHub repository. Read [Readiness](/docs/readiness/) before provisioning anything.
+## Install and check locally
 
-## Install and verify
-
-~~~sh
+```sh
 pnpm install
 pnpm typecheck
 pnpm lint
 pnpm test
 pnpm docs:check
 pnpm build
-~~~
+```
 
-The combined build writes the dashboard to public/ and docs to public/docs/. It does not deploy or publish a PR.
+The combined build assembles the dashboard and docs in `public/`; it does not deploy or publish a pull request. Tests with fakes are unit evidence only.
 
 ## Preview documentation
 
-~~~sh
+```sh
 pnpm docs:preview
-~~~
+```
 
-Open http://localhost:4321/docs/. Production builds include Pagefind search; the docs development server does not.
+Open `http://localhost:4321/docs/`. Production builds include generated Pagefind search; the docs development server does not.
 
-## Prepare the coding application
+## Prepare an account deployment
 
-The fastest path is the interactive bootstrap:
+`pnpm run bootstrap` uses `scripts/setup.mjs` and Alchemy. It requires Docker, Cloudflare OAuth/profile setup (or API credentials in `.env`), prompts for Access emails, the Workers subdomain, and optional secrets, then builds and runs `alchemy deploy`. This is a real account-changing deployment command, not a local test. Review [Deployment](/docs/deployment/) and [Configuration](/docs/configuration/) first.
 
-~~~sh
-pnpm run bootstrap
-~~~
+For local backend work, `pnpm dev` serves the dashboard and proxies API/WebSocket paths to a separately started Wrangler Worker; it does not start that Worker. See [Local development](/docs/local-development/).
 
-It checks `wrangler` auth, deploys the Worker and container image, prompts for each secret (skippable), and prints the Slack app manifest import path and the URLs to paste into your Slack app. Afterwards the dashboard's onboarding modal shows live status from `GET /api/setup/status`.
-
-Manual path: copy .dev.vars.example to the ignored .dev.vars file. Set the values described in [Configuration](/docs/configuration/). Public diff-only runs need no GitHub token.
-
-The Vite command, pnpm dev, is **UI-only**, with no Worker API or WebSocket proxy. Use [Local development](/docs/local-development/) for Worker startup. A static page is not evidence that the cloud coding integration works.
-
-After resolving the [readiness blockers](/docs/readiness/), submit a small task against a public test repository you own, review the exact tool input, approve or reject it, and inspect the final transcript and diff. Keep publishing off initially. Run the target repository's checks before adopting any generated changes.
-
-
-
+The current dated verification reports local checks passing but no cloud end-to-end run. OpenCode has a recorded local container exercise; its model request returned 401. Do not infer working cloud coding or inference from a static page, setup status, or local unit tests. After resolving readiness blockers, use an isolated deployment and public test repository, keep publishing off, inspect the approval/result/diff, and record actual outcomes in `VERIFICATION.md`.
