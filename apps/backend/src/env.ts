@@ -124,6 +124,8 @@ export interface Env {
   TELEGRAM_WEBHOOK_SECRET?: string;
   /** Optional comma-separated numeric Telegram user ids allowed to approve. */
   TELEGRAM_APPROVERS?: string;
+  /** Optional Discord bot token used only for shared chat post-back. */
+  DISCORD_BOT_TOKEN?: string;
   /** Optional JSON map of chat ids to repository URLs. */
   TELEGRAM_CHAT_REPOS?: string;
   /** Optional. TypeSafe System One key for `run_when`; unset falls back to Workers AI. */
