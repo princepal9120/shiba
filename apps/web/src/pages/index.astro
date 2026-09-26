@@ -38,62 +38,40 @@ const capabilities = [
   <section class="shell home-hero" aria-labelledby="home-title">
     <div class="hero-copy">
       <p class="eyebrow">OPEN-SOURCE DEVIN CLOUD ALTERNATIVE</p>
-      <h1 id="home-title">Your AI software engineer.<br /><em>On your terms.</em></h1>
+      <h1 id="home-title">It asks before<br /><em>it writes code.</em></h1>
       <p class="hero-lead">Give Shiba a repository and a task. When deployed, review the exact plan before a sandbox starts by default, then follow the work in your Cloudflare account.</p>
       <div class="hero-actions">
         <a class="button" href="https://github.com/princepal9120/shiba">Join the build <span aria-hidden="true">↗</span></a>
         <a class="button button-outline" href="/docs/getting-started/">Read the docs</a>
       </div>
       <p class="hero-note">No hosted black box. No sandbox starts before your approval.</p>
-      <ul class="hero-proof">
-        <li class="hero-proof-item"><span class="hero-proof-label">0</span><span class="hero-proof-detail">servers you don't control. It runs in your Cloudflare account.</span></li>
-        <li class="hero-proof-item"><span class="hero-proof-label">1</span><span class="hero-proof-detail">approval before any code runs. Reject and nothing executes.</span></li>
-        <li class="hero-proof-item"><span class="hero-proof-label">4</span><span class="hero-proof-detail">agents to choose from: Claude Code, Codex, OpenCode, Devin.</span></li>
-      </ul>
     </div>
 
-    <div class="work-window" aria-label="Illustration of Shiba's approval-gated task flow">
-      <div class="window-titlebar">
-        <div class="window-brand">
-          <img src="/assets/mascot/pet-logo.png" alt="" width="16" height="16" class="pixelated" />
-          <span class="brand-title">shiba.workspace</span>
-          <span class="status-indicator"><span class="status-dot"></span><span>AWAITING APPROVAL</span></span>
-        </div>
-      </div>
-      <div class="window-body">
-        <div class="approval-card">
-          <div class="card-header">
-            <div class="header-left">
-              <span class="pulse-marker" aria-hidden="true"></span>
-              <span class="tool-name">delegate_coding_task</span>
-              <span class="badge-frozen">FROZEN INPUT</span>
-            </div>
-            <span class="harness-badge">harness: claude-code</span>
-          </div>
-          <div class="code-preview" tabindex="0" role="region" aria-label="Proposed tool execution plan">
-            <pre><code><span class="code-line"><span class="c-k">repo:</span>   <span class="c-s">"https://github.com/acme/api"</span></span>
-<span class="code-line"><span class="c-k">branch:</span> <span class="c-s">"fix/auth-race"</span> <span class="c-cmt">/* base: main */</span></span>
-<span class="code-line"><span class="c-k">task:</span>   <span class="c-s">"Fix token refresh race in auth.ts"</span></span>
-<span class="code-line"><span class="c-k">egress:</span> <span class="c-s">"zero-credentials-in-container"</span></span></code></pre>
-          </div>
-          <div class="card-actions">
-            <button type="button" class="btn-approve" aria-label="Simulate approving task">
-              <span class="action-icon">✓</span>
-              <span>Approve &amp; Start Sandbox</span>
-            </button>
-            <button type="button" class="btn-reject" aria-label="Simulate rejecting task">
-              <span class="action-icon">✕</span>
-              <span>Reject</span>
-            </button>
-          </div>
-          <div class="approval-guarantee">
-            <span class="lock-icon" aria-hidden="true">⚿</span>
-            <span>By default, zero code executes and no container boots until approved.</span>
-          </div>
-        </div>
-        <div class="window-caption">The agent proposes. You decide when it runs.</div>
-      </div>
-    </div>
+    <figure class="hero-showcase" aria-label="Illustration of shiba.workspace">
+      <img
+        id="hero-showcase-img"
+        class="hero-showcase-img"
+        src="/assets/shiba-hero-window-dark.png"
+        alt="Retro desktop window of the shiba.workspace: harness chips, a pixel workstation, capability icons, and a status bar reading your Cloudflare account, one approval, four harnesses"
+        width="1672"
+        height="940"
+        loading="eager"
+        fetchpriority="high"
+      />
+    </figure>
+    <script is:inline>
+      (function() {
+        var img = document.getElementById('hero-showcase-img');
+        if (!img) return;
+        function update() {
+          var dark = document.documentElement.getAttribute('data-theme') === 'dark';
+          img.src = dark ? '/assets/shiba-hero-window-dark.png' : '/assets/shiba-hero-window.png';
+        }
+        update();
+        var obs = new MutationObserver(update);
+        obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+      })();
+    </script>
   </section>
 
   <div class="shell compatibility" aria-label="Ways to use Shiba"><span>USE FROM</span><span>Web</span><span>Slack</span><span>Telegram</span><span>Discord</span><span>GitHub</span><span class="compatibility-end">Mobile web is available; native iPhone app is on the roadmap.</span></div>
@@ -248,7 +226,7 @@ const capabilities = [
   /* Hero rhythm — 4-unit base. The label belongs to the headline (tight), the
      headline-to-lead break is the section's main pause, then intervals tighten
      toward the quiet note so the column tapers instead of repeating one value. */
-  .home-hero { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:56px; align-items:start; padding-block:56px 72px; min-height:710px; --hero-gap-tight:16px; --hero-gap-lg:36px; --hero-gap-md:28px; --hero-gap-sm:20px; }
+  .home-hero { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.3fr); gap:clamp(28px, 4vw, 48px); align-items:start; padding-block:36px 18px; --hero-gap-tight:14px; --hero-gap-lg:24px; --hero-gap-md:20px; --hero-gap-sm:14px; }
   .hero-copy { animation:hero-arrive 560ms cubic-bezier(.2,.7,.2,1) both; }
   /* Size the headline to the measure it actually has, not to the viewport.
      10.9cqi keeps "Your AI software engineer." on one line at every column
@@ -261,64 +239,22 @@ const capabilities = [
   .home-hero .hero-actions { margin-top:var(--hero-gap-md); }
   .hero-note { display:flex; align-items:flex-start; gap:8px; margin-top:var(--hero-gap-sm); font:10px 'Geist Mono',monospace; letter-spacing:.02em; }
   .hero-note::before { content:''; flex:none; width:6px; height:6px; margin-top:4px; background:var(--navy); }
-  /* Proof row: ruled strip, matching the compatibility-strip idiom in design.md.
-     Mono label carries the fact, Geist carries the explanation. */
-  .hero-proof { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); margin:var(--hero-gap-lg) 0 0; padding:0; list-style:none; border-top:1px solid var(--line); }
-  .hero-proof-item { display:flex; flex-direction:column; gap:6px; padding:16px 16px 0 0; }
-  .hero-proof-item + .hero-proof-item { padding-left:16px; border-left:1px solid var(--line); }
-  .hero-proof-item:last-child { padding-right:0; }
-  /* The label IS the number (0 / 1 / 4), so it takes display type rather than
-     the 9px mono caption the label idiom uses for words. */
-  .hero-proof-label { font-family:'Instrument Serif',Georgia,serif; font-size:44px; line-height:.9; color:var(--navy); }
-  .hero-proof-detail { font-size:12px; line-height:1.45; color:var(--ink-2); }
-  .work-window { border:1px solid var(--line-2); background:var(--panel-2); padding:3px; box-shadow:5px 5px 0 var(--paper-shadow); transition:transform 220ms ease, box-shadow 220ms ease; animation:hero-arrive 680ms 100ms cubic-bezier(.2,.7,.2,1) both; }
-  .work-window:focus-within { transform:translateY(-2px); box-shadow:7px 7px 0 var(--paper-shadow); }
-  @media (hover: hover) and (pointer: fine) {
-    .work-window:hover { transform:translateY(-2px); box-shadow:7px 7px 0 var(--paper-shadow); }
-  }
-  .window-titlebar { display:flex; justify-content:space-between; align-items:center; gap:10px; min-height:32px; padding:4px 9px; color:var(--paper-title-fg); background:var(--paper-title); font:11px/1 'Geist Mono',monospace; }
-  .window-brand { display:flex; align-items:center; gap:7px; font-weight:600; letter-spacing:.04em; min-width:0; }
-  .window-brand img { image-rendering:pixelated; background:#fff; border:1px solid var(--line-2); padding:1px; }
-  .brand-title { color:var(--paper-title-fg); }
-  .status-indicator { display:inline-flex; align-items:center; gap:5px; padding:2px 6px; background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.22); font-size:8.5px; letter-spacing:.08em; font-weight:500; }
-  .status-dot { width:5px; height:5px; background:var(--ok); box-shadow:0 0 5px var(--ok); animation:approval-pulse 2s ease-in-out infinite; }
-  .window-body { padding:16px; background:var(--card); display:flex; flex-direction:column; gap:12px; }
-  .approval-card { background:var(--panel-2); border:1px solid var(--line-2); padding:12px; display:flex; flex-direction:column; gap:9px; box-shadow:2px 2px 0 var(--paper-shadow); }
-  .card-header { display:flex; align-items:center; justify-content:space-between; font:10px 'Geist Mono',monospace; border-bottom:1px solid var(--line); padding-bottom:7px; }
-  .header-left { display:flex; align-items:center; gap:6px; }
-  .pulse-marker { width:6px; height:6px; background:var(--navy); box-shadow:0 0 6px var(--navy); animation:approval-pulse 2.2s infinite; }
-  .tool-name { color:var(--ink); font-weight:600; letter-spacing:.02em; }
-  .badge-frozen { font-size:8px; padding:1px 5px; background:var(--card); border:1px solid var(--line); color:var(--ink-2); }
-  .harness-badge { color:var(--navy); font-size:9px; }
-  .code-preview { background:var(--card); border:1px solid var(--line); padding:9px 11px; font:11px/1.6 'Geist Mono',monospace; overflow-x:auto; }
-  .code-preview pre { margin:0; }
-  .code-line { display:block; }
-  .c-k { color:var(--navy); font-weight:500; }
-  .c-s { color:var(--ink); }
-  .c-cmt { color:var(--ink-2); font-style:italic; opacity:.7; }
-  .card-actions { display:grid; grid-template-columns:2fr 1fr; gap:8px; margin-top:2px; }
-  .btn-approve { display:flex; align-items:center; justify-content:center; gap:7px; height:34px; padding:0 12px; background:var(--paper-title); color:var(--paper-title-fg); border:1px solid var(--navy); box-shadow:2px 2px 0 var(--paper-shadow); font:11px 'Geist Mono',monospace; font-weight:600; cursor:pointer; transition:transform 120ms ease, background 120ms ease; }
-  .btn-approve:hover { background:var(--navy-2); transform:translateY(-1px); box-shadow:3px 3px 0 var(--paper-shadow); }
-  .btn-approve:active { transform:translateY(1px); box-shadow:1px 1px 0 var(--paper-shadow); }
-  .btn-reject { display:flex; align-items:center; justify-content:center; gap:6px; height:34px; padding:0 12px; background:var(--card); color:var(--ink-2); border:1px solid var(--line-2); box-shadow:2px 2px 0 var(--paper-shadow); font:11px 'Geist Mono',monospace; cursor:pointer; transition:transform 120ms ease, color 120ms ease, border-color 120ms ease; }
-  .btn-reject:hover { color:var(--danger); border-color:var(--danger); transform:translateY(-1px); }
-  .btn-reject:active { transform:translateY(1px); }
-  .action-icon { font-size:10px; font-weight:bold; }
-  .approval-guarantee { display:flex; align-items:center; gap:6px; color:var(--ink-2); font:9px 'Geist Mono',monospace; padding-top:2px; }
-  .lock-icon { color:var(--navy); }
-  .window-caption { text-align:center; color:var(--ink-2); font:10px 'Geist Mono',monospace; letter-spacing:.04em; padding-top:2px; }
-  @media (max-width:540px) {
-    .card-actions { grid-template-columns:1fr; }
+  .hero-showcase { border:1px solid var(--line-2); background:var(--panel-2); padding:4px; box-shadow:6px 6px 0 var(--paper-shadow); transition:transform 220ms ease, box-shadow 220ms ease; animation:hero-arrive 680ms 100ms cubic-bezier(.2,.7,.2,1) both; margin:0; }
+  .hero-showcase:hover, .hero-showcase:focus-within { transform:translateY(-2px); box-shadow:8px 8px 0 var(--paper-shadow); }
+  .hero-showcase-img { display:block; width:100%; height:auto; image-rendering:pixelated; border:1px solid var(--line-2); }
+  @media (max-width:900px) {
+    .home-hero { grid-template-columns:1fr; }
+    .hero-showcase { width:100%; }
   }
   @keyframes approval-pulse { 0%, 100% { opacity:1; } 50% { opacity:.58; } }
   @keyframes hero-arrive { from { opacity:0; translate:0 14px; } to { opacity:1; translate:0 0; } }
   @media (prefers-reduced-motion: reduce) {
-    .hero-copy, .work-window, .status-dot, .pulse-marker { animation:none; }
-    .work-window, .btn-approve, .btn-reject { transition:none; }
+    .hero-copy, .hero-showcase { animation:none; }
+    .hero-showcase { transition:none; }
     .step-dither-screen { transition:none; }
     .step-card:hover .step-dither-screen { transform:none; }
   }
-  .compatibility { display:flex; flex-wrap:wrap; align-items:center; gap:16px 28px; padding-block:23px; border-top:1px solid var(--line-2); border-bottom:1px solid var(--line-2); font:11px 'Geist Mono',monospace; color:var(--ink); }
+  .compatibility { display:flex; flex-wrap:wrap; align-items:center; gap:14px 24px; padding-block:14px; border-top:1px solid var(--line-2); border-bottom:1px solid var(--line-2); font:11px 'Geist Mono',monospace; color:var(--ink); }
   .compatibility>span:first-child { font-size:9px; letter-spacing:.15em; color:var(--ink-2); margin-right:auto; }
   .compatibility-end { margin-left:auto; color:var(--ink-2); font-size:9px; }
   .harness-section { padding-top:85px; text-align:center; }
@@ -422,8 +358,8 @@ const capabilities = [
   .closing h2 { margin:12px 0 8px; }
   .closing p:last-child { margin:0; }
   .closing-actions { flex:none; margin:0; }
-  @media(max-width:980px) { .channels-grid { grid-template-columns:repeat(2,1fr); } .home-hero { gap:30px; } .work-window { align-self:start; } .window-body { padding:14px; } .task-paper { padding:12px; } .compatibility-end { margin-left:0; } }
-  @media(max-width:760px) { .home-hero { grid-template-columns:minmax(0,1fr); min-height:0; padding-block:48px 60px; } .work-window { width:100%; } .home-section { padding-top:75px; } .section-head { align-items:start; flex-direction:column; gap:10px; } .section-copy { grid-template-columns:1fr; gap:18px; } .capability-grid { grid-template-columns:repeat(2,1fr); } .steps-grid { grid-template-columns:1fr; } .closing { flex-direction:column; align-items:start; margin-top:75px; } }
+  @media(max-width:980px) { .channels-grid { grid-template-columns:repeat(2,1fr); } .home-hero { gap:28px; } .compatibility-end { margin-left:0; } }
+  @media(max-width:760px) { .home-hero { grid-template-columns:minmax(0,1fr); min-height:0; padding-block:28px 32px; } .home-section { padding-top:75px; } .section-head { align-items:start; flex-direction:column; gap:10px; } .section-copy { grid-template-columns:1fr; gap:18px; } .capability-grid { grid-template-columns:repeat(2,1fr); } .steps-grid { grid-template-columns:1fr; } .closing { flex-direction:column; align-items:start; margin-top:75px; } }
   @media(max-width:560px) { .hero-proof { grid-template-columns:minmax(0,1fr); } .hero-proof-item { flex-direction:row; align-items:baseline; gap:12px; padding:10px 0 0; border-left:0; } .hero-proof-item + .hero-proof-item { padding-left:0; border-top:1px solid var(--line); } .hero-proof-label { flex:none; min-width:34px; font-size:34px; } }
   @media(max-width:500px) { .channels-grid { grid-template-columns:1fr; } .capability-grid { grid-template-columns:1fr; } .capability-card { min-height:0; } .hero-actions .button { width:100%; } .closing { padding:22px; } .closing-actions { width:100%; } .closing-actions .button { width:100%; } }
   /* Stacked on narrow screens: each comparison point becomes a labelled block
