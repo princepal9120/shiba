@@ -42,7 +42,7 @@ Record actual failures and date. A dry run is not a live deployment. Review pack
 
 ## Account-owned integration acceptance (not executed by these docs)
 
-After implementing the missing boundaries, use an isolated test installation and a repository you own:
+For account-owned integration acceptance, use an isolated test installation and a repository you own:
 
 1. Verify unauthorized browser, run API, child-agent, and service requests are denied. Verify authorized browser WebSockets and server-side provider requests work.
 2. Submit a harmless README task without publishing; verify no container starts before approval. Reject it and verify no work occurs.
@@ -50,7 +50,7 @@ After implementing the missing boundaries, use an isolated test installation and
 4. Compare actual changes to the transcript, including new files, diff, exit status, truncation, and redaction.
 5. Verify no-change and controlled failure tasks are reported honestly.
 6. Cancel during execution, verify the process stops, and confirm late output cannot revive a cancelled record.
-7. Exercise the three-run limit, reconnect, retained history, and clear-history partial failures.
+7. Exercise the five-run application concurrency limit (`MAX_CONCURRENT_RUNS = 5`), reconnect, retained history, and clear-history partial failures.
 8. On a dedicated test repository, explicitly approve publishing and verify the intended branch and PR; do not use production repositories for this test.
 9. Check keyboard operation, narrow/desktop layouts, docs navigation/search, and missing-path 404 behavior.
 
