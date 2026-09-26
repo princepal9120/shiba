@@ -1,22 +1,18 @@
-import { describe, expect, it } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import assert from "node:assert";
 
-// Local test runner when vitest node_modules is unavailable
-const runnerIt = typeof it !== "undefined" ? it : (name: string, fn: () => void) => {
+// Local test runner fallback
+const runnerIt = (name: string, fn: () => void) => {
   fn();
+  console.log("PASS:", name);
 };
-const runnerDescribe = typeof describe !== "undefined" ? describe : (name: string, fn: () => void) => {
+const runnerDescribe = (name: string, fn: () => void) => {
   fn();
 };
 const runnerExpect = (actual: any) => ({
   toContain: (expected: string) => {
-    if (typeof expect !== "undefined") {
-      expect(actual).toContain(expected);
-    } else {
-      assert.ok(typeof actual === "string" && actual.includes(expected));
-    }
+    assert.ok(typeof actual === "string" && actual.includes(expected), `Expected ${actual} to contain ${expected}`);
   },
 });
 
