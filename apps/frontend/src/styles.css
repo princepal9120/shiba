@@ -23,7 +23,9 @@
   --ok: #15803d;
   --pending: #f99c00;
   --running: #0000a8;
-  --radius: 10px;
+  --radius: 0;
+  --paper-shadow: #2527261c;
+  --paper-dot: #24272919;
   --space: 8px;
   --gutter: 16px;
   --focus: 2px solid var(--accent);
