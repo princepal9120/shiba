@@ -117,6 +117,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
   const [pairingStep, setPairingStep] = useState<1 | 2>(1);
   const [newAddress, setNewAddress] = useState("");
   const [newLabel, setNewLabel] = useState("");
+  const [newAgent, setNewAgent] = useState("");
   const [registerError, setRegisterError] = useState<string | null>(null);
   const [registerNotice, setRegisterNotice] = useState<string | null>(null);
 
@@ -190,14 +191,23 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
     setRegisterNotice(null);
     try {
       const label = newLabel.trim();
-      await apiJson<{ mailbox?: InboxMailbox }>("/api/mailboxes", {
+      const agent = newAgent.trim();
+      if (agent !== "" && (agent.length > 128 || /\s/.test(agent))) {
+        setRegisterError("Agent principal must match the token name (no whitespace, max 128 characters).");
+        return;
+      }
+      const result = await apiJson<{ mailbox?: InboxMailbox }>("/api/mailboxes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(label === "" ? { address } : { address, label }),
+        body: JSON.stringify({ address, ...(label === "" ? {} : { label }), agent: agent || null }),
       });
-      setRegisterNotice(`Successfully paired and registered ${address}.`);
+      const assigned = result.mailbox?.agent;
+      setRegisterNotice(assigned
+        ? `Registered ${address} for agent ${assigned}. Configure Email Routing and test delivery before using it.`
+        : `Registered ${address} for dashboard use. Configure Email Routing and test delivery before using it.`);
       setNewAddress("");
       setNewLabel("");
+      setNewAgent("");
       setPairingStep(1);
       setSettingsOpen(false);
       await loadMailboxes();
@@ -206,7 +216,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
     } finally {
       setActionBusy(null);
     }
-  }, [newAddress, newLabel, loadMailboxes]);
+  }, [newAddress, newLabel, newAgent, loadMailboxes]);
 
   const toggleExpanded = useCallback(
     async (email: InboxEmail) => {
@@ -424,7 +434,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
                 Active Mailbox Lines
               </h5>
               {mailboxes === null || mailboxes.length === 0 ? (
-                <p className="text-[11px] text-[#6a6f63] italic">No mailboxes currently paired.</p>
+                <p className="text-[11px] text-[#6a6f63] italic">No mailboxes registered yet.</p>
               ) : (
                 <div className="flex flex-col gap-1.5">
                   {mailboxes.map((mb) => (
@@ -442,7 +452,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
                         ) : null}
                       </div>
                       <span className="text-[10px] font-mono text-[#6a6f63] shrink-0">
-                        paired {formatTimeAgo(mb.created_at)}
+                        {mb.agent ? `agent: ${mb.agent}` : "dashboard only"} · registered {formatTimeAgo(mb.created_at)}
                       </span>
                     </div>
                   ))}
@@ -465,7 +475,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
               {pairingStep === 1 ? (
                 <div className="flex flex-col gap-2">
                   <p className="text-[11px] text-[#222320]">
-                    Specify the email address for this agent mailbox. Incoming emails sent to this address will be stored securely in the Mailbox Durable Object.
+                    Register the address for this mailbox. Incoming mail is stored only after Cloudflare Email Routing is configured to deliver it to this Worker.
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div>
@@ -484,7 +494,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
                     </div>
                     <div>
                       <label className="text-[10px] font-mono text-[#6a6f63] block mb-1">
-                        Label / Agent Name (optional)
+                        Display label (optional)
                       </label>
                       <input
                         type="text"
@@ -494,6 +504,21 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
                         aria-label="Mailbox label"
                         className="w-full text-[11px] bg-[#fffef8] border border-[#e0ded5] rounded-none px-2.5 py-1.5 text-[#222320] placeholder:text-[#6a6f63] focus:outline-none focus:border-[#0000a8]"
                       />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="text-[10px] font-mono text-[#6a6f63] block mb-1">
+                        Cloud agent token principal (optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={newAgent}
+                        onChange={(e) => setNewAgent(e.target.value)}
+                        maxLength={128}
+                        placeholder="e.g. claude-code (from mint-token --agent)"
+                        aria-label="Cloud agent token principal"
+                        className="w-full text-[11px] font-mono bg-[#fffef8] border border-[#e0ded5] rounded-none px-2.5 py-1.5 text-[#222320] placeholder:text-[#6a6f63] focus:outline-none focus:border-[#0000a8]"
+                      />
+                      <p className="text-[10px] text-[#6a6f63] mt-1">Leave blank for dashboard-only mail. Re-enter an existing address to assign or change its agent.</p>
                     </div>
                   </div>
 
@@ -529,6 +554,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
                       <span className="font-mono text-[#0000a8]">{newAddress}</span>
                       {newLabel ? <span className="text-[#6a6f63]">({newLabel})</span> : null}
                     </div>
+                    <div>Cloud agent: <span className="font-mono">{newAgent.trim() || "dashboard only"}</span></div>
                     <div className="text-[10px] text-[#6a6f63] space-y-1 mt-1 border-t border-[#e0ded5] pt-1.5">
                       <p>✓ <strong>Approval-Gated Outbound:</strong> Every draft created by agents requires explicit human sign-off prior to external delivery.</p>
                       <p>✓ <strong>Zero Sandbox Secrets:</strong> Sandboxes cannot access provider credentials or SMTP servers directly.</p>
@@ -556,7 +582,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
                       disabled={actionBusy === "register"}
                       onClick={() => void registerMailbox()}
                     >
-                      {actionBusy === "register" ? "Pairing & Registering…" : "Confirm & Pair Mailbox"}
+                      {actionBusy === "register" ? "Registering…" : "Register Mailbox"}
                     </button>
                   </div>
                 </div>
@@ -571,6 +597,16 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
           </p>
         ) : null}
       </section>
+
+      <details open={mailboxes?.length === 0} className="border border-[#0000a8]/25 bg-[#0000a8]/5 p-3 text-xs text-[#222320]">
+        <summary className="cursor-pointer font-semibold">First mailbox: from setup to a received message</summary>
+        <ol className="mt-2 ml-4 list-decimal space-y-1.5 text-[#6a6f63]">
+          <li><button type="button" onClick={() => setSettingsOpen(true)} className="text-[#0000a8] hover:underline">Register a mailbox</button> and assign the exact MCP token principal.</li>
+          <li><a href="/docs/api/#email-api" className="text-[#0000a8] hover:underline">Configure Cloudflare Email Routing</a> for that address to this Worker. Registration does not configure routing.</li>
+          <li><a href="/?tab=agents" className="text-[#0000a8] hover:underline">Mint and connect an agent token</a> with <code>email:read</code> (and draft/send scopes only if needed).</li>
+          <li>Send a test email from another address; confirm it appears here and the agent&apos;s <code>list_emails</code> can see it.</li>
+        </ol>
+      </details>
 
       {/* Filter and Search Bar */}
       <section aria-label="Mail search and filters" className="flex flex-col gap-2">

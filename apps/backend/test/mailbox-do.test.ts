@@ -135,6 +135,14 @@ describe("stub helpers", () => {
 });
 
 describe("mailbox registry (directory stub)", () => {
+  it("rejects invalid cloud-agent assignments through the HTTP registry route", async () => {
+    const h = makeHarness();
+    expect((await send(h.directory, "POST", "/mailboxes", {
+      address: "agent@shiba.dev", agent: "two words",
+    })).status).toBe(400);
+    expect((await asJson(await get(h.directory, "/mailboxes"))).mailboxes).toEqual([]);
+  });
+
   it("registers, lists, and answers isRegistered", async () => {
     const h = makeHarness();
     const created = await send(h.directory, "POST", "/mailboxes", {

@@ -22,7 +22,7 @@ function boundHead(text: string, maxChars: number): string {
 }
 
 /** Workers AI id the orchestrator plans and distills with. */
-export const DEFAULT_ORCHESTRATOR_MODEL = "@cf/meta/llama-3.1-8b-instruct";
+export const DEFAULT_ORCHESTRATOR_MODEL = "@cf/zai-org/glm-4.7-flash";
 
 /** Spec cap: at most 10 durable facts per distilled session. */
 export const MAX_DISTILL_FACTS = 10;

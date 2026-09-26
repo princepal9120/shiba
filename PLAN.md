@@ -54,6 +54,8 @@
 
 ### 2.0 Status as of rev 8 (2026-09-26)
 
+**Mailbox-scoped cloud-agent pairing (local, 2026-09-26):** the Inbox can assign a mailbox to the exact `/mcp` token principal. All thirteen email tools now restrict listing, direct address access, and ID-based probes to that principal's assigned mailboxes; unassigned mailboxes remain dashboard-only. Sends and deletes still queue human approval. Unit and Worker checks cover this; a live cloud-agent mailbox round trip remains unverified until an account-owned deployment.
+
 **Rev 8 (PR #17):** unified chat lane — Telegram webhook + Discord interactions share `chat-lane.ts` (one orchestrator conversation per chat/channel, approval cards are pointers, server-side approver allowlists) · GitHub Projects v2 board sync on PR publish (best-effort) · model connections + purpose policy + frozen `ApprovedRoute` (approve exactly this route; revalidated at dispatch) · iPhone `/api/trigger` lane (PR #13) · marketing site overhaul. ce-code-review fixes landed: full task text posts in-thread (no blind approval), route shown on the card, outbound chat APIs timeout-bounded, board sync is non-blocking, legacy `harness` approvals still dispatch correctly, dedupe sweep chunked past the 128-key limit, waitlist returns uniform 200.
 
 Baseline: **1178 tests passing across 74 files**, typecheck and lint clean.

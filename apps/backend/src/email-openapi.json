@@ -57,7 +57,8 @@
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "description": "Exact MCP token principal assigned to this mailbox; null means dashboard-only."
           },
           "created_at": {
             "type": "integer"
@@ -367,7 +368,11 @@
                     "type": "string"
                   },
                   "agent": {
-                    "type": "string"
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Optional MCP token principal. Omit to keep an existing assignment; set null to unassign for dashboard-only mail."
                   }
                 }
               }

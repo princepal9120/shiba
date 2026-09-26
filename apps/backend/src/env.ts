@@ -9,6 +9,12 @@ import type { Sandbox } from "./sandbox.js";
 
 export interface Env {
   AI: Ai;
+  /**
+   * Dynamic Worker Loader for Code Mode (`worker_loaders` in wrangler.jsonc)
+   * — the isolate sandbox `run_code` executes generated JavaScript in.
+   * Optional so local/typecheck without the binding degrades to no tool.
+   */
+  LOADER?: WorkerLoader;
   CodingOrchestrator: DurableObjectNamespace<CodingOrchestrator>;
   OpenCodeAgent: DurableObjectNamespace<OpenCodeAgent>;
   Sandbox: DurableObjectNamespace<Sandbox>;

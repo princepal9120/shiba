@@ -4,6 +4,7 @@ export interface OnboardingModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSelectStarterTask?: (repoUrl: string, task: string, harness: string) => void;
+  onOpenInbox?: () => void;
 }
 
 export interface SetupStep {
@@ -160,6 +161,7 @@ export function OnboardingModal({
   isOpen,
   onClose,
   onSelectStarterTask,
+  onOpenInbox,
 }: OnboardingModalProps): React.JSX.Element | null {
   const [completedSteps, setCompletedSteps] = useState<string[]>(() => {
     try {
@@ -217,12 +219,8 @@ export function OnboardingModal({
   const progressPercent = Math.round((completedCount / totalSteps) * 100);
   const isAllComplete = completedCount === totalSteps;
   const resetChecklist = () => {
-    setCompletedSteps(["workers-paid"]);
+    setCompletedSteps([]);
     setExpandedStep("workers-paid");
-  };
-
-  const markAllComplete = () => {
-    setCompletedSteps(ONBOARDING_STEPS.map((s) => s.id));
   };
 
   const filteredSteps = ONBOARDING_STEPS.filter((step) => {
@@ -268,11 +266,26 @@ export function OnboardingModal({
           </button>
         </div>
 
+        <div className="mt-3 border border-[#0000a8]/25 bg-[#0000a8]/5 p-3 text-xs text-[#222320] shrink-0">
+          <div className="font-semibold">Connect a cloud agent mailbox</div>
+          <p className="mt-1 text-[#6a6f63]">Prefer email first? Register an address, route it in Cloudflare, connect a scoped MCP token, then receive a test message. Registration alone does not prove delivery.</p>
+          <div className="mt-2 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => { onOpenInbox?.(); onClose(); }}
+              className="text-[#0000a8] font-semibold hover:underline"
+            >
+              Open Inbox setup →
+            </button>
+            <a href="/docs/mcp/#pair-a-cloud-agent-with-its-mailbox" className="text-[#0000a8] hover:underline">Pairing guide</a>
+          </div>
+        </div>
+
         {/* Progress Tracker with Endowed Progress */}
         <div className="py-3.5 border-b border-[#e0ded5]/70 shrink-0">
           <div className="flex items-center justify-between text-xs mb-1.5">
             <span className="font-semibold text-[#222320] flex items-center gap-2">
-              <span>Setup Progress</span>
+              <span>Setup progress (reported + detected)</span>
               <span className="text-[11px] font-mono text-[#0000a8] font-normal tabular-nums">
                 {completedCount} of {totalSteps} steps completed
               </span>
@@ -317,15 +330,6 @@ export function OnboardingModal({
             </div>
 
             <div className="flex items-center gap-2 text-[11px] font-mono">
-              {!isAllComplete ? (
-                <button
-                  type="button"
-                  onClick={markAllComplete}
-                  className="text-[#6a6f63] hover:text-[#1c1cc8] transition-colors"
-                >
-                  Mark all done
-                </button>
-              ) : null}
               {completedCount > 1 ? (
                 <button
                   type="button"
@@ -339,7 +343,7 @@ export function OnboardingModal({
           </div>
           {isAllComplete ? (
             <div className="mt-3 text-xs bg-[#0000a8]/10 border border-[#0000a8]/40 text-[#1c1cc8] px-3 py-2 rounded-none flex items-center justify-between">
-              <span>🎉 <strong>All systems configured!</strong> You are ready to run tasks safely.</span>
+              <span><strong>Checklist reviewed.</strong> Confirm live readiness before using real repositories.</span>
               <button
                 type="button"
                 onClick={() => {
@@ -525,4 +529,3 @@ export function OnboardingModal({
     </div>
   );
 }
-

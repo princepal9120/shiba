@@ -928,6 +928,15 @@ describe("dashboard approval routes", () => {
 });
 
 describe("InboxTab + MemoryTab SSR", () => {
+  it("guides first-time users to register, route, and verify mail without claiming delivery", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(InboxTab, { onOpenApprovals: () => {} }),
+    );
+    expect(html).toContain("Register a mailbox");
+    expect(html).toContain("Configure Cloudflare Email Routing");
+    expect(html).toContain("Send a test email");
+    expect(html).not.toContain("No mailboxes currently paired.");
+  });
   it("renders the loading state without a live backend", () => {
     const inbox = renderToStaticMarkup(
       React.createElement(InboxTab, { onOpenApprovals: () => {} }),

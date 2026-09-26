@@ -7,8 +7,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { ApprovalCard } from "../../frontend/src/components/ApprovalCard";
-import { ArchitectureView } from "../../frontend/src/components/ArchitectureView";
 import { OnboardingModal } from "../../frontend/src/components/OnboardingModal";
+import { AgentsView } from "../../frontend/src/components/AgentsView";
 import {
   SessionsSidebar,
   type SessionItem,
@@ -94,6 +94,19 @@ describe("dashboard components SSR (T14 sweep)", () => {
     // workers-paid is expanded by default but not done until /api/setup/status proves it.
     expect(html).toContain("Mark as Completed ✓");
     expect(html).toContain("Mark Cloudflare AI Gateway &amp; Stored BYOK Keys as complete");
+    expect(html).toContain("Connect a cloud agent mailbox");
+    expect(html).toContain("Open Inbox setup");
+    expect(html).not.toContain("Mark all done");
+    expect(html).not.toContain("All systems configured!");
+  });
+
+  it("AgentsView shows a usable, scoped token command and no false connection claim", () => {
+    const html = renderToStaticMarkup(React.createElement(AgentsView));
+    expect(html).toContain("--agent scout --scopes email:read");
+    expect(html).toContain("Minting without --write only prints a token");
+    expect(html).toContain("Open Inbox setup");
+    expect(html).not.toContain("--principal=agent-1");
+    expect(html).not.toContain("MCP 1.30.0 Active");
   });
 
   it("OnboardingModal renders nothing while closed", () => {
@@ -150,11 +163,7 @@ describe("dashboard components SSR (T14 sweep)", () => {
     expect(html).toContain("send_email");
   });
 
-  it("ArchitectureView renders the static architecture map", () => {
-    const html = renderToStaticMarkup(React.createElement(ArchitectureView));
-    expect(html.length).toBeGreaterThan(0);
-  });
-  it("AppNavRail renders all promoted views including Diff, Approvals, Mailbox, and Memory with badges", () => {
+  it("AppNavRail renders promoted views without the retired Architecture entry", () => {
     const html = renderToStaticMarkup(
       React.createElement(AppNavRail, {
         activeView: "diff",
@@ -171,6 +180,7 @@ describe("dashboard components SSR (T14 sweep)", () => {
     expect(html).toContain("Approvals");
     expect(html).toContain("Mailbox");
     expect(html).toContain("Memory");
+    expect(html).not.toContain("Architecture");
     expect(html).toContain("3"); // Pending approval badge
     expect(html).toContain("aria-current");
   });

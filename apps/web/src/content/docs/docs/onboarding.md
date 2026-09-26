@@ -3,7 +3,11 @@ title: Onboarding and setup
 description: Prepare a local checkout and understand what has—and has not—been verified for live use.
 ---
 
-This guide describes the current repository setup, not a completed cloud acceptance run. The latest dated record in `VERIFICATION.md` is 2026-09-24: local checks pass, but cloud deployment is pending. On 2026-09-19, OpenCode was exercised end to end with local `wrangler dev` and OrbStack; the model request returned 401, so inference was not verified. No cloud live run is recorded. Treat all harnesses and deployment instructions below as implementation/setup guidance, not proof of production readiness. See [Readiness](/docs/readiness/).
+This guide describes the current repository setup, not a completed cloud acceptance run. See the latest dated record in `VERIFICATION.md`: local checks pass, but cloud deployment is pending. On 2026-09-19, OpenCode was exercised with local `wrangler dev` and OrbStack; the model request returned 401, so inference was not verified. No cloud live run is recorded. Treat all harnesses and deployment instructions below as implementation/setup guidance, not proof of production readiness. See [Readiness](/docs/readiness/).
+
+## First value: receive mail with a cloud agent
+
+If email is your immediate goal, choose **Setup Guide → Open Inbox setup** instead of completing the coding-run checklist first. Register an address in Inbox settings and assign the exact principal that will be used by your `/mcp` token. Registration only creates a Mailbox record: you must separately configure Cloudflare Email Routing to send that address to the deployed Worker. In **Agents & MCP Gateway**, use the shown `mint-token.mjs` command with `email:read` and the deployed KV namespace ID, then connect the resulting token to your MCP client. Never put the token in an email or a public log. The first successful outcome is a real test message visible in the Inbox and through the agent's `list_emails` tool. A registered address, stored token, or local build alone does not prove that outcome. See the [MCP pairing guide](/docs/mcp/#pair-a-cloud-agent-with-its-mailbox) and [email API guide](/docs/api/#email-api).
 
 ## Local prerequisites
 

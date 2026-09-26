@@ -263,7 +263,7 @@ function stubAi(answer: unknown, fail = false): RunWhenAi {
   return { run: async () => { if (fail) throw new Error("model exploded"); return answer; } };
 }
 
-const MODEL = "@cf/meta/llama-3.1-8b-instruct";
+const MODEL = "@cf/zai-org/glm-4.7-flash";
 
 describe("run_when gate (T19)", () => {
   it("runs when the condition clearly holds", async () => {
