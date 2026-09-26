@@ -10,6 +10,39 @@
 	border-bottom: 1px solid var(--line);
 }
 
+.blog-hero-media {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(140px, 260px);
+	gap: clamp(12px, 2.5vw, 28px);
+	align-items: end;
+	margin: clamp(20px, 3vw, 36px) 0 0;
+}
+
+.blog-hero-window,
+.blog-hero-side {
+	display: block;
+	width: 100%;
+	height: auto;
+	border: 1px solid var(--line-2, var(--line));
+	image-rendering: pixelated;
+}
+
+.blog-hero-side {
+	max-width: 260px;
+	justify-self: end;
+}
+
+@media (max-width: 640px) {
+	.blog-hero-media {
+		grid-template-columns: 1fr;
+	}
+
+	.blog-hero-side {
+		justify-self: start;
+		max-width: 200px;
+	}
+}
+
 .blog-lede {
 	font-size: 15px;
 	line-height: 1.65;
