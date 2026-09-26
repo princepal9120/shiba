@@ -34,6 +34,7 @@ Subscription credentials (such as Claude or ChatGPT consumer subscriptions) are 
 | --- | --- |
 | `GITHUB_TOKEN` | Worker-side GitHub access for private clone and optional PR publishing; public diff-only runs can omit it |
 | `GITHUB_WEBHOOK_SECRET` | HMAC verification for GitHub webhook automations |
+| `GITHUB_PROJECT_TOKEN`, `GITHUB_PROJECT_NUMBER` | Optional Projects v2 board sync — a PAT with `project` scope and the board number; published PRs are added to the board and moved to "In review" |
 | `AI_GATEWAY_TOKEN` | Optional gateway authorization credential |
 | `DEVIN_API_KEY` | Required for Devin API access |
 | `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, `SLACK_APPROVERS` | Optional Slack integration and approver allowlist |
