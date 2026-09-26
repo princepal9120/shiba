@@ -1,46 +1,50 @@
 ---
 title: Configuration
-description: Current runtime variables, optional secrets, and model boundaries.
+description: Current runtime defaults, optional secrets, and what harness verification means.
 ---
 
-Non-secret defaults live in apps/backend/wrangler.jsonc. Local overrides and secrets may be placed in the ignored .dev.vars file. Production secrets are set through Wrangler; .dev.vars is not uploaded as production configuration.
+Non-secret defaults are in `apps/backend/wrangler.jsonc` and `alchemy.run.ts`. For local Wrangler runs, copy `apps/backend/.dev.vars.example` to the ignored `apps/backend/.dev.vars`. The Alchemy bootstrap stores deployment configuration/secrets in root `.env` (gitignored, mode 0600); inspect `scripts/setup.mjs` and `alchemy.run.ts`. Neither file belongs in version control. `.dev.vars` is not uploaded as production configuration.
 
-| Setting | Default | Purpose |
+| Setting | Default / status | Purpose |
 | --- | --- | --- |
-| GATEWAY_ID | default | Account-owned AI Gateway selected by the AI binding |
-| ORCHESTRATOR_MODEL | @cf/meta/llama-3.1-8b-instruct | Parent planning via Workers AI |
-| CODING_MODEL | google/gemini-3.5-flash-lite | OpenCode coding model; validated against the selected harness |
-| CLAUDE_CODE_MODEL | anthropic/claude-sonnet-4-6 | Coding model when the claude-code harness is selected |
-| CODEX_MODEL | openai/gpt-5.3-codex | Coding model when the codex harness is selected |
-| RUNTIME | sandbox | Default adapter; computer refuses execution |
-| AGENT_HARNESS | opencode | Default harness; a run may override it from the dashboard |
+| `GATEWAY_ID` | `default` | Account-owned AI Gateway selected through the Workers AI binding |
+| `ORCHESTRATOR_MODEL` | `@cf/meta/llama-3.1-8b-instruct` | Parent planning via Workers AI |
+| `CODING_MODEL` | `google/gemini-3.5-flash-lite` | OpenCode default coding model |
+| `CLAUDE_CODE_MODEL` | `anthropic/claude-sonnet-4-6` | Claude Code default model |
+| `CODEX_MODEL` | `openai/gpt-5.3-codex` | Codex default model |
+| `DEVIN_MODEL` | `devin/swe-2` | Devin default model |
+| `AGENT_HARNESS` | `opencode` | Deployment fallback; a task can select a harness explicitly |
+| `RUNTIME` | `sandbox` | Runtime adapter; current default is Cloudflare Sandbox |
+| `INSTANCE_TYPE` | `standard-1` | Configured Cloudflare container size |
+| `REQUIRE_ACCESS` | Wrangler default unset; live Alchemy stages set `1` | Require Access identity at the Worker boundary |
 
-Provider traffic is intercepted at Sandbox egress. There is no public `/api/provider` callback. Keep provider keys in AI Gateway BYOK; they never enter the container.
+Model identifiers are defaults, not availability guarantees. Choose a currently available model for your account. Harness selection is implemented in `apps/backend/src/harness/` and has unit coverage; local OpenCode execution and successful model inference are separate claims (see dated [verification](/docs/readiness/)).
 
-Select a currently available model in your account. The checked-in default is not an availability guarantee. The assistant model used to edit this repository is independent of these application settings; an anonymous model name is not a usable endpoint.
+## Harnesses and credentials
 
-### Harnesses and subscription credentials
+The current source registry and Dockerfile include four harnesses: `opencode`, `claude-code`, `codex`, and `devin`. Their selection/configuration/egress paths are unit-tested. The dated `VERIFICATION.md` records OpenCode as the only harness exercised in the local end-to-end container run; that run's provider request returned 401. It records no cloud end-to-end run and no successful inference. Do not present unit tests or image binary checks as live harness acceptance.
 
-`opencode`, `claude-code`, and `codex` are supported; each run may pick a different provider model (`google/*`, `anthropic/*`, `openai/*`) validated against the harness. Subscription credentials are deliberately not supported: Claude Pro/Max OAuth tokens and ChatGPT Plus/Pro credentials may not be routed through a third-party service on a user's behalf. The supported path is a provider **API key** stored as BYOK on your own AI Gateway — the container receives only a dummy key and real credentials are injected at egress. Cursor and Devin have no published headless CLI with a compatible credential model, so no harness exists for them.
+OpenCode, Claude Code, and Codex provider traffic uses the account-owned AI Gateway path; configure provider credentials there. `AI_GATEWAY_TOKEN` is an optional Worker secret for gateway authentication. Devin is different: its API key is a Worker-side `DEVIN_API_KEY` secret, injected by the egress proxy for Devin hosts and not stored in the container. The dummy container key is not a real credential. Keep keys out of repository files, logs, and task text.
+
+Subscription credentials (such as Claude or ChatGPT consumer subscriptions) are not the configured provider-key path. Use supported API credentials and check the provider and Cloudflare's current terms/configuration. The assistant/model used to edit this repository is independent of these application settings.
 
 ## Optional secrets
 
 | Name | Purpose |
 | --- | --- |
-| GITHUB_TOKEN | Worker-side PR publishing, not private clone access |
-| GITHUB_WEBHOOK_SECRET | HMAC verification for acknowledgment-only webhooks |
+| `GITHUB_TOKEN` | Worker-side GitHub access for private clone and optional PR publishing; public diff-only runs can omit it |
+| `GITHUB_WEBHOOK_SECRET` | HMAC verification for GitHub webhook automations |
+| `AI_GATEWAY_TOKEN` | Optional gateway authorization credential |
+| `DEVIN_API_KEY` | Required for Devin API access |
+| `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, `SLACK_APPROVERS` | Optional Slack integration and approver allowlist |
+| `SLACK_CHANNEL_REPOS` | Optional channel-to-repository mapping |
+| `TYPESAFE_API_KEY` | Optional TypeSafe integration |
 
-~~~sh
+Local example:
+
+```sh
 cp apps/backend/.dev.vars.example apps/backend/.dev.vars
 # Edit locally; never commit secrets.
-~~~
+```
 
-After resolving [readiness blockers](/docs/readiness/), production operators may configure:
-
-~~~sh
-npx wrangler secret put GITHUB_TOKEN --config apps/backend/wrangler.jsonc
-npx wrangler secret put GITHUB_WEBHOOK_SECRET --config apps/backend/wrangler.jsonc
-~~~
-
-These commands modify your Cloudflare account. They are not local validation steps. Keep actual provider keys in the supported gateway credential store, never in container configuration. See [Deployment](/docs/deployment/#ai-gateway-setup).
-
+For the Alchemy deployment path, use `pnpm run bootstrap` to collect secrets in `.env`. Do not use `wrangler secret put` as though it configures the Alchemy deployment: its source of truth is `.env`. See [Deployment](/docs/deployment/).
