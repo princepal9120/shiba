@@ -868,6 +868,17 @@ describe("InboxTab + MemoryTab SSR", () => {
     const memory = renderToStaticMarkup(React.createElement(MemoryTab));
     expect(memory).toContain("Loading memory");
   });
+
+  it("renders the enhanced activity summary bar and approval boundary indicators in SSR", () => {
+    const inbox = renderToStaticMarkup(
+      React.createElement(InboxTab, { onOpenApprovals: () => {} }),
+    );
+    expect(inbox).toContain("Mailbox activity summary");
+    expect(inbox).toContain("Approval-Gated Send");
+    expect(inbox).toContain("Mailbox Settings");
+    expect(inbox).toContain("All Mail");
+    expect(inbox).toContain("Search mail");
+  });
 });
 
 describe("replyAddress", () => {
@@ -893,3 +904,4 @@ describe("replyMailbox", () => {
     expect(replyMailbox(null, "")).toBe("");
   });
 });
+

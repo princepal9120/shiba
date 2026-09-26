@@ -5,7 +5,7 @@
  * Mailbox Durable Objects; "Send for approval" queues an approval rather
  * than transmitting anything.
  */
-import { useCallback, useEffect, useRef, useState, type JSX } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from "react";
 import type {
   InboxAttachment,
   InboxDraft,
@@ -16,9 +16,11 @@ import type {
 import { formatTimeAgo } from "../ui-helpers";
 
 const GHOST_BUTTON =
-  "text-[11px] bg-transparent hover:bg-[#fffef8] border border-[#e0ded5] hover:border-[#d3d2c8] text-[#6a6f63] hover:text-[#222320] font-medium py-1 px-2.5 touch:min-h-11 rounded-md transition-colors";
+  "text-[11px] bg-transparent hover:bg-[#fffef8] border border-[#e0ded5] hover:border-[#d3d2c8] text-[#6a6f63] hover:text-[#222320] font-medium py-1.5 px-3 touch:min-h-11 rounded-lg transition-colors inline-flex items-center justify-center gap-1.5";
 const ACCENT_BUTTON =
-  "text-[11px] bg-[#0000a8]/10 hover:bg-[#0000a8]/15 border border-[#0000a8]/15 text-[#1c1cc8] font-medium py-1 px-2.5 touch:min-h-11 rounded-md transition-colors";
+  "text-[11px] bg-[#0000a8] hover:bg-[#1c1cc8] text-[#fffef8] font-medium py-1.5 px-3 touch:min-h-11 rounded-lg transition-colors shadow-xs inline-flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed";
+const SECONDARY_BUTTON =
+  "text-[11px] bg-[#0000a8]/10 hover:bg-[#0000a8]/15 border border-[#0000a8]/20 text-[#1c1cc8] font-medium py-1.5 px-3 touch:min-h-11 rounded-lg transition-colors inline-flex items-center justify-center gap-1.5 disabled:opacity-50";
 
 async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, init);
@@ -29,11 +31,11 @@ async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
   return body;
 }
 
-/** Email statuses aren't run statuses — map them onto the same chip palette. */
+/** Email statuses mapped to the warm dashboard palette. */
 function emailChipClass(status: string): string {
   switch (status) {
     case "unread":
-      return "text-[#0000a8] border-[#0000a8]/30 bg-[#0000a8]/10";
+      return "text-[#0000a8] border-[#0000a8]/30 bg-[#0000a8]/10 font-semibold";
     case "sent":
       return "text-[#15803d] border-[#15803d]/30 bg-[#15803d]/10";
     case "deleted":
@@ -54,6 +56,13 @@ function draftChipClass(status: string): string {
     default:
       return "text-[#6a6f63] border-[#e0ded5] bg-[#fffef8]";
   }
+}
+
+function formatBytes(bytes?: number): string {
+  if (bytes === undefined || bytes === null || Number.isNaN(bytes)) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 /** Where a reply to this email goes: inbound mail answers its sender. */
@@ -92,6 +101,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [searching, setSearching] = useState(false);
+  const [filterView, setFilterView] = useState<"all" | "unread" | "drafts">("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<{ mailbox: string | null; email: InboxEmail; attachments: InboxAttachment[] } | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -101,15 +111,17 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
   const [replyOpen, setReplyOpen] = useState(false);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  // The email id the in-flight detail fetch belongs to — a slower reply
-  // landing after a newer expand would otherwise paint A's body on B's row
-  // and aim B's reply draft at A's sender.
-  const detailRequestRef = useRef<string | null>(null);
-  const [registerOpen, setRegisterOpen] = useState(false);
+
+  // Settings & Two-Step Pairing State
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [pairingStep, setPairingStep] = useState<1 | 2>(1);
   const [newAddress, setNewAddress] = useState("");
   const [newLabel, setNewLabel] = useState("");
   const [registerError, setRegisterError] = useState<string | null>(null);
   const [registerNotice, setRegisterNotice] = useState<string | null>(null);
+
+  // The email id the in-flight detail fetch belongs to — prevents racing responses.
+  const detailRequestRef = useRef<string | null>(null);
 
   const loadMailboxes = useCallback(async () => {
     try {
@@ -123,34 +135,6 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
   useEffect(() => {
     void loadMailboxes();
   }, [loadMailboxes]);
-
-  const registerMailbox = useCallback(async () => {
-    const address = newAddress.trim();
-    if (address === "") {
-      setRegisterError("Enter the mailbox address to register.");
-      return;
-    }
-    setActionBusy("register");
-    setRegisterError(null);
-    setRegisterNotice(null);
-    try {
-      const label = newLabel.trim();
-      await apiJson<{ mailbox?: InboxMailbox }>("/api/mailboxes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(label === "" ? { address } : { address, label }),
-      });
-      setRegisterNotice(`Registered ${address}.`);
-      setNewAddress("");
-      setNewLabel("");
-      setRegisterOpen(false);
-      await loadMailboxes();
-    } catch (err) {
-      setRegisterError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setActionBusy(null);
-    }
-  }, [newAddress, newLabel, loadMailboxes]);
 
   const loadMail = useCallback(async () => {
     setLoading(true);
@@ -177,6 +161,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
   const runSearch = useCallback(async () => {
     const q = search.trim();
     if (q === "") {
+      void loadMail();
       return;
     }
     setSearching(true);
@@ -192,7 +177,36 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
     } finally {
       setSearching(false);
     }
-  }, [search, mailbox]);
+  }, [search, mailbox, loadMail]);
+
+  const registerMailbox = useCallback(async () => {
+    const address = newAddress.trim();
+    if (address === "") {
+      setRegisterError("Enter the mailbox address to register.");
+      return;
+    }
+    setActionBusy("register");
+    setRegisterError(null);
+    setRegisterNotice(null);
+    try {
+      const label = newLabel.trim();
+      await apiJson<{ mailbox?: InboxMailbox }>("/api/mailboxes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(label === "" ? { address } : { address, label }),
+      });
+      setRegisterNotice(`Successfully paired and registered ${address}.`);
+      setNewAddress("");
+      setNewLabel("");
+      setPairingStep(1);
+      setSettingsOpen(false);
+      await loadMailboxes();
+    } catch (err) {
+      setRegisterError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setActionBusy(null);
+    }
+  }, [newAddress, newLabel, loadMailboxes]);
 
   const toggleExpanded = useCallback(
     async (email: InboxEmail) => {
@@ -284,7 +298,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
           in_reply_to_email_id: detail.email.id,
         }),
       });
-      setNotice("Reply saved to drafts.");
+      setNotice("Reply saved to drafts. It will require approval before sending.");
       setReplyOpen(false);
       setReplyBody("");
       await loadMail();
@@ -301,7 +315,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
       setError(null);
       try {
         await apiJson(`/api/drafts/${encodeURIComponent(draft.id)}/send`, { method: "POST" });
-        setNotice("Queued for approval — review it in the Approvals tab.");
+        setNotice("Draft locked & queued for human approval — review it in the Approvals tab.");
         setDrafts((prev) =>
           prev.map((row) => (row.id === draft.id ? { ...row, status: "queued" } : row)),
         );
@@ -314,330 +328,761 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
     [],
   );
 
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-2">
-        <select
-          value={mailbox}
-          onChange={(event) => setMailbox(event.target.value)}
-          aria-label="Mailbox"
-          className="flex-1 min-w-0 text-[11px] font-mono bg-[#fffef8] border border-[#e0ded5] rounded-md px-2 py-1.5 text-[#222320] focus:outline-none focus:border-[#0000a8]/50"
-        >
-          <option value="">All mailboxes</option>
-          {(mailboxes ?? []).map((record) => (
-            <option key={record.address} value={record.address}>
-              {record.label ?? record.address}
-            </option>
-          ))}
-        </select>
-        <button
-          type="button"
-          onClick={() => void loadMail()}
-          title="Refresh inbox"
-          className="text-[11px] text-[#6a6f63] hover:text-[#222320] border border-[#e0ded5] hover:border-[#d3d2c8] rounded-md px-2 py-1 touch:min-h-11 transition-colors"
-        >
-          Refresh
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setRegisterOpen((open) => !open);
-            setRegisterError(null);
-            setRegisterNotice(null);
-          }}
-          aria-expanded={registerOpen}
-          title="Register a mailbox"
-          className={`${ACCENT_BUTTON} shrink-0`}
-        >
-          + Mailbox
-        </button>
-      </div>
+  // Computed metrics
+  const unreadCount = useMemo(() => emails.filter((e) => e.status === "unread").length, [emails]);
+  const queuedDraftsCount = useMemo(() => drafts.filter((d) => d.status === "queued").length, [drafts]);
+  const pendingDraftsCount = useMemo(() => drafts.filter((d) => d.status === "draft").length, [drafts]);
 
-      {registerOpen ? (
-        <form
-          aria-label="Register mailbox"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void registerMailbox();
-          }}
-          className="flex flex-col gap-2 border border-[#e0ded5] rounded-xl bg-[#f6f4ed] p-3"
-        >
-          <h4 className="text-[10px] font-bold uppercase tracking-wider text-[#6a6f63]">
-            Register mailbox
-          </h4>
-          <input
-            type="email"
-            required
-            value={newAddress}
-            onChange={(event) => setNewAddress(event.target.value)}
-            placeholder="agent@yourdomain.com"
-            aria-label="Mailbox address"
-            autoComplete="off"
-            className="w-full text-[11px] font-mono bg-[#fffef8] border border-[#e0ded5] rounded-md px-2 py-1.5 text-[#222320] placeholder:text-[#6a6f63] focus:outline-none focus:border-[#0000a8]/50"
-          />
-          <input
-            type="text"
-            value={newLabel}
-            onChange={(event) => setNewLabel(event.target.value)}
-            placeholder="Label (optional)"
-            aria-label="Mailbox label"
-            className="w-full text-[11px] bg-[#fffef8] border border-[#e0ded5] rounded-md px-2 py-1.5 text-[#222320] placeholder:text-[#6a6f63] focus:outline-none focus:border-[#0000a8]/50"
-          />
-          {registerError !== null ? (
-            <p role="alert" className="text-[11px] text-[#fb2c36] break-words">
-              {registerError}
-            </p>
-          ) : null}
-          <div className="flex items-center justify-end gap-2">
-            <button type="button" className={GHOST_BUTTON} onClick={() => setRegisterOpen(false)}>
-              Cancel
-            </button>
-            <button type="submit" className={ACCENT_BUTTON} disabled={actionBusy === "register"}>
-              {actionBusy === "register" ? "Registering…" : "Register"}
+  // Filtered emails based on tab selection
+  const displayedEmails = useMemo(() => {
+    if (filterView === "unread") {
+      return emails.filter((e) => e.status === "unread");
+    }
+    return emails;
+  }, [emails, filterView]);
+
+  return (
+    <div className="flex flex-col gap-3.5 max-w-full">
+      {/* Activity & System Summary Bar */}
+      <section
+        aria-label="Mailbox activity summary"
+        className="bg-[#fffef8] border border-[#e0ded5] rounded-xl p-3 shadow-xs"
+      >
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-[#6a6f63]">Mailboxes:</span>
+              <span className="font-mono text-xs font-semibold text-[#222320]">
+                {mailboxes === null ? "…" : mailboxes.length}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-[#6a6f63]">Unread:</span>
+              <span className={`font-mono text-xs font-semibold ${unreadCount > 0 ? "text-[#0000a8]" : "text-[#222320]"}`}>
+                {unreadCount}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-[#6a6f63]">Drafts:</span>
+              <span className="font-mono text-xs font-semibold text-[#b45309]">
+                {pendingDraftsCount}
+                {queuedDraftsCount > 0 ? (
+                  <span className="text-[10px] font-normal text-[#0000a8] ml-1">({queuedDraftsCount} queued)</span>
+                ) : null}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 ml-auto">
+            <span
+              className="text-[10px] font-mono text-[#15803d] bg-[#15803d]/10 border border-[#15803d]/20 px-2 py-0.5 rounded-full inline-flex items-center gap-1"
+              title="Cloudflare Email Routing + Mailbox Durable Objects"
+            >
+              <span className="size-1.5 rounded-full bg-[#15803d]" />
+              Approval-Gated Send
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setSettingsOpen((prev) => !prev);
+                setRegisterError(null);
+                setRegisterNotice(null);
+              }}
+              aria-expanded={settingsOpen}
+              className={settingsOpen ? ACCENT_BUTTON : SECONDARY_BUTTON}
+            >
+              ⚙ Mailbox Settings
             </button>
           </div>
-        </form>
-      ) : null}
-      {registerNotice !== null ? (
-        <p role="status" className="text-[11px] text-[#15803d] bg-[#15803d]/10 border border-[#15803d]/20 rounded-lg px-2.5 py-2">
-          {registerNotice}
-        </p>
-      ) : null}
+        </div>
 
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          void runSearch();
-        }}
-        className="flex items-center gap-2"
-      >
-        <input
-          type="search"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search mail…"
-          className="flex-1 min-w-0 text-[11px] font-mono bg-[#fffef8] border border-[#e0ded5] rounded-md px-2 py-1.5 text-[#222320] placeholder:text-[#6a6f63] focus:outline-none focus:border-[#0000a8]/50"
-        />
-        <button type="submit" disabled={searching} className={ACCENT_BUTTON}>
-          {searching ? "Searching…" : "Search"}
-        </button>
-        {search.trim() !== "" ? (
+        {/* Expandable Settings-First Two-Step Pairing Panel */}
+        {settingsOpen ? (
+          <div className="mt-3 pt-3 border-t border-[#e0ded5] flex flex-col gap-3">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h4 className="text-xs font-semibold text-[#222320]">
+                  Agent Mailbox Configuration &amp; Pairing
+                </h4>
+                <p className="text-[11px] text-[#6a6f63] mt-0.5 max-w-xl">
+                  Connect inbound routing addresses to isolated Mailbox Durable Objects. All outbound communications require human verification via the Approvals queue. No provider credentials exist inside execution sandboxes.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSettingsOpen(false)}
+                className="text-xs text-[#6a6f63] hover:text-[#222320]"
+                aria-label="Close settings"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Currently Configured Mailboxes (Paired Lines) */}
+            <div className="bg-[#f6f4ed] border border-[#e0ded5] rounded-lg p-2.5">
+              <h5 className="text-[10px] font-mono uppercase tracking-wider text-[#6a6f63] mb-1.5">
+                Active Mailbox Lines
+              </h5>
+              {mailboxes === null || mailboxes.length === 0 ? (
+                <p className="text-[11px] text-[#6a6f63] italic">No mailboxes currently paired.</p>
+              ) : (
+                <div className="flex flex-col gap-1.5">
+                  {mailboxes.map((mb) => (
+                    <div
+                      key={mb.address}
+                      className="flex items-center justify-between gap-2 text-[11px] bg-[#fffef8] border border-[#e0ded5] rounded-md px-2.5 py-1.5"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="size-2 rounded-full bg-[#15803d]" />
+                        <span className="font-mono font-medium text-[#222320] truncate">{mb.address}</span>
+                        {mb.label ? (
+                          <span className="text-[10px] text-[#6a6f63] bg-[#f6f4ed] border border-[#e0ded5] rounded px-1.5 py-0.2">
+                            {mb.label}
+                          </span>
+                        ) : null}
+                      </div>
+                      <span className="text-[10px] font-mono text-[#6a6f63] shrink-0">
+                        paired {formatTimeAgo(mb.created_at)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Two-Step Pairing Form */}
+            <div className="border border-[#0000a8]/20 bg-[#0000a8]/5 rounded-xl p-3 flex flex-col gap-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-mono uppercase font-bold tracking-wider text-[#1c1cc8]">
+                  {pairingStep === 1 ? "Step 1: Define Mailbox Identity" : "Step 2: Security & Privacy Verification"}
+                </span>
+                <div className="flex items-center gap-1 text-[10px] font-mono text-[#6a6f63]">
+                  <span className={`size-2 rounded-full ${pairingStep === 1 ? "bg-[#0000a8]" : "bg-[#15803d]"}`} />
+                  <span>Step {pairingStep} of 2</span>
+                </div>
+              </div>
+
+              {pairingStep === 1 ? (
+                <div className="flex flex-col gap-2">
+                  <p className="text-[11px] text-[#222320]">
+                    Specify the email address for this agent mailbox. Incoming emails sent to this address will be stored securely in the Mailbox Durable Object.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] font-mono text-[#6a6f63] block mb-1">
+                        Mailbox Address *
+                      </label>
+                      <input
+                        type="email"
+                        required
+                        value={newAddress}
+                        onChange={(e) => setNewAddress(e.target.value)}
+                        placeholder="agent@shiba.dev"
+                        aria-label="Mailbox address"
+                        className="w-full text-[11px] font-mono bg-[#fffef8] border border-[#e0ded5] rounded-md px-2.5 py-1.5 text-[#222320] placeholder:text-[#6a6f63] focus:outline-none focus:border-[#0000a8]"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-mono text-[#6a6f63] block mb-1">
+                        Label / Agent Name (optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={newLabel}
+                        onChange={(e) => setNewLabel(e.target.value)}
+                        placeholder="e.g. Primary Assistant"
+                        aria-label="Mailbox label"
+                        className="w-full text-[11px] bg-[#fffef8] border border-[#e0ded5] rounded-md px-2.5 py-1.5 text-[#222320] placeholder:text-[#6a6f63] focus:outline-none focus:border-[#0000a8]"
+                      />
+                    </div>
+                  </div>
+
+                  {registerError !== null ? (
+                    <p role="alert" className="text-[11px] text-[#fb2c36]">
+                      {registerError}
+                    </p>
+                  ) : null}
+
+                  <div className="flex justify-end gap-2 mt-1">
+                    <button
+                      type="button"
+                      className={ACCENT_BUTTON}
+                      disabled={newAddress.trim() === ""}
+                      onClick={() => {
+                        if (newAddress.trim() === "") {
+                          setRegisterError("Please enter an email address.");
+                          return;
+                        }
+                        setRegisterError(null);
+                        setPairingStep(2);
+                      }}
+                    >
+                      Next: Review Policies →
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2.5">
+                  <div className="bg-[#fffef8] border border-[#e0ded5] rounded-lg p-2.5 text-[11px] text-[#222320] flex flex-col gap-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold">Selected Address:</span>
+                      <span className="font-mono text-[#0000a8]">{newAddress}</span>
+                      {newLabel ? <span className="text-[#6a6f63]">({newLabel})</span> : null}
+                    </div>
+                    <div className="text-[10px] text-[#6a6f63] space-y-1 mt-1 border-t border-[#e0ded5] pt-1.5">
+                      <p>✓ <strong>Approval-Gated Outbound:</strong> Every draft created by agents requires explicit human sign-off prior to external delivery.</p>
+                      <p>✓ <strong>Zero Sandbox Secrets:</strong> Sandboxes cannot access provider credentials or SMTP servers directly.</p>
+                      <p>✓ <strong>Isolated Storage:</strong> State is sealed in Cloudflare Durable Objects under sovereign tenancy.</p>
+                    </div>
+                  </div>
+
+                  {registerError !== null ? (
+                    <p role="alert" className="text-[11px] text-[#fb2c36]">
+                      {registerError}
+                    </p>
+                  ) : null}
+
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      className={GHOST_BUTTON}
+                      onClick={() => setPairingStep(1)}
+                    >
+                      ← Back
+                    </button>
+                    <button
+                      type="button"
+                      className={ACCENT_BUTTON}
+                      disabled={actionBusy === "register"}
+                      onClick={() => void registerMailbox()}
+                    >
+                      {actionBusy === "register" ? "Pairing & Registering…" : "Confirm & Pair Mailbox"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : null}
+
+        {registerNotice !== null ? (
+          <p role="status" className="mt-2 text-[11px] text-[#15803d] bg-[#15803d]/10 border border-[#15803d]/20 rounded-lg px-2.5 py-1.5">
+            {registerNotice}
+          </p>
+        ) : null}
+      </section>
+
+      {/* Filter and Search Bar */}
+      <section aria-label="Mail search and filters" className="flex flex-col gap-2">
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+          {/* Mailbox Selector */}
+          <div className="w-full sm:w-64 shrink-0">
+            <select
+              value={mailbox}
+              onChange={(event) => setMailbox(event.target.value)}
+              aria-label="Mailbox"
+              className="w-full text-[11px] font-mono bg-[#fffef8] border border-[#e0ded5] rounded-lg px-2.5 py-1.5 text-[#222320] focus:outline-none focus:border-[#0000a8]"
+            >
+              <option value="">All mailboxes</option>
+              {(mailboxes ?? []).map((record) => (
+                <option key={record.address} value={record.address}>
+                  {record.label ? `${record.label} (${record.address})` : record.address}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Filter Pills */}
+          <div className="flex items-center gap-1 bg-[#fffef8] border border-[#e0ded5] rounded-lg p-0.5">
+            <button
+              type="button"
+              onClick={() => setFilterView("all")}
+              className={`text-[11px] px-2.5 py-1 rounded-md font-medium transition-colors ${
+                filterView === "all"
+                  ? "bg-[#0000a8] text-[#fffef8]"
+                  : "text-[#6a6f63] hover:text-[#222320]"
+              }`}
+            >
+              All Mail
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterView("unread")}
+              className={`text-[11px] px-2.5 py-1 rounded-md font-medium transition-colors ${
+                filterView === "unread"
+                  ? "bg-[#0000a8] text-[#fffef8]"
+                  : "text-[#6a6f63] hover:text-[#222320]"
+              }`}
+            >
+              Unread {unreadCount > 0 ? `(${unreadCount})` : ""}
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterView("drafts")}
+              className={`text-[11px] px-2.5 py-1 rounded-md font-medium transition-colors ${
+                filterView === "drafts"
+                  ? "bg-[#0000a8] text-[#fffef8]"
+                  : "text-[#6a6f63] hover:text-[#222320]"
+              }`}
+            >
+              Drafts {drafts.length > 0 ? `(${drafts.length})` : ""}
+            </button>
+          </div>
+
+          {/* Refresh Button */}
           <button
             type="button"
-            onClick={() => {
-              setSearch("");
-              void loadMail();
-            }}
-            className="text-[11px] text-[#6a6f63] hover:text-[#222320]"
+            onClick={() => void loadMail()}
+            title="Refresh inbox"
+            className={GHOST_BUTTON}
           >
-            Clear
+            ↻ Refresh
           </button>
-        ) : null}
-      </form>
+        </div>
 
+        {/* Search input */}
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void runSearch();
+          }}
+          className="flex items-center gap-2"
+        >
+          <div className="relative flex-1 min-w-0">
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search sender, recipient, subject, or message body…"
+              aria-label="Search mail"
+              className="w-full text-[11px] font-mono bg-[#fffef8] border border-[#e0ded5] rounded-lg pl-3 pr-8 py-1.5 text-[#222320] placeholder:text-[#6a6f63] focus:outline-none focus:border-[#0000a8]"
+            />
+            {search.trim() !== "" ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch("");
+                  void loadMail();
+                }}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-[#6a6f63] hover:text-[#222320]"
+                title="Clear search"
+              >
+                ✕
+              </button>
+            ) : null}
+          </div>
+          <button type="submit" disabled={searching} className={ACCENT_BUTTON}>
+            {searching ? "Searching…" : "Search"}
+          </button>
+        </form>
+      </section>
+
+      {/* Global Notices / Errors */}
       {notice !== null ? (
-        <p className="text-[11px] text-[#15803d] bg-[#15803d]/10 border border-[#15803d]/20 rounded-lg px-2.5 py-2 flex items-center justify-between gap-2">
-          <span>{notice}</span>
-          <button type="button" className="text-[#1c1cc8] underline shrink-0" onClick={onOpenApprovals}>
-            Approvals →
+        <div
+          role="status"
+          className="text-[11px] text-[#15803d] bg-[#15803d]/10 border border-[#15803d]/20 rounded-xl p-3 flex items-center justify-between gap-3 shadow-xs"
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="size-2 rounded-full bg-[#15803d] shrink-0" />
+            <span className="font-medium truncate">{notice}</span>
+          </div>
+          <button
+            type="button"
+            className="text-[#1c1cc8] font-medium hover:underline shrink-0 text-xs inline-flex items-center gap-1"
+            onClick={onOpenApprovals}
+          >
+            Approvals Queue →
           </button>
-        </p>
-      ) : null}
-      {error !== null ? (
-        <p className="text-[11px] text-[#fb2c36] bg-[#fb2c36]/10 border border-[#fb2c36]/20 rounded-lg px-2.5 py-2">
-          {error}
-        </p>
+        </div>
       ) : null}
 
-      {drafts.length > 0 ? (
-        <div className="flex flex-col gap-2">
-          <h4 className="text-[10px] font-bold uppercase tracking-wider text-[#b45309]">
-            Drafts
-          </h4>
-          {drafts.map((draft) => (
-            <div
-              key={draft.id}
-              className="border border-[#e0ded5] border-l-2 border-l-[#f99c00] rounded-xl bg-[#f6f4ed] p-3"
-            >
-              <div className="flex items-start justify-between gap-2 mb-1">
-                <div className="min-w-0">
-                  <p className="font-mono text-[11px] text-[#222320] truncate">to {draft.to_addr}</p>
-                  <p className="text-[11px] text-[#222320] truncate font-medium">{draft.subject}</p>
-                </div>
-                <span
-                  className={`text-[10px] font-bold uppercase tracking-wider border rounded-full px-2 py-0.5 shrink-0 ${draftChipClass(draft.status)}`}
-                >
-                  {draft.status}
-                </span>
-              </div>
-              <p className="text-[11px] text-[#6a6f63] font-mono truncate mb-1.5">
-                {draft.body_text}
-              </p>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[10px] text-[#6a6f63] font-mono">
-                  {draft.mailbox ?? ""} · {formatTimeAgo(draft.updated_at)}
-                </span>
-                {draft.status === "draft" ? (
-                  <button
-                    type="button"
-                    className={ACCENT_BUTTON}
-                    disabled={actionBusy === draft.id}
-                    onClick={() => void sendDraft(draft)}
-                  >
-                    {actionBusy === draft.id ? "Queueing…" : "Send for approval"}
-                  </button>
-                ) : null}
+      {error !== null ? (
+        <div
+          role="alert"
+          className="text-[11px] text-[#fb2c36] bg-[#fb2c36]/10 border border-[#fb2c36]/20 rounded-xl p-3 flex items-center justify-between gap-3"
+        >
+          <span>{error}</span>
+          <button
+            type="button"
+            onClick={() => setError(null)}
+            className="text-[#fb2c36] hover:opacity-75"
+          >
+            Dismiss
+          </button>
+        </div>
+      ) : null}
+
+      {/* Sacred Approval Boundary Outbound Section (Drafts & Queued Sends) */}
+      {(filterView === "all" || filterView === "drafts") && drafts.length > 0 ? (
+        <section
+          aria-label="Drafts requiring human approval"
+          className="border-2 border-[#f99c00]/60 rounded-xl bg-[#fffef8] p-3.5 shadow-xs flex flex-col gap-3"
+        >
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <span className="text-sm">🔒</span>
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[#b45309]">
+                  Approval Boundary: Outbound Transmissions
+                </h3>
+                <p className="text-[11px] text-[#6a6f63]">
+                  All outbound emails created by agents must be confirmed by a human operator before delivery.
+                </p>
               </div>
             </div>
-          ))}
-        </div>
-      ) : null}
+            <button
+              type="button"
+              onClick={onOpenApprovals}
+              className="text-[11px] text-[#1c1cc8] hover:underline font-medium ml-auto"
+            >
+              Open Approvals Queue →
+            </button>
+          </div>
 
-      {loading ? (
-        <div className="flex flex-col items-center justify-center py-8 border border-dashed border-[#e0ded5] rounded-xl bg-[#f6f4ed] px-4 text-center">
-          <p className="text-[#6a6f63] text-xs">Loading mail…</p>
-        </div>
-      ) : emails.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-8 border border-dashed border-[#e0ded5] rounded-xl bg-[#f6f4ed] px-4 text-center">
-          <p className="text-[#6a6f63] text-xs">
-            {mailboxes !== null && mailboxes.length === 0
-              ? "No mailboxes registered yet. Register an address before Email Routing can deliver."
-              : "No mail."}
-          </p>
-        </div>
-      ) : (
-        <ol className="flex flex-col gap-2">
-          {emails.map((email) => {
-            const expanded = expandedId === email.id;
-            return (
-              <li
-                key={email.id}
-                className={`border rounded-xl bg-[#f6f4ed] overflow-hidden transition-colors ${
-                  expanded ? "border-[#0000a8]/50" : "border-[#e0ded5] hover:border-[#d3d2c8]"
-                }`}
-              >
-                <button
-                  type="button"
-                  onClick={() => void toggleExpanded(email)}
-                  className="w-full text-left p-3 hover:bg-[#fffef8] transition-colors"
+          <div className="flex flex-col gap-2.5">
+            {drafts.map((draft) => {
+              const isQueued = draft.status === "queued";
+              return (
+                <article
+                  key={draft.id}
+                  className={`border rounded-lg bg-[#f6f4ed] p-3 transition-colors ${
+                    isQueued ? "border-[#0000a8]/40 bg-[#0000a8]/5" : "border-[#e0ded5]"
+                  }`}
                 >
-                  <div className="flex items-center gap-2 min-w-0">
+                  <div className="flex items-start justify-between gap-3 mb-1.5">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[10px] font-mono uppercase tracking-wider text-[#6a6f63]">To:</span>
+                        <span className="font-mono text-xs text-[#222320] font-medium truncate">
+                          {draft.to_addr}
+                        </span>
+                        {draft.mailbox ? (
+                          <span className="text-[10px] font-mono text-[#6a6f63] bg-[#fffef8] border border-[#e0ded5] rounded px-1.5">
+                            via {draft.mailbox}
+                          </span>
+                        ) : null}
+                      </div>
+                      <h4 className="text-xs font-semibold text-[#222320] mt-0.5 truncate">
+                        {draft.subject}
+                      </h4>
+                    </div>
+
                     <span
-                      className={`size-1.5 rounded-full shrink-0 ${
-                        email.status === "unread" ? "bg-[#0000a8]" : "bg-transparent"
-                      }`}
-                      title={email.status}
-                    />
-                    <span
-                      className={`text-[11px] truncate min-w-0 ${
-                        email.status === "unread" ? "text-[#222320] font-semibold" : "text-[#6a6f63]"
-                      }`}
+                      className={`text-[10px] font-mono uppercase font-bold tracking-wider border rounded-full px-2 py-0.5 shrink-0 ${draftChipClass(
+                        draft.status,
+                      )}`}
                     >
-                      {email.from_addr}
-                    </span>
-                    <span className="text-[10px] text-[#6a6f63] font-mono shrink-0 ml-auto">
-                      {formatTimeAgo(email.created_at)}
+                      {draft.status === "queued" ? "Queued for Approval" : draft.status}
                     </span>
                   </div>
-                  <p
-                    className={`text-[11px] truncate mt-0.5 pl-3.5 ${
-                      email.status === "unread" ? "text-[#222320] font-medium" : "text-[#6a6f63]"
+
+                  <p className="text-[11px] text-[#222320] font-mono whitespace-pre-wrap bg-[#fffef8] border border-[#e0ded5] rounded-md p-2.5 mb-2.5 max-h-36 overflow-auto">
+                    {draft.body_text}
+                  </p>
+
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <span className="text-[10px] text-[#6a6f63] font-mono">
+                      Last edited {formatTimeAgo(draft.updated_at)}
+                    </span>
+
+                    {draft.status === "draft" ? (
+                      <button
+                        type="button"
+                        className={ACCENT_BUTTON}
+                        disabled={actionBusy === draft.id}
+                        onClick={() => void sendDraft(draft)}
+                      >
+                        {actionBusy === draft.id ? "Submitting to Queue…" : "Send for approval →"}
+                      </button>
+                    ) : isQueued ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-medium text-[#0000a8] flex items-center gap-1">
+                          <span className="size-1.5 rounded-full bg-[#0000a8] animate-pulse" />
+                          Pending Human Decision
+                        </span>
+                        <button
+                          type="button"
+                          className={SECONDARY_BUTTON}
+                          onClick={onOpenApprovals}
+                        >
+                          Review in Approvals tab
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
+
+      {/* Main Mail List / Feed */}
+      {filterView !== "drafts" ? (
+        <section aria-label="Inbox messages">
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-12 border border-dashed border-[#e0ded5] rounded-xl bg-[#fffef8] px-4 text-center">
+              <div className="size-5 border-2 border-[#0000a8] border-t-transparent rounded-full animate-spin mb-2" />
+              <p className="text-[#6a6f63] text-xs font-mono">Loading mail…</p>
+            </div>
+          ) : displayedEmails.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 border border-dashed border-[#e0ded5] rounded-xl bg-[#fffef8] px-4 text-center">
+              <span className="text-xl mb-1 text-[#6a6f63]">✉</span>
+              <p className="text-[#222320] text-xs font-medium">
+                {mailboxes !== null && mailboxes.length === 0
+                  ? "No mailboxes registered yet."
+                  : filterView === "unread"
+                  ? "No unread mail."
+                  : "No mail found."}
+              </p>
+              <p className="text-[#6a6f63] text-[11px] mt-0.5 max-w-sm">
+                {mailboxes !== null && mailboxes.length === 0
+                  ? "Pair a mailbox line above so Cloudflare Email Routing can deliver agent correspondence."
+                  : "Emails delivered to your paired addresses will show up here."}
+              </p>
+            </div>
+          ) : (
+            <ol className="flex flex-col gap-2">
+              {displayedEmails.map((email) => {
+                const expanded = expandedId === email.id;
+                const isUnread = email.status === "unread";
+                const isInbound = email.direction === "inbound";
+
+                return (
+                  <li
+                    key={email.id}
+                    className={`border rounded-xl bg-[#fffef8] overflow-hidden transition-all shadow-xs ${
+                      expanded
+                        ? "border-[#0000a8] ring-1 ring-[#0000a8]/20"
+                        : "border-[#e0ded5] hover:border-[#d3d2c8]"
                     }`}
                   >
-                    {email.subject}
-                  </p>
-                </button>
-                {expanded ? (
-                  <div className="p-3 pt-1 border-t border-[#e0ded5]/60 flex flex-col gap-2">
-                    {detailLoading ? (
-                      <p className="text-[11px] text-[#6a6f63] font-mono">Loading…</p>
-                    ) : detail !== null ? (
-                      <>
-                        <div className="text-[10px] text-[#6a6f63] font-mono flex flex-wrap gap-x-3 gap-y-1">
-                          <span>from {detail.email.from_addr}</span>
-                          <span>to {detail.email.to_addr}</span>
-                          {email.mailbox ? <span>box {email.mailbox}</span> : null}
-                          <span className={`border rounded-full px-1.5 ${emailChipClass(detail.email.status)}`}>
-                            {detail.email.status}
+                    {/* Collapsed / Row Summary Button */}
+                    <button
+                      type="button"
+                      onClick={() => void toggleExpanded(email)}
+                      aria-expanded={expanded}
+                      className="w-full text-left p-3.5 hover:bg-[#fcfbf7] transition-colors flex flex-col gap-1"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span
+                          className={`size-2 rounded-full shrink-0 ${
+                            isUnread ? "bg-[#0000a8] ring-4 ring-[#0000a8]/10" : "bg-transparent"
+                          }`}
+                          title={isUnread ? "Unread" : "Read"}
+                        />
+
+                        <span
+                          className={`text-[10px] font-mono uppercase px-1.5 py-0.2 rounded border shrink-0 ${
+                            isInbound
+                              ? "bg-[#15803d]/10 text-[#15803d] border-[#15803d]/20"
+                              : "bg-[#0000a8]/10 text-[#0000a8] border-[#0000a8]/20"
+                          }`}
+                        >
+                          {isInbound ? "Inbound" : "Outbound"}
+                        </span>
+
+                        <span
+                          className={`text-xs truncate min-w-0 font-mono ${
+                            isUnread ? "text-[#222320] font-bold" : "text-[#6a6f63]"
+                          }`}
+                        >
+                          {isInbound ? email.from_addr : `to ${email.to_addr}`}
+                        </span>
+
+                        {email.mailbox ? (
+                          <span className="text-[10px] font-mono text-[#6a6f63] border border-[#e0ded5] rounded px-1.5 bg-[#f6f4ed] shrink-0">
+                            {email.mailbox}
                           </span>
-                        </div>
-                        <pre className="font-mono text-[11px] text-[#222320] bg-[#fffef8] p-2.5 rounded-lg border border-[#e0ded5] whitespace-pre-wrap break-words max-h-48 overflow-auto">
-                          {detail.email.body_text ?? "(no plain-text body)"}
-                        </pre>
-                        {detail.attachments.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
-                            {detail.attachments.map((attachment) => (
-                              <span
-                                key={attachment.part_id}
-                                className="text-[10px] font-mono text-[#6a6f63] border border-[#e0ded5] bg-[#fffef8] rounded-md px-1.5 py-0.5"
-                              >
-                                {attachment.filename ?? attachment.part_id}
-                              </span>
-                            ))}
+                        ) : null}
+
+                        <span className="text-[10px] text-[#6a6f63] font-mono shrink-0 ml-auto">
+                          {formatTimeAgo(email.created_at)}
+                        </span>
+                      </div>
+
+                      <h4
+                        className={`text-xs truncate pl-4 font-medium font-serif ${
+                          isUnread ? "text-[#222320]" : "text-[#4b5046]"
+                        }`}
+                      >
+                        {email.subject || "(no subject)"}
+                      </h4>
+                    </button>
+
+                    {/* Expanded Detail View */}
+                    {expanded ? (
+                      <div className="p-4 pt-2 border-t border-[#e0ded5] bg-[#f6f4ed]/50 flex flex-col gap-3">
+                        {detailLoading ? (
+                          <div className="py-4 flex items-center justify-center gap-2 text-xs font-mono text-[#6a6f63]">
+                            <span className="size-3 border-2 border-[#0000a8] border-t-transparent rounded-full animate-spin" />
+                            Loading message details…
                           </div>
-                        ) : null}
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <button type="button" className={GHOST_BUTTON} onClick={() => void toggleThread()}>
-                            {threadLoading ? "Loading…" : thread !== null ? "Hide thread" : "Thread"}
-                          </button>
-                          <button
-                            type="button"
-                            className={ACCENT_BUTTON}
-                            onClick={() => setReplyOpen((open) => !open)}
-                          >
-                            Draft reply
-                          </button>
-                        </div>
-                        {thread !== null ? (
-                          <ol className="flex flex-col gap-1.5 border-l-2 border-[#e0ded5] pl-2.5">
-                            {thread.emails.map((item) => (
-                              <li key={item.id} className="text-[10px] font-mono text-[#6a6f63]">
-                                <span className="text-[#222320]">{item.from_addr}</span> ·{" "}
-                                {formatTimeAgo(item.created_at)} · {item.subject}
-                              </li>
-                            ))}
-                          </ol>
-                        ) : null}
-                        {replyOpen ? (
-                          <div className="flex flex-col gap-2">
-                            <p className="text-[10px] font-mono text-[#6a6f63]">
-                              to {replyAddress(detail.email)} · {replySubject(detail.email.subject)}
-                            </p>
-                            <textarea
-                              value={replyBody}
-                              onChange={(event) => setReplyBody(event.target.value)}
-                              rows={4}
-                              placeholder="Write the reply…"
-                              className="w-full text-[11px] font-mono bg-[#fffef8] border border-[#e0ded5] rounded-lg px-2.5 py-2 text-[#222320] placeholder:text-[#6a6f63] focus:outline-none focus:border-[#0000a8]/50"
-                            />
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                className={ACCENT_BUTTON}
-                                disabled={actionBusy === "reply" || replyBody.trim() === ""}
-                                onClick={() => void saveReply()}
-                              >
-                                {actionBusy === "reply" ? "Saving…" : "Save draft"}
-                              </button>
+                        ) : detail !== null ? (
+                          <>
+                            {/* Metadata Header */}
+                            <div className="bg-[#fffef8] border border-[#e0ded5] rounded-lg p-3 text-[11px] text-[#222320] flex flex-col gap-1.5 shadow-2xs">
+                              <div className="flex items-center justify-between gap-2 flex-wrap">
+                                <div className="space-y-0.5">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-mono uppercase text-[#6a6f63]">From:</span>
+                                    <span className="font-mono font-medium">{detail.email.from_addr}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-mono uppercase text-[#6a6f63]">To:</span>
+                                    <span className="font-mono font-medium">{detail.email.to_addr}</span>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  {email.mailbox ? (
+                                    <span className="text-[10px] font-mono text-[#6a6f63] bg-[#f6f4ed] border border-[#e0ded5] rounded px-1.5 py-0.5">
+                                      Mailbox: {email.mailbox}
+                                    </span>
+                                  ) : null}
+                                  <span className={`text-[10px] font-mono border rounded-full px-2 py-0.5 ${emailChipClass(detail.email.status)}`}>
+                                    {detail.email.status}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Message Body */}
+                            <div className="bg-[#fffef8] border border-[#e0ded5] rounded-xl p-3.5 shadow-2xs">
+                              <pre className="font-mono text-xs text-[#222320] whitespace-pre-wrap break-words leading-relaxed max-h-72 overflow-auto">
+                                {detail.email.body_text ?? "(no plain-text body)"}
+                              </pre>
+                            </div>
+
+                            {/* Attachments */}
+                            {detail.attachments.length > 0 ? (
+                              <div className="flex flex-col gap-1">
+                                <span className="text-[10px] font-mono uppercase text-[#6a6f63]">Attachments ({detail.attachments.length})</span>
+                                <div className="flex flex-wrap gap-2">
+                                  {detail.attachments.map((attachment) => (
+                                    <div
+                                      key={attachment.part_id}
+                                      className="text-[11px] font-mono text-[#222320] border border-[#e0ded5] bg-[#fffef8] rounded-lg px-2.5 py-1.5 flex items-center gap-2 shadow-2xs"
+                                    >
+                                      <span>📎</span>
+                                      <span className="font-medium">{attachment.filename ?? attachment.part_id}</span>
+                                      {attachment.size !== undefined ? (
+                                        <span className="text-[10px] text-[#6a6f63]">({formatBytes(attachment.size)})</span>
+                                      ) : null}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : null}
+
+                            {/* Action Bar */}
+                            <div className="flex items-center gap-2 pt-1 flex-wrap">
                               <button
                                 type="button"
                                 className={GHOST_BUTTON}
-                                onClick={() => setReplyOpen(false)}
+                                onClick={() => void toggleThread()}
                               >
-                                Cancel
+                                {threadLoading ? "Loading thread…" : thread !== null ? "Hide thread" : "View thread"}
+                              </button>
+                              <button
+                                type="button"
+                                className={ACCENT_BUTTON}
+                                onClick={() => setReplyOpen((open) => !open)}
+                              >
+                                {replyOpen ? "Close reply draft" : "Draft reply"}
                               </button>
                             </div>
-                          </div>
+
+                            {/* Thread Timeline */}
+                            {thread !== null ? (
+                              <div className="border border-[#e0ded5] rounded-xl bg-[#fffef8] p-3 flex flex-col gap-2 mt-1">
+                                <h5 className="text-[10px] font-mono uppercase tracking-wider text-[#6a6f63]">
+                                  Thread History ({thread.emails.length} messages)
+                                </h5>
+                                <ol className="flex flex-col gap-2 border-l-2 border-[#0000a8]/30 pl-3 ml-1">
+                                  {thread.emails.map((item) => (
+                                    <li key={item.id} className="text-[11px] font-mono">
+                                      <div className="flex items-center gap-2 text-[#6a6f63]">
+                                        <span className="font-medium text-[#222320]">{item.from_addr}</span>
+                                        <span>·</span>
+                                        <span>{formatTimeAgo(item.created_at)}</span>
+                                      </div>
+                                      <p className="text-[#222320] text-xs font-serif mt-0.5">{item.subject}</p>
+                                    </li>
+                                  ))}
+                                </ol>
+                              </div>
+                            ) : null}
+
+                            {/* Reply Draft Composer */}
+                            {replyOpen ? (
+                              <form
+                                onSubmit={(e) => {
+                                  e.preventDefault();
+                                  void saveReply();
+                                }}
+                                className="border-2 border-[#0000a8]/30 bg-[#fffef8] rounded-xl p-3.5 flex flex-col gap-2.5 shadow-xs"
+                              >
+                                <div className="flex items-center justify-between gap-2 border-b border-[#e0ded5] pb-2">
+                                  <div className="text-[11px] font-mono">
+                                    <span className="text-[#6a6f63]">Replying to: </span>
+                                    <span className="font-semibold text-[#222320]">{replyAddress(detail.email)}</span>
+                                    <span className="text-[#6a6f63] ml-2">from </span>
+                                    <span className="font-semibold text-[#0000a8]">{replyMailbox(detail, mailbox) || "(selected mailbox)"}</span>
+                                  </div>
+                                  <span className="text-[10px] font-mono text-[#b45309] bg-[#f99c00]/10 border border-[#f99c00]/30 rounded px-2 py-0.5">
+                                    🔒 Approval Gate
+                                  </span>
+                                </div>
+
+                                <div className="text-[10px] text-[#6a6f63]">
+                                  Subject: <span className="font-mono text-[#222320]">{replySubject(detail.email.subject)}</span>
+                                </div>
+
+                                <textarea
+                                  value={replyBody}
+                                  onChange={(event) => setReplyBody(event.target.value)}
+                                  rows={5}
+                                  placeholder="Compose reply message here. Saved drafts require human review before dispatch…"
+                                  aria-label="Reply message body"
+                                  className="w-full text-xs font-mono bg-[#f6f4ed]/50 border border-[#e0ded5] rounded-lg p-3 text-[#222320] placeholder:text-[#6a6f63] focus:outline-none focus:border-[#0000a8] focus:bg-[#fffef8]"
+                                />
+
+                                <div className="flex items-center justify-between gap-2 pt-1">
+                                  <p className="text-[10px] text-[#6a6f63]">
+                                    Saving stores this in Drafts. You can then submit it to the Approvals queue.
+                                  </p>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      className={GHOST_BUTTON}
+                                      onClick={() => setReplyOpen(false)}
+                                    >
+                                      Cancel
+                                    </button>
+                                    <button
+                                      type="submit"
+                                      className={ACCENT_BUTTON}
+                                      disabled={actionBusy === "reply" || replyBody.trim() === ""}
+                                    >
+                                      {actionBusy === "reply" ? "Saving…" : "Save Draft"}
+                                    </button>
+                                  </div>
+                                </div>
+                              </form>
+                            ) : null}
+                          </>
                         ) : null}
-                      </>
+                      </div>
                     ) : null}
-                  </div>
-                ) : null}
-              </li>
-            );
-          })}
-        </ol>
-      )}
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </section>
+      ) : null}
     </div>
   );
 }
+
