@@ -379,4 +379,11 @@ const finalSchemas = schema
     .nav-links { justify-content:flex-start; width:100%; overflow-x:auto; padding-bottom:3px; scrollbar-width:thin; }
     .nav-actions { justify-content:space-between; }
   }
+  @media (pointer: coarse) {
+    .nav-link, .nav-ghost, .nav-theme-toggle, .nav-cta, .button,
+    footer li a, .watch-link { min-height:44px; }
+    .nav-link { display:inline-flex; align-items:center; }
+    .nav-theme-toggle { width:44px; }
+    .button { padding-inline:18px; }
+  }
 </style>

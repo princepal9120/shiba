@@ -1183,7 +1183,21 @@ starlight-toc a:focus-visible,
   .sidebar-content summary {
     display: flex !important;
     align-items: center;
-    min-height: 2.5rem;
+    min-height: 2.75rem;
+  }
+
+  button[data-open-modal],
+  mobile-starlight-toc summary,
+  .pagination-links a {
+    min-height: 2.75rem;
+  }
+
+  .sl-markdown-content :is(button, input, select, textarea) {
+    min-height: 2.75rem;
+  }
+
+  .sl-markdown-content :is(input, select, textarea) {
+    font-size: 1rem;
   }
 
   table {

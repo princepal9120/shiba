@@ -427,17 +427,18 @@ const articleSchema = {
 
 <style>
   .hero {
-    padding-top: clamp(60px, 9vw, 120px);
-    padding-bottom: clamp(50px, 7vw, 80px);
+    padding-top: clamp(72px, 11vw, 148px);
+    padding-bottom: clamp(64px, 9vw, 112px);
     border-bottom: 1px solid var(--line);
   }
   .manifesto-title {
-    font-size: clamp(2.5rem, 5.5vw, 4.8rem);
-    font-weight: 700;
-    line-height: 1.1;
-    letter-spacing: -0.04em;
-    max-width: 960px;
-    margin-bottom: 24px;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: clamp(3rem, 7.2vw, 6.8rem);
+    font-weight: 400;
+    line-height: 0.98;
+    letter-spacing: -0.055em;
+    max-width: 1040px;
+    margin-bottom: 32px;
   }
   .hero-actions {
     display: flex;
@@ -448,35 +449,52 @@ const articleSchema = {
   .hero-status { max-width: 62ch; }
   .hero-status a { text-underline-offset: 3px; }
   .micro {
+    display: inline-block;
     font-family: 'Geist Mono', monospace;
-    font-size: 10px;
+    font-size: 11px;
     text-transform: uppercase;
-    letter-spacing: 0.14em;
-    color: var(--navy);
+    letter-spacing: 0.16em;
+    color: var(--ink-2);
+    border-top: 1px solid var(--line-2);
+    padding-top: 12px;
   }
   .story-section {
     border-bottom: 1px solid var(--line);
     display: grid;
-    grid-template-columns: minmax(140px, 1fr) minmax(0, 3fr);
-    gap: 48px;
-    padding-block: 72px 84px;
+    grid-template-columns: minmax(120px, 0.72fr) minmax(0, 3fr);
+    gap: clamp(32px, 6vw, 88px);
+    padding-block: clamp(88px, 12vw, 160px);
   }
   .section-label {
-    padding-top: 8px;
+    padding-top: 12px;
+  }
+  .micro {
+    display: inline-block;
+    color: var(--ink-2);
+    border-top: 1px solid var(--line-2);
+    padding-top: 12px;
+    font-size: 11px;
+    letter-spacing: 0.16em;
   }
   .prose-body {
-    max-width: 820px;
+    max-width: 900px;
+    min-width: 0;
   }
   .prose-body h2 {
-    font-size: clamp(1.8rem, 3.2vw, 2.8rem);
-    font-weight: 600;
-    margin-bottom: 20px;
-    letter-spacing: -0.03em;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: clamp(2.35rem, 5vw, 4.6rem);
+    font-weight: 400;
+    line-height: 1.02;
+    margin-bottom: 28px;
+    letter-spacing: -0.045em;
+    text-wrap: balance;
   }
   .prose-body p {
-    font-size: 15px;
-    line-height: 1.75;
-    margin-bottom: 18px;
+    max-width: 68ch;
+    color: var(--ink-2);
+    font-size: 16px;
+    line-height: 1.8;
+    margin-bottom: 22px;
   }
   .pull-quote {
     border-left: 3px solid var(--navy);
@@ -658,15 +676,16 @@ const articleSchema = {
   @media (max-width: 800px) {
     .story-section {
       grid-template-columns: 1fr;
-      gap: 20px;
-      padding-block: 54px;
+      gap: 28px;
+      padding-block: 76px;
     }
+    .section-label { padding-top: 0; }
     .route-head, .route-row { grid-template-columns: 1fr; gap: 4px; }
   }
   @media (max-width: 480px) {
-    .story-section { gap: 14px; padding-block: 44px 48px; }
-    .prose-body h2 { margin-bottom: 16px; }
-    .prose-body > p { font-size: 16px; line-height: 1.7; margin-bottom: 16px; }
+    .story-section { gap: 22px; padding-block: 60px; }
+    .prose-body h2 { font-size: clamp(2.25rem, 11vw, 3.25rem); margin-bottom: 22px; }
+    .prose-body > p { font-size: 16px; line-height: 1.7; margin-bottom: 18px; }
     .pillar-row, .friction-row { gap: 14px; padding: 18px 16px; }
     .pillar-icon, .friction-num { width: 32px; height: 32px; font-size: 12px; }
     .pull-quote { padding: 16px 18px; }
