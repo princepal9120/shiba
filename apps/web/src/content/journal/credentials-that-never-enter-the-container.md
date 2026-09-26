@@ -1,79 +1,76 @@
 ---
-title: Credentials that never enter the container
-description: A walk through the egress boundary, timed and actor by actor, showing where every secret is actually substituted.
+title: The credentials that never enter the container
+description: How Shiba runs a real coding agent with a dummy key in the process and a real one at the egress boundary.
 pubDate: 2026-09-15
 category: guide
 pattern: choreography
-summary: The container holds a dummy key. Everything real is swapped in outside it, one hop from the network call.
+summary: The container runs a coding harness against a fake API key. The real credentials are attached outside it, per request, only after a human approves the run.
 ---
 
+There is a moment in every Shiba run where a coding agent needs to call a model provider. The agent runs inside a container. The provider key is a real secret. The obvious design puts the key in an environment variable and moves on.
+
+Shiba does the opposite. The container gets `DUMMY_PROVIDER_KEY`. The real AI Gateway credential is substituted outside the container, at the egress boundary, by the Sandbox Durable Object. This post is about how that substitution works and why the surrounding choreography matters more than the trick itself.
+
 <div class="callout">
-  <span class="callout-label">Prototype status</span>
-  <p>Shiba is a local prototype. No live end-to-end cloud run is claimed here, and no penetration test, user count, or benchmark is claimed. The boundary described here is enforced in code and covered by unit tests; that is an implementation claim, not proof of a live deployment.</p>
+<span class="callout-label">Prototype status</span>
+
+Shiba is a local prototype. The egress and credential paths are implemented and unit-tested. No live end-to-end cloud run is recorded, and no penetration test against a deployed instance is claimed.
 </div>
-
-The most dangerous moment in an agent system is not the model call. It is the moment a real credential becomes reachable by a process that reads untrusted text.
-
-Shiba's answer is a single invariant, stated the same way in the specification, the README, and the security documentation: the container never holds a real provider key. Everything else in this post is that one sentence, timed.
 
 ## The actors
 
-There are only three, and keeping them distinct is the whole design.
+Four parties are involved, and keeping them distinct is the whole design.
 
-**The container.** A real Docker process, running a real coding CLI, reading files from a cloned repository that a model was told to modify. It is the least trusted party in the system, and it is designed that way — it processes adversarial input by definition, because the input is a task description and the repository content.
+**The orchestrator** is Worker code. It plans the task, presents it for approval, and owns the secrets. It never runs inside the container.
 
-**The Sandbox Durable Object.** This sits outside the container, at the network boundary. It holds the allowlist, the handlers, and the real credentials. It is the only party that talks to both the inside and the outside.
+**The container** is an isolated Cloudflare Sandbox instance holding a checkout of one branch. It runs a pinned harness CLI — `opencode`, `claude-code`, `codex`, or `devin` — and it has no real credentials for anything.
 
-**The account owner.** The person who deployed this. Their provider key lives in their AI Gateway; their GitHub token lives as a Worker secret. Neither is visible to anything running in a container, because neither is ever sent to one.
+**The Sandbox Durable Object** sits between the container and the internet. It intercepts HTTPS egress, decides which hosts are reachable, and attaches the real credentials to the requests it forwards.
 
-## Time one: the container is configured
+**The providers and GitHub** sit on the other side. They see requests from the Durable Object. They never see the container directly.
 
-The container process is handed a dummy key — the environment variable literally named `DUMMY_PROVIDER_KEY`. It is a placeholder with the shape of a credential and none of the value. The CLI inside the container cannot tell the difference, and does not need to: it will attach the placeholder to its provider request exactly as it would attach a real one.
+If the container is compromised — by a malicious dependency, a bad shell command, an over-broad agent — the attacker holds a dummy key and an allowlist. The real secrets are not in the blast radius.
 
-The configuration handed to the container is deliberately minimal. For the Devin harness, the container's own credentials file carries a dummy too, and a Worker-side forwarder swaps in the real service key on the way out.
+## Deny by default
 
-This is the moment the invariant holds, and it holds trivially: the real secret was never in scope to be leaked.
+Egress is not open with a few rules bolted on. `interceptHttps` is enabled and the default is refusal. A run gets an explicit host allowlist, and the notable entries are `generativelanguage.googleapis.com`, `github.com`, and `codeload.github.com`.
 
-## Time two: the container dials out
+`registry.npmjs.org` is deliberately absent. That means `npm install` inside a run is refused, which the docs call out as a known consequence rather than a bug. A harness that wants a dependency it does not have will fail, and failing is the correct outcome for a system whose job is to not silently expand its own permissions.
 
-The CLI inside the container issues an HTTPS request to its provider host. It believes this is a normal network call. It is not — outbound traffic is intercepted at the Sandbox egress boundary before it leaves.
+The allowlist is also narrowed per run to the selected harness's provider host plus git — never the union across harnesses. A run on the Devin harness does not inherit Google's egress just because both are in the image.
 
-The allowlist is evaluated first, and it is deny-by-default. `allowedHosts` admits only the hosts the current run is entitled to reach. In the shipped configuration that is the selected harness's provider host plus git; `registry.npmjs.org` is deliberately excluded, because allowing package installs inside a run is simultaneously a convenience feature and the widest exfiltration channel available.
+## Model calls: dummy in, real out
 
-Because the list is evaluated before any handler runs, a request to an unlisted host is refused at the allowlist, not politely handled downstream.
+When the container's harness calls the provider, it does so with a fake key. The Sandbox Durable Object intercepts the HTTPS request and forwards it through the account owner's Cloudflare AI Gateway binding, swapping in the real credential on the way out.
 
-## Time three: the boundary substitutes the real credential
+The consequence is a clean split. Inside the process there is nothing worth stealing. Outside the process there is a key that never entered it. The provider key, or the Unified Billing credential, lives in AI Gateway and stays there.
 
-Now the Durable Object forwards the provider-native request through the account owner's AI Gateway binding, and the real provider credential — which has been sitting in AI Gateway the entire time — authorizes it. The real key is used in the forward. It is never written into the container, the container's environment, its config, a clone URL, a log line, or a UI response.
+The same invariant holds for every harness. Claude Code and Codex are API-key harnesses only; subscription credentials are deliberately not proxied, because Anthropic's terms forbid routing requests through Free, Pro, or Max plan credentials on behalf of users. The Devin CLI authenticates to Cognition's own backends with a Worker secret `DEVIN_API_KEY`, and its `credentials.toml` in the container carries a dummy that the egress forwarders replace with a real Bearer.
 
-There is no callback route. The old provider-callback path was deleted; the forwarder and its route no longer exist. All provider traffic is this one direction: container makes a request, boundary rewrites and forwards it, response comes back. There is no inbound endpoint for a provider to call, and therefore no inbound endpoint to secure.
+## The GitHub token
 
-The handoff is complete in a single hop. The container does not need to know, and never learns, that the credential it is holding is a placeholder.
+GitHub is the more interesting case, because git traffic is not a single request.
 
-## The git credential, scoped to one repository
+`GITHUB_TOKEN` is a Wrangler secret on the Worker. It is attached by the Worker at the egress boundary for git traffic to the approved repository only, and it is also used for Worker-side pull-request publishing. It is never placed in the container, and never appears in the clone URL, the command, the process environment, the logs, or UI responses.
 
-The GitHub token is the second credential and it is handled differently, because it is a different kind of power.
+Access is scoped rather than global. GitHub access defaults to refusal. `approveRepoScope("/owner/repo")` installs a scoped forwarder for one repository; a run without an approved scope receives no credential at all. Requests for any other repository are refused with a 403 and no `Authorization` header. Sibling and prefix-lookalike paths are refused too.
 
-`GITHUB_TOKEN` is attached by the Worker at the egress boundary — never inside the container — and it is scoped to the run's own repository. `github.com` egress *defaults to refusal*. Before the clone, the run calls `approveRepoScope("/owner/repo")`, which installs a forwarder for that one path. Any request for a different repository is refused, with no `Authorization` header attached at all. A sibling repository that shares a prefix — `/owner/repo-evil` — is refused too, because a prefix match is not a scope match.
+Even for the approved repo, the container is not trusted to push. Only `GET`/`HEAD` and `POST git-upload-pack` pass. Git authorization is injected by the same interception layer, so the container never holds a token that could write.
 
-The clone is refused until the scope is installed, and the tests assert the scope is proven *before* the clone, not after. A run that never scoped itself gets no credential at all. And even with the token attached, only read-style git traffic plus `git-upload-pack` passes: container pushes are refused, so the container cannot push even holding a token that could otherwise push.
+`GITHUB_TOKEN` is optional for public repositories and diff-only tasks. If `publishPullRequest` is set to true without a token, the run fails early with a clear configuration error instead of failing later inside a git command.
 
-Pull request publishing happens the other way around, from Worker code against the GitHub API, using captured file contents — never from inside the container.
+## Webhooks, and the difference between acknowledging and acting
 
-## One image, four harnesses, one boundary
+`GITHUB_WEBHOOK_SECRET` verifies incoming webhook requests. Those requests are acknowledgment-only: the system validates the signature and confirms receipt. It does not let a webhook drive a mutation on its own. Any work that follows still passes through the approval gate.
 
-The image ships four coding CLIs: OpenCode, Claude Code, Codex, and Devin. The credential invariant has to hold for all of them, and it does — every harness passes the container a dummy and nothing matching a real credential shape.
+This is the same discipline applied to Slack. A valid Slack signature authenticates that the request came from Slack, not which human clicked the button. So `SLACK_APPROVERS` is deny-by-default: unset means nobody can approve from Slack.
 
-The allowlist is narrowed per run to the *selected* harness's provider host plus git, never the union across harnesses. Choosing Claude Code does not leave OpenAI's host reachable. This is the difference between a policy that says "we support four providers" and one that says "for this run, this provider, this host, and git — nothing else."
+## Why the choreography is the security property
 
-Subscription credentials are a separate boundary and deliberately unsupported. Claude Code and Codex are API-key harnesses only; Anthropic's terms forbid third parties routing requests through Free, Pro, or Max plan credentials on behalf of users, so the system does not proxy them.
+Any one of these controls is a line of code. Together they are a sequence, and the sequence is what holds.
 
-## The honest limit
+The orchestrator holds secrets and does not run agent code. The container runs agent code and holds no secrets. The Durable Object is the only component that sees both, and it exists to translate between them under an explicit allowlist. The approval gate ensures none of it starts until a human has said which repository and which commands are acceptable.
 
-The security documentation is careful about what this evidence means, and the care is worth preserving.
+If you removed any single piece, the others would not compensate. Remove the gate and a compromised container can act on an approved scope without a human in the loop. Remove the allowlist and the dummy key becomes irrelevant. Remove the dummy key and the container becomes the thing holding the secret.
 
-These boundaries have unit coverage. The allowlist policy and the handlers are exercised by tests. That is an implementation and test claim — it is not a cloud penetration-test result, and it does not establish that a deployed hostname is covered by the intended Access application. `VERIFICATION.md` records a forged-header 401 check against a deployed Worker; it does not record a cloud end-to-end coding run.
-
-The retention caveat is stated just as plainly: clearing history or the run registry does not erase all child Durable Object data or stop already-running containers, and cancellation is best-effort. Review retention requirements before pointing this at confidential repositories, and use least-privilege credentials scoped to test repositories.
-
-The invariant is simple enough to hold in your head — the container holds a placeholder, the boundary holds the real thing, and the two never meet — and the reason it is worth this much attention is that the entire safety story of an agent system rests on that one sentence remaining true under every code path.
+The dummy key is the memorable part. The property it creates — real authority lives outside the thing you do not trust — is the actual design.
