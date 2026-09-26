@@ -14,6 +14,9 @@ import {
   type SessionItem,
 } from "../../frontend/src/components/SessionsSidebar";
 import { TaskComposer } from "../../frontend/src/components/TaskComposer";
+import { AppNavRail } from "../../frontend/src/components/AppNavRail";
+import { DiffView } from "../../frontend/src/components/DiffView";
+import { ApprovalsView } from "../../frontend/src/components/ApprovalsView";
 import type { AgentPrincipal } from "../../frontend/src/types";
 
 const sessions: SessionItem[] = [
@@ -150,5 +153,105 @@ describe("dashboard components SSR (T14 sweep)", () => {
   it("ArchitectureView renders the static architecture map", () => {
     const html = renderToStaticMarkup(React.createElement(ArchitectureView));
     expect(html.length).toBeGreaterThan(0);
+  });
+  it("AppNavRail renders all promoted views including Diff, Approvals, Mailbox, and Memory with badges", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(AppNavRail, {
+        activeView: "diff",
+        onNavigate: () => {},
+        activeSandboxCount: 2,
+        pendingApprovalCount: 3,
+        setupDone: 4,
+        setupTotal: 6,
+        onOpenSetup: () => {},
+        onOpenShortcuts: () => {},
+      })
+    );
+    expect(html).toContain("Diff");
+    expect(html).toContain("Approvals");
+    expect(html).toContain("Mailbox");
+    expect(html).toContain("Memory");
+    expect(html).toContain("3"); // Pending approval badge
+    expect(html).toContain("aria-current");
+  });
+
+  it("DiffView renders diff inspection and run switcher", () => {
+    const runs = [
+      {
+        runId: "run-42",
+        sandboxId: "sb-42",
+        repoUrl: "https://github.com/shiba/core",
+        task: "Refactor router to standalone views",
+        baseBranch: "main",
+        publishPullRequest: true,
+        status: "completed",
+        createdAt: Date.now() - 5000,
+        updatedAt: Date.now(),
+        diff: `diff --git a/routes.ts b/routes.ts
+@@ -1,3 +1,4 @@
++import { DiffView } from "./DiffView";`, 
+      },
+    ];
+
+    const html = renderToStaticMarkup(
+      React.createElement(DiffView, {
+        runs,
+        selectedRunId: "run-42",
+      })
+    );
+    expect(html).toContain("Diff &amp; Patch Inspector");
+    expect(html).toContain("run-42");
+    expect(html).toContain("Refactor router to standalone views");
+    expect(html).toContain("DiffView");
+  });
+
+  it("ApprovalsView renders pending approvals, stored DO approvals, and outcomes", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(ApprovalsView, {
+        pendingApprovals: [
+          {
+            messageId: "msg-1",
+            toolCallId: "call-1",
+            approvalId: "apv-tool",
+            tool: "run_sandbox",
+            input: { command: "pnpm test" },
+          },
+        ],
+        decisions: {},
+        onDecideApproval: () => {},
+        storedApprovals: [
+          {
+            approvalId: "apv-email",
+            kind: "email_send",
+            status: "pending",
+            repoUrl: "contact@example.com",
+            task: "Send outbound email to user",
+            createdAt: Date.now() - 1000,
+            threadKey: "mail-thread-1",
+          },
+        ],
+        storedDecisions: {},
+        decidedStoredApprovals: [
+          {
+            approvalId: "apv-done",
+            kind: "run",
+            status: "approved",
+            repoUrl: "https://github.com/shiba/core",
+            task: "Run safe migrations",
+            createdAt: Date.now() - 10000,
+            threadKey: "main",
+            execution: { status: "executed" },
+          },
+        ],
+        storedApprovalsError: null,
+        onDecideStoredApproval: () => {},
+      })
+    );
+    expect(html).toContain("Approvals &amp; Decision Center");
+    expect(html).toContain("2 waiting");
+    expect(html).toContain("run_sandbox");
+    expect(html).toContain("Email send");
+    expect(html).toContain("Recent Outcomes &amp; Decided Actions");
+    expect(html).toContain("Executed");
   });
 });
