@@ -528,6 +528,12 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     }
     const approvalId = crypto.randomUUID();
     const threadKey = typeof input.threadKey === "string" && input.threadKey.trim() ? input.threadKey.trim() : "default";
+    // Flood guard: pending approvals persist in DO state — an uncapped queue
+    // lets one trigger token crowd out Slack, chat, and dashboard intake.
+    const MAX_PENDING = 100;
+    if (this.approvals.filter((a) => a.status === "pending").length >= MAX_PENDING) {
+      return Response.json({ error: "Approval queue is full — resolve pending approvals first." }, { status: 429 });
+    }
     try {
       this.writeApprovals(createPendingApproval(this.approvals, {
         threadKey,

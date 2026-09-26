@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { TRIGGER_PATH, handleTrigger } from "../src/trigger.js";
 
-const TOKEN = "test-trigger-token";
+const TOKEN = "test-trigger-token-padded-to-32chars";
 
 function triggerEnv(token?: string) {
   return (token === undefined ? {} : { TRIGGER_TOKEN: token }) as never;

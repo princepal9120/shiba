@@ -42,11 +42,13 @@ Content-Type: application/json
 
 ## Configuration
 
-Generate a random token and store it as a Wrangler secret:
+Generate a random token and store it as a Wrangler secret. The endpoint rejects tokens shorter than 32 characters:
 
 ```sh
-npx wrangler secret put TRIGGER_TOKEN --config apps/backend/wrangler.jsonc
+openssl rand -hex 32 | npx wrangler secret put TRIGGER_TOKEN --config apps/backend/wrangler.jsonc
 ```
+
+Sharing or exporting the Shortcut exports the header with it — rotate the token if the Shortcut ever leaves your device.
 
 `/api/trigger` sits in the `SIGNATURE_AUTHENTICATED` allowlist, so it bypasses the Cloudflare Access identity check — the bearer token is its only credential. Like every other ingress, it can only *queue* work; the approval gate is unchanged.
 

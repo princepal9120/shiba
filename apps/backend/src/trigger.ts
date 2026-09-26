@@ -64,10 +64,12 @@ export async function handleTrigger(
   if (url.pathname !== TRIGGER_PATH || request.method !== "POST") {
     return null;
   }
-  const token = env.TRIGGER_TOKEN ?? "";
-  if (!token) {
+  const token = env.TRIGGER_TOKEN?.trim() ?? "";
+  // A short token is brute-forceable over the wire; fail closed rather than
+  // silently accept a weak deployment. openssl rand -hex 32 satisfies this.
+  if (token.length < 32) {
     return Response.json(
-      { error: "Trigger endpoint is not configured: set the TRIGGER_TOKEN secret." },
+      { error: "Trigger endpoint is not configured: set the TRIGGER_TOKEN secret (min 32 chars)." },
       { status: 503 },
     );
   }
