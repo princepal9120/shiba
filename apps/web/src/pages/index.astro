@@ -35,6 +35,11 @@ const capabilities = [
         <a class="button button-outline" href="/docs/getting-started/">Read the docs</a>
       </div>
       <p class="hero-note">No hosted black box. By default, no sandbox starts before your approval.</p>
+      <ul class="hero-proof">
+        <li class="hero-proof-item"><span class="hero-proof-label">DEPLOYED BY YOU</span><span class="hero-proof-detail">Runs in your Cloudflare account</span></li>
+        <li class="hero-proof-item"><span class="hero-proof-label">OPEN SOURCE</span><span class="hero-proof-detail">AGPL-3.0-only</span></li>
+        <li class="hero-proof-item"><span class="hero-proof-label">KEYS HELD BACK</span><span class="hero-proof-detail">Provider keys stay outside the sandbox</span></li>
+      </ul>
     </div>
 
     <div class="work-window" aria-label="Illustration of Shiba's approval-gated task flow">
@@ -235,6 +240,14 @@ const capabilities = [
   .home-hero .hero-actions { margin-top:var(--hero-gap-md); }
   .hero-note { display:flex; align-items:flex-start; gap:8px; margin-top:var(--hero-gap-sm); font:10px 'Geist Mono',monospace; letter-spacing:.02em; }
   .hero-note::before { content:''; flex:none; width:6px; height:6px; margin-top:4px; background:var(--navy); }
+  /* Proof row: ruled strip, matching the compatibility-strip idiom in design.md.
+     Mono label carries the fact, Geist carries the explanation. */
+  .hero-proof { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); margin:var(--hero-gap-lg) 0 0; padding:0; list-style:none; border-top:1px solid var(--line); }
+  .hero-proof-item { display:flex; flex-direction:column; gap:6px; padding:14px 16px 0 0; }
+  .hero-proof-item + .hero-proof-item { padding-left:16px; border-left:1px solid var(--line); }
+  .hero-proof-item:last-child { padding-right:0; }
+  .hero-proof-label { font:9px 'Geist Mono',monospace; text-transform:uppercase; letter-spacing:.14em; color:var(--navy); }
+  .hero-proof-detail { font-size:12px; line-height:1.45; color:var(--ink-2); }
   .work-window { border:1px solid var(--input-line); background:var(--panel-2); padding:4px; box-shadow:6px 6px 0 var(--paper-shadow); transition:transform 220ms ease, box-shadow 220ms ease; animation:hero-arrive 680ms 100ms cubic-bezier(.2,.7,.2,1) both; }
   .work-window:focus-within { transform:translateY(-3px); box-shadow:8px 9px 0 var(--paper-shadow); }
   @media (hover: hover) and (pointer: fine) {
@@ -438,6 +451,7 @@ const capabilities = [
   @media(max-width:980px) { .approval-art { height:160px; } }
   @media(max-width:420px) { .approval-art { height:132px; } }
   @media(max-width:760px) { .home-hero { grid-template-columns:minmax(0,1fr); min-height:0; padding-block:48px 60px; } .work-window { width:100%; } .home-section { padding-top:75px; } .section-head { align-items:start; flex-direction:column; gap:10px; } .section-copy { grid-template-columns:1fr; gap:18px; } .capability-grid { grid-template-columns:repeat(2,1fr); } .steps-grid { grid-template-columns:1fr; } .closing { flex-direction:column; align-items:start; margin-top:75px; } }
+  @media(max-width:560px) { .hero-proof { grid-template-columns:minmax(0,1fr); } .hero-proof-item { flex-direction:row; align-items:baseline; gap:10px; padding:10px 0 0; border-left:0; } .hero-proof-item + .hero-proof-item { padding-left:0; border-top:1px solid var(--line); } .hero-proof-label { flex:none; min-width:112px; } }
   @media(max-width:500px) { .channels-grid { grid-template-columns:1fr; } .capability-grid { grid-template-columns:1fr; } .capability-card { min-height:0; } .hero-actions .button { width:100%; } .window-status { flex-wrap:wrap; } .closing { padding:22px; } .closing-actions { width:100%; } .closing-actions .button { width:100%; } }
 
   .channels-section { padding-top:85px; }
