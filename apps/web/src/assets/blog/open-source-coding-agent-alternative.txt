@@ -1,0 +1,11 @@
+   +------------------------------------------------------+
+   |  THE ALTERNATIVE QUESTION                            |
+   |                                                      |
+   |   hosted agent:   [ brain ] ----> your repos         |
+   |                                                      |
+   |   shiba:   your harness + your model + your account  |
+   |                       |                              |
+   |                  approval gate                       |
+   |                       |                              |
+   |                sandbox -> diff                       |
+   +------------------------------------------------------+
