@@ -1,76 +1,126 @@
 ---
-title: The credentials that never enter the container
-description: How Shiba runs a real coding agent with a dummy key in the process and a real one at the egress boundary.
+title: Credentials that never enter the container
+description: A walk through what Shiba hands to the sandbox, what it holds back, and where each key is actually attached.
 pubDate: 2026-09-15
 category: guide
 pattern: choreography
-summary: The container runs a coding harness against a fake API key. The real credentials are attached outside it, per request, only after a human approves the run.
+summary: Actors, keys, and handoffs traced from your machine to the sandbox and back out to the provider.
 ---
 
-There is a moment in every Shiba run where a coding agent needs to call a model provider. The agent runs inside a container. The provider key is a real secret. The obvious design puts the key in an environment variable and moves on.
+This post is a choreography. It follows four actors across time and shows where
+each secret lives at every step. The cast is the sandbox container, the Sandbox
+Durable Object, the Worker, and Cloudflare AI Gateway.
 
-Shiba does the opposite. The container gets `DUMMY_PROVIDER_KEY`. The real AI Gateway credential is substituted outside the container, at the egress boundary, by the Sandbox Durable Object. This post is about how that substitution works and why the surrounding choreography matters more than the trick itself.
+Every detail here comes from `README.md` and
+`apps/web/src/content/docs/docs/security.md`. Shiba is a local prototype with
+unit coverage on these paths. That is not proof of a cloud deployment, and this
+post makes no claim about a live end-to-end run.
 
-<div class="callout">
-<span class="callout-label">Prototype status</span>
+## The one-sentence rule
 
-Shiba is a local prototype. The egress and credential paths are implemented and unit-tested. No live end-to-end cloud run is recorded, and no penetration test against a deployed instance is claimed.
-</div>
+`README.md` says it directly: do not add provider credentials to the container.
 
-## The actors
+The container receives `DUMMY_PROVIDER_KEY`. The Sandbox Durable Object swaps in
+the real AI Gateway credential outside the container, at egress. The credential
+invariant holds for every harness.
 
-Four parties are involved, and keeping them distinct is the whole design.
+That is the whole design in one sentence. The rest of this post is the
+consequences.
 
-**The orchestrator** is Worker code. It plans the task, presents it for approval, and owns the secrets. It never runs inside the container.
+## Actor one: the container
 
-**The container** is an isolated Cloudflare Sandbox instance holding a checkout of one branch. It runs a pinned harness CLI — `opencode`, `claude-code`, `codex`, or `devin` — and it has no real credentials for anything.
+The container is the least privileged actor and the most noisy one. It clones a
+repository, runs a coding harness, writes files, and streams output back to the
+parent UI. It has a working key-shaped value and nothing behind it.
 
-**The Sandbox Durable Object** sits between the container and the internet. It intercepts HTTPS egress, decides which hosts are reachable, and attaches the real credentials to the requests it forwards.
+`security.md` states that provider credentials are not supplied to
+provider-backed harnesses in the container. They receive a dummy key, and
+provider requests are forwarded at Sandbox egress, in
+`apps/backend/src/egress.ts`.
 
-**The providers and GitHub** sit on the other side. They see requests from the Durable Object. They never see the container directly.
+`spec/GOAL.md` puts the same rule in the sandbox's own requirement list as item
+seven: never pass real model-provider credentials into the container process.
+It also says the real provider key or Unified Billing credential must stay in AI
+Gateway, outside the container.
 
-If the container is compromised — by a malicious dependency, a bad shell command, an over-broad agent — the attacker holds a dummy key and an allowlist. The real secrets are not in the blast radius.
+## Actor two: egress
 
-## Deny by default
+The dummy key has to work well enough that a harness does not notice the swap.
+The container calls its selected provider host, and the request is intercepted
+and forwarded through the configured AI Gateway binding.
 
-Egress is not open with a few rules bolted on. `interceptHttps` is enabled and the default is refusal. A run gets an explicit host allowlist, and the notable entries are `generativelanguage.googleapis.com`, `github.com`, and `codeload.github.com`.
+`spec/GOAL.md` describes the mechanism for the default path: intercept the
+container's HTTPS egress in the Sandbox Durable Object and forward the
+provider-native request through the account owner's AI Gateway binding.
 
-`registry.npmjs.org` is deliberately absent. That means `npm install` inside a run is refused, which the docs call out as a known consequence rather than a bug. A harness that wants a dependency it does not have will fail, and failing is the correct outcome for a system whose job is to not silently expand its own permissions.
+`security.md` adds two constraints worth naming. Egress is narrowed to the
+selected harness's provider host plus git, never the union across harnesses.
+There is no provider callback route. Inference is outbound only.
 
-The allowlist is also narrowed per run to the selected harness's provider host plus git — never the union across harnesses. A run on the Devin harness does not inherit Google's egress just because both are in the image.
+## Actor three: AI Gateway
 
-## Model calls: dummy in, real out
+Gateway is where the real credential lives. `README.md` notes that adding a
+provider key (BYOK) to the `default` AI Gateway is still a manual step.
 
-When the container's harness calls the provider, it does so with a fake key. The Sandbox Durable Object intercepts the HTTPS request and forwards it through the account owner's Cloudflare AI Gateway binding, swapping in the real credential on the way out.
+`security.md` is careful about what forwarding proves: successful inference
+still depends on account configuration and credentials. A `401` from a provider
+is a real failure, and `troubleshooting.md` is direct about it. A 401 means the
+provider call was not successful, and egress routing alone is not inference.
 
-The consequence is a clean split. Inside the process there is nothing worth stealing. Outside the process there is a key that never entered it. The provider key, or the Unified Billing credential, lives in AI Gateway and stays there.
+## Actor four: the Worker and GITHUB_TOKEN
 
-The same invariant holds for every harness. Claude Code and Codex are API-key harnesses only; subscription credentials are deliberately not proxied, because Anthropic's terms forbid routing requests through Free, Pro, or Max plan credentials on behalf of users. The Devin CLI authenticates to Cognition's own backends with a Worker secret `DEVIN_API_KEY`, and its `credentials.toml` in the container carries a dummy that the egress forwarders replace with a real Bearer.
+Git is a separate credential with a separate handoff. `spec/GOAL.md` allows
+`GITHUB_TOKEN` only as a Wrangler secret, and only for optional GitHub access.
+Public repositories and diff-only tasks must work without it.
 
-## The GitHub token
+If `publishPullRequest` is true and no token exists, the system must fail before
+coding with a clear configuration error. If it is configured, the token stays
+out of the container. Git transport authorization is injected through Sandbox
+HTTPS interception, and the pull request API is called from Worker code.
 
-GitHub is the more interesting case, because git traffic is not a single request.
+The same line lists where the token must never appear: a clone URL, a command,
+the process environment, a log, or a UI response. `security.md` compresses it:
+`GITHUB_TOKEN` is attached in the Worker, never in the container. `README.md`
+adds that it is scoped to the approved repo for git traffic, is also used for
+Worker-side PR publishing, and should be a fine-grained token scoped to that
+repo.
 
-`GITHUB_TOKEN` is a Wrangler secret on the Worker. It is attached by the Worker at the egress boundary for git traffic to the approved repository only, and it is also used for Worker-side pull-request publishing. It is never placed in the container, and never appears in the clone URL, the command, the process environment, the logs, or UI responses.
+## Time, as a sequence
 
-Access is scoped rather than global. GitHub access defaults to refusal. `approveRepoScope("/owner/repo")` installs a scoped forwarder for one repository; a run without an approved scope receives no credential at all. Requests for any other repository are refused with a 403 and no `Authorization` header. Sibling and prefix-lookalike paths are refused too.
+Fold the actors into order and the run reads like this.
 
-Even for the approved repo, the container is not trusted to push. Only `GET`/`HEAD` and `POST git-upload-pack` pass. Git authorization is injected by the same interception layer, so the container never holds a token that could write.
+1. A human approves a plan. No container exists yet.
+2. The sandbox validates an HTTPS GitHub URL, clones the requested branch, and
+   starts a harness.
+3. The harness is handed a dummy key, and the process environment contains no
+   real credential.
+4. The harness makes a provider request to its allowed host. Egress intercepts
+   it and forwards it through AI Gateway, which holds the real key.
+5. Git traffic is authorized in the Worker, not the container.
+6. On completion, cancel, or reclaim, the sandbox is destroyed.
 
-`GITHUB_TOKEN` is optional for public repositories and diff-only tasks. If `publishPullRequest` is set to true without a token, the run fails early with a clear configuration error instead of failing later inside a git command.
+Each step hands the work forward without handing over the secret.
 
-## Webhooks, and the difference between acknowledging and acting
+## The Devin exception
 
-`GITHUB_WEBHOOK_SECRET` verifies incoming webhook requests. Those requests are acknowledgment-only: the system validates the signature and confirms receipt. It does not let a webhook drive a mutation on its own. Any work that follows still passes through the approval gate.
+One harness does not fit the AI Gateway shape. The `devin` harness is not an AI
+Gateway provider. Its CLI authenticates to Cognition's own backends with an
+account API key set as a Worker secret, `DEVIN_API_KEY`. The container's
+`credentials.toml` carries a dummy, and the egress forwarders replace the
+authorization header with the real Bearer.
 
-This is the same discipline applied to Slack. A valid Slack signature authenticates that the request came from Slack, not which human clicked the button. So `SLACK_APPROVERS` is deny-by-default: unset means nobody can approve from Slack.
+The invariant survives the exception, but only because the swap happens in a
+different place.
 
-## Why the choreography is the security property
+## What is not claimed
 
-Any one of these controls is a line of code. Together they are a sequence, and the sequence is what holds.
+`security.md` is explicit that these boundaries have unit coverage and that you
+should not treat that as proof of a cloud deployment. The unit tests use fakes.
+`VERIFICATION.md` lists the live cloud run as not attempted.
 
-The orchestrator holds secrets and does not run agent code. The container runs agent code and holds no secrets. The Durable Object is the only component that sees both, and it exists to translate between them under an explicit allowlist. The approval gate ensures none of it starts until a human has said which repository and which commands are acceptable.
+Two things are deliberately absent from this post. There is no measured price or
+end-to-end cloud usage to report, and there is no latency comparison between
+configurations. The costs document omits earlier cost-ratio language on purpose,
+because it is not evidenced.
 
-If you removed any single piece, the others would not compensate. Remove the gate and a compromised container can act on an approved scope without a human in the loop. Remove the allowlist and the dummy key becomes irrelevant. Remove the dummy key and the container becomes the thing holding the secret.
-
-The dummy key is the memorable part. The property it creates — real authority lives outside the thing you do not trust — is the actual design.
+Read next: [harness and model choices](/blog/harness-and-model-choices/).
