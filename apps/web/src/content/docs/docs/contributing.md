@@ -37,10 +37,7 @@ frontmatter, descriptive headings, and links using the `/docs/` base.
 Starlight supplies navigation and search; avoid duplicating its interface.
 Source: `apps/web/astro.config.mjs`.
 
-Write technical claims from `apps/backend/src/`, `apps/backend/wrangler.jsonc`, and the installed
-configuration rather than copying README assumptions. Cite relevant source
-files or symbols. When source and the goal differ, label **Current behavior
-(as implemented)** and **Specification target (GOAL)** explicitly.
+Write technical claims from `apps/backend/src/`, `apps/backend/wrangler.jsonc`, `apps/backend/Dockerfile`, and installed configuration rather than copying README assumptions. Cite relevant source files or symbols. When source and the goal differ, label **Current behavior (as implemented)** and **Specification target (GOAL)** explicitly. Distinguish implementation, unit tests (often fake-backed), local end-to-end exercises, and successful cloud-live evidence; cite the dated `VERIFICATION.md` entry. Its 2026-09-24 summary has no cloud end-to-end run. The 2026-09-19 local OpenCode run ended with a 401 provider response, not successful inference.
 
 The combined build builds the dashboard first, then documentation, copies
 the documentation output into `public/docs`, and verifies the assembled site.
@@ -65,9 +62,11 @@ of them requires re-running the live acceptance checklist (T10).
 
 | Package | Version | Why it matters |
 |---|---|---|
-| `opencode-ai` | `1.18.31` | `parseOpencodeEvent` couples to the JSON event format. A stream-format change breaks progress parsing silently. |
-| `@cloudflare/sandbox` | `0.12.9` | Must match the base image tag in `Dockerfile`. The `interceptHttps` + `outboundByHost` mechanism is the "no credentials in the container" guarantee. |
-| `CODING_MODEL` | `google/gemini-3.5-flash-lite` | Model ids retire. A retired model fails silently at run time. |
+| `opencode-ai` | `1.18.31` | Pinned in `Dockerfile`; event parsing depends on the CLI stream format. |
+| `@cloudflare/sandbox` | `0.12.9` | Must match the base image tag in `Dockerfile`; verify the SDK egress behavior and credential boundary rather than asserting an absolute isolation guarantee. |
+| `@anthropic-ai/claude-code` | `2.1.277` | Pinned image CLI; unit-tested config/argv/parser does not establish live API execution. |
+| `@openai/codex` | `0.155.0` | Pinned image CLI; unit-tested config/argv/parser does not establish live API execution. |
+| Devin CLI | `3000.10.31` | Checksum-pinned image binary; uses `DEVIN_API_KEY` via Worker egress, not AI Gateway BYOK. |
+| `CODING_MODEL` | `google/gemini-3.5-flash-lite` | Default only; model identifiers can change availability. `assertLiveCodingModel` rejects known retired IDs on requests. |
 
-`apps/backend/src/index.ts` throws on first request if `CODING_MODEL` is in the retired-id deny list.
-
+All four harnesses are present in current source and image configuration; only OpenCode has a dated local end-to-end exercise, and no cloud end-to-end run is recorded. Keep this distinction current when updating documentation.
