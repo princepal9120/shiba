@@ -309,8 +309,9 @@ html[data-theme='dark'] .blog-filter[aria-current='true'] {
 	image-rendering: pixelated;
 }
 
-.prose > p:first-child:has(> img:only-child) {
-	display: none;
+.prose > p:first-child:has(img),
+.prose > p:first-child > img {
+	display: none !important;
 }
 
 /* Article body: a two-column measure on wide screens so the TOC sits beside the

@@ -106,7 +106,7 @@ const capabilities = [
       <div class="channel-card">
         <div class="channel-top">
           <span class="channel-icon"><img src="/assets/channels/slack.svg" alt="" width="22" height="22" /></span>
-          <span class="channel-badge live">● LIVE CHATOPS</span>
+          <span class="channel-badge">● LIVE CHATOPS</span>
         </div>
         <h3>Slack</h3>
         <div class="channel-bubble">
@@ -119,7 +119,7 @@ const capabilities = [
       <div class="channel-card">
         <div class="channel-top">
           <span class="channel-icon"><img src="/assets/channels/iphone.svg" alt="" width="22" height="22" /></span>
-          <span class="channel-badge live">● MOBILE WEB</span>
+          <span class="channel-badge">● MOBILE WEB</span>
         </div>
         <h3>Mobile web</h3>
         <div class="channel-bubble">
@@ -132,7 +132,7 @@ const capabilities = [
       <div class="channel-card">
         <div class="channel-top">
           <span class="channel-icon"><img src="/assets/channels/telegram.svg" alt="" width="22" height="22" /></span>
-          <span class="channel-badge live">● LIVE CHATOPS</span>
+          <span class="channel-badge">● LIVE CHATOPS</span>
         </div>
         <h3>Telegram</h3>
         <div class="channel-bubble">
@@ -145,7 +145,7 @@ const capabilities = [
       <div class="channel-card">
         <div class="channel-top">
           <span class="channel-icon"><img src="/assets/channels/discord.svg" alt="" width="22" height="22" /></span>
-          <span class="channel-badge live">● LIVE CHATOPS</span>
+          <span class="channel-badge">● LIVE CHATOPS</span>
         </div>
         <h3>Discord</h3>
         <div class="channel-bubble">
@@ -383,11 +383,10 @@ const capabilities = [
   .channel-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
   .channel-icon { display:grid; place-items:center; width:38px; height:38px; border:1px solid var(--line-2); background:var(--panel-2); }
   :global(html[data-theme='dark']) .channel-icon img { filter:invert(1) brightness(1.2); }
-  .channel-badge { font-family:'Geist Mono',monospace; font-size:8.5px; letter-spacing:0.12em; text-transform:uppercase; padding:2px 7px; border:1px solid var(--line-2); color:var(--navy); background:var(--panel-2); }
-  .channel-badge.live { color:var(--navy); border-color:var(--line-2); }
+  .channel-badge { font-family:'Geist Mono',monospace; font-size:8.5px; letter-spacing:0.12em; text-transform:uppercase; padding:2px 7px; border:1px solid var(--line-2); color:var(--navy); background:var(--panel-2); box-shadow:2px 2px 0 var(--paper-shadow); }
   .channel-badge.soon { background:var(--panel-2); color:var(--ink-2); }
   .channel-card h3 { font-family:var(--sl-font); font-size:18px; font-weight:600; margin:0 0 12px; color:var(--ink); letter-spacing:-0.01em; }
-  .channel-bubble { background:var(--panel-2); border:1px solid var(--line-2); padding:10px 12px; margin-bottom:16px; font-family:'Geist Mono',monospace; font-size:11px; line-height:1.55; display:flex; flex-direction:column; gap:4px; }
+  .channel-bubble { background:var(--panel-2); border:1px solid var(--line-2); border-left:3px solid var(--navy); padding:10px 12px; margin-bottom:16px; font-family:'Geist Mono',monospace; font-size:11px; line-height:1.55; display:flex; flex-direction:column; gap:4px; box-shadow:2px 2px 0 var(--paper-shadow); }
   .bubble-prompt { color:var(--ink); }
   .bubble-prompt .highlight { color:var(--navy); font-weight:600; }
   .bubble-reply { color:var(--ink-2); font-size:10px; }

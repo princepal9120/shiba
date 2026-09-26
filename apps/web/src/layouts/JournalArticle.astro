@@ -100,12 +100,6 @@ const articleSchema = {
 				)}
 			</header>
 
-			{hero && (
-				<figure class="article-hero">
-					<img src={hero.src} alt={hero.alt} width="1200" height="630" loading="eager" />
-				</figure>
-			)}
-
 			<div class="article-body">
 				{toc.length > 0 && (
 					<aside class="article-toc-col">
