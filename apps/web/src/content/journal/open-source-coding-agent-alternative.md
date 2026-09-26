@@ -2,6 +2,7 @@
 title: "An open-source coding agent alternative: a guide to Shiba"
 description: A grounded look at Shiba as an open-source alternative to hosted coding agents, covering what is inspectable, what is gated, and what is not yet proven.
 pubDate: 2026-09-20
+updatedDate: 2026-09-26
 category: guide
 pattern: situation-complication-resolution
 summary: What the search for an open-source coding agent usually means, what Shiba actually is, and how to evaluate it against your own work.
@@ -58,11 +59,27 @@ operations need a human, what state the run retains, and what secrets can
 reach the container are all readable. Record the revision you evaluated so
 your findings stay attached to a specific implementation.
 
+## What a task looks like end to end
+
+The workflow is deliberately small. You paste an HTTPS GitHub repository URL
+and describe the task in the dashboard — "fix the token refresh race in
+`auth.ts`", not a spec. Shiba generates a proposed tool call,
+`delegate_coding_task`, and freezes it for review.
+
+That frozen input is the product. It names the repository, the branch, the
+base it diverges from, and the egress policy the sandbox will run under.
+Nothing executes while it is frozen. Approval starts the container;
+rejection discards the plan entirely.
+
+After approval the run reports progress, changed files, and a unified diff
+in the dashboard. Opening a pull request is optional and only happens when
+you configure a GitHub token for it — diff-only tasks need no token at all.
+
 ## Choose the harness and the model
 
-A Shiba run executes OpenCode or Claude Code inside a sandboxed container.
-The coding agent is a tool the run invokes, not the product's identity, and
-`CODING_MODEL` is a per-run selection.
+A Shiba run executes OpenCode, Claude Code, Codex, or Devin CLI inside a
+sandboxed container. The coding agent is a tool the run invokes, not the
+product's identity, and `CODING_MODEL` is a per-run selection.
 
 Model access goes through a Cloudflare AI Gateway in your account. You add a
 provider key to the gateway named `default`, and the container only ever
@@ -84,20 +101,43 @@ Automations get the same treatment. Cron, GitHub, Slack, webhook, and manual
 triggers all queue an approval by default. Unattended mode exists only for
 pull-request-only mutations on an explicit repo allowlist.
 
+## Where tasks can come from
+
+The approval gate only earns its keep if starting a task is cheap, so the
+entry points follow you rather than the other way around. A `@shiba` mention
+in Slack, a `/shiba` command in Telegram or Discord, the mobile web app, and
+the dashboard all land on the same frozen-input review.
+
+The trigger channel does not change the gate. A task queued from a phone at
+11pm produces the same reviewable proposal as one typed at your desk.
+
 ## Compare against your actual requirements
 
 | Requirement | Shiba's approach | What to verify |
 |---|---|---|
 | Inspectable source | AGPL-3.0 monorepo, three apps | The revision you plan to run |
-| Harness choice | OpenCode or Claude Code per run | Authentication in your environment |
+| Harness choice | OpenCode, Claude Code, Codex, Devin CLI | Authentication in your environment |
 | Model choice | BYOK through your AI Gateway | Provider key in gateway `default` |
 | Approval before execution | Required human gate, code-enforced | Approval list and entry points |
+| Credential isolation | Container sees a dummy key only | Egress interception code |
 | Failure reporting | Real exit code, bounded stderr tail, error envelope | A failing task's record |
 | Compute ceiling | `standard-4`: 4 vCPU / 12 GiB / 20 GB | Your build's actual footprint |
 
 A missing row is a reason to keep looking, not a reason to assume a
 workaround. The compute ceiling is real: heavy builds and large monorepo
 test suites are out of reach on this platform by design.
+
+## What it costs you to run
+
+The infrastructure cost lands on your Cloudflare account — a Worker,
+Durable Objects, a Sandbox container per run, KV, D1, and an AI Gateway.
+There is no seat fee because there is no vendor between you and the
+platform. The real cost is operational: you keep the Worker updated, you
+rotate the provider keys, you read the diff.
+
+Model spend is also yours. The gateway meters each run against your provider
+key, so a cheaper model choice shows up directly on your bill rather than
+inside a credit bundle you cannot audit.
 
 ## Run one bounded check before trusting it
 
