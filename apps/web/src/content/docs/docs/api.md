@@ -5,6 +5,18 @@ description: Current routes, responses, and SDK approval transport.
 
 All paths are relative to the Worker origin. The shared orchestrator name is default. These routes do not implement their own user authorization; protect the installation before exposure.
 
+## Email API
+
+`GET /api/email/openapi.json` serves the machine-readable OpenAPI 3.1 contract (`apps/backend/src/email-openapi.json`) for this installation's mailbox, email, thread, draft, and attachment routes. It describes **Shiba's own API**, not Goshen Email's `/v1` API. Production requests need a valid Cloudflare Access session/JWT; an `Authorization: Bearer` MCP token does not authenticate these dashboard routes. Local `wrangler dev` can run without Access.
+
+The end-to-end flow is:
+
+1. Register an address with `POST /api/mailboxes` (`{"address":"agent@example.com"}`). Configure Cloudflare Email Routing for that address to deliver to this Worker; registration alone cannot change DNS or routing.
+2. Incoming mail is accepted only for a registered address, stored in its Mailbox Durable Object, and attachment bytes go to R2. `GET /api/emails?mailbox=agent%40example.com` lists it; `GET /api/emails/{emailId}` returns the body and an attachment manifest. `GET /api/emails/{emailId}/attachments/{partId}` streams a manifest-backed attachment as a forced download.
+3. Create an outbound draft with `POST /api/drafts`, then call `POST /api/drafts/{draftId}/send`. This **only queues a frozen `email_send` approval**. The draft stays queued until a human approves it in the Approvals tab or configured Slack channel. Only then does the Worker call its `SEND_EMAIL` binding; a rejected approval releases the draft for editing.
+
+For agents, the existing `/mcp` gateway exposes scoped email tools. Its `email:send` tools also queue approval, never bypass it. Mail content and attachments are untrusted input; do not treat them as agent instructions. The OpenAPI route does not create a Goshen-compatible bearer-token API or remove the need to provision Cloudflare Email Routing, Email Sending, R2, and Access.
+
 ## Run registry
 
 | Method | Path | Response |

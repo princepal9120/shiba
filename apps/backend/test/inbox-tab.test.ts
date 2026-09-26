@@ -198,6 +198,27 @@ function makeEnvWithTwoMailboxes() {
 }
 
 describe("dashboard inbox routes", () => {
+  it("serves an Access-gated OpenAPI contract for the implemented email routes", async () => {
+    const { env } = makeEnvWithTwoMailboxes();
+    const response = await worker.fetch(new Request("https://worker/api/email/openapi.json"), env, ctx);
+    expect(response.status).toBe(200);
+    const spec = (await response.json()) as {
+      openapi: string;
+      paths: Record<string, Record<string, { operationId: string }>>;
+    };
+    expect(spec.openapi).toBe("3.1.0");
+    expect(spec.paths["/api/emails/{emailId}/attachments/{partId}"]?.get?.operationId)
+      .toBe("downloadAttachment");
+    expect(spec.paths["/api/drafts/{draftId}/send"]?.post?.operationId)
+      .toBe("queueDraftSend");
+    const blocked = await worker.fetch(
+      new Request("https://worker/api/email/openapi.json"),
+      { ...env, ACCESS_AUD: "required-aud" } as Env,
+      ctx,
+    );
+    expect(blocked.status).toBe(401);
+  });
+
   it("GET /api/mailboxes lists the registered mailboxes from the directory stub", async () => {
     const { env, directory } = makeEnvWithTwoMailboxes();
     const response = await worker.fetch(new Request("https://worker/api/mailboxes"), env, ctx);
@@ -309,6 +330,53 @@ describe("dashboard inbox routes", () => {
     expect(body.attachments).toEqual([
       { part_id: "p1", filename: "a.pdf", mime_type: "application/pdf", size: 1234 },
     ]);
+  });
+
+  it("downloads only a manifest-backed attachment as an authenticated, forced download", async () => {
+    const { env } = makeEnvWithTwoMailboxes();
+    const get = vi.fn(async (key: string) =>
+      key === "eml-a1/p1"
+        ? { body: new Blob(["pdf bytes"]).stream(), size: 9 }
+        : null,
+    );
+    const withBucket = { ...env, ATTACHMENTS: { get } } as unknown as Env;
+    const response = await worker.fetch(
+      new Request("https://worker/api/emails/eml-a1/attachments/p1"),
+      withBucket,
+      ctx,
+    );
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("pdf bytes");
+    expect(response.headers.get("Content-Disposition")).toContain("attachment;");
+    expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(get).toHaveBeenCalledWith("eml-a1/p1");
+
+    const forged = await worker.fetch(
+      new Request("https://worker/api/emails/eml-a1/attachments/other"),
+      withBucket,
+      ctx,
+    );
+    expect(forged.status).toBe(404);
+    expect(get).toHaveBeenCalledTimes(1);
+
+    get.mockResolvedValueOnce(null);
+    const missingBody = await worker.fetch(
+      new Request("https://worker/api/emails/eml-a1/attachments/p1"),
+      withBucket,
+      ctx,
+    );
+    expect(missingBody.status).toBe(404);
+
+    const unauthenticated = await worker.fetch(
+      new Request("https://worker/api/emails/eml-a1/attachments/p1", {
+        headers: { "CF-Access-Authenticated-User-Email": "forged@example.com" },
+      }),
+      { ...withBucket, ACCESS_AUD: "required-aud" } as Env,
+      ctx,
+    );
+    expect(unauthenticated.status).toBe(401);
+    expect(get).toHaveBeenCalledTimes(2);
   });
 
   it("GET /api/emails/:id returns 404 when no registered mailbox owns it", async () => {
@@ -904,4 +972,3 @@ describe("replyMailbox", () => {
     expect(replyMailbox(null, "")).toBe("");
   });
 });
-

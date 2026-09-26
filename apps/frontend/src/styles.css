@@ -234,9 +234,16 @@ html.dark [class~="hover:bg-[#fcfbf7]"]:hover { background-color: #242523; }
 html.dark [class~="hover:bg-[#f6f4ed]/70"]:hover { background-color: #191a18b3; }
 html.dark [class~="hover:bg-[#fffef8]"]:hover { background-color: #2b2c28; }
 html.dark [class~="hover:bg-[#e0ded5]/60"]:hover { background-color: #3b3d3699; }
+html.dark [class~="hover:bg-[#e0ded5]"]:hover { background-color: #3b3d36; }
+html.dark [class~="hover:bg-[#e0ded5]/30"]:hover { background-color: #3b3d364d; }
+html.dark [class~="hover:bg-[#e0ded5]/50"]:hover { background-color: #3b3d3680; }
+html.dark [class~="hover:bg-[#f6f4ed]"]:hover { background-color: #272824; }
+html.dark [class~="hover:bg-[#f1efe6]"]:hover { background-color: #272824; }
+html.dark [class~="hover:bg-[#e9e8df]"]:hover { background-color: #2b2c28; }
 html.dark [class~="before:bg-[#e0ded5]"]::before { background-color: #3b3d36; }
 html.dark [class~="hover:border-[#d3d2c8]"]:hover { border-color: #4a4c44; }
 html.dark [class~="hover:text-[#222320]"]:hover { color: #f4f2ea; }
+html.dark .group:hover [class~="group-hover:text-[#222320]"] { color: #f4f2ea; }
 
 html.dark [class~="text-[#222320]"]          { color: #eae8e1; }
 html.dark [class~="text-[#4b5046]"]          { color: #a3a398; }

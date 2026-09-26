@@ -384,13 +384,17 @@ export function App(): React.JSX.Element {
 
   const agent = useAgent({
     agent: ORCHESTRATOR_AGENT,
-    // Until /api/whoami resolves, bind to a private placeholder DO — `agents`
-    // defaults a missing name to the shared "default" instance, where chat
-    // approvals would be decidable by any other pending dashboard.
+    // Until /api/whoami resolves, don't connect at all — the Worker 403s any
+    // name that isn't the caller's identity, so a placeholder DO name just
+    // produces a 403 burst on every load.
     name: orchestratorName ?? "identity-pending",
+    enabled: orchestratorName !== null,
   });
   const chat = useAgentChat({
     agent,
+    // Skip the /get-messages prefetch while the DO name is the pending
+    // placeholder — it 403s by design; the hook refetches when name resolves.
+    getInitialMessages: orchestratorName === null ? async () => [] : undefined,
     onError: () => {
       submitFailed.current = true;
     },

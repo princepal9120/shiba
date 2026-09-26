@@ -127,6 +127,8 @@ claude mcp add --transport http shiba https://<worker-host>/mcp --header "Author
 
 Tools: `queue_run` (`sandbox:exec`) plus `run_status`, `list_runs`, `list_approvals` (`runs:read`, scoped to records the token's principal queued), and email and memory tools behind their own scopes. `queue_run` only queues — a human approves in the dashboard, on iPhone, or in Slack; there is no approve tool. Details: [/docs/mcp](apps/web/src/content/docs/docs/mcp.md).
 
+The built-in email backend has a documented OpenAPI contract at `GET /api/email/openapi.json` ([email API guide](apps/web/src/content/docs/docs/api.md#email-api)). The Inbox downloads stored attachments through an Access-gated route; sending a draft still requires human approval. This is Shiba's own API, not a Goshen Email `/v1` clone.
+
 ## Documentation
 
 The documentation site at `/docs/` includes setup, configuration, local development, dashboard usage, deployment, GitHub integration, security, architecture, API reference, troubleshooting, cost surfaces, contributing, and an end-to-end acceptance checklist.

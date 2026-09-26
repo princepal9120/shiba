@@ -960,8 +960,11 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
                                 <span className="text-[10px] font-mono uppercase text-[#6a6f63]">Attachments ({detail.attachments.length})</span>
                                 <div className="flex flex-wrap gap-2">
                                   {detail.attachments.map((attachment) => (
-                                    <div
+                                    <a
                                       key={attachment.part_id}
+                                      href={`/api/emails/${encodeURIComponent(detail.email.id)}/attachments/${encodeURIComponent(attachment.part_id)}`}
+                                      download={attachment.filename ?? "attachment"}
+                                      aria-label={`Download ${attachment.filename ?? attachment.part_id}`}
                                       className="text-[11px] font-mono text-[#222320] border border-[#e0ded5] bg-[#fffef8] rounded-none px-2.5 py-1.5 flex items-center gap-2 shadow-2xs"
                                     >
                                       <span>📎</span>
@@ -969,7 +972,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
                                       {attachment.size !== undefined ? (
                                         <span className="text-[10px] text-[#6a6f63]">({formatBytes(attachment.size)})</span>
                                       ) : null}
-                                    </div>
+                                    </a>
                                   ))}
                                 </div>
                               </div>
@@ -1085,4 +1088,3 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
     </div>
   );
 }
-

@@ -115,3 +115,11 @@ Blocked until the image carries the CLI. Build `Dockerfile.claude-code` installi
 - G4: one paragraph in `spec/GOAL.md` naming Slack as a second inbound surface.
 - G5, G6: done — `apps/backend/src/costs.ts`, `apps/backend/test/costs.test.ts`, and `spec/COMPLETION.md` are already absent from the tree (removed by commit `22217d6`, ancestor of HEAD).
 - G7: either delete `review.md`, `jira.mdx`, `multi-agent.mdx` or move them under a clearly labelled "Not built" section. Rewrite `claude-code.mdx` to drop the npm/pip claim. Docs describing unbuilt features are the failure PLAN §12 T24 exists to prevent.
+## Email live acceptance (not run locally)
+
+This requires an account-owned Cloudflare deployment; `spec/GOAL.md` forbids deploying from this implementation environment. After provisioning Email Routing, Email Sending, R2, and Access, verify:
+
+1. Register a mailbox in the Inbox tab, route that address to the Worker, and send it a message with a small attachment. Confirm one inbound record appears and the attachment downloads from the Inbox; an unknown part id must return 404.
+2. Create a draft addressed to a controlled mailbox and click Send. Confirm the response is `pending_approval`, no outbound mail arrives yet, and the exact recipient/subject/body appear on the approval card.
+3. Reject one approval and confirm the draft becomes editable without sending. Queue it again, approve once, and confirm exactly one message arrives and the draft becomes `sent`; repeat the approval callback and confirm no duplicate.
+4. Repeat with Cloudflare Access enabled: an unauthenticated `GET /api/emails` and attachment download must return 401, while an authorized session works. Check logs for no provider or GitHub credentials.

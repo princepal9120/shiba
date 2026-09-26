@@ -1,3 +1,13 @@
 /docs /docs/overview/ 301
 /docs/ /docs/overview/ 301
 
+# App and Dashboard subdomains redirect to the SPA dashboard
+https://app.tryshiba.dev/ /app/ 302
+https://app.tryshiba.dev/* /app/:splat 302
+https://dashboard.tryshiba.dev/ /app/ 302
+https://dashboard.tryshiba.dev/* /app/:splat 302
+
+# Path aliases for dashboard
+/dashboard /app/ 301
+/dashboard/ /app/ 301
+/dashboard/* /app/:splat 301

@@ -153,13 +153,13 @@ function NavItem({
       aria-label={label}
       aria-current={active ? "page" : undefined}
       className={
-        "w-full flex items-center gap-2.5 rounded-none px-2.5 py-1.5 touch:min-h-11 text-[13px] font-medium transition-colors duration-100 " +
+        "group w-full flex items-center gap-2.5 rounded-none px-2.5 py-1.5 touch:min-h-11 text-[13px] font-medium transition-colors duration-100 " +
         (active
           ? "bg-[#0000a8] text-white shadow-[2px_2px_0_var(--paper-shadow)]"
           : "text-[#222320] hover:bg-[#e0ded5] hover:text-[#222320]")
       }
     >
-      <span className={active ? "text-white" : "text-[#6a6f63]"} aria-hidden="true">
+      <span className={active ? "text-white" : "text-[#6a6f63] group-hover:text-[#222320]"} aria-hidden="true">
         {children}
       </span>
       <span className="flex-1 text-left truncate">{label}</span>

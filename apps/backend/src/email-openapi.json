@@ -1,0 +1,798 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Shiba Email API",
+    "version": "1.0.0",
+    "description": "Account-owned email API. A send request only queues a frozen draft for human approval; it never sends immediately. This is not a Goshen-compatible API."
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "security": [
+    {
+      "cloudflareAccess": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "cloudflareAccess": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Cf-Access-Jwt-Assertion",
+        "description": "JWT issued by this installation's Cloudflare Access application. A caller-supplied identity email header is not authentication. Local development can opt out of Access."
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        }
+      },
+      "Mailbox": {
+        "type": "object",
+        "required": [
+          "address",
+          "created_at"
+        ],
+        "properties": {
+          "address": {
+            "type": "string",
+            "format": "email"
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "agent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "type": "integer"
+          }
+        }
+      },
+      "Email": {
+        "type": "object",
+        "required": [
+          "id",
+          "thread_id",
+          "direction",
+          "from_addr",
+          "to_addr",
+          "subject",
+          "status",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "string"
+          },
+          "direction": {
+            "enum": [
+              "inbound",
+              "outbound"
+            ]
+          },
+          "from_addr": {
+            "type": "string",
+            "format": "email"
+          },
+          "to_addr": {
+            "type": "string",
+            "format": "email"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "body_text": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "body_html": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "enum": [
+              "unread",
+              "read",
+              "archived",
+              "sent",
+              "deleted"
+            ]
+          },
+          "created_at": {
+            "type": "integer"
+          }
+        }
+      },
+      "Attachment": {
+        "type": "object",
+        "required": [
+          "part_id",
+          "filename",
+          "mime_type",
+          "size"
+        ],
+        "properties": {
+          "part_id": {
+            "type": "string"
+          },
+          "filename": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mime_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "size": {
+            "type": "integer"
+          }
+        }
+      },
+      "Draft": {
+        "type": "object",
+        "required": [
+          "id",
+          "to_addr",
+          "subject",
+          "body_text",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "to_addr": {
+            "type": "string",
+            "format": "email"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "body_text": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "draft",
+              "queued",
+              "sending",
+              "sent",
+              "discarded"
+            ]
+          },
+          "in_reply_to_email_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "type": "integer"
+          },
+          "updated_at": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "parameters": {
+      "emailId": {
+        "name": "emailId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "partId": {
+        "name": "partId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "draftId": {
+        "name": "draftId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "threadId": {
+        "name": "threadId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "mailbox": {
+        "name": "mailbox",
+        "in": "query",
+        "schema": {
+          "type": "string",
+          "format": "email"
+        },
+        "description": "Optional registered mailbox; omitted means all registered mailboxes."
+      },
+      "limit": {
+        "name": "limit",
+        "in": "query",
+        "schema": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "status": {
+        "name": "status",
+        "in": "query",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "Missing or invalid Access identity.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "No matching email, draft, thread, or attachment.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/api/mailboxes": {
+      "get": {
+        "operationId": "listMailboxes",
+        "summary": "List registered mailboxes",
+        "responses": {
+          "200": {
+            "description": "Mailbox list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mailboxes": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Mailbox"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": []
+      },
+      "post": {
+        "operationId": "registerMailbox",
+        "summary": "Register a mailbox before routing mail to it",
+        "responses": {
+          "201": {
+            "description": "Registered mailbox",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mailbox": {
+                      "$ref": "#/components/schemas/Mailbox"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid address",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "address"
+                ],
+                "properties": {
+                  "address": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "agent": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/emails": {
+      "get": {
+        "operationId": "listEmails",
+        "summary": "List emails, newest first",
+        "responses": {
+          "200": {
+            "description": "Email list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "emails": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Email"
+                      }
+                    },
+                    "mailbox": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/mailbox"
+          },
+          {
+            "$ref": "#/components/parameters/limit"
+          },
+          {
+            "$ref": "#/components/parameters/status"
+          }
+        ]
+      }
+    },
+    "/api/emails-search": {
+      "get": {
+        "operationId": "searchEmails",
+        "summary": "Search emails",
+        "responses": {
+          "200": {
+            "description": "Matching emails",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "emails": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Email"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing q",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/mailbox"
+          },
+          {
+            "$ref": "#/components/parameters/limit"
+          },
+          {
+            "$ref": "#/components/parameters/status"
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/emails/{emailId}": {
+      "get": {
+        "operationId": "getEmail",
+        "summary": "Read an email and its attachment manifest",
+        "responses": {
+          "200": {
+            "description": "Email detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mailbox": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "$ref": "#/components/schemas/Email"
+                    },
+                    "attachments": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Attachment"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/emailId"
+          }
+        ]
+      }
+    },
+    "/api/emails/{emailId}/attachments/{partId}": {
+      "get": {
+        "operationId": "downloadAttachment",
+        "summary": "Download attachment bytes",
+        "responses": {
+          "200": {
+            "description": "Attachment bytes",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/emailId"
+          },
+          {
+            "$ref": "#/components/parameters/partId"
+          }
+        ],
+        "description": "Authenticated, no-store, forced download. The URL cannot select an arbitrary R2 key."
+      }
+    },
+    "/api/emails/{emailId}/read": {
+      "post": {
+        "operationId": "markEmailRead",
+        "summary": "Mark an email read",
+        "responses": {
+          "200": {
+            "description": "Updated email",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mailbox": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "$ref": "#/components/schemas/Email"
+                    },
+                    "changed": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/emailId"
+          }
+        ]
+      }
+    },
+    "/api/threads/{threadId}": {
+      "get": {
+        "operationId": "getThread",
+        "summary": "Read a thread",
+        "responses": {
+          "200": {
+            "description": "Thread and emails",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mailbox": {
+                      "type": "string"
+                    },
+                    "thread": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "subject": {
+                          "type": "string"
+                        },
+                        "last_message_at": {
+                          "type": "integer"
+                        },
+                        "emails": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/Email"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/threadId"
+          }
+        ]
+      }
+    },
+    "/api/drafts": {
+      "get": {
+        "operationId": "listDrafts",
+        "summary": "List drafts",
+        "responses": {
+          "200": {
+            "description": "Draft list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "drafts": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Draft"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/mailbox"
+          },
+          {
+            "$ref": "#/components/parameters/limit"
+          },
+          {
+            "$ref": "#/components/parameters/status"
+          }
+        ]
+      },
+      "post": {
+        "operationId": "createDraft",
+        "summary": "Create a draft; never sends",
+        "responses": {
+          "201": {
+            "description": "Created draft",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mailbox": {
+                      "type": "string"
+                    },
+                    "draft": {
+                      "$ref": "#/components/schemas/Draft"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid draft",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "mailbox",
+                  "to_addr",
+                  "subject",
+                  "body_text"
+                ],
+                "properties": {
+                  "mailbox": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "to_addr": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "subject": {
+                    "type": "string"
+                  },
+                  "body_text": {
+                    "type": "string"
+                  },
+                  "thread_id": {
+                    "type": "string"
+                  },
+                  "in_reply_to_email_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/drafts/{draftId}/send": {
+      "post": {
+        "operationId": "queueDraftSend",
+        "summary": "Queue a frozen draft for human approval",
+        "responses": {
+          "200": {
+            "description": "Pending approval and queued draft",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "approval_id": {
+                      "type": "string"
+                    },
+                    "draft": {
+                      "$ref": "#/components/schemas/Draft"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/draftId"
+          }
+        ],
+        "description": "This request never transmits email. A human must approve the exact frozen recipient, subject and body in the approval queue."
+      }
+    },
+    "/api/email/openapi.json": {
+      "get": {
+        "operationId": "getEmailOpenApi",
+        "summary": "Get this OpenAPI contract",
+        "responses": {
+          "200": {
+            "description": "OpenAPI JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        },
+        "parameters": []
+      }
+    }
+  }
+}

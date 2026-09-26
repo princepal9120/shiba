@@ -1,17 +1,17 @@
 # Verification Results
 
-**Last run: 2026-09-24 (reliability + one-step-deploy pass).**
+**Last run: 2026-09-26 (email API and attachment pass).**
 
-## Status: Local checks PASS; deployment validation is blocked on Docker and Cloudflare OAuth
+## Status: Local checks and Wrangler dry-run PASS; cloud deployment and live mail unverified
 
 | Check | Result |
 |-------|--------|
 | `pnpm typecheck` | PASS |
 | `pnpm lint` | PASS (0 errors) |
-| `pnpm test` | PASS (995 passed across 62 files) |
-| `pnpm build` | PASS (docs: 25 pages, 1124 links verified; TanStack Start prerenders `/app` to `public/app/index.html`) |
+| `pnpm test` | PASS (1174 passed, 6 skipped across 74 files) |
+| `pnpm build` | PASS (docs: 47 pages, 2286 links/assets/anchors verified; TanStack Start prerenders `/app`) |
 | Frontend dev smoke | PASS — `/app/`, `/app`, manifest, and both app icons return 200 with expected content types |
-| `npx wrangler deploy --dry-run` | BLOCKED — Docker CLI unavailable to build configured container image; Worker/assets dry-run passes with `--containers-rollout=none` |
+| `npx wrangler deploy --dry-run --config apps/backend/wrangler.jsonc` | PASS — OrbStack built the configured image; no deployment performed |
 | Alchemy deploy (`pnpm run deploy`) | PENDING — needs user `npx alchemy profile edit --add Cloudflare --method oauth` + `.env` (`pnpm run bootstrap`) |
 | `npx alchemy plan` | Validates `alchemy.run.ts` loads and resolves stage `live_princepal`; stops only at `Provider 'Cloudflare' is not configured in profile 'default'` — expected until OAuth |
 
@@ -190,3 +190,8 @@ And one repo bug that only surfaces at runtime:
 - **TypeSafe Score result wired** (orchestrator.ts finish completed). When TYPESAFE_API_KEY is set, evaluateResultQuality scores run output quality and annotates the run summary with the grade level. Fire-and-forget — never delays run completion.
 - **TypeSafe Score result quality** (src/result-quality.ts). evaluateResultQuality returns null on missing key, HTTP errors, parse failures, and network errors; parses score + confidence + level correctly; sends the correct Score request shape.
 - **TypeSafe Choice intent classification** (src/slack-mention.ts classifySlackMentionIntent). Returns null on missing key, empty mention, HTTP/parse/network errors; classifies fix/implement/explain/other; maps unknown choices to other; sends correct Choice request shape. intentHint returns sharpened prompt text per intent.
+# 2026-09-26 — Shiba email API and attachment download
+
+- Added an Access-gated OpenAPI 3.1 contract at `GET /api/email/openapi.json` for the existing mailbox, email, thread, and draft routes. It explicitly documents that `POST /api/drafts/:id/send` queues approval rather than sending.
+- Closed the attachment path: the Inbox links to `GET /api/emails/:id/attachments/:partId`; the Worker resolves the R2 key only from a registered mailbox's attachment manifest and forces a no-store binary download. Tests cover a valid download, a forged part id, a missing object, and an unauthenticated request.
+- Local verification: six focused email test files passed (193 tests); `pnpm typecheck`, `pnpm lint`, `pnpm test` (1174 passed, 6 skipped), `pnpm build` (including docs verification), and `npx wrangler deploy --dry-run --config apps/backend/wrangler.jsonc` all passed. `wrangler dev` served `GET /api/email/openapi.json` with HTTP 200 and the expected `downloadAttachment` operation. No deployment or live Email Routing/Email Sending test was performed; account provisioning and real delivery remain unverified.

@@ -14,6 +14,7 @@ import { Automations } from "./automations-do.js";
 import { parseAutomationWebhookPath } from "./automations.js";
 import { assertLiveCodingModel } from "./coding-model.js";
 import { emailApprovalBridgeReady, queueEmailApproval } from "./email-approvals.js";
+import emailOpenApi from "./email-openapi.json";
 import { handleInboundEmail } from "./email-handler.js";
 import type { Env } from "./env.js";
 import { agentCliCatalog } from "./harness/catalog.js";
@@ -356,6 +357,7 @@ async function handleInbox(request: Request, env: Env): Promise<Response | null>
   const url = new URL(request.url);
   const { pathname } = url;
   const emailId = /^\/api\/emails\/([^/]+)$/.exec(pathname)?.[1];
+  const attachmentMatch = /^\/api\/emails\/([^/]+)\/attachments\/([^/]+)$/.exec(pathname);
   const emailReadId = /^\/api\/emails\/([^/]+)\/read$/.exec(pathname)?.[1];
   const threadId = /^\/api\/threads\/([^/]+)$/.exec(pathname)?.[1];
   const draftSendId = /^\/api\/drafts\/([^/]+)\/send$/.exec(pathname)?.[1];
@@ -365,6 +367,7 @@ async function handleInbox(request: Request, env: Env): Promise<Response | null>
     pathname !== "/api/emails-search" &&
     pathname !== "/api/drafts" &&
     emailId === undefined &&
+    attachmentMatch === null &&
     emailReadId === undefined &&
     threadId === undefined &&
     draftSendId === undefined
@@ -459,6 +462,39 @@ async function handleInbox(request: Request, env: Env): Promise<Response | null>
           mime_type: attachment.mime_type,
           size: attachment.size,
         })),
+      });
+    }
+    if (attachmentMatch !== null) {
+      if (request.method !== "GET") return methodNotAllowed();
+      const [, attachmentEmailId, partId] = attachmentMatch;
+      const located = await probeMailboxes(env, (stub) =>
+        mailboxDoJsonOrNull<{ attachments?: StoredAttachment[] }>(
+          stub,
+          `/emails/${encodeURIComponent(attachmentEmailId!)}`,
+        ),
+      );
+      const attachment = located?.value.attachments?.find((part) => part.part_id === partId);
+      if (!attachment) {
+        return Response.json({ error: "Attachment not found." }, { status: 404 });
+      }
+      // The manifest, not the URL, chooses the R2 key. Never render untrusted
+      // attachment content inline, including HTML/SVG from an email sender.
+      const object = await env.ATTACHMENTS.get(attachment.r2_key);
+      if (!object) {
+        return Response.json({ error: "Attachment body is missing." }, { status: 404 });
+      }
+      const filename = attachment.filename || "attachment";
+      const encodedFilename = encodeURIComponent(filename).replace(/['()*]/g, (char) =>
+        `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
+      );
+      return new Response(object.body, {
+        headers: {
+          "Content-Type": "application/octet-stream",
+          "Content-Disposition": `attachment; filename="attachment"; filename*=UTF-8''${encodedFilename}`,
+          "Content-Length": String(object.size),
+          "Cache-Control": "no-store",
+          "X-Content-Type-Options": "nosniff",
+        },
       });
     }
     if (emailReadId !== undefined) {
@@ -1010,6 +1046,10 @@ export default {
         return Response.json({ agent: getUserId(request) ?? "default" }, {
           headers: { "Cache-Control": "no-store" },
         });
+      }
+      if (url.pathname === "/api/email/openapi.json") {
+        if (request.method !== "GET") return methodNotAllowed();
+        return Response.json(emailOpenApi, { headers: { "Cache-Control": "no-store" } });
       }
       if (url.pathname === "/api/setup/status") {
         if (request.method !== "GET") {
