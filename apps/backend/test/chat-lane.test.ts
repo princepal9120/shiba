@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { getAgentByName } from "agents/routing";
 import {
   buildChatThreadName,
   buildDecisionData,
@@ -6,8 +7,6 @@ import {
   createSeenRing,
   decideChatApproval,
   decisionLine,
-  discordApi,
-  NO_MENTIONS,
   parseChatTaskRequest,
   parseChatThreadName,
   parseDecisionData,
@@ -17,6 +16,8 @@ import {
   type OrchestratorStub,
   type ResolveOrchestrator,
 } from "../src/chat-lane.js";
+
+vi.mock("agents/routing", () => ({ getAgentByName: vi.fn() }));
 
 const REPO = "https://github.com/owner/repo";
 const APPROVAL_ID = "a1b2c3d4-e5f6-47a8-b9c0-d1e2f3a4b5c6";
@@ -218,6 +219,20 @@ describe("chatApprovalText / decisionLine", () => {
 });
 
 describe("queueChatRun", () => {
+  it("uses the default resolver with the already-prefixed thread key", async () => {
+    const stub = fakeOrchestrator({ body: { approvalId: APPROVAL_ID } });
+    vi.mocked(getAgentByName).mockResolvedValue(stub.resolve("telegram:123") as never);
+    const result = await queueChatRun(env({ CodingOrchestrator: {} }), {
+      platform: "telegram",
+      threadKey: "telegram:123",
+      repoUrl: REPO,
+      task: "fix the bug",
+      userId: "42",
+    });
+    expect(result).toEqual({ approvalId: APPROVAL_ID });
+    expect(getAgentByName).toHaveBeenCalledWith({}, "telegram:123");
+  });
+
   const input = {
     platform: "telegram" as const,
     threadKey: "telegram:-100",
@@ -416,41 +431,6 @@ describe("telegramApi", () => {
   });
 });
 
-describe("discordApi", () => {
-  it("sends the bot token and JSON body", async () => {
-    const requests: Request[] = [];
-    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      requests.push(new Request(input, init));
-      return new Response(null, { status: 200 });
-    }));
-    try {
-      await discordApi("post-back", "/channels/1/messages", {
-        method: "POST",
-        botToken: "bot-tok",
-        body: { content: "hi", allowed_mentions: NO_MENTIONS },
-      });
-      expect(requests[0]!.url).toBe("https://discord.com/api/v10/channels/1/messages");
-      expect(requests[0]!.headers.get("authorization")).toBe("Bot bot-tok");
-      expect(await requests[0]!.json()).toEqual({ content: "hi", allowed_mentions: { parse: [] } });
-    } finally {
-      vi.unstubAllGlobals();
-    }
-  });
-
-  it("throws the Discord message on a non-2xx", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () =>
-      Response.json({ message: "Unknown Channel" }, { status: 404 }),
-    ));
-    try {
-      await expect(discordApi("post-back", "/channels/9/messages", { method: "POST" })).rejects.toThrow(
-        "Discord post-back failed (404): Unknown Channel",
-      );
-    } finally {
-      vi.unstubAllGlobals();
-    }
-  });
-});
-
 describe("postToChatThread", () => {
   it("returns null for names that are not chat threads", () => {
     expect(postToChatThread(env(), "slack:T1:C1:1", "hi")).toBeNull();
@@ -480,22 +460,4 @@ describe("postToChatThread", () => {
     }
   });
 
-  it("posts a Discord message capped at 2000 chars with mentions disabled", async () => {
-    const requests: Request[] = [];
-    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      requests.push(new Request(input, init));
-      return new Response(null, { status: 200 });
-    }));
-    try {
-      const posted = postToChatThread(env({ DISCORD_BOT_TOKEN: "d" }), "discord:555", "z".repeat(3000));
-      expect(posted).not.toBeNull();
-      await posted;
-      expect(requests[0]!.url).toBe("https://discord.com/api/v10/channels/555/messages");
-      const body = (await requests[0]!.json()) as { content: string; allowed_mentions: unknown };
-      expect(body.content).toHaveLength(2000);
-      expect(body.allowed_mentions).toEqual({ parse: [] });
-    } finally {
-      vi.unstubAllGlobals();
-    }
-  });
 });

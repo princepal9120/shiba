@@ -13,6 +13,14 @@
 # SLACK_BOT_TOKEN=
 # JSON map {channelId: "https://github.com/owner/repo"} for bare @mentions.
 # SLACK_CHANNEL_REPOS=
+
+# Optional Telegram lane. Secret is checked only in the webhook header.
+# TELEGRAM_BOT_TOKEN=
+# TELEGRAM_WEBHOOK_SECRET=
+# TELEGRAM_APPROVERS=
+# JSON map {chatId: "https://github.com/owner/repo"} for bare /shiba commands.
+# TELEGRAM_CHAT_REPOS=
+# TELEGRAM_AGENT_HARNESS=
 # Optional TypeSafe System One key for run_when (falls back to Workers AI).
 # TYPESAFE_API_KEY=
 
@@ -27,4 +35,3 @@
 
 # Set to any value to enforce Cloudflare Access on /app and /api locally too.
 # REQUIRE_ACCESS=1
-
