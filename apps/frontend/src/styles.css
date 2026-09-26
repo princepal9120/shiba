@@ -7,22 +7,31 @@
   --font-display: 'Instrument Serif', 'Georgia', serif;
   --font-body: 'Geist', 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'Geist Mono', 'DM Mono', ui-monospace, SFMono-Regular, monospace;
-  --bg: #f6f4ed;
-  --panel: #fffef8;
+  /* Canonical names from design.md. Both apps speak the same vocabulary;
+     the local aliases below are the only names that should differ.
+     Canonical: paper/ink/navy — aliases: bg/panel/text/accent. */
+  --paper: #f6f4ed;
+  --card: #fffef8;
+  --ink: #222320;
+  --ink-2: #6a6f63;
+  --navy: #0000a8;
+  --navy-2: #1c1cc8;
+  --bg: var(--paper);
+  --panel: var(--card);
   --panel-elevated: #f1efe6;
   --line: #e0ded5;
   --line-light: #d3d2c8;
-  --text: #222320;
-  --muted: #6a6f63;
-  --accent: #0000a8;
-  --accent-light: #1c1cc8;
+  --text: var(--ink);
+  --muted: var(--ink-2);
+  --accent: var(--navy);
+  --accent-light: var(--navy-2);
   --accent-ink: #fffef8;
-  --brand: #0000a8;
-  --brand-light: #1c1cc8;
+  --brand: var(--navy);
+  --brand-light: var(--navy-2);
   --danger: #fb2c36;
   --ok: #15803d;
   --pending: #f99c00;
-  --running: #0000a8;
+  --running: var(--navy);
   --radius: 0;
   --paper-shadow: #2527261c;
   --paper-dot: #24272919;
@@ -188,18 +197,18 @@ details summary::-webkit-details-marker {
 
 html.dark {
   color-scheme: dark;
-  --bg: #191a18;
-  --panel: #222320;
+  /* Override canonical names; the aliases re-point automatically because they
+     are declared as var() references in :root, not as literal colors. */
+  --paper: #191a18;
+  --card: #222320;
+  --ink: #eae8e1;
+  --ink-2: #aaa99f;
+  --navy: #9cbce2;
+  --navy-2: #dceafa;
   --panel-elevated: #272824;
   --line: #3b3d36;
   --line-light: #3b3d36;
-  --text: #eae8e1;
-  --muted: #aaa99f;
-  --accent: #9cbce2;
-  --accent-light: #dceafa;
   --accent-ink: #152335;
-  --brand: #9cbce2;
-  --brand-light: #dceafa;
   --danger: #ee9690;
   --ok: #95c4a0;
   --pending: #f5c96b;

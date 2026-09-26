@@ -46,16 +46,14 @@ const CATALOG_META: Record<
   opencode: { label: "OpenCode", binary: "opencode", version: "1.18.31", docsUrl: "https://opencode.ai/docs/" },
   "claude-code": { label: "Claude Code", binary: "claude", version: "2.1.277", docsUrl: "https://docs.anthropic.com/en/docs/claude-code" },
   codex: { label: "Codex", binary: "codex", version: "0.155.0", docsUrl: "https://github.com/openai/codex" },
-  cursor: { label: "Cursor", binary: "cursor-agent", version: "0.50.0", docsUrl: "https://docs.cursor.com" },
   devin: { label: "Devin", binary: "devin", version: "3000.10.31", docsUrl: "https://cli.devin.ai/docs" },
-  grok: { label: "Grok", binary: "grok", version: "0.1.0", docsUrl: "https://x.ai/grok" },
+  grok: { label: "Grok", binary: "grok", version: "1.0.41", docsUrl: "https://docs.x.ai" },
 };
 
 const GATEWAY_PROVIDER: Record<string, string> = {
   opencode: "google / anthropic / openai / xAI",
   "claude-code": "anthropic",
   codex: "openai",
-  cursor: "cursor",
   grok: "xAI",
 };
 

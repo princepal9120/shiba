@@ -1,6 +1,6 @@
 # shiba-ai-coworker
 
-Self-hosted, approval-gated coding agent on Cloudflare Workers + Sandbox. Plan and status: `PLAN.md`. Product contract: `spec/GOAL.md`. Verification evidence: `VERIFICATION.md`; open gaps and how to check them: `VERIFICATION_PLAN.md`.
+Self-hosted, approval-gated coding agent on Cloudflare Workers + Sandbox. Architecture: `ARCHITECTURE.md`. Plan and status: `PLAN.md`. Product contract: `spec/GOAL.md`. Verification evidence: `VERIFICATION.md`; open gaps and how to check them: `VERIFICATION_PLAN.md`.
 
 ```bash
 pnpm typecheck && pnpm lint && pnpm test && pnpm build

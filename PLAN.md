@@ -1,6 +1,6 @@
 # AI Coworker — End-to-End Completion Plan
 
-**Revision:** 2026-09-17 (rev 4). Rev 3's §2 "genuinely broken" table is now largely historical — see §2.0 for what is actually left.
+**Revision:** 2026-09-27 (rev 10). Adds §17, Phase P7 — Roomote parity (T27–T39). **W4 multi-repo deferred: GitHub-only** (owner decision); T37–T39 added to finish GitHub end to end.
 
 **Target:** an open-source, self-hosted [Capy](https://capy.ai)/[Hoplite](https://hoplite.sh)-shaped coding agent that runs entirely on the user's own Cloudflare account. Scope is Capy's **spine plus review and automations** — not its workspace layer. See §4 for what is deliberately not being built.
 
@@ -21,6 +21,7 @@
 | **Ceiling** | `standard-4` (4 vCPU / 12 GiB / 20 GB) is Cloudflare's max. Capy goes to 16 vCPU / 128 GB. Heavy builds are out of reach — say so in the README. |
 | **Effort** | P0 ≈ 3h · P1 ≈ 5h · P2 ≈ 5h · P3 ≈ 14h · P4 ≈ 10h · **P5 ≈ 14h** · P6 ≈ 4h → **~55h** |
 | **Rev 4 status** | All of the above is **done except T10** — the live run is now verified locally via `wrangler dev` up to the model call (AI Gateway credential needed); the cloud deploy itself is still blocked on GOAL.md. See §2.0. |
+| **Rev 9 status** | §17 (P7, Roomote parity) is **planned, not started**. ~80% of Roomote's spine already ships; the delta is OAuth MCP, web chat + steering, and screenshot/preview. Recommended scope W0–W3 ≈ 43h. T27 (spec/monorepo contradiction) gates all of it. |
 
 ---
 
@@ -167,7 +168,8 @@ Self-hosted own-subscription use is grayer than a SaaS doing it, but shipping it
 
 | Cut | Reason |
 |---|---|
-| **Multi-tenancy / per-user DOs** | GOAL.md: *"Each installation is single-tenant and account-owned."* |
+| **Multi-tenancy / per-user DOs** | GOAL.md: *"Each installation is single-tenant and account-owned."* — **§17.7 (T35) proposes revisiting this as a product decision. Not code; a spec change.** |
+| **MCP integrations** | Each is its own auth surface for one workflow. — **§17.3 (T29) now builds one first, the OAuth MCP server, because it is the parity gap, not a cut.** |
 | **Machine snapshots** (Capy's 1–2s restore) | No Cloudflare equivalent. Partial substitute: fatten the Dockerfile, or R2 FUSE mounts for `node_modules`. Not equal — say so. |
 | **Machines > `standard-4`** | Hard platform ceiling: 4 vCPU / 12 GiB / 20 GB vs Capy's 16 vCPU / 128 GB. Heavy builds and big test suites are out of reach. **README, not a surprise.** |
 | **Multi-repo projects, volumes, skills, environments** | Capy's workspace layer. Real work, no pipeline reuse. Revisit after P4. |
@@ -184,7 +186,7 @@ Noted so the next reader knows these were considered rather than missed. None of
 
 - **PR review agent** (~9h). A `review_pull_request` tool: clone at the PR head so the agent reads surrounding code rather than diff context alone, emit `{path, line, severity, comment}` findings, publish via `POST /repos/{o}/{r}/pulls/{n}/reviews` as `COMMENT` — never `APPROVE`, an agent must not approve. Reuses the whole pipeline with a different prompt and a different endpoint, so it stays cheap whenever it returns. Competitive cost, stated plainly: [Codra](https://github.com/devarshishimpi/codra) exists solely to be this, and Capy and Hoplite both ship one.
 - **PR feedback loop** (~4h, needs the review agent). Extend `/api/github/webhook` to `pull_request_review_comment`; a comment mentioning the bot on an shiba-ai-coworker PR starts a run against that PR's branch and replies on the same thread.
-- **Live preview URLs.** `proxyToSandbox` is already imported at `src/index.ts:6` and unused — this is nearer than it looks.
+- **Live preview URLs.** **Shipped in rev 8** — `index.ts:1093-1099` proxies to the sandbox. Screenshot capture remains open; see §17.5 (T33).
 - **Resumable runs.** Stop/resume/fork, the way Cloudbox does it, for work exceeding `OPENCODE_TIMEOUT_MS`. A real architecture change, not a tuning knob (§16).
 
 **Slack was cut in rev 1 and restored in rev 2.** The rev-1 reasoning was right about the spec and wrong about the product: what was cut was a slash command duplicating the dashboard; what is now built is the place work starts and finishes. `spec/GOAL.md` is consequently stale — its 11-step contract is dashboard-only and anticipates no second inbound surface. **T17 updates it.** Leaving it means the next reader cuts Slack again.
@@ -766,7 +768,187 @@ T5–T8 are independent of each other. Within P3, T12 gates everything; T13/T14 
 
 ---
 
+## 17. Phase P7 — Roomote Parity (rev 9)
+
+**Added:** 2026-09-27. **Benchmark:** [Roomote](https://github.com/RooCodeInc/Roomote) — a self-hostable cloud coding agent (Slack/Teams/Telegram/Discord/Web → ephemeral sandbox → clone → code → test → screenshot → PR). Source-available, FCL-1.0.
+
+**One correction before anything else:** Roomote is **not** a VS Code remote-control extension. That is Roo Code's Cline extension. Roomote is a *server-side* cloud agent — the same category as Capy/Hoplite, which is what §3 already benchmarks. The port is therefore a feature-parity exercise against a peer, not an integration of a plugin.
+
+**What this phase is not:** a rewrite. As of rev 8 the repo already implements the large majority of Roomote's spine. The work below is the honest delta.
+
+### 17.1 Parity baseline — what already exists
+
+| Roomote capability | ai-intern status | Evidence |
+|---|---|---|
+| Task from Slack / Telegram / Discord / email | **Done** | `slack-routes.ts`, `telegram.ts`, `chat-lane.ts` (Discord), `email-handler.ts` |
+| Web dashboard | **Ahead** | `apps/frontend/src/components/` — Approvals, Agents, Missions, Automations, Memory, Inbox, Audit, Gates, VMInspector |
+| Ephemeral sandbox per task | **Ahead** | `sandbox.ts`, `sandbox/lifecycle.ts` — per-run `allowedHosts`, TLS interception CA, destroy-on-finish |
+| BYOK models | **Ahead** | `model-connections.ts` + `model-config-do.ts` + `model-policy.ts` (frozen `ApprovedRoute`) |
+| Multi-harness CLIs | **Done / in progress** | `harness/index.ts` — opencode, claude-code, codex, cursor, devin, grok + `acp.ts` transport |
+| Approval gate before execution | **Ahead** | Sacred invariant (§15 P1) |
+| Automations (cron/webhook/event) | **Ahead** | `automations.ts`, `automations-do.ts`, TypeSafe `run_when` |
+| MCP server | **Partial** | `mcp-gateway.ts` — bearer-only, no OAuth |
+| Memory / mailbox | **Done** | `memory-do.ts`, `mailbox-do.ts` |
+| Screenshot + live preview in PR | **Partial** | preview proxied at `index.ts:1093-1099`; **screenshot capture missing** |
+| OAuth MCP (its headline feature) | **Missing** | `grep -rn oauth apps/backend/src/{mcp-gateway,index}.ts` → empty |
+| Interactive web chat + mid-run steering | **Missing** | `apps/frontend/src/routes/` has only `__root.tsx`, `app.tsx` |
+| GitLab / Gitea / Bitbucket / ADO | **Missing** | `github.ts` only |
+| Multi-user accounts | **Missing** | single-tenant by design (§4) |
+| Teams lane | **Missing** | Slack/Telegram/Discord/email only |
+| Alternate sandboxes (Modal/E2B/Daytona/Blaxel) | **Deliberately not** | Cloudflare-native is the thesis; `runtime.ts` adapter seam is the only concession |
+
+### 17.2 W0 — Unblock the spec (do this first, ~1h)
+
+**T27 · Reconcile `spec/GOAL.md` with the monorepo.** `GOAL.md` still says *"Do not add D1, KV, Queues, R2, Workflows, Hono, or a monorepo."* The repo is now `apps/{backend,frontend,web}` + turbo + alchemy (`package.json`, `pnpm-workspace.yaml`, `alchemy.run.ts`). The spec the next reader trusts is contradicted by the tree.
+
+Two honest options — pick one explicitly, do not leave it implicit:
+- **(a) Amend `GOAL.md`** to accept the monorepo and record *why* it became necessary (backend/frontend/docs separation, turbo caching). Then enumerate which of the other forbidden primitives are now in use and justify each.
+- **(b) Revert the monorepo.** Not recommended — it would undo shipped, working work to satisfy prose.
+
+**T27 gates T28–T36.** Every task below is written against the monorepo layout; amending the spec first stops the next reader from re-litigating it.
+
+**T28 · Confirm G10/G11 are closed, then re-audit `VERIFICATION_PLAN.md`.** `VERIFICATION_PLAN.md:26-27` records G10 (all landing images gitignored) and G11 (duplicate configs) as open, but both are now **fixed** in the tree — `.gitignore:3-6` negates `public/` and `apps/web/public/**`, and `git ls-tree -r HEAD -- apps/web/public/assets` returns 22 tracked files. The findings are stale, not the code.
+
+So T28 is not a fix, it is a **re-audit**: walk the whole G1–G11 table, re-run each check, and mark resolved ones resolved with the command that proves it. That table has already misled one reader (§4 records the Slack precedent, where a stale cut survived a full rev). **Do not add features on top of an audit nobody has re-run.**
+
+### 17.3 W1 — OAuth MCP (~8h) · *the unblocking one*
+
+**T29 · OAuth 2.1 authorization server on `/mcp`.** Today `mcp-gateway.ts` + `index.ts:76` accept only a static bearer `agent-token`, and `index.ts:90` states it explicitly. Roomote's headline capability is *"connect to Claude Code, Codex, or Cursor through its OAuth MCP server."* Without this, no third-party MCP client can connect.
+
+- Discovery: `/.well-known/oauth-authorization-server` + `/.well-known/oauth-protected-resource`.
+- Authorization Code + PKCE (S256), public clients, no client secret.
+- Tokens: short-lived access, rotating refresh, hashed at rest in the `model-config-do`-style DO.
+- **Security invariants (non-negotiable, per `CLAUDE.md`):** the OAuth path must not weaken the approval gate — every `registerTool` dispatch still goes `requireScope` → handler → `audit`; the `MCP_PRINCIPAL_HEADER` worker-injection defense (strip client copies) still applies; secrets never in a URL, a log, or a UI response; grant issuance is rate-limited and audited.
+- Migration: existing bearer tokens keep working (they are the documented path today) — OAuth is additive.
+
+**Why first:** it is the only item that makes the repo usable *from* other agents, and it reuses `agent-tokens.ts` rather than adding a new auth model.
+
+### 17.4 W2 — Web chat + live steering (~14h) · *the real UX delta*
+
+**T30 · Chat route + session conversation.** `apps/frontend/src/routes/` contains only `__root.tsx` and `app.tsx` — there is no chat surface. Roomote's core loop is conversational: send a follow-up into a *live* run and watch it steer.
+
+- New `/chat` route over the existing `ai-chat` stream; reuse `CodingOrchestrator` rather than a parallel agent.
+- Follow-up turns append to the same conversation; `chat-lane.ts` already establishes the "one conversation per chat/channel" naming pattern — mirror it for web sessions.
+
+**T31 · Mid-run steering with the approval gate intact.** A follow-up that changes scope must **re-freeze the approved input and re-request approval**, exactly as `model-policy.ts` does for routes. Steering must never become a bypass around T7/T12 approval. This is the single highest-risk task in the whole phase; write the invariant test first.
+
+**T32 · Session list + resume in the UI.** `SessionsSidebar.tsx` exists; it needs real session persistence, not a static view.
+
+### 17.5 W3 — Screenshot + live preview in the PR (~6h)
+
+**T33 · Capture and attach.** Run the app in-sandbox, screenshot, upload, attach to the PR body and the run record. **Preview plumbing already exists** — `index.ts:1093-1099` wires `proxyToSandbox` into the request path, so this is capture and presentation, not architecture. Screenshot is the genuinely missing half. Cheapest real parity win in the plan; do it after W2 because screenshots are most valuable when attached to a steered run.
+
+**Open question, answer during T33:** Cloudflare Sandbox containers have no browser installed, and the image deliberately keeps `registry.npmjs.org` off the egress allowlist. Capture therefore needs *either* a pinned headless-browser layer in the image (image size vs. cold-start cost — the §8 concern) *or* an external capture service. **Decide with data, do not guess.**
+
+### 17.6 W4 — Repo providers — **DEFERRED (decision, 2026-09-27)**
+
+**Owner decision: GitHub only, for now.** W4 is not scheduled. T34 is deferred
+indefinitely, not cut — the note below is kept so a future reader knows the work
+was considered, priced, and deliberately sequenced *after* GitHub is proven
+live.
+
+The reasoning is §16's standing risk, not preference: every additional provider
+is a **new credential egress path**, and B6 is exactly how a GitHub token
+reached every repo it could see. One provider, thoroughly proven against a real
+repository, is worth more than four that are unit-tested.
+
+**T34 · (deferred) Provider abstraction behind `github.ts`.** GitLab, Gitea,
+Bitbucket Cloud, Azure DevOps. The approval gate, run model, and harness seam
+are already provider-agnostic, so this would be a provider interface plus
+implementations — but each one is a fresh credential path requiring its own
+scoping and its own cross-repo-refusal test. Sequence when it happens: GitLab
+(largest demand) → Gitea/Bitbucket (self-hosted, same auth shape) → ADO
+(different auth entirely, likely its own task).
+
+### 17.6.1 GitHub end to end — the actual focus (T37–T39)
+
+GitHub is the only provider, so "GitHub end to end" is now the deliverable. An
+audit of the path found it **structurally complete** — the work left is proof,
+not code:
+
+| Stage | Status | Evidence |
+|---|---|---|
+| URL validation | **Done** — https-only, `github.com` only, no embedded credentials, exactly 2 path segments | `security.ts:47-72` |
+| Scoped clone credential | **Done** — `github.com` defaults to *refusal*; `approveRepoScope` installs a per-repo forwarder before the clone | `sandbox.ts:52-62`, `opencode-agent.ts:53` |
+| Per-harness egress | **Done** — allowlist narrowed to the selected harness + git, never the union | `sandbox.ts:44` |
+| Publish as PR | **Done** — blob → tree → commit → ref → PR, unsafe paths refused, deletions via null-sha, **orphan branch deleted if the PR fails** | `github.ts:79-173` |
+| Token containment | **Done** — one `Authorization` header; never in the container, a clone URL, a command, env, logs, or UI | `github.ts:1-6` |
+| Webhook ingest | **Done** — HMAC-SHA256 verified, dedupe *after* verification, 503 when unconfigured | `index.ts:881-905` |
+| Projects v2 board sync | **Done** — best-effort, `waitUntil`, never delays the terminal transition | `github-project.ts` |
+
+**T37 · Record the GitHub acceptance run.** One dated run, in `VERIFICATION.md`:
+submit → approve → scoped clone → harness exec → diff matches the real working
+tree → PR opens on the real repo → board sync lands. The diff-matching and
+PR-opening steps are the two that only a live run can prove; everything above
+them is already unit-tested.
+
+**T38 · Prove a deletion and a binary file in that same run.** `github.ts:114`
+refuses `..` and absolute paths, and `:118-120` publishes a `null` sha for
+deletions — both are tested against a mock, and both are exactly the cases a
+real repository proves or disproves.
+
+**T39 · Confirm the cross-repo refusal live.** T6's scoping is verified by unit
+test only. The live check is that repo code executing *inside the container*
+cannot reach a second repository the same token can see. This is the single
+highest-value assertion in the whole GitHub path and it has never been run.
+
+**Sequencing:** T37–T39 need a GitHub token and a target repository, i.e. the
+same account-side prerequisites as T10. They are not blocked on more code.
+
+
+### 17.7 W5 — Multi-user accounts (~12h) · *product decision, not just code*
+
+**T35 · Registration, per-user repos, ownership.** §4 cut multi-tenancy citing `GOAL.md`: *"Each installation is single-tenant and account-owned."* Roomote supports 10 users self-hosted and sells licensing above that. `waitlist-do.ts` gives a partial user model to build on.
+
+**This is a spec change, not a feature.** It reverses an explicit §4 cut and a `GOAL.md` line, and it is the item most likely to be *cut again* by a future reader. Whatever the decision, it belongs in `PLAN.md` §4 and `GOAL.md` **before** code — the same lesson §4 already records about Slack.
+
+### 17.8 W6 — Teams lane (~4h) · *lowest value, do last or not at all*
+
+**T36 · Teams bot.** Another lane in `chat-lane.ts`: OAuth bot registration, message handling, approval cards, allowlisted approvers. Lowest value in this plan — it is surface area that deepens nothing, against `GOAL.md`'s *"keep the smallest working architecture."* **Recommendation: cut.** If built, it ships only after W1–W3 are proven live.
+
+### 17.9 Order and dependencies
+
+| Wave | Tasks | Blocks | Effort | Verdict |
+|---|---|---|---|---|
+| **W0** spec | T27 · T28 | **all** | ~1h | **Do first** |
+| **W1** OAuth MCP | T29 | — | ~8h | **Do** — the unblocker |
+| **W2** web chat + steering | T30 · T31 · T32 | — | ~14h | **Do** — the real delta |
+| **W3** screenshot/preview | T33 | benefits from W2 | ~6h | **Do** — cheapest win |
+| **W4** multi-repo | T34 | — | ~8h | **Deferred** (owner, 2026-09-27) — GitHub only |
+| **W5** multi-user | T35 | — | ~12h | **Spec decision first** |
+| **W6** Teams | T36 | — | ~4h | **Recommend cut** |
+| **GH** GitHub e2e proof | T37 · T38 · T39 | needs a token + repo | ~2h | **Now the focus** |
+
+**Critical path:** T27 → T29 → T30 → T31. T28 is parallel. T33 is independent of
+W1/W2 and can be pulled forward. T34 is deferred (§17.6); T37–T39 need a token
+and a repository, not code.
+
+**Recommended scope: W0–W3 + the GitHub proof (T37–T39), ~45h.** With W4
+deferred, that is the honest "Roomote parity" for a Cloudflare-native,
+single-tenant, **GitHub-only** deployment. W5 is a product decision that changes
+who your customer is; W6 is a channel.
+
+**GitHub-only (owner decision, 2026-09-27).** One provider, proven end to end,
+beats four that are unit-tested — B6 is the precedent for what an unproven
+credential path costs. T37–T39 exist because the GitHub path is *structurally
+complete but unproven in the cloud*, so the remaining work there is evidence,
+not code.
+
+**Standing constraint, unchanged:** W1–W6 are all *in front of* the same wall as everything else. Until T10's dated live acceptance is in `VERIFICATION.md`, none of this is proven in the cloud. **A wave does not ship because its unit tests pass** — that is the §16 standing risk, and it is why W0 exists before W1.
+
+### 17.10 Success criteria
+
+**W0** — `GOAL.md` no longer contradicts the tree; `git ls-tree -r HEAD -- apps/web/public` returns the assets a fresh clone needs; no duplicate config files.
+**W1** — an OAuth client completes code+PKCE against `/mcp`; discovery documents are served; refresh rotates; a revoked token is refused; **the approval gate and `audit` path are provably unchanged for OAuth-issued principals**; a test proves a client-supplied `MCP_PRINCIPAL_HEADER` is still stripped.
+**W2** — a follow-up steers a live run; a scope-changing follow-up **re-requests approval and starts no container without it** (proven by container metrics, not UI); sessions survive reload.
+**W3** — a PR carries a screenshot and a working preview URL; the capture decision (§17.5) is written down with its cost measurement.
+**W4** — each provider's token is scoped to one repo and a test proves cross-repo access is refused, mirroring T6.
+
+---
+
 ## References
+
+**Roomote** (observed 2026-09-27) — [RooCodeInc/Roomote](https://github.com/RooCodeInc/Roomote) · [docs.roomote.dev](https://docs.roomote.dev) · [MCP integration guide](https://docs.roomote.dev/integrations/roomote-mcp) · [SELF_HOSTING.md](https://github.com/RooCodeInc/Roomote/blob/main/SELF_HOSTING.md). Parity claims above are from the public README; sandboxes/providers/channels are README-advertised, not independently verified against a running deployment. Roomote is FCL-1.0 (free ≤10 users, licensed above) — **read the license before copying any implementation.**
 
 **Cloudflare** — [Sandbox outbound traffic](https://developers.cloudflare.com/sandbox/guides/outbound-traffic/) · [credential injection changelog](https://developers.cloudflare.com/changelog/post/2026-04-13-sandbox-outbound-workers-tls-auth/) · [Sandbox get-started](https://developers.cloudflare.com/sandbox/get-started/) · [Sandbox options](https://developers.cloudflare.com/sandbox/configuration/sandbox-options/) · [Containers limits](https://developers.cloudflare.com/containers/platform/limits/) · [Containers pricing](https://developers.cloudflare.com/containers/pricing/) · [DO pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/) · [Wrangler config](https://developers.cloudflare.com/workers/wrangler/configuration/) · [Cron Triggers](https://developers.cloudflare.com/workers/configuration/cron-triggers/) · [Think tools and approval](https://developers.cloudflare.com/agents/harnesses/think/tools/) · [AI Gateway BYOK](https://developers.cloudflare.com/ai-gateway/configuration/bring-your-own-keys/)
 
