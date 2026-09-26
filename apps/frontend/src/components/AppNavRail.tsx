@@ -9,8 +9,10 @@ import type { JSX } from "react";
 export type AppNavView =
   | "dashboard"
   | "tasks"
-  | "vm"
   | "runs"
+  | "diff"
+  | "approvals"
+  | "vm"
   | "agents"
   | "inbox"
   | "memory"
@@ -28,8 +30,10 @@ export interface AppNavItem {
 export const APP_NAV_ITEMS: AppNavItem[] = [
   { id: "dashboard", label: "Dashboard", description: "Overview & At-a-Glance Stats" },
   { id: "tasks", label: "Tasks", description: "Tasks & Live Sessions" },
-  { id: "vm", label: "VM", description: "VM Inspector & Terminals" },
   { id: "runs", label: "Runs", description: "Run Registry & Workspaces" },
+  { id: "diff", label: "Diff", description: "Code Changes & Git Diffs" },
+  { id: "approvals", label: "Approvals", description: "Review & Decision Queue" },
+  { id: "vm", label: "VM", description: "VM Inspector & Terminals" },
   { id: "agents", label: "Agents & MCP", description: "MCP Gateway & Capability Scopes" },
   { id: "inbox", label: "Mailbox", description: "Cloudflare Email Routing & Send" },
   { id: "memory", label: "Memory", description: "Vectorize Long-Term Semantic Memory" },
@@ -40,7 +44,7 @@ export const APP_NAV_ITEMS: AppNavItem[] = [
 ];
 
 const NAV_GROUPS: { label: string; items: AppNavView[] }[] = [
-  { label: "Workspace", items: ["dashboard", "tasks", "runs", "missions", "automations"] },
+  { label: "Workspace", items: ["dashboard", "tasks", "runs", "diff", "approvals", "missions", "automations"] },
   { label: "Capabilities", items: ["agents", "inbox", "memory"] },
   { label: "Sandbox & Safety", items: ["vm", "gates", "architecture"] },
 ];
@@ -51,6 +55,7 @@ export interface AppNavRailProps {
   theme?: "dark" | "light";
   onToggleTheme?: () => void;
   activeSandboxCount: number;
+  pendingApprovalCount?: number;
   setupDone: number | null;
   setupTotal: number;
   onOpenSetup: () => void;
@@ -79,6 +84,16 @@ const ICONS: Record<AppNavView, JSX.Element> = {
   runs: (
     <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M8 5.14v14l11-7-11-7z" />
+    </svg>
+  ),
+  diff: (
+    <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8 7v10M8 7a2 2 0 100-4 2 2 0 000 4zm0 10a2 2 0 100 4 2 2 0 000-4zm8-6v6m0-6a2 2 0 100-4 2 2 0 000 4zm0 6a2 2 0 100 4 2 2 0 000-4z" />
+    </svg>
+  ),
+  approvals: (
+    <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
     </svg>
   ),
   inbox: (
@@ -157,6 +172,7 @@ export function AppNavRail({
   activeView,
   onNavigate,
   activeSandboxCount,
+  pendingApprovalCount,
   setupDone,
   setupTotal,
   onOpenSetup,
@@ -235,6 +251,13 @@ export function AppNavRail({
                           aria-hidden="true"
                           title={`${activeSandboxCount} active`}
                         />
+                      ) : item.id === "approvals" && pendingApprovalCount && pendingApprovalCount > 0 ? (
+                        <span
+                          className="min-w-4 h-4 px-1 rounded-none bg-[#f99c00] text-white text-[9px] font-bold flex items-center justify-center animate-pulse"
+                          aria-hidden="true"
+                        >
+                          {pendingApprovalCount}
+                        </span>
                       ) : undefined
                     }
                   >
