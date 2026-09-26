@@ -82,6 +82,7 @@
 
 /* bezalel dark paper scheme (Starlight theme switcher) */
 :root[data-theme='dark'] {
+  color-scheme: dark;
   --paper: #191a18;
   --card: #222320;
   --panel-2: #272824;
@@ -266,8 +267,7 @@ button[data-open-modal]:focus-visible {
 /* ==========================================================================
    Header & Navigation — opaque paper, hairline rule, no blur
    ========================================================================== */
-header.header,
-.header {
+header.header {
   background-color: var(--sl-color-bg-nav) !important;
   background: var(--sl-color-bg-nav) !important;
   backdrop-filter: none !important;
@@ -346,7 +346,7 @@ button[data-open-modal] kbd {
   color: var(--sl-color-gray-2) !important;
 }
 
-.header :is(button, a):focus-visible {
+header.header :is(button, a):focus-visible {
   outline: 2px solid var(--navy);
   outline-offset: 2px;
 }
@@ -1171,7 +1171,7 @@ body {
 starlight-toc a:focus-visible,
 .right-sidebar-panel a:focus-visible,
 .pagination-links a:focus-visible,
-.header :is(input, select):focus-visible {
+header.header :is(input, select):focus-visible {
   outline: 2px solid var(--navy);
   outline-offset: 2px;
 }
