@@ -16,7 +16,10 @@ import { DashboardView } from "./components/DashboardView";
 import { OnboardingModal, detectSetupSteps } from "./components/OnboardingModal";
 import { SessionsSidebar, type SessionItem } from "./components/SessionsSidebar";
 import { StepTimeline } from "./components/StepTimeline";
-import { WorkspacePanel, type WorkspaceTab } from "./components/WorkspacePanel";
+import { DiffView } from "./components/DiffView";
+import { ApprovalsView } from "./components/ApprovalsView";
+import { InboxTab } from "./components/InboxTab";
+import { MemoryTab } from "./components/MemoryTab";
 import { TaskComposer } from "./components/TaskComposer";
 import { toast } from "sonner";
 import { AppNavRail, APP_NAV_ITEMS, type AppNavView } from "./components/AppNavRail";
@@ -252,14 +255,7 @@ export function App(): React.JSX.Element {
   const [setupDone, setSetupDone] = useState<number | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [selectedSessionId, setSelectedSessionId] = useState<string>("live");
-  // Workspace starts collapsed below lg so the drawer doesn't cover the
-  // conversation on small screens; expanded by default on desktop.
-  const [workspaceCollapsed, setWorkspaceCollapsed] = useState(() =>
-    typeof window !== "undefined"
-      ? window.matchMedia("(max-width: 1023px)").matches
-      : false,
-  );
-  const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("runs");
+// Persistent workspace panel removed from tasks view; functionality promoted to standalone views.
   const [mobileSessionsOpen, setMobileSessionsOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [sessionsCollapsed, setSessionsCollapsed] = useState(() =>
@@ -307,6 +303,14 @@ export function App(): React.JSX.Element {
         setMainView("vm");
       } else if (tabParam === "runs" || tabParam === "run-registry") {
         setMainView("runs");
+      } else if (tabParam === "diff") {
+        setMainView("diff");
+      } else if (tabParam === "approvals") {
+        setMainView("approvals");
+      } else if (tabParam === "inbox" || tabParam === "mailbox") {
+        setMainView("inbox");
+      } else if (tabParam === "memory") {
+        setMainView("memory");
       } else if (tabParam === "automations") {
         setMainView("automations");
       } else if (tabParam === "agents") {
@@ -894,12 +898,6 @@ export function App(): React.JSX.Element {
       run: toggleSessionsCollapsed,
     },
     {
-      id: "toggle-workspace",
-      label: "Toggle workspace panel",
-      hint: "⌘\\",
-      run: () => setWorkspaceCollapsed((prev) => !prev),
-    },
-    {
       id: "toggle-theme",
       label: theme === "dark" ? "Switch to light theme" : "Switch to dark theme",
       hint: "D",
@@ -957,16 +955,9 @@ export function App(): React.JSX.Element {
     <div className="h-dvh overflow-hidden bg-[#f6f4ed] text-[#222320] font-sans selection:bg-[#0000a8] selection:text-white flex pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
       {/* LEFT: app navigation rail (lg+; phones use the sheet below) */}
       <AppNavRail
-        activeView={mainView === "tasks" && !workspaceCollapsed && (workspaceTab === "inbox" || workspaceTab === "memory") ? workspaceTab : mainView}
-        onNavigate={(view) => {
-          if (view === "inbox" || view === "memory") {
-            setMainView("tasks");
-            setWorkspaceTab(view);
-            setWorkspaceCollapsed(false);
-          } else {
-            setMainView(view);
-          }
-        }}
+        activeView={mainView}
+        onNavigate={(view) => setMainView(view)}
+        pendingApprovalCount={pendingApprovals.length + visibleStoredApprovals.length}
         theme={theme}
         onToggleTheme={toggleTheme}
         activeSandboxCount={activeSandboxCount}
@@ -987,17 +978,12 @@ export function App(): React.JSX.Element {
           <div className="absolute inset-y-0 left-0 shadow-[3px_3px_0_var(--paper-shadow)]">
             <AppNavRail
               variant="sheet"
-              activeView={mainView === "tasks" && !workspaceCollapsed && (workspaceTab === "inbox" || workspaceTab === "memory") ? workspaceTab : mainView}
+              activeView={mainView}
               onNavigate={(view) => {
-                if (view === "inbox" || view === "memory") {
-                  setMainView("tasks");
-                  setWorkspaceTab(view);
-                  setWorkspaceCollapsed(false);
-                } else {
-                  setMainView(view);
-                }
+                setMainView(view);
                 setMobileNavOpen(false);
               }}
+              pendingApprovalCount={pendingApprovals.length + visibleStoredApprovals.length}
               theme={theme}
               onToggleTheme={toggleTheme}
               activeSandboxCount={activeSandboxCount}
@@ -1092,15 +1078,7 @@ export function App(): React.JSX.Element {
           connectionLabel={connectionState}
           connectionTone={identityError || agent.connectionError ? "error" : agent.identified ? "ok" : "pending"}
           runsError={runsError}
-          onNavigate={(view) => {
-            if (view === "inbox" || view === "memory") {
-              setMainView("tasks");
-              setWorkspaceTab(view);
-              setWorkspaceCollapsed(false);
-            } else {
-              setMainView(view);
-            }
-          }}
+          onNavigate={(view) => setMainView(view)}
           onNewTask={handleNewTask}
           onInspectRun={(runId) => {
             setSelectedRunId(runId);
@@ -1232,20 +1210,7 @@ export function App(): React.JSX.Element {
               </span>
               </Tooltip>
             </div>
-            {/* Phones: the collapsed rail is hidden, so the workspace opens from here. */}
-            <button
-              type="button"
-              onClick={() => setWorkspaceCollapsed(false)}
-              aria-label="Open workspace panel"
-              className="md:hidden relative w-11 h-11 -my-1.5 rounded-none border border-black/[0.08] bg-[#fffef8] text-[#6a6f63] hover:text-[#222320] flex items-center justify-center transition-colors shrink-0"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 5h16v14H4zM14 5v14" />
-              </svg>
-              {pendingApprovals.length + visibleStoredApprovals.length > 0 ? (
-                <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-[#b45309] animate-pulse" aria-hidden="true" />
-              ) : null}
-            </button>
+
             <div className="hidden md:flex items-center gap-4 text-xs font-mono text-[#6a6f63] shrink-0">
               <Tooltip content="Tool runs actively isPending" side="bottom">
               <span className="cursor-default">
@@ -1273,21 +1238,6 @@ export function App(): React.JSX.Element {
               </span>
               </Tooltip>
 
-              {/* Quick toggle for workspace panel when collapsed */}
-              {workspaceCollapsed ? (
-                <Tooltip content="Expand workspace panel" shortcut="⌘\\" side="bottom">
-                  <button
-                    type="button"
-                    onClick={() => setWorkspaceCollapsed(false)}
-                    aria-label="Expand workspace panel"
-                    className="w-7 h-7 rounded-none border border-black/[0.08] bg-[#fffef8] text-[#6a6f63] hover:text-[#222320] hover:bg-[#e0ded5] flex items-center justify-center transition-colors shrink-0"
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
-                    </svg>
-                  </button>
-                </Tooltip>
-              ) : null}
             </div>
           </div>
 
@@ -1312,10 +1262,7 @@ export function App(): React.JSX.Element {
               {visibleStoredApprovals.length > 0 ? (
                 <button
                   type="button"
-                  onClick={() => {
-                    setWorkspaceTab("approvals");
-                    setWorkspaceCollapsed(false);
-                  }}
+                  onClick={() => setMainView("approvals")}
                   className="shrink-0 text-xs font-semibold text-[#b45309] border border-[#b45309]/40 bg-[#b45309]/10 hover:bg-[#b45309]/15 rounded-none px-3 py-1.5 touch:min-h-11 transition-colors"
                 >
                   Review
@@ -1392,40 +1339,6 @@ export function App(): React.JSX.Element {
           </div>
         </main>
 
-        {/* RIGHT: workspace panel */}
-        <WorkspacePanel
-          toolRuns={toolRuns}
-          retainedRuns={retainedRuns}
-          vmRuns={allRuns}
-          pendingApprovals={pendingApprovals}
-          decisions={decisions}
-          onDecideApproval={decideApproval}
-          storedApprovals={visibleStoredApprovals}
-          storedDecisions={storedDecisions}
-          decidedStoredApprovals={decidedStoredApprovals}
-          storedApprovalsError={storedApprovalsError}
-          onDecideStoredApproval={decideStoredApproval}
-          orchestratorName={orchestratorName}
-          onRefreshRuns={refreshRuns}
-          onInspectVM={(id) => {
-            setSelectedRunId(id);
-            setWorkspaceCollapsed(false);
-            setWorkspaceTab("vm");
-          }}
-          onCancelRun={cancelRun}
-          onReuseParams={(run) => {
-            setRepoUrl(run.repoUrl);
-            setBaseBranch(run.baseBranch);
-            setTask(run.task);
-            setPublishPullRequest(run.publishPullRequest);
-          }}
-          selectedRunId={selectedRunId}
-          onSelectRun={setSelectedRunId}
-          collapsed={workspaceCollapsed}
-          onToggleCollapsed={() => setWorkspaceCollapsed((current) => !current)}
-          tab={workspaceTab}
-          onTabChange={setWorkspaceTab}
-        />
       </div>
       ) : mainView === "vm" ? (
         <VMInspector
@@ -1451,6 +1364,65 @@ export function App(): React.JSX.Element {
           onClearHistory={() => setShowClearModal(true)}
           onRefresh={refreshRuns}
         />
+      ) : mainView === "diff" ? (
+        <DiffView
+          runs={allRuns}
+          selectedRunId={selectedRunId}
+          onSelectRun={(id) => setSelectedRunId(id)}
+          onInspectVM={(id) => {
+            setSelectedRunId(id);
+            setMainView("vm");
+          }}
+        />
+      ) : mainView === "approvals" ? (
+        <ApprovalsView
+          pendingApprovals={pendingApprovals}
+          decisions={decisions}
+          onDecideApproval={decideApproval}
+          storedApprovals={visibleStoredApprovals}
+          storedDecisions={storedDecisions}
+          decidedStoredApprovals={decidedStoredApprovals}
+          storedApprovalsError={storedApprovalsError}
+          onDecideStoredApproval={decideStoredApproval}
+          orchestratorName={orchestratorName}
+          onRefresh={refreshRuns}
+        />
+      ) : mainView === "inbox" ? (
+        <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#f6f4ed] text-[#222320]">
+          <div className="border-b border-[#e0ded5] bg-[#f1efe6] px-4 lg:px-8 py-4 shrink-0 flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-base font-semibold text-[#222320] flex items-center gap-2">
+                <span>Mailbox</span>
+              </h2>
+              <p className="text-xs text-[#6a6f63]">
+                Cloudflare Email Routing, inbound triage, and approval-gated outbound send.
+              </p>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 lg:p-8">
+            <div className="max-w-6xl mx-auto">
+              <InboxTab onOpenApprovals={() => setMainView("approvals")} />
+            </div>
+          </div>
+        </div>
+      ) : mainView === "memory" ? (
+        <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#f6f4ed] text-[#222320]">
+          <div className="border-b border-[#e0ded5] bg-[#f1efe6] px-4 lg:px-8 py-4 shrink-0 flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-base font-semibold text-[#222320] flex items-center gap-2">
+                <span>Agent Memory</span>
+              </h2>
+              <p className="text-xs text-[#6a6f63]">
+                Vectorize long-term semantic memory, extracted facts, and session context.
+              </p>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 lg:p-8">
+            <div className="max-w-6xl mx-auto">
+              <MemoryTab />
+            </div>
+          </div>
+        </div>
       ) : mainView === "automations" ? (
         <AutomationsView />
       ) : mainView === "agents" ? (
@@ -1529,12 +1501,7 @@ export function App(): React.JSX.Element {
                   ⌘ / Ctrl + B  or  [
                 </span>
               </div>
-              <div className="flex items-center justify-between py-1.5 border-b border-[#e0ded5]">
-                <span className="text-[#6a6f63]">Toggle Workspace Panel</span>
-                <span className="font-mono bg-[#fffef8] border border-[#e0ded5] px-2 py-0.5 rounded-none text-[#222320]">
-                  ⌘ / Ctrl + \  or  ]
-                </span>
-              </div>
+
               <div className="flex items-center justify-between py-1.5 border-b border-[#e0ded5]">
                 <span className="text-[#6a6f63]">Close Modals</span>
                 <span className="font-mono bg-[#fffef8] border border-[#e0ded5] px-2 py-0.5 rounded-none text-[#222320]">

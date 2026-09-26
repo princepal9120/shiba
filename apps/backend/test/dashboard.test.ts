@@ -44,6 +44,9 @@ import { RunRegistryView } from "../../frontend/src/components/RunRegistryView";
 import { AutomationsView } from "../../frontend/src/components/AutomationsView";
 import { ArchitectureView } from "../../frontend/src/components/ArchitectureView";
 import { DashboardView } from "../../frontend/src/components/DashboardView";
+import { WorkspacePanel } from "../../frontend/src/components/WorkspacePanel";
+import { DiffView } from "../../frontend/src/components/DiffView";
+import { ApprovalsView } from "../../frontend/src/components/ApprovalsView";
 import { OnboardingModal, ONBOARDING_STEPS } from "../../frontend/src/components/OnboardingModal";
 import { TaskForm } from "../../web/src/components/TaskForm";
 import { Tooltip } from "../../frontend/src/components/Tooltip";
@@ -91,7 +94,29 @@ describe("dashboard rendering", () => {
     expect(markup).toContain("Setup Guide");
     expect(markup).toContain("Sessions");
     expect(markup).toContain("Fix Failing Tests");
-    expect(markup).toContain("No runs. Approved tasks appear here while they execute.");
+
+    const wsMarkup = renderToStaticMarkup(
+      React.createElement(WorkspacePanel, {
+        toolRuns: [],
+        retainedRuns: [],
+        vmRuns: [],
+        pendingApprovals: [],
+        decisions: {},
+        onDecideApproval: vi.fn(),
+        storedApprovals: [],
+        storedDecisions: {},
+        decidedStoredApprovals: [],
+        storedApprovalsError: null,
+        onDecideStoredApproval: vi.fn(),
+        onRefreshRuns: vi.fn(),
+        onInspectVM: vi.fn(),
+        selectedRunId: null,
+        onSelectRun: vi.fn(),
+        collapsed: false,
+        onToggleCollapsed: vi.fn(),
+      })
+    );
+    expect(wsMarkup).toContain("No runs. Approved tasks appear here while they execute.");
   });
 
   it("renders a pending approval with its tool input and actions", () => {
@@ -139,10 +164,33 @@ describe("dashboard rendering", () => {
 
     expect(markup).toContain("Chat error: stream failed");
     expect(markup).toContain("run-1");
-    expect(markup).toContain("error");
-    expect(markup).toContain("sandbox failed");
-    expect(markup).toContain("The sandbox exited early.");
-    expect(markup).toContain("exit code 1");
+
+    const wsMarkup = renderToStaticMarkup(
+      React.createElement(WorkspacePanel, {
+        toolRuns: [mocks.runsById["run-1"] as any],
+        retainedRuns: [],
+        vmRuns: [],
+        pendingApprovals: [],
+        decisions: {},
+        onDecideApproval: vi.fn(),
+        storedApprovals: [],
+        storedDecisions: {},
+        decidedStoredApprovals: [],
+        storedApprovalsError: null,
+        onDecideStoredApproval: vi.fn(),
+        onRefreshRuns: vi.fn(),
+        onInspectVM: vi.fn(),
+        selectedRunId: null,
+        onSelectRun: vi.fn(),
+        collapsed: false,
+        onToggleCollapsed: vi.fn(),
+      })
+    );
+    expect(wsMarkup).toContain("run-1");
+    expect(wsMarkup).toContain("Error");
+    expect(wsMarkup).toContain("sandbox failed");
+    expect(wsMarkup).toContain("The sandbox exited early.");
+    expect(wsMarkup).toContain("exit code 1");
   });
 
   it("renders task submission form", () => {
@@ -162,40 +210,81 @@ describe("dashboard rendering", () => {
     expect(appMarkup).toContain('type="checkbox"');
   });
 
-  it("renders diff output for completed runs", () => {
-    mocks.runsById = {
-      "run-diff-1": {
-        runId: "run-diff-1",
-        status: "completed",
-        agentType: "coding-agent",
-        parentToolCallId: "call-1",
-        parts: [{ text: "done" }],
-        summary: "Done.",
-        diff: "diff --git a/src/a.ts b/src/a.ts\n+added line\n-removed line",
-      },
+  it("renders diff output for completed runs in standalone DiffView", () => {
+    const run = {
+      runId: "run-diff-1",
+      sandboxId: "sb-diff-1",
+      repoUrl: "https://github.com/owner/repo",
+      task: "Implement feature",
+      baseBranch: "main",
+      publishPullRequest: false,
+      status: "completed",
+      createdAt: Date.now() - 10000,
+      updatedAt: Date.now(),
+      agentType: "coding-agent",
+      parentToolCallId: "call-1",
+      parts: [{ text: "done" }],
+      summary: "Done.",
+      diff: "diff --git a/src/a.ts b/src/a.ts\n+added line\n-removed line",
     };
 
-    const markup = renderApp();
+    const diffMarkup = renderToStaticMarkup(
+      React.createElement(DiffView, {
+        runs: [run],
+        selectedRunId: "run-diff-1",
+      })
+    );
 
-    expect(markup).toContain("run-diff-1");
-    expect(markup).toContain("completed");
-    expect(markup).toContain("diff --git");
-    expect(markup).toContain("added line");
-    expect(markup).toContain("removed line");
-    expect(markup).toContain("<pre");
-    expect(markup).toContain("<code");
+    expect(diffMarkup).toContain("run-diff-1");
+    expect(diffMarkup).toContain("Completed");
+    expect(diffMarkup).toContain("diff --git");
+    expect(diffMarkup).toContain("added line");
+    expect(diffMarkup).toContain("removed line");
+    expect(diffMarkup).toContain("<pre");
+    expect(diffMarkup).toContain("<code");
   });
 
   it("renders the top navigation bar with all architectural views", () => {
     const markup = renderApp();
     expect(markup).toContain("Dashboard");
     expect(markup).toContain("Tasks");
-    expect(markup).toContain("VM");
     expect(markup).toContain("Runs");
+    expect(markup).toContain("Diff");
+    expect(markup).toContain("Approvals");
+    expect(markup).toContain("VM");
+    expect(markup).toContain("Mailbox");
+    expect(markup).toContain("Memory");
     expect(markup).toContain("Automations");
     expect(markup).toContain("Missions");
     expect(markup).toContain("Gates");
     expect(markup).toContain("Architecture");
+  });
+
+  it("renders standalone DiffView and ApprovalsView with empty states and zero-trust framing", () => {
+    const diffMarkup = renderToStaticMarkup(
+      React.createElement(DiffView, {
+        runs: [],
+      })
+    );
+    expect(diffMarkup).toContain("Diff &amp; Patch Inspector");
+    expect(diffMarkup).toContain("No Task Runs Found");
+
+    const approvalsMarkup = renderToStaticMarkup(
+      React.createElement(ApprovalsView, {
+        pendingApprovals: [],
+        decisions: {},
+        onDecideApproval: vi.fn(),
+        storedApprovals: [],
+        storedDecisions: {},
+        decidedStoredApprovals: [],
+        storedApprovalsError: null,
+        onDecideStoredApproval: vi.fn(),
+      })
+    );
+    expect(approvalsMarkup).toContain("Approvals &amp; Decision Center");
+    expect(approvalsMarkup).toContain("All Clear");
+    expect(approvalsMarkup).toContain("Zero-Trust Boundary");
+    expect(approvalsMarkup).toContain("Cryptographic Audit Log");
   });
 
   it("renders the Missions surface with standing-goal framing", async () => {
