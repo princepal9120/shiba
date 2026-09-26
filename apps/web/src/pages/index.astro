@@ -3,7 +3,7 @@ import '../styles/tailwind.css';
 import '../styles/theme.css';
 ---
 <!DOCTYPE html>
-<html lang="en" class="dark scroll-smooth">
+<html lang="en" class="scroll-smooth" data-theme="light">
 <head>
   <meta charset="utf-8" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -39,6 +39,17 @@ import '../styles/theme.css';
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Bebas+Neue&family=DM+Mono:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500;600;700;800;900&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- Match the other marketing pages: saved preference, then light by default. -->
+  <script is:inline>
+    (function() {
+      try {
+        var stored = localStorage.getItem('shiba-theme');
+        var theme = stored === 'dark' ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch (_) {}
+    })();
+  </script>
   
   <style is:global>
     :root {
@@ -278,6 +289,198 @@ import '../styles/theme.css';
         margin-bottom: 1rem;
       }
     }
+
+    /* ============ LIGHT THEME (manga paper variant) ============ */
+    html[data-theme='light'] body {
+      background-color: #f2f0e8 !important;
+      color: #222320 !important;
+    }
+
+    /* Grid lines -> soft ink */
+    html[data-theme='light'] .grid-bg {
+      background-image: linear-gradient(to right, rgba(0, 0, 0, 0.05) 1px, transparent 1px),
+                        linear-gradient(to bottom, rgba(0, 0, 0, 0.05) 1px, transparent 1px);
+    }
+
+    /* Pattern tiles: invert white-line art for paper */
+    html[data-theme='light'] .manga-brick-bg,
+    html[data-theme='light'] .manga-tile-bg {
+      filter: invert(0.92);
+      opacity: 0.4;
+    }
+
+    /* Panels & secondary buttons -> light cards with same hard frames */
+    html[data-theme='light'] .manga-panel {
+      border-color: #a5a69b;
+      background-color: #fffef8;
+    }
+    html[data-theme='light'] .manga-panel:hover {
+      border-color: #222320;
+    }
+    html[data-theme='light'] .manga-btn-secondary {
+      background-color: #fffef8;
+      color: #222320;
+      border-color: #a5a69b;
+      box-shadow: -3px 3px 0 0 #222320;
+    }
+    html[data-theme='light'] .manga-btn-secondary:hover {
+      box-shadow: 0 0 0 0 #222320;
+      border-color: var(--color-teal-600);
+      color: var(--color-teal-600);
+    }
+
+    /* Diff colors -> readable light variants */
+    html[data-theme='light'] .diff-line-add {
+      background-color: rgba(38, 123, 122, 0.12);
+      color: #1f6f6d;
+      border-left-color: #267b7a;
+    }
+    html[data-theme='light'] .diff-line-del {
+      background-color: rgba(255, 69, 18, 0.09);
+      color: #c23a0e;
+      border-left-color: #d5440f;
+    }
+    html[data-theme='light'] :is(a, button):focus-visible { outline-color: #267b7a; }
+
+    /* Hero sky/shade: keep the daylight sky art readable on paper */
+    html[data-theme='light'] .hero-sky { opacity: 0.18; }
+    html[data-theme='light'] .hero-shade {
+      background-image: linear-gradient(to bottom, rgba(242,240,232,0.9), rgba(242,240,232,0.75), #f2f0e8) !important;
+    }
+
+    /* ---- utility-class remaps (attribute selectors cover every usage) ---- */
+    /* solid ink text */
+    html[data-theme='light'] [class~='text-white'] { color: #222320; }
+    html[data-theme='light'] [class~='text-neutral-200'] { color: #3f4038; }
+    html[data-theme='light'] [class~='text-neutral-300'] { color: #4a4c44; }
+    html[data-theme='light'] [class~='text-neutral-400'] { color: #5f6157; }
+    html[data-theme='light'] [class~='text-neutral-500'] { color: #6a6f63; }
+    html[data-theme='light'] [class~='text-neutral-600'] { color: #7c7e72; }
+    html[data-theme='light'] [class~='text-neutral-700'] { color: #9a9c8e; }
+
+    /* accent text -> darker readable variants */
+    html[data-theme='light'] [class~='text-teal-200'],
+    html[data-theme='light'] [class~='text-teal-300'],
+    html[data-theme='light'] [class~='text-teal-400'],
+    html[data-theme='light'] [class~='text-[#2dd4bf]'] { color: #267b7a; }
+    html[data-theme='light'] [class~='text-emerald-300'],
+    html[data-theme='light'] [class~='text-emerald-400'] { color: #157a4e; }
+    html[data-theme='light'] [class~='text-cyan-300'],
+    html[data-theme='light'] [class~='text-cyan-400'] { color: #0e7490; }
+    html[data-theme='light'] [class~='text-blue-300'],
+    html[data-theme='light'] [class~='text-blue-400'] { color: #1d4ed8; }
+    html[data-theme='light'] [class~='text-purple-300'],
+    html[data-theme='light'] [class~='text-purple-400'],
+    html[data-theme='light'] [class~='text-[#ae69b1]'] { color: #8b2f8e; }
+    html[data-theme='light'] [class~='text-amber-300'],
+    html[data-theme='light'] [class~='text-amber-400'],
+    html[data-theme='light'] [class~='text-yellow-300'],
+    html[data-theme='light'] [class~='text-yellow-400'],
+    html[data-theme='light'] [class~='text-[#ebc04b]'] { color: #8a6500; }
+    html[data-theme='light'] [class~='text-orange-300'],
+    html[data-theme='light'] [class~='text-orange-400'],
+    html[data-theme='light'] [class~='text-[#ff4512]'] { color: #c2410c; }
+
+    /* dark surfaces -> paper cards / recessed panels */
+    html[data-theme='light'] [class~='bg-black'],
+    html[data-theme='light'] [class~='bg-black/50'],
+    html[data-theme='light'] [class~='bg-black/60'],
+    html[data-theme='light'] [class~='bg-black/70'],
+    html[data-theme='light'] [class~='bg-black/80'],
+    html[data-theme='light'] [class~='bg-black/90'],
+    html[data-theme='light'] [class~='bg-black/95'] { background-color: #fffef8; }
+    html[data-theme='light'] [class~='bg-neutral-950/90'] { background-color: rgba(255, 254, 248, 0.92); }
+    html[data-theme='light'] [class~='bg-[#040507]'],
+    html[data-theme='light'] [class~='bg-[#06070a]'],
+    html[data-theme='light'] [class~='bg-[#07080b]'],
+    html[data-theme='light'] [class~='bg-[#090a0d]'],
+    html[data-theme='light'] [class~='bg-[#090a0e]'],
+    html[data-theme='light'] [class~='bg-[#0b0d11]'],
+    html[data-theme='light'] [class~='bg-[#0d0e13]'],
+    html[data-theme='light'] [class~='bg-[#0e1015]'] { background-color: #eeece1; }
+    html[data-theme='light'] [class~='bg-[#101217]'],
+    html[data-theme='light'] [class~='bg-[#101218]'],
+    html[data-theme='light'] [class~='bg-[#12141a]'],
+    html[data-theme='light'] [class~='bg-[#12141c]'],
+    html[data-theme='light'] [class~='bg-[#151820]'] { background-color: #fffef8; }
+    html[data-theme='light'] [class~='bg-white/5'] { background-color: rgba(0, 0, 0, 0.04); }
+    html[data-theme='light'] [class~='bg-neutral-700'],
+    html[data-theme='light'] [class~='bg-neutral-800'] { background-color: #e4e2d5; }
+
+    /* solid accent fills -> darker on paper */
+    html[data-theme='light'] [class~='bg-teal-400'] { background-color: #2f9b96; }
+    html[data-theme='light'] [class~='bg-emerald-400'] { background-color: #22a06b; }
+    html[data-theme='light'] [class~='bg-cyan-400'] { background-color: #0891b2; }
+    html[data-theme='light'] [class~='bg-amber-400'],
+    html[data-theme='light'] [class~='bg-yellow-400'] { background-color: #d9a514; }
+
+    /* borders -> ink hairlines */
+    html[data-theme='light'] [class~='border-black'] { border-color: #222320; }
+    html[data-theme='light'] [class~='border-white/10'] { border-color: #d3d2c8; }
+    html[data-theme='light'] [class~='border-neutral-700'],
+    html[data-theme='light'] [class~='border-neutral-700/90'],
+    html[data-theme='light'] [class~='border-neutral-800'],
+    html[data-theme='light'] [class~='border-neutral-800/60'],
+    html[data-theme='light'] [class~='border-neutral-800/80'],
+    html[data-theme='light'] [class~='border-neutral-800/90'] { border-color: #d3d2c8; }
+    html[data-theme='light'] [class~='border-teal-400'],
+    html[data-theme='light'] [class~='border-teal-400/30'],
+    html[data-theme='light'] [class~='border-teal-400/40'],
+    html[data-theme='light'] [class~='border-teal-400/60'],
+    html[data-theme='light'] [class~='border-teal-500/30'],
+    html[data-theme='light'] [class~='border-teal-500/40'],
+    html[data-theme='light'] [class~='border-teal-500/50'],
+    html[data-theme='light'] [class~='border-teal-500/60'] { border-color: rgba(38, 123, 122, 0.5); }
+
+    /* hover variants */
+    html[data-theme='light'] [class~='hover:text-white']:hover { color: #000000; }
+    html[data-theme='light'] [class~='hover:text-teal-200']:hover,
+    html[data-theme='light'] [class~='hover:text-teal-300']:hover { color: #1f6f6d; }
+    html[data-theme='light'] [class~='hover:border-neutral-800']:hover { border-color: #a5a69b; }
+    html[data-theme='light'] [class~='hover:border-teal-400']:hover,
+    html[data-theme='light'] [class~='hover:border-teal-400/60']:hover,
+    html[data-theme='light'] [class~='hover:border-teal-500/40']:hover { border-color: #267b7a; }
+    html[data-theme='light'] [class~='hover:bg-teal-500/20']:hover { background-color: rgba(38, 123, 122, 0.15); }
+
+    /* theme toggle icon swap (tailwind dark: is media-mode; use attr) */
+    .icon-sun { display: none; }
+    .icon-moon { display: block; }
+    html[data-theme='dark'] .icon-sun { display: block; }
+    html[data-theme='dark'] .icon-moon { display: none; }
+
+    /* square manga-style toggle button */
+    .nav-theme-toggle {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 1.875rem;
+      height: 1.875rem;
+      border-radius: 0;
+      border: 1.5px solid #333842;
+      background-color: #111317;
+      color: #abe4de;
+      box-shadow: -2px 2px 0 0 #000000;
+      cursor: pointer;
+      transition: all 0.15s ease-out;
+      flex-shrink: 0;
+    }
+    .nav-theme-toggle:hover {
+      transform: translate(1px, -1px);
+      box-shadow: 0 0 0 0 #000000;
+      border-color: var(--color-teal-400);
+      color: var(--color-teal-300);
+    }
+    html[data-theme='light'] .nav-theme-toggle {
+      background-color: #fffef8;
+      color: #267b7a;
+      border-color: #a5a69b;
+      box-shadow: -2px 2px 0 0 #222320;
+    }
+    html[data-theme='light'] .nav-theme-toggle:hover {
+      box-shadow: 0 0 0 0 #222320;
+      border-color: #267b7a;
+      color: #1f6f6d;
+    }
   </style>
 </head>
 <body class="antialiased selection:bg-[#63c8c1] selection:text-black grid-bg">
@@ -308,6 +511,20 @@ import '../styles/theme.css';
           <a href="/docs/slack" class="text-neutral-300 hover:text-white transition-colors">Integrations</a>
           <a href="/docs/claude-code" class="text-neutral-300 hover:text-white transition-colors">Agents</a>
           <a href="/docs/deployment" class="text-neutral-300 hover:text-white transition-colors">Deployment</a>
+          <button
+            type="button"
+            id="theme-toggle-btn"
+            aria-label="Toggle theme"
+            title="Toggle theme"
+            class="nav-theme-toggle"
+          >
+            <svg class="icon-sun size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+            <svg class="icon-moon size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+            </svg>
+          </button>
         </nav>
       </div>
     </div>
@@ -317,8 +534,8 @@ import '../styles/theme.css';
     <!-- HERO SECTION -->
     <section class="relative isolate pt-6 sm:pt-10 pb-16 overflow-hidden text-center">
       <!-- Dark overlay keeps text readable over the daylight sky. -->
-      <div class="absolute inset-0 -z-10 bg-cover bg-center bg-no-repeat" style="background-image: url('/assets/synara/hero-bg.jpg');" aria-hidden="true"></div>
-      <div class="absolute inset-0 -z-10 bg-gradient-to-b from-black/85 via-black/75 to-black" aria-hidden="true"></div>
+      <div class="absolute inset-0 -z-10 bg-cover bg-center bg-no-repeat hero-sky" style="background-image: url('/assets/synara/hero-bg.jpg');" aria-hidden="true"></div>
+      <div class="absolute inset-0 -z-10 bg-gradient-to-b from-black/85 via-black/75 to-black hero-shade" aria-hidden="true"></div>
       <div class="max-w-6xl mx-auto px-4 sm:px-6">
         
         <!-- MAIN HEADLINE -->
@@ -1680,9 +1897,16 @@ $ run checks
 
   </script>
 
+  <script is:inline>
+    var btn = document.getElementById('theme-toggle-btn');
+    btn?.addEventListener('click', function() {
+      var next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      try {
+        localStorage.setItem('shiba-theme', next);
+      } catch (_) {}
+    });
+  </script>
+
 </body>
 </html>
-
-
-
-

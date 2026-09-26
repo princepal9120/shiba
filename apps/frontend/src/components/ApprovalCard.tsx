@@ -15,7 +15,12 @@ export interface ApprovalCardProps {
 
 export function ApprovalCard({ approval, decided, onDecideApproval, agentName }: ApprovalCardProps): JSX.Element {
   return (
-    <div className="border border-[#b45309]/60 bg-[#f1efe6] rounded-xl p-4 shadow-lg shadow-[#b45309]/5 flex flex-col gap-3">
+    <div className="border border-[#b45309]/60 bg-[#f1efe6] rounded-none shadow-[3px_3px_0_var(--paper-shadow)] overflow-hidden">
+      <div className="flex items-center justify-between bg-[#f99c00]/15 border-b border-[#b45309]/40 px-3 py-1.5 min-h-[31px]">
+        <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-[#b45309]">approval.gate</span>
+        <span className="bez-marks" aria-hidden="true"><i /><i /><i /></span>
+      </div>
+      <div className="p-4 flex flex-col gap-3">
       <div className="flex items-center justify-between gap-3">
         <div className="font-mono font-bold text-sm text-[#222320] flex items-center gap-2 min-w-0">
           <Tooltip content="Sacred Approval Gate — Zero Trust Security" side="bottom">
@@ -27,7 +32,7 @@ export function ApprovalCard({ approval, decided, onDecideApproval, agentName }:
           </Tooltip>
           <span className="truncate">{approval.tool}</span>
         </div>
-        <span className="text-[10px] uppercase tracking-wider font-bold bg-[#b45309]/15 border border-[#b45309]/30 text-[#b45309] px-2 py-0.5 rounded-full shrink-0">
+        <span className="text-[10px] uppercase tracking-wider font-bold bg-[#b45309]/15 border border-[#b45309]/30 text-[#b45309] px-2 py-0.5 rounded-none shrink-0">
           Action Required
         </span>
       </div>
@@ -36,7 +41,7 @@ export function ApprovalCard({ approval, decided, onDecideApproval, agentName }:
         <p className="text-[10px] font-mono text-[#6a6f63] truncate -mt-1">via {agentName}</p>
       ) : null}
 
-      <pre className="whitespace-pre-wrap font-mono text-xs text-[#6a6f63] bg-[#fffef8] p-3 rounded-lg border border-[#e0ded5] max-h-56 overflow-auto">
+      <pre className="whitespace-pre-wrap font-mono text-xs text-[#6a6f63] bg-[#fffef8] p-3 rounded-none border border-[#e0ded5] max-h-56 overflow-auto">
         {typeof approval.input === "string"
           ? approval.input
           : JSON.stringify(approval.input, null, 2)}
@@ -50,7 +55,7 @@ export function ApprovalCard({ approval, decided, onDecideApproval, agentName }:
         <Tooltip content="Approve tool execution inside isolated container" side="top">
           <button
             type="button"
-            className="bg-[#15803d] hover:bg-[#166534] text-[#fffef8] font-semibold py-2 px-5 touch:min-h-11 rounded-lg transition-all disabled:opacity-50 text-sm shadow-sm flex items-center gap-1.5 active:scale-[0.98]"
+            className="bg-[#15803d] hover:bg-[#166534] text-[#fffef8] font-semibold py-2 px-5 touch:min-h-11 rounded-none transition-all disabled:opacity-50 text-sm shadow-[2px_2px_0_var(--paper-shadow)] flex items-center gap-1.5 active:scale-[0.98]"
             disabled={decided}
             onClick={() => onDecideApproval(approval.approvalId, true)}
           >
@@ -64,7 +69,7 @@ export function ApprovalCard({ approval, decided, onDecideApproval, agentName }:
         <Tooltip content="Reject tool execution and cancel operation" side="top">
           <button
             type="button"
-            className="bg-transparent border border-[#fb2c36] text-[#fb2c36] hover:bg-[#fb2c36]/10 font-semibold py-2 px-5 touch:min-h-11 rounded-lg transition-all disabled:opacity-50 text-sm flex items-center gap-1.5 active:scale-[0.98]"
+            className="bg-transparent border border-[#fb2c36] text-[#fb2c36] hover:bg-[#fb2c36]/10 font-semibold py-2 px-5 touch:min-h-11 rounded-none transition-all disabled:opacity-50 text-sm flex items-center gap-1.5 active:scale-[0.98]"
             disabled={decided}
             onClick={() => onDecideApproval(approval.approvalId, false)}
           >
@@ -74,6 +79,7 @@ export function ApprovalCard({ approval, decided, onDecideApproval, agentName }:
             <span>Reject</span>
           </button>
         </Tooltip>
+      </div>
       </div>
     </div>
   );

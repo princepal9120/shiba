@@ -57,6 +57,8 @@ import { DEFAULT_ORCHESTRATOR_MODEL, distillSession } from "../session-distill.j
 import { parseSlackThreadName } from "../slack-thread.js";
 import { evaluateResultQuality } from "../result-quality.js";
 import { HARNESS_DEFAULT_MODELS, allowedHostsFor, resolveHarness } from "../harness/index.js";
+import { isApprovedRoute, type ApprovedRoute } from "../model-connections.js";
+import { readModelConfig, revalidateCodingRoute, resolveCodingRoute } from "../model-policy.js";
 import { OpenCodeAgent } from "./opencode-agent.js";
 
 export interface OrchestratorState {
@@ -103,6 +105,13 @@ const delegateInputSchema = z.object({
     .describe(
       "Coding model as provider/model, e.g. google/gemini-3.5-flash-lite. " +
         "Defaults to the deployment's per-harness model.",
+    ),
+  connectionId: z
+    .string()
+    .optional()
+    .describe(
+      "Model connection id (conn_*) from the deployment's connection catalog. " +
+        "Defaults to the deployment's implicit gateway/secret default.",
     ),
 });
 
@@ -310,6 +319,23 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
   }
 
   /**
+   * Resolve and freeze the exact route the human approves (spec §4): the
+   * per-run connection/model override wins, then the deployment default.
+   * An inadmissible connection/model/harness combination throws here —
+   * before the approval card — so a bad route never starts a container.
+   */
+  private async resolveRoute(input: DelegateInput): Promise<{ harness: string; codingModel: string; route: ApprovedRoute }> {
+    const { harness, codingModel } = this.resolveHarnessAndModel(input);
+    const snapshot = await readModelConfig(this.env);
+    const route = resolveCodingRoute(snapshot, {
+      connectionId: input.connectionId?.trim() || null,
+      model: codingModel,
+      harness,
+    });
+    return { harness, codingModel, route };
+  }
+
+  /**
    * The run pipeline as an Effect program (spec B6), run to a Promise at
    * the tool boundary via `runWorkerEffect`. Observable behavior is
    * unchanged: the same checkpoint order, fenced writes, Slack posts,
@@ -359,10 +385,15 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
             "Set the GITHUB_TOKEN secret or retry without requesting a pull request.",
         );
       }
-      // Resolve harness + model HERE, at approval time: the human approves the
-      // exact harness and model that will execute, and an unsupported
-      // harness/model pair fails before a container starts — not inside one.
-      const { harness: resolvedHarness, codingModel } = this.resolveHarnessAndModel(input);
+      // Resolve harness + model + connection HERE: the human approves the
+      // exact route that will execute. An approval-dispatched run reuses the
+      // route frozen on its pointer verbatim; a fresh tool call resolves it
+      // now. Either way the route is revalidated just before dispatch — a
+      // revoked connection fails the run honestly, never a substitution.
+      const frozen = reserved?.route;
+      const { harness: resolvedHarness, codingModel, route } = frozen !== undefined && isApprovedRoute(frozen)
+        ? { harness: frozen.harness, codingModel: frozen.modelId, route: frozen }
+        : yield* Effect.promise(() => this.resolveRoute(input));
       const sandboxId = makeSandboxId(input.repoUrl, input.task, callId);
       const fullInput: CodingTaskInput = {
         repoUrl: input.repoUrl,
@@ -372,6 +403,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         sandboxId,
         codingModel,
         harness: resolvedHarness as CodingTaskInput["harness"],
+        route,
       };
       if (!reserved) this.store.add(
         createRun({
@@ -381,6 +413,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
           task: fullInput.task,
           baseBranch: fullInput.baseBranch,
           publishPullRequest: fullInput.publishPullRequest,
+          route,
         }),
       );
       const finish = (status: RunStatus, patch?: RunPatch): DelegatedRun | null => {
@@ -426,6 +459,13 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         (signal) =>
           Effect.gen({ self: this }, function* () {
             yield* Effect.sync(() => signal.throwIfAborted());
+            // Just before dispatch: the connection may have been disabled or
+            // deleted since approval. Fail honestly — never substitute.
+            const snapshot = yield* Effect.promise(() => readModelConfig(this.env));
+            const routeProblem = revalidateCodingRoute(snapshot, route);
+            if (routeProblem !== null) {
+              throw new Error(`Approved route is no longer available: ${routeProblem}`);
+            }
             const output = yield* tryRunPromise((fiberSignal) =>
               childExecute(formatAgentToolInput(fullInput), {
                 toolCallId: callId,
@@ -527,7 +567,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
    * the pointer via POST /api/approvals. Email-kind approvals freeze a
    * mailbox payload instead of a run input.
    */
-  private async queueSlackRun(input: { repoUrl?: unknown; task?: unknown; baseBranch?: unknown; publishPullRequest?: unknown; threadKey?: unknown; kind?: unknown; mailbox?: unknown; payload?: unknown; queuedBy?: unknown }): Promise<Response> {
+  private async queueSlackRun(input: { repoUrl?: unknown; task?: unknown; baseBranch?: unknown; publishPullRequest?: unknown; harness?: unknown; codingModel?: unknown; connectionId?: unknown; threadKey?: unknown; kind?: unknown; mailbox?: unknown; payload?: unknown; queuedBy?: unknown }): Promise<Response> {
     const kind = typeof input.kind === "string" && input.kind.trim() ? input.kind.trim() : "run";
     if (kind === "email_send" || kind === "email_delete") {
       return this.queueEmailApprovalRecord(kind, input);
@@ -549,6 +589,24 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     if (publishPullRequest && !this.env.GITHUB_TOKEN) {
       return Response.json({ error: "publishPullRequest was requested but GITHUB_TOKEN is not configured." }, { status: 400 });
     }
+    // Freeze the route at queue time (spec §4): the approval card shows the
+    // exact harness/model/connection that will execute, and an inadmissible
+    // selection is refused before any approval exists — no container starts.
+    let route: ApprovedRoute | undefined;
+    try {
+      const resolved = await this.resolveRoute({
+        repoUrl,
+        task,
+        baseBranch: typeof input.baseBranch === "string" ? input.baseBranch : "main",
+        publishPullRequest,
+        harness: typeof input.harness === "string" && input.harness.trim() ? (input.harness.trim() as DelegateInput["harness"]) : undefined,
+        codingModel: typeof input.codingModel === "string" && input.codingModel.trim() ? input.codingModel.trim() : undefined,
+        connectionId: typeof input.connectionId === "string" && input.connectionId.trim() ? input.connectionId.trim() : undefined,
+      });
+      route = resolved.route;
+    } catch (error) {
+      return Response.json({ error: error instanceof Error ? error.message : "Unsupported model route." }, { status: 400 });
+    }
     const approvalId = crypto.randomUUID();
     const threadKey = typeof input.threadKey === "string" && input.threadKey.trim() ? input.threadKey.trim() : "default";
     try {
@@ -559,6 +617,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         task: task.slice(0, 4000),
         baseBranch: typeof input.baseBranch === "string" && input.baseBranch.trim() ? input.baseBranch.slice(0, 200) : "main",
         publishPullRequest,
+        route,
         // Worker-vouched principal (X-Agent-Principal) — never the raw body,
         // so an operator-queued record can't be claimed by an agent token.
         ...(typeof input.queuedBy === "string" && input.queuedBy.trim()
@@ -776,6 +835,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       baseBranch: record.baseBranch ?? "main",
       publishPullRequest: record.publishPullRequest ?? false,
       queuedBy: record.queuedBy,
+      ...(record.route ? { route: record.route } : {}),
     }) : undefined;
     // One state write reserves capacity and records the decision before any await.
     this.setState({
@@ -795,6 +855,15 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
             task: run.task,
             baseBranch: run.baseBranch,
             publishPullRequest: run.publishPullRequest,
+            // The frozen route is the exact approved input: harness, model,
+            // and connection ride the pointer, never a fresh lookup.
+            ...(run.route
+              ? {
+                  harness: run.route.harness,
+                  codingModel: run.route.modelId,
+                  ...(run.route.connectionId ? { connectionId: run.route.connectionId } : {}),
+                }
+              : {}),
           }, { toolCallId: approvalId });
         } catch (error) {
           // delegate.execute can throw before its inner `finish` seam ran;

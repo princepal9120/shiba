@@ -88,11 +88,11 @@ const TABS: { id: WorkspaceTab; label: string }[] = [
 ];
 
 const GHOST_BUTTON =
-  "text-[11px] bg-transparent hover:bg-[#fffef8] border border-[#e0ded5] hover:border-[#d3d2c8] text-[#6a6f63] hover:text-[#222320] font-medium py-1 px-2.5 touch:min-h-11 touch:px-3.5 rounded-md transition-colors";
+  "text-[11px] bg-transparent hover:bg-[#fffef8] border border-[#e0ded5] hover:border-[#d3d2c8] text-[#6a6f63] hover:text-[#222320] font-medium py-1 px-2.5 touch:min-h-11 touch:px-3.5 rounded-none transition-colors";
 const ACCENT_BUTTON =
-  "text-[11px] bg-[#0000a8]/10 hover:bg-[#0000a8]/15 border border-[#0000a8]/15 text-[#1c1cc8] font-medium py-1 px-2.5 touch:min-h-11 touch:px-3.5 rounded-md transition-colors";
+  "text-[11px] bg-[#0000a8]/10 hover:bg-[#0000a8]/15 border border-[#0000a8]/15 text-[#1c1cc8] font-medium py-1 px-2.5 touch:min-h-11 touch:px-3.5 rounded-none transition-colors";
 const DANGER_BUTTON =
-  "text-[11px] bg-transparent hover:bg-[#fb2c36]/10 border border-[#fb2c36]/50 text-[#fb2c36] font-medium py-1 px-2.5 touch:min-h-11 touch:px-3.5 rounded-md transition-colors";
+  "text-[11px] bg-transparent hover:bg-[#fb2c36]/10 border border-[#fb2c36]/50 text-[#fb2c36] font-medium py-1 px-2.5 touch:min-h-11 touch:px-3.5 rounded-none transition-colors";
 
 /** Kind-aware label for a stored approval pointer; unknown kinds render raw. */
 function storedApprovalKind(approval: StoredApproval): string {
@@ -146,7 +146,7 @@ function StoredApprovalCard({
         : {}),
     } satisfies Record<string, unknown>);
   return (
-    <div className="border border-[#e0ded5] border-l-2 border-l-[#b45309] rounded-xl bg-[#f6f4ed] p-3">
+    <div className="border border-[#e0ded5] border-l-2 border-l-[#b45309] rounded-none bg-[#f6f4ed] p-3">
       <div className="flex items-center justify-between gap-2 mb-1.5">
         <span className="text-[10px] font-bold uppercase tracking-wider text-[#b45309]">
           {storedApprovalKind(approval)}
@@ -159,7 +159,7 @@ function StoredApprovalCard({
         via {storedApprovalAgent(approval)}
       </p>
       <p className="text-[11px] text-[#222320] font-medium break-words mb-1">{approval.task}</p>
-      <pre className="font-mono text-[10px] text-[#6a6f63] bg-[#fffef8] p-2 rounded-lg border border-[#e0ded5] whitespace-pre-wrap break-words max-h-32 overflow-auto mb-2">
+      <pre className="font-mono text-[10px] text-[#6a6f63] bg-[#fffef8] p-2 rounded-none border border-[#e0ded5] whitespace-pre-wrap break-words max-h-32 overflow-auto mb-2">
         {JSON.stringify(frozen, null, 2)}
       </pre>
       <div className="flex items-center gap-2">
@@ -200,13 +200,13 @@ function DecidedApprovalRow({ approval }: { approval: StoredApproval }): JSX.Ele
           ? { label: "Executed", cls: statusChipClass("completed") }
           : { label: "Approved", cls: statusChipClass("running") };
   return (
-    <div className="border border-[#e0ded5] rounded-xl bg-[#f6f4ed] p-3">
+    <div className="border border-[#e0ded5] rounded-none bg-[#f6f4ed] p-3">
       <div className="flex items-center justify-between gap-2 mb-1.5">
         <span className="text-[10px] font-bold uppercase tracking-wider text-[#6a6f63]">
           {storedApprovalKind(approval)}
         </span>
         <span
-          className={`text-[10px] font-bold uppercase tracking-wider border rounded-full px-2 py-0.5 shrink-0 ${chip.cls}`}
+          className={`text-[10px] font-bold uppercase tracking-wider border rounded-none px-2 py-0.5 shrink-0 ${chip.cls}`}
         >
           {chip.label}
         </span>
@@ -308,7 +308,7 @@ export function WorkspacePanel({
           onClick={onToggleCollapsed}
           aria-label="Expand workspace panel"
           title="Expand workspace panel"
-          className="w-7 h-7 rounded-lg flex items-center justify-center text-[#6a6f63] hover:text-[#222320] hover:bg-[#fffef8] transition-colors"
+          className="w-7 h-7 rounded-none flex items-center justify-center text-[#6a6f63] hover:text-[#222320] hover:bg-[#fffef8] transition-colors"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -330,9 +330,13 @@ export function WorkspacePanel({
       type="button"
       aria-label="Close workspace panel"
       onClick={onToggleCollapsed}
-      className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm lg:hidden"
+      className="fixed inset-0 z-40 bg-black/40 lg:hidden"
     />
-    <aside className="fixed inset-0 z-50 w-full sm:left-auto sm:w-[400px] pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] shrink-0 border-l border-[#e0ded5] bg-[#f1efe6] flex flex-col min-h-0 shadow-2xl lg:static lg:inset-auto lg:w-[400px] lg:pt-0 lg:pb-0 lg:z-auto lg:shadow-none">
+    <aside className="fixed inset-0 z-50 w-full sm:left-auto sm:w-[400px] pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] shrink-0 border-l border-[#e0ded5] bg-[#f1efe6] flex flex-col min-h-0 shadow-[3px_3px_0_var(--paper-shadow)] lg:static lg:inset-auto lg:w-[400px] lg:pt-0 lg:pb-0 lg:z-auto lg:shadow-none">
+      <div className="bez-titlebar shrink-0">
+        <span>workspace.panel</span>
+        <span className="bez-marks" aria-hidden="true"><i /><i /><i /></span>
+      </div>
       {/* Tab bar: tabs scroll sideways, the close button stays pinned. */}
       <div className="flex items-center border-b border-[#e0ded5]">
         <div className="flex-1 min-w-0 flex items-center gap-1 pl-3 pt-2 overflow-x-auto no-scrollbar">
@@ -346,7 +350,7 @@ export function WorkspacePanel({
               type="button"
               aria-pressed={active}
               onClick={() => setTab(t.id)}
-              className={`shrink-0 text-xs font-medium px-2.5 py-1.5 touch:min-h-11 rounded-t-lg border-b-2 transition-colors flex items-center gap-1.5 ${
+              className={`shrink-0 text-xs font-medium px-2.5 py-1.5 touch:min-h-11 rounded-none border-b-2 transition-colors flex items-center gap-1.5 ${
                 active
                   ? "text-[#222320] border-[#0000a8] bg-[#fffef8]"
                   : "text-[#6a6f63] border-transparent hover:text-[#222320] hover:bg-[#fffef8]"
@@ -355,7 +359,7 @@ export function WorkspacePanel({
               {t.label}
               {count !== null && count > 0 ? (
                 <span
-                  className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full border ${
+                  className={`text-[10px] font-mono px-1.5 py-0.5 rounded-none border ${
                     t.id === "approvals"
                       ? "text-[#b45309] border-[#b45309]/40 bg-[#b45309]/10"
                       : "text-[#6a6f63] border-[#e0ded5] bg-[#fffef8]"
@@ -373,7 +377,7 @@ export function WorkspacePanel({
           onClick={onToggleCollapsed}
           aria-label="Collapse workspace panel"
           title="Collapse workspace panel"
-          className="w-11 h-11 lg:w-7 lg:h-7 mx-1 lg:mx-2 mt-1 shrink-0 rounded-lg flex items-center justify-center text-[#6a6f63] hover:text-[#222320] hover:bg-[#fffef8] transition-colors"
+          className="w-11 h-11 lg:w-7 lg:h-7 mx-1 lg:mx-2 mt-1 shrink-0 rounded-none flex items-center justify-center text-[#6a6f63] hover:text-[#222320] hover:bg-[#fffef8] transition-colors"
         >
           <svg className="w-5 h-5 lg:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -394,7 +398,7 @@ export function WorkspacePanel({
                     key={f}
                     type="button"
                     onClick={() => setRunsFilter(f)}
-                    className={`text-[11px] font-medium px-2 py-1 rounded-full border transition-colors capitalize ${
+                    className={`text-[11px] font-medium px-2 py-1 rounded-none border transition-colors capitalize ${
                       runsFilter === f
                         ? "text-[#222320] border-[#0000a8]/50 bg-[#0000a8]/10"
                         : "text-[#6a6f63] border-[#e0ded5] hover:border-[#d3d2c8] hover:text-[#222320]"
@@ -408,7 +412,7 @@ export function WorkspacePanel({
                 type="button"
                 onClick={onRefreshRuns}
                 title="Refresh runs"
-                className="text-[11px] text-[#6a6f63] hover:text-[#222320] border border-[#e0ded5] hover:border-[#d3d2c8] rounded-md px-2 py-1 transition-colors flex items-center gap-1"
+                className="text-[11px] text-[#6a6f63] hover:text-[#222320] border border-[#e0ded5] hover:border-[#d3d2c8] rounded-none px-2 py-1 transition-colors flex items-center gap-1"
               >
                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -418,7 +422,7 @@ export function WorkspacePanel({
             </div>
 
             {filteredToolRuns.length === 0 && filteredRetainedRuns.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 border border-dashed border-[#e0ded5] rounded-xl bg-[#f6f4ed] px-4 text-center">
+              <div className="flex flex-col items-center justify-center py-8 border border-dashed border-[#e0ded5] rounded-none bg-[#f6f4ed] px-4 text-center">
                 <p className="text-[#6a6f63] text-xs">No runs. Approved tasks appear here while they execute.</p>
               </div>
             ) : null}
@@ -431,7 +435,7 @@ export function WorkspacePanel({
                   return (
                     <li
                       key={run.runId}
-                      className={`border rounded-xl p-3 bg-[#f6f4ed] transition-colors ${
+                      className={`border rounded-none p-3 bg-[#f6f4ed] transition-colors ${
                         selected ? "border-[#0000a8]/50" : "border-[#e0ded5]"
                       }`}
                     >
@@ -443,7 +447,7 @@ export function WorkspacePanel({
                         >
                           {run.runId}
                         </button>
-                        <span className={`text-[10px] font-bold uppercase tracking-wider border rounded-full px-2 py-0.5 shrink-0 ${statusChipClass(run.status)}`}>
+                        <span className={`text-[10px] font-bold uppercase tracking-wider border rounded-none px-2 py-0.5 shrink-0 ${statusChipClass(run.status)}`}>
                           {statusLabel(run.status)}
                         </span>
                       </div>
@@ -452,17 +456,17 @@ export function WorkspacePanel({
                         {run.parentToolCallId ? <span>· tool call {run.parentToolCallId}</span> : null}
                       </div>
                       {run.parts.length > 0 ? (
-                        <pre className="font-mono text-[11px] text-[#6a6f63] bg-[#fffef8] p-2.5 rounded-lg border border-[#e0ded5] max-h-40 overflow-auto whitespace-pre-wrap break-words mb-2">
+                        <pre className="font-mono text-[11px] text-[#6a6f63] bg-[#fffef8] p-2.5 rounded-none border border-[#e0ded5] max-h-40 overflow-auto whitespace-pre-wrap break-words mb-2">
                           {run.parts.map(runPartText).join("\n")}
                         </pre>
                       ) : null}
                       {run.summary ? (
-                        <pre className="font-mono text-[11px] text-[#222320] bg-[#fffef8] p-2.5 rounded-lg border border-[#e0ded5] max-h-40 overflow-auto whitespace-pre-wrap break-words mb-2">
+                        <pre className="font-mono text-[11px] text-[#222320] bg-[#fffef8] p-2.5 rounded-none border border-[#e0ded5] max-h-40 overflow-auto whitespace-pre-wrap break-words mb-2">
                           {run.summary}
                         </pre>
                       ) : null}
                       {run.error ? (
-                        <p className="text-[11px] text-[#fb2c36] bg-[#fb2c36]/10 p-2.5 rounded-lg border border-[#fb2c36]/20 mb-2">
+                        <p className="text-[11px] text-[#fb2c36] bg-[#fb2c36]/10 p-2.5 rounded-none border border-[#fb2c36]/20 mb-2">
                           {run.error}
                         </p>
                       ) : null}
@@ -503,7 +507,7 @@ export function WorkspacePanel({
                     return (
                       <li
                         key={run.runId}
-                        className={`border rounded-xl bg-[#f6f4ed] overflow-hidden hover:border-[#d3d2c8] transition-colors ${
+                        className={`border rounded-none bg-[#f6f4ed] overflow-hidden hover:border-[#d3d2c8] transition-colors ${
                           selected ? "border-[#0000a8]/50" : "border-[#e0ded5]"
                         }`}
                       >
@@ -523,7 +527,7 @@ export function WorkspacePanel({
                                 {formatTimeAgo(run.createdAt)}
                               </span>
                             </div>
-                            <span className={`text-[10px] font-bold uppercase tracking-wider border rounded-full px-2 py-0.5 shrink-0 ml-2 ${statusChipClass(run.status)}`}>
+                            <span className={`text-[10px] font-bold uppercase tracking-wider border rounded-none px-2 py-0.5 shrink-0 ml-2 ${statusChipClass(run.status)}`}>
                               {statusLabel(run.status)}
                             </span>
                           </summary>
@@ -533,16 +537,16 @@ export function WorkspacePanel({
                               <span>Branch: {run.baseBranch}</span>
                               {run.publishPullRequest ? <span className="text-[#0000a8]">· pull request requested</span> : null}
                             </div>
-                            <pre className="text-xs text-[#222320] whitespace-pre-wrap break-words bg-[#f6f4ed] p-2.5 rounded-lg border border-[#e0ded5]/60">
+                            <pre className="text-xs text-[#222320] whitespace-pre-wrap break-words bg-[#f6f4ed] p-2.5 rounded-none border border-[#e0ded5]/60">
                               {run.task}
                             </pre>
                             {run.summary ? (
-                              <pre className="font-mono text-[11px] text-[#222320] bg-[#fffef8] p-2.5 rounded-lg border border-[#e0ded5] whitespace-pre-wrap break-words max-h-40 overflow-auto">
+                              <pre className="font-mono text-[11px] text-[#222320] bg-[#fffef8] p-2.5 rounded-none border border-[#e0ded5] whitespace-pre-wrap break-words max-h-40 overflow-auto">
                                 {run.summary}
                               </pre>
                             ) : null}
                             {run.error ? (
-                              <p className="text-[11px] text-[#fb2c36] bg-[#fb2c36]/10 p-2.5 rounded-lg border border-[#fb2c36]/20">
+                              <p className="text-[11px] text-[#fb2c36] bg-[#fb2c36]/10 p-2.5 rounded-none border border-[#fb2c36]/20">
                                 {run.error}
                               </p>
                             ) : null}
@@ -610,7 +614,7 @@ export function WorkspacePanel({
           selectedRun && selectedDiff ? (
             <DiffViewer diff={selectedDiff} runId={selectedRun.runId} />
           ) : (
-            <div className="flex flex-col items-center justify-center py-8 border border-dashed border-[#e0ded5] rounded-xl bg-[#f6f4ed] px-4 text-center">
+            <div className="flex flex-col items-center justify-center py-8 border border-dashed border-[#e0ded5] rounded-none bg-[#f6f4ed] px-4 text-center">
               <p className="text-[#6a6f63] text-xs">
                 {selectedRunId
                   ? "No diff available for the selected run."
@@ -623,12 +627,12 @@ export function WorkspacePanel({
         {tab === "approvals" ? (
           <div className="flex flex-col gap-4">
             {storedApprovalsError !== null ? (
-              <p className="text-[11px] text-[#fb2c36] bg-[#fb2c36]/10 border border-[#fb2c36]/20 rounded-lg px-2.5 py-2">
+              <p className="text-[11px] text-[#fb2c36] bg-[#fb2c36]/10 border border-[#fb2c36]/20 rounded-none px-2.5 py-2">
                 Approval queue: {storedApprovalsError}
               </p>
             ) : null}
             {pendingApprovals.length === 0 && storedApprovals.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 border border-dashed border-[#e0ded5] rounded-xl bg-[#f6f4ed] px-4 text-center">
+              <div className="flex flex-col items-center justify-center py-8 border border-dashed border-[#e0ded5] rounded-none bg-[#f6f4ed] px-4 text-center">
                 <p className="text-[#6a6f63] text-xs">No pending approvals.</p>
               </div>
             ) : null}

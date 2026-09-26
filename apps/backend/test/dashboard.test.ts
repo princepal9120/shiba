@@ -43,6 +43,7 @@ import { VMInspector } from "../../frontend/src/components/VMInspector";
 import { RunRegistryView } from "../../frontend/src/components/RunRegistryView";
 import { AutomationsView } from "../../frontend/src/components/AutomationsView";
 import { ArchitectureView } from "../../frontend/src/components/ArchitectureView";
+import { DashboardView } from "../../frontend/src/components/DashboardView";
 import { OnboardingModal, ONBOARDING_STEPS } from "../../frontend/src/components/OnboardingModal";
 import { TaskForm } from "../../web/src/components/TaskForm";
 import { Tooltip } from "../../frontend/src/components/Tooltip";
@@ -61,6 +62,28 @@ function renderApp() {
 }
 
 describe("dashboard rendering", () => {
+  it("renders the dashboard overview and links to real capability surfaces", () => {
+    const markup = renderToStaticMarkup(React.createElement(DashboardView, {
+      runs: [],
+      pendingApprovals: [],
+      storedApprovals: [],
+      agents: [],
+      connectionLabel: "Connected",
+      connectionTone: "ok",
+      runsError: null,
+      onNavigate: vi.fn(),
+      onNewTask: vi.fn(),
+      onInspectRun: vi.fn(),
+    }));
+
+    expect(markup).toContain("Your agent plane");
+    expect(markup).toContain("Agents &amp; MCP");
+    expect(markup).toContain("Mailbox");
+    expect(markup).toContain("Memory");
+    expect(markup).toContain("Sandbox");
+    expect(markup).toContain("No runs yet.");
+  });
+
   it("shows useful empty states when no task has started", () => {
     const markup = renderApp();
 
@@ -165,6 +188,7 @@ describe("dashboard rendering", () => {
 
   it("renders the top navigation bar with all architectural views", () => {
     const markup = renderApp();
+    expect(markup).toContain("Dashboard");
     expect(markup).toContain("Tasks");
     expect(markup).toContain("VM");
     expect(markup).toContain("Runs");

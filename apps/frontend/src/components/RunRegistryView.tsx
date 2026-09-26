@@ -76,11 +76,11 @@ export function RunRegistryView({
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#f6f4ed] text-[#222320]">
       {/* Top Header */}
-      <div className="border-b border-[#e0ded5] bg-[#f1efe6]/95 backdrop-blur-md px-4 lg:px-8 py-4 flex flex-wrap items-center justify-between gap-4 shrink-0">
+      <div className="border-b border-[#e0ded5] bg-[#f1efe6] px-4 lg:px-8 py-4 flex flex-wrap items-center justify-between gap-4 shrink-0">
         <div>
           <h2 className="text-base font-semibold text-[#222320] flex items-center gap-2">
             <span>Run Registry & Workspaces</span>
-            <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-[#fffef8] border border-[#e0ded5] text-[#6a6f63]">
+            <span className="text-xs font-mono px-2 py-0.5 rounded-none bg-[#fffef8] border border-[#e0ded5] text-[#6a6f63]">
               {stats.total} total
             </span>
           </h2>
@@ -93,7 +93,7 @@ export function RunRegistryView({
           <button
             type="button"
             onClick={onRefresh}
-            className="text-xs bg-[#fffef8] hover:bg-[#e0ded5] border border-[#e0ded5] text-[#222320] font-medium py-1.5 px-3 rounded-lg transition-colors flex items-center gap-1.5"
+            className="text-xs bg-[#fffef8] hover:bg-[#e0ded5] border border-[#e0ded5] text-[#222320] font-medium py-1.5 px-3 rounded-none transition-colors flex items-center gap-1.5"
           >
             <svg className="w-3.5 h-3.5 text-[#6a6f63]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -105,7 +105,7 @@ export function RunRegistryView({
             <button
               type="button"
               onClick={onClearHistory}
-              className="text-xs bg-transparent hover:bg-[#fb2c36]/10 text-[#fb2c36] border border-[#fb2c36]/30 font-medium py-1.5 px-3 rounded-lg transition-colors"
+              className="text-xs bg-transparent hover:bg-[#fb2c36]/10 text-[#fb2c36] border border-[#fb2c36]/30 font-medium py-1.5 px-3 rounded-none transition-colors"
             >
               Clear History
             </button>
@@ -117,29 +117,29 @@ export function RunRegistryView({
       <div className="p-4 lg:p-8 flex-1 overflow-y-auto flex flex-col gap-6">
         {/* Quick Stats Metrics */}
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-          <div className="bg-[#f1efe6] border border-[#e0ded5] rounded-xl p-3.5 shadow-sm flex flex-col gap-1">
+          <div className="bg-[#f1efe6] border border-[#e0ded5] rounded-none p-3.5 shadow-[2px_2px_0_var(--paper-shadow)] flex flex-col gap-1">
             <span className="text-[11px] font-mono text-[#6a6f63] uppercase">Total Runs</span>
             <span className="text-xl font-bold text-[#222320] font-mono">{stats.total}</span>
           </div>
-          <div className="bg-[#f1efe6] border border-[#e0ded5] rounded-xl p-3.5 flex flex-col gap-1">
+          <div className="bg-[#f1efe6] border border-[#e0ded5] rounded-none p-3.5 flex flex-col gap-1">
             <span className="text-[11px] font-mono text-[#1c1cc8] uppercase">Active Now</span>
             <span className="text-xl font-bold text-[#1c1cc8] font-mono">{stats.active}</span>
           </div>
-          <div className="bg-[#f1efe6] border border-[#e0ded5] rounded-xl p-3.5 flex flex-col gap-1">
+          <div className="bg-[#f1efe6] border border-[#e0ded5] rounded-none p-3.5 flex flex-col gap-1">
             <span className="text-[11px] font-mono text-[#15803d] uppercase">Completed</span>
             <span className="text-xl font-bold text-[#15803d] font-mono">{stats.completed}</span>
           </div>
-          <div className="bg-[#f1efe6] border border-[#e0ded5] rounded-xl p-3.5 flex flex-col gap-1">
+          <div className="bg-[#f1efe6] border border-[#e0ded5] rounded-none p-3.5 flex flex-col gap-1">
             <span className="text-[11px] font-mono text-[#fb2c36] uppercase">Failed / Cancelled</span>
             <span className="text-xl font-bold text-[#fb2c36] font-mono">{stats.error}</span>
           </div>
-          <div className="bg-[#f1efe6] border border-[#e0ded5] rounded-xl p-3.5 flex flex-col gap-1">
+          <div className="bg-[#f1efe6] border border-[#e0ded5] rounded-none p-3.5 flex flex-col gap-1">
             <span className="text-[11px] font-mono text-[#6a6f63] uppercase">Success Rate</span>
             <span className="text-xl font-bold text-[#222320] font-mono">
               {stats.successRate === null ? "—" : `${stats.successRate}%`}
             </span>
           </div>
-          <div className="bg-[#f1efe6] border border-[#e0ded5] rounded-xl p-3.5 flex flex-col gap-1">
+          <div className="bg-[#f1efe6] border border-[#e0ded5] rounded-none p-3.5 flex flex-col gap-1">
             <span className="text-[11px] font-mono text-[#6a6f63] uppercase">Median Cycle</span>
             <span className="text-xl font-bold text-[#222320] font-mono">
               {stats.medianMs === null
@@ -149,23 +149,23 @@ export function RunRegistryView({
                   : `${Math.round(stats.medianMs / 60_000)}m`}
             </span>
           </div>
-          <div className="bg-[#f1efe6] border border-[#e0ded5] rounded-xl p-3.5 flex flex-col gap-1">
+          <div className="bg-[#f1efe6] border border-[#e0ded5] rounded-none p-3.5 flex flex-col gap-1">
             <span className="text-[11px] font-mono text-[#6a6f63] uppercase">PRs Requested</span>
             <span className="text-xl font-bold text-[#222320] font-mono">{stats.prRequested}</span>
           </div>
         </div>
 
         {/* Filter Controls & Search */}
-        <div className="flex flex-wrap items-center justify-between gap-3 bg-[#f1efe6] p-3 rounded-xl border border-[#e0ded5]">
-          <div className="flex items-center gap-1 bg-[#fffef8] p-1 rounded-lg border border-[#e0ded5] text-xs">
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-[#f1efe6] p-3 rounded-none border border-[#e0ded5]">
+          <div className="flex items-center gap-1 bg-[#fffef8] p-1 rounded-none border border-[#e0ded5] text-xs">
             {(["all", "active", "completed", "error"] as const).map((tab) => (
               <button
                 key={tab}
                 type="button"
                 onClick={() => setFilter(tab)}
-                className={`px-3 py-1 rounded-md transition-colors capitalize ${
+                className={`px-3 py-1 rounded-none transition-colors capitalize ${
                   filter === tab
-                    ? "bg-[#e0ded5] text-[#222320] font-semibold shadow-sm"
+                    ? "bg-[#e0ded5] text-[#222320] font-semibold shadow-[2px_2px_0_var(--paper-shadow)]"
                     : "text-[#6a6f63] hover:text-[#222320]"
                 }`}
               >
@@ -181,7 +181,7 @@ export function RunRegistryView({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search repository or task..."
-              className="w-full bg-[#fffef8] text-xs font-mono text-[#222320] border border-[#e0ded5] rounded-lg pl-8 pr-3 py-1.5 focus:outline-none focus:border-[#0000a8] placeholder:text-[#6a6f63]/50"
+              className="w-full bg-[#fffef8] text-xs font-mono text-[#222320] border border-[#e0ded5] rounded-none pl-8 pr-3 py-1.5 focus:outline-none focus:border-[#0000a8] placeholder:text-[#6a6f63]/50"
             />
             <svg className="w-3.5 h-3.5 text-[#6a6f63] absolute left-2.5 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -191,7 +191,7 @@ export function RunRegistryView({
 
         {/* Runs List */}
         {filteredRuns.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 border border-dashed border-[#e0ded5] rounded-xl bg-[#f1efe6]/40 p-6 text-center">
+          <div className="flex flex-col items-center justify-center py-16 border border-dashed border-[#e0ded5] rounded-none bg-[#f1efe6]/40 p-6 text-center">
             <p className="text-[#6a6f63] text-sm mb-1 font-medium">No runs matching your criteria</p>
             <p className="text-xs text-[#6a6f63]/70">
               Submit a task from the Task Console to execute code in an isolated Cloudflare Sandbox.
@@ -207,7 +207,7 @@ export function RunRegistryView({
               return (
                 <div
                   key={run.runId}
-                  className="border border-[#e0ded5] rounded-xl bg-[#f1efe6] overflow-hidden transition-all hover:border-[#d3d2c8]"
+                  className="border border-[#e0ded5] rounded-none bg-[#f1efe6] overflow-hidden transition-all hover:border-[#d3d2c8]"
                 >
                   <button
                     type="button"
@@ -241,7 +241,7 @@ export function RunRegistryView({
                     </div>
 
                     <div className="flex items-center gap-3 shrink-0">
-                      <span className={`text-[10px] font-bold uppercase tracking-wider border rounded-full px-2.5 py-0.5 ${sColor}`}>
+                      <span className={`text-[10px] font-bold uppercase tracking-wider border rounded-none px-2.5 py-0.5 ${sColor}`}>
                         {statusLabel(run.status)}
                       </span>
                     </div>
@@ -263,7 +263,7 @@ export function RunRegistryView({
                         <button
                           type="button"
                           onClick={() => onInspectVM(run.runId)}
-                          className="bg-[#0000a8] hover:bg-[#1c1cc8] text-white font-semibold text-xs px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
+                          className="bg-[#0000a8] hover:bg-[#1c1cc8] text-white font-semibold text-xs px-3 py-1.5 rounded-none transition-colors flex items-center gap-1.5 shadow-[2px_2px_0_var(--paper-shadow)]"
                         >
                           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -274,13 +274,13 @@ export function RunRegistryView({
                       </div>
 
                       {/* Full Task Description */}
-                      <pre className="font-sans text-xs text-[#222320] whitespace-pre-wrap break-words bg-[#f1efe6] p-3 rounded-lg border border-[#e0ded5] leading-relaxed">
+                      <pre className="font-sans text-xs text-[#222320] whitespace-pre-wrap break-words bg-[#f1efe6] p-3 rounded-none border border-[#e0ded5] leading-relaxed">
                         {run.task}
                       </pre>
 
                       {/* Summary */}
                       {run.summary ? (
-                        <div className="border border-[#e0ded5] rounded-lg p-3 bg-[#f1efe6]">
+                        <div className="border border-[#e0ded5] rounded-none p-3 bg-[#f1efe6]">
                           <span className="text-[11px] font-mono uppercase text-[#1c1cc8] font-bold block mb-1">
                             Result Summary
                           </span>
@@ -292,7 +292,7 @@ export function RunRegistryView({
 
                       {/* Error */}
                       {run.error ? (
-                        <div className="border border-[#fb2c36]/30 rounded-lg p-3 bg-[#fb2c36]/10 text-xs text-[#fb2c36]">
+                        <div className="border border-[#fb2c36]/30 rounded-none p-3 bg-[#fb2c36]/10 text-xs text-[#fb2c36]">
                           {run.error}
                         </div>
                       ) : null}
@@ -309,7 +309,7 @@ export function RunRegistryView({
                         {(run.status === "pending" || run.status === "running") ? (
                           <button
                             type="button"
-                            className="text-xs bg-transparent border border-[#fb2c36] hover:bg-[#fb2c36]/10 text-[#fb2c36] font-medium py-1.5 px-3 rounded-md transition-colors"
+                            className="text-xs bg-transparent border border-[#fb2c36] hover:bg-[#fb2c36]/10 text-[#fb2c36] font-medium py-1.5 px-3 rounded-none transition-colors"
                             onClick={() => onCancelRun(run.runId)}
                           >
                             Cancel Run
@@ -318,7 +318,7 @@ export function RunRegistryView({
 
                         <button
                           type="button"
-                          className="text-xs bg-[#fffef8] hover:bg-[#e0ded5] border border-[#e0ded5] text-[#6a6f63] hover:text-[#222320] font-medium py-1.5 px-3 rounded-md transition-colors"
+                          className="text-xs bg-[#fffef8] hover:bg-[#e0ded5] border border-[#e0ded5] text-[#6a6f63] hover:text-[#222320] font-medium py-1.5 px-3 rounded-none transition-colors"
                           onClick={() => onReuseParams(run)}
                         >
                           Reuse Parameters

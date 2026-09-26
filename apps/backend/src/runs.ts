@@ -7,6 +7,7 @@
  * stop/resume — resumable runs are a real architecture change and were
  * deliberately cut (PLAN.md §4, "Future work").
  */
+import type { ApprovedRoute } from "./model-connections.js";
 import { appendReceipt, makeReceipt, type Receipt } from "./receipts.js";
 import type { RunErrorCode } from "./run-errors.js";
 
@@ -59,6 +60,12 @@ export interface DelegatedRun {
    * tokens only ever see their own runs through the run tools.
    */
   queuedBy?: string;
+  /**
+   * The frozen, approval-gated route (connection/model/harness ids only —
+   * spec MODEL-CONNECTIONS-ARCHITECTURE.md §4). Absent on runs that
+   * predate route freezing. Never carries credentials.
+   */
+  route?: ApprovedRoute;
 }
 
 export type RunPatch = {
@@ -92,6 +99,7 @@ export function createRun(args: {
   baseBranch: string;
   publishPullRequest: boolean;
   queuedBy?: string;
+  route?: ApprovedRoute;
   now?: number;
 }): DelegatedRun {
   const now = args.now ?? Date.now();
@@ -103,6 +111,7 @@ export function createRun(args: {
     baseBranch: args.baseBranch,
     publishPullRequest: args.publishPullRequest,
     ...(args.queuedBy !== undefined ? { queuedBy: args.queuedBy } : {}),
+    ...(args.route !== undefined ? { route: args.route } : {}),
     status: "pending",
     generation: 0,
     createdAt: now,

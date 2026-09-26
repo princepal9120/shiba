@@ -15,11 +15,12 @@ describe.skipIf(!built)("marketing landing page", () => {
 
   test("renders the custom landing page, not the Starlight splash", () => {
     const markup = html();
-    expect(markup).toContain("AI Coworker - The best AI software engineer");
-    expect(markup).toContain("THE BEST SELF-HOSTED");
-    expect(markup).toContain("AI SOFTWARE ENGINEER");
+    expect(markup).toContain("Shiba - The best AI software engineer");
+    expect(markup).toContain("AI software engineer");
     expect(markup).toContain("grid-bg");
-    expect(markup).toContain("01. Approval-Gated");
+    expect(markup).toContain("Approval-Gated");
+    expect(markup).toContain('data-theme="light"');
+    expect(markup).toContain("Toggle theme");
   });
 
   test("every referenced asset exists in the build output", () => {
@@ -33,4 +34,3 @@ describe.skipIf(!built)("marketing landing page", () => {
     expect(html().toLowerCase()).not.toContain("capy");
   });
 });
-

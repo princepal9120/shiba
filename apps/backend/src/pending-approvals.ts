@@ -3,6 +3,7 @@
  * Pure list transforms so the orchestrator stores them in DO state the same
  * way it stores runs; the click handler resolves a pointer exactly once.
  */
+import type { ApprovedRoute } from "./model-connections.js";
 
 export const APPROVAL_TTL_MS = 30 * 60 * 1000;
 
@@ -75,6 +76,12 @@ export interface PendingApproval {
   /** Exact delegation input frozen at queue time; executed verbatim on approve. */
   baseBranch?: string;
   publishPullRequest?: boolean;
+  /**
+   * The frozen, approval-gated route (spec MODEL-CONNECTIONS-ARCHITECTURE.md
+   * §4): connection/model/harness ids only. The human approves exactly this;
+   * dispatch revalidates it and never substitutes another model.
+   */
+  route?: ApprovedRoute;
   /** Approval kind; absent on records written before email kinds landed — treated as `"run"`. */
   kind?: ApprovalKind;
   /** Frozen email send/delete input for email-kind approvals. */
@@ -113,6 +120,7 @@ export interface CreateApprovalInput {
   task: string;
   baseBranch?: string;
   publishPullRequest?: boolean;
+  route?: ApprovedRoute;
   kind?: ApprovalKind;
   payload?: JsonValue;
   queuedBy?: string;
@@ -135,6 +143,7 @@ export function createPendingApproval(
       task: input.task,
       ...(input.baseBranch !== undefined ? { baseBranch: input.baseBranch } : {}),
       ...(input.publishPullRequest !== undefined ? { publishPullRequest: input.publishPullRequest } : {}),
+      ...(input.route !== undefined ? { route: input.route } : {}),
       ...(input.kind !== undefined ? { kind: input.kind } : {}),
       ...(input.payload !== undefined ? { payload: input.payload } : {}),
       ...(input.queuedBy !== undefined ? { queuedBy: input.queuedBy } : {}),

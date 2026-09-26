@@ -157,6 +157,7 @@ describe("provider egress forwarders (T22)", () => {
       "generativelanguage.googleapis.com": "google-ai-studio",
       "api.anthropic.com": "anthropic",
       "api.openai.com": "openai",
+      "opencode.ai": "opencode-go",
     });
   });
 

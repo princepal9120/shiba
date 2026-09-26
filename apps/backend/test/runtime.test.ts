@@ -699,15 +699,17 @@ describe("worker authentication gate (T7)", () => {
     vi.mocked(routing.routeAgentRequest).mockResolvedValue(null);
   });
 
-  it("gates asset fetch without an Access header", async () => {
+  it("serves public marketing assets but gates dashboard assets without an Access header", async () => {
     const routing = await import("agents/routing");
     vi.mocked(proxyToSandbox).mockResolvedValue(null);
     vi.mocked(routing.routeAgentRequest).mockResolvedValue(null);
     const worker = (await import("../src/index.js")).default;
-    const denied = await worker.fetch(new Request("https://example.com/"), makeAccessEnv());
+    const publicPage = await worker.fetch(new Request("https://example.com/"), makeAccessEnv());
+    expect(publicPage.status).toBe(200);
+    const denied = await worker.fetch(new Request("https://example.com/app/"), makeAccessEnv());
     expect(denied.status).toBe(401);
     const allowed = await worker.fetch(
-      new Request("https://example.com/", {
+      new Request("https://example.com/app/", {
         headers: { "CF-Access-Authenticated-User-Email": "alice@example.com" },
       }),
       makeAccessEnv(),

@@ -111,17 +111,225 @@ details summary::-webkit-details-marker {
   animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-/* Dark theme via invert filter — the UI is light-first like bezalel.sh;
-   inverting the root keeps fixed positioning intact; media is re-inverted. */
+/* ------------------------------------------------------------------
+   Dark theme — real bezalel dark, not an invert filter.
+   Call sites use hardcoded light arbitrary values (bg-[#f6f4ed], etc.);
+   instead of rewriting hundreds of classes we remap those exact class
+   tokens under html.dark, the same technique as
+   apps/web/src/layouts/MarketingPage.astro.
+------------------------------------------------------------------- */
+
 html.dark {
-  filter: invert(1) hue-rotate(180deg);
-  background: #121008;
+  color-scheme: dark;
+  --bg: #191a18;
+  --panel: #222320;
+  --panel-elevated: #272824;
+  --line: #3b3d36;
+  --line-light: #3b3d36;
+  --text: #eae8e1;
+  --muted: #aaa99f;
+  --accent: #9cbce2;
+  --accent-light: #dceafa;
+  --accent-ink: #152335;
+  --brand: #9cbce2;
+  --brand-light: #dceafa;
+  --danger: #ee9690;
+  --ok: #95c4a0;
+  --pending: #f5c96b;
+  --running: #9cbce2;
+  --paper-shadow: #00000035;
+  --paper-dot: #eae8e119;
 }
-html.dark img,
-html.dark video,
-html.dark canvas {
-  filter: invert(1) hue-rotate(180deg);
+
+/* ---------- paper / ink / rules (neutrals) ---------- */
+html.dark [class~="bg-[#f6f4ed]"]            { background-color: #191a18; }
+html.dark [class~="bg-[#f6f4ed]/60"]         { background-color: #191a1899; }
+html.dark [class~="bg-[#fffef8]"]            { background-color: #222320; }
+html.dark [class~="bg-[#fffef8]/60"]         { background-color: #22232099; }
+html.dark [class~="bg-[#f6f4ed]/95"],
+html.dark [class~="bg-[#fffef8]/95"]         { background-color: #222320f2; }
+html.dark [class~="bg-[#f1efe6]"]            { background-color: #272824; }
+html.dark [class~="bg-[#e9e8df]"]            { background-color: #2b2c28; }
+html.dark [class~="bg-[#e0ded5]"]            { background-color: #3b3d36; }
+html.dark [class~="bg-[#e0ded5]/30"]         { background-color: #3b3d364d; }
+html.dark [class~="bg-[#e0ded5]/50"]         { background-color: #3b3d3680; }
+html.dark [class~="bg-[#a5a69b]"],
+html.dark [class~="bg-[#6a6f63]"]            { background-color: #707368; }
+
+html.dark [class~="text-[#222320]"]          { color: #eae8e1; }
+html.dark [class~="text-[#fffef8]"]          { color: #eae8e1; }
+html.dark [class~="text-[#6a6f63]"]          { color: #aaa99f; }
+html.dark [class~="text-[#6a6f63]/50"]       { color: #aaa99f80; }
+html.dark [class~="text-[#6a6f63]/60"]       { color: #aaa99f99; }
+html.dark [class~="text-[#6a6f63]/70"]       { color: #aaa99fb3; }
+html.dark [class~="text-[#6a6f63]/80"]       { color: #aaa99fcc; }
+
+html.dark [class~="border-[#e0ded5]"]        { border-color: #3b3d36; }
+html.dark [class~="border-[#e0ded5]/60"]     { border-color: #3b3d3699; }
+html.dark [class~="border-[#e0ded5]/70"]     { border-color: #3b3d36b3; }
+html.dark [class~="border-[#e0ded5]/80"]     { border-color: #3b3d36cc; }
+html.dark [class~="border-[#d3d2c8]"]        { border-color: #3b3d36; }
+html.dark [class~="border-[#a5a69b]"],
+html.dark [class~="border-[#6a6f63]"]        { border-color: #707368; }
+html.dark [class~="divide-[#e0ded5]"] > * + *,
+html.dark [class~="divide-[#e0ded5]/50"] > * + * { border-color: #3b3d36; }
+
+html.dark [class~="placeholder-[#6a6f63]"]::placeholder,
+html.dark [class~="placeholder-[#6a6f63]/60"]::placeholder { color: #aaa99f99; }
+html.dark [class~="placeholder-[#6a6f63]/70"]::placeholder { color: #aaa99fb3; }
+
+/* black-alpha tints (hover states, kbd chips, hairlines) -> light tints */
+html.dark [class~="bg-black/[0.04]"]         { background-color: #ffffff0a; }
+html.dark [class~="bg-black/[0.06]"]         { background-color: #ffffff10; }
+html.dark [class~="bg-black/[0.08]"]         { background-color: #ffffff14; }
+html.dark [class~="hover:bg-black/[0.04]"]:hover { background-color: #ffffff0a; }
+html.dark [class~="hover:bg-black/[0.06]"]:hover { background-color: #ffffff10; }
+html.dark [class~="border-black/[0.04]"],
+html.dark [class~="border-black/[0.06]"],
+html.dark [class~="border-black/[0.08]"],
+html.dark [class~="border-black/[0.08]/60"],
+html.dark [class~="border-black/[0.08]/80"],
+html.dark [class~="border-black/[0.1]"],
+html.dark [class~="border-black/[0.14]"],
+html.dark [class~="border-black/[0.18]"]     { border-color: #eae8e122; }
+
+/* ---------- navy accent -> light-steel accent ---------- */
+html.dark [class~="bg-[#0000a8]"]            { background-color: #9cbce2; }
+html.dark [class~="bg-[#1c1cc8]"]            { background-color: #dceafa; }
+html.dark [class~="hover:bg-[#1c1cc8]"]:hover { background-color: #b6d2ee; }
+html.dark [class~="hover:bg-[#0000a8]"]:hover { background-color: #8fb0d8; }
+html.dark [class~="bg-[#0000a8]/10"]         { background-color: #9cbce21a; }
+html.dark [class~="bg-[#0000a8]/15"]         { background-color: #9cbce226; }
+html.dark [class~="bg-[#0000a8]/20"]         { background-color: #9cbce233; }
+
+html.dark [class~="text-[#0000a8]"]          { color: #9cbce2; }
+html.dark [class~="text-[#0000a8]/80"]       { color: #9cbce2cc; }
+html.dark [class~="text-[#0000a8]/50"]       { color: #9cbce280; }
+html.dark [class~="text-[#1c1cc8]"]          { color: #dceafa; }
+html.dark [class~="hover:text-[#0000a8]"]:hover { color: #9cbce2; }
+html.dark [class~="hover:text-[#1c1cc8]"]:hover { color: #dceafa; }
+
+html.dark [class~="border-[#0000a8]"]        { border-color: #9cbce2; }
+html.dark [class~="border-[#0000a8]/10"]     { border-color: #9cbce21a; }
+html.dark [class~="border-[#0000a8]/15"]     { border-color: #9cbce226; }
+html.dark [class~="border-[#0000a8]/25"]     { border-color: #9cbce240; }
+html.dark [class~="border-[#0000a8]/30"]     { border-color: #9cbce24d; }
+html.dark [class~="border-[#0000a8]/40"]     { border-color: #9cbce266; }
+html.dark [class~="border-[#0000a8]/50"]     { border-color: #9cbce280; }
+html.dark [class~="border-[#1c1cc8]"]        { border-color: #dceafa; }
+html.dark [class~="ring-[#0000a8]"],
+html.dark [class~="ring-[#0000a8]/30"]       { --tw-ring-color: #9cbce24d; }
+html.dark [class~="ring-[#1c1cc8]/40"]       { --tw-ring-color: #dceafa66; }
+html.dark [class~="accent-[#0000a8]"]        { accent-color: #9cbce2; }
+html.dark [class~="from-[#0000a8]"]          { --tw-gradient-from: #9cbce2; }
+html.dark [class~="to-[#1c1cc8]"]            { --tw-gradient-to: #dceafa; }
+
+/* white-on-navy pairings: element-level + descendants of a navy block */
+html.dark [class~="bg-[#0000a8]"][class~="text-white"],
+html.dark [class~="bg-[#1c1cc8]"][class~="text-white"],
+html.dark [class~="bg-[#0000a8]"] [class~="text-white"] {
+  color: #152335;
 }
+html.dark [class~="bg-[#0000a8]"] [class~="text-white/90"],
+html.dark [class~="bg-[#0000a8]"] [class~="hover:text-white"]:hover {
+  color: #152335e6;
+}
+html.dark [class~="bg-[#0000a8]"] [class~="text-white/60"] { color: #15233599; }
+html.dark [class~="bg-[#0000a8]"] [class~="text-white/40"] { color: #15233566; }
+html.dark [class~="bg-[#0000a8]"] [class~="bg-white/10"]  { background-color: #1523351a; }
+html.dark [class~="bg-[#0000a8]"] [class~="bg-white/15"],
+html.dark [class~="bg-[#0000a8]"] [class~="hover:bg-white/15"]:hover { background-color: #15233526; }
+html.dark [class~="bg-[#0000a8]"] [class~="bg-white/20"],
+html.dark [class~="bg-[#0000a8]"] [class~="hover:bg-white/20"]:hover { background-color: #15233533; }
+html.dark [class~="bg-[#0000a8]"] [class~="border-white/20"] { border-color: #15233533; }
+
+/* ---------- semantic: ok (green) ---------- */
+html.dark [class~="bg-[#15803d]"],
+html.dark [class~="bg-[#166534]"]            { background-color: #95c4a0; }
+html.dark [class~="bg-[#15803d]"][class~="text-white"],
+html.dark [class~="bg-[#166534]"][class~="text-white"],
+html.dark [class~="bg-[#15803d]"] [class~="text-white"],
+html.dark [class~="bg-[#166534]"] [class~="text-white"] { color: #14301c; }
+html.dark [class~="bg-[#15803d]/10"],
+html.dark [class~="bg-[#166534]/10"]         { background-color: #95c4a01a; }
+html.dark [class~="text-[#15803d]"],
+html.dark [class~="text-[#166534]"]          { color: #95c4a0; }
+html.dark [class~="border-[#15803d]"],
+html.dark [class~="border-[#166534]"]        { border-color: #95c4a0; }
+html.dark [class~="border-[#15803d]/20"]     { border-color: #95c4a033; }
+html.dark [class~="border-[#15803d]/30"],
+html.dark [class~="border-[#166534]/30"]     { border-color: #95c4a04d; }
+
+/* ---------- semantic: pending (amber) ---------- */
+html.dark [class~="bg-[#b45309]"]            { background-color: #d9be80; }
+html.dark [class~="bg-[#f99c00]"]            { background-color: #f5c96b; }
+html.dark [class~="bg-[#b45309]"][class~="text-white"],
+html.dark [class~="bg-[#f99c00]"][class~="text-white"],
+html.dark [class~="bg-[#b45309]"] [class~="text-white"],
+html.dark [class~="bg-[#f99c00]"] [class~="text-white"] { color: #3a2c10; }
+html.dark [class~="bg-[#b45309]/10"]         { background-color: #d9be801a; }
+html.dark [class~="bg-[#f99c00]/10"]         { background-color: #f5c96b1a; }
+html.dark [class~="text-[#b45309]"],
+html.dark [class~="text-[#b45309]/90"]       { color: #d9be80; }
+html.dark [class~="text-[#f99c00]"]          { color: #f5c96b; }
+html.dark [class~="border-[#b45309]"],
+html.dark [class~="border-l-[#b45309]"]      { border-color: #d9be80; }
+html.dark [class~="border-[#f99c00]"],
+html.dark [class~="border-l-[#f99c00]"]      { border-color: #f5c96b; }
+html.dark [class~="border-[#b45309]/30"]     { border-color: #d9be804d; }
+html.dark [class~="border-[#b45309]/40"]     { border-color: #d9be8066; }
+html.dark [class~="border-[#b45309]/60"]     { border-color: #d9be8099; }
+html.dark [class~="border-[#f99c00]/20"]     { border-color: #f5c96b33; }
+html.dark [class~="border-[#f99c00]/30"]     { border-color: #f5c96b4d; }
+html.dark [class~="border-[#f99c00]/40"]     { border-color: #f5c96b66; }
+html.dark [class~="border-[#f99c00]/50"]     { border-color: #f5c96b80; }
+html.dark [class~="shadow-[#b45309]/5"]      { --tw-shadow-color: #d9be800d; }
+
+/* ---------- semantic: danger (red) ---------- */
+html.dark [class~="bg-[#fb2c36]"],
+html.dark [class~="bg-[#b91c1c]"]            { background-color: #ee9690; }
+html.dark [class~="bg-[#fb2c36]"][class~="text-white"],
+html.dark [class~="bg-[#b91c1c]"][class~="text-white"],
+html.dark [class~="bg-[#fb2c36]"] [class~="text-white"],
+html.dark [class~="bg-[#b91c1c]"] [class~="text-white"] { color: #471410; }
+html.dark [class~="bg-[#fb2c36]/10"],
+html.dark [class~="bg-[#b91c1c]/10"]         { background-color: #ee96901a; }
+html.dark [class~="hover:bg-[#fb2c36]/90"]:hover { background-color: #ee9690e6; }
+html.dark [class~="text-[#fb2c36]"],
+html.dark [class~="text-[#b91c1c]"]          { color: #ee9690; }
+html.dark [class~="border-[#fb2c36]"],
+html.dark [class~="border-[#b91c1c]"]        { border-color: #ee9690; }
+html.dark [class~="border-[#fb2c36]/20"]     { border-color: #ee969033; }
+html.dark [class~="border-[#fb2c36]/30"]     { border-color: #ee96904d; }
+html.dark [class~="border-[#fb2c36]/40"]     { border-color: #ee969066; }
+html.dark [class~="border-[#fb2c36]/50"]     { border-color: #ee969080; }
+
+/* ---------- bezalel primitives + misc surfaces ---------- */
+html.dark .bez-titlebar  { background: #222320; color: #eae8e1; }
+html.dark .bez-marks i   { background: linear-gradient(#4a4c44, #2a2b26); box-shadow: inset 0 1px 0 #ffffff22, inset 0 -1px 0 #00000066; }
+html.dark .paper-window  { background: #222320; box-shadow: 4px 4px 0 var(--paper-shadow); }
+html.dark .paper-dots    { background-image: radial-gradient(var(--paper-dot) 1px, transparent 1px); }
+html.dark .bez-statusbar { background: #272824; border-color: #3b3d36; color: #aaa99f; }
+
+html.dark .glass-panel {
+  background: rgba(34, 35, 32, 0.9);
+  border-color: rgba(234, 232, 225, 0.09);
+  box-shadow: 0px 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+html.dark ::selection {
+  background: #9cbce2;
+  color: #152335;
+}
+html.dark [class~="selection:bg-[#0000a8]"]::selection {
+  background: #9cbce2;
+}
+html.dark [class~="selection:text-white"]::selection {
+  color: #152335;
+}
+
+html.dark ::-webkit-scrollbar-thumb         { background: #3b3d36; }
+html.dark ::-webkit-scrollbar-thumb:hover   { background: #4a4c44; }
 
 /* iOS Safari zooms into any focused field under 16px. */
 @media (pointer: coarse) {

@@ -4,6 +4,7 @@
  * parseAgentToolInput. The child never scrapes arbitrary prose.
  */
 import { z } from "zod";
+import { isApprovedRoute, type ApprovedRoute } from "./model-connections.js";
 import { parseGitHubRepoUrl } from "./security.js";
 
 export const TOOL_INPUT_MARKER = "SHIBA_AI_COWORKER_CODING_TASK_JSON";
@@ -18,9 +19,23 @@ const codingTaskInputSchema = z.object({
   codingModel: z.string().min(1),
   /** Which coding agent runs the task. Validated at approval time, never in the container. */
   harness: z.enum(["opencode", "claude-code", "codex", "devin"]).optional(),
+  /**
+   * The frozen, approval-gated route (connection/model/harness ids only —
+   * spec MODEL-CONNECTIONS-ARCHITECTURE.md §4). Validated with
+   * {@link isApprovedRoute} after parsing; absent on pre-route envelopes.
+   */
+  route: z.unknown().optional(),
 });
 
-export type CodingTaskInput = z.infer<typeof codingTaskInputSchema>;
+const codingTaskInputWithRouteSchema = codingTaskInputSchema.superRefine((input, ctx) => {
+  if (input.route !== undefined && !isApprovedRoute(input.route)) {
+    ctx.addIssue({ code: "custom", message: "route must be an ApprovedRoute (connection/model/harness ids only)." });
+  }
+});
+
+export type CodingTaskInput = Omit<z.infer<typeof codingTaskInputSchema>, "route"> & {
+  route?: ApprovedRoute;
+};
 
 const changedFileSchema = z.object({
   path: z.string().min(1),
@@ -42,7 +57,7 @@ const codingTaskResultSchema = z.object({
 export type CodingTaskResult = z.infer<typeof codingTaskResultSchema>;
 
 export function formatAgentToolInput(input: CodingTaskInput): string {
-  const parsed = codingTaskInputSchema.parse(input);
+  const parsed = codingTaskInputWithRouteSchema.parse(input);
   // Validate the repo URL eagerly so a bad URL fails before approval.
   parseGitHubRepoUrl(parsed.repoUrl);
   return `${TOOL_INPUT_MARKER}\n${JSON.stringify(parsed)}`;
@@ -64,10 +79,10 @@ export function parseAgentToolInput(messages: ChatTextMessage[]): CodingTaskInpu
     const message = messages[i] as ChatTextMessage;
     if (message.role !== "user") continue;
     for (const candidate of candidatePayloads(message.text)) {
-      const parsed = codingTaskInputSchema.safeParse(candidate);
+      const parsed = codingTaskInputWithRouteSchema.safeParse(candidate);
       if (parsed.success) {
         parseGitHubRepoUrl(parsed.data.repoUrl);
-        return parsed.data;
+        return parsed.data as CodingTaskInput;
       }
     }
   }

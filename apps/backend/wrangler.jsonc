@@ -34,6 +34,8 @@
       { "name": "Mailbox", "class_name": "Mailbox" },
       { "name": "McpGateway", "class_name": "McpGateway" },
       { "name": "Memory", "class_name": "Memory" },
+      { "name": "Waitlist", "class_name": "Waitlist" },
+      { "name": "ModelConfig", "class_name": "ModelConfig" },
     ],
   },
   // Email attachment bodies >256KB go here, keyed `emailId/partId`
@@ -81,5 +83,7 @@
     { "tag": "v3", "new_sqlite_classes": ["Mailbox"] },
     { "tag": "v4", "new_sqlite_classes": ["McpGateway"] },
     { "tag": "v5", "new_sqlite_classes": ["Memory"] },
+    { "tag": "v6", "new_sqlite_classes": ["Waitlist"] },
+    { "tag": "v7", "new_sqlite_classes": ["ModelConfig"] },
   ],
 }

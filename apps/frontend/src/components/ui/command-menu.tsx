@@ -24,14 +24,14 @@ function CommandDialog({
       <button
         type="button"
         aria-label="Close command menu"
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/60"
         onClick={onClose}
       />
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Command menu"
-        className="relative bg-[#fffef8] border border-[#e0ded5] rounded-xl max-w-md w-full shadow-2xl overflow-hidden"
+        className="relative bg-[#fffef8] border border-[#e0ded5] rounded-none max-w-md w-full shadow-[3px_3px_0_var(--paper-shadow)] overflow-hidden"
       >
         {children}
       </div>

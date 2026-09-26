@@ -16,11 +16,11 @@ import type {
 import { formatTimeAgo } from "../ui-helpers";
 
 const GHOST_BUTTON =
-  "text-[11px] bg-transparent hover:bg-[#fffef8] border border-[#e0ded5] hover:border-[#d3d2c8] text-[#6a6f63] hover:text-[#222320] font-medium py-1.5 px-3 touch:min-h-11 rounded-lg transition-colors inline-flex items-center justify-center gap-1.5";
+  "text-[11px] bg-transparent hover:bg-[#fffef8] border border-[#e0ded5] hover:border-[#d3d2c8] text-[#6a6f63] hover:text-[#222320] font-medium py-1.5 px-3 touch:min-h-11 rounded-none transition-colors inline-flex items-center justify-center gap-1.5";
 const ACCENT_BUTTON =
-  "text-[11px] bg-[#0000a8] hover:bg-[#1c1cc8] text-[#fffef8] font-medium py-1.5 px-3 touch:min-h-11 rounded-lg transition-colors shadow-xs inline-flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed";
+  "text-[11px] bg-[#0000a8] hover:bg-[#1c1cc8] text-[#fffef8] font-medium py-1.5 px-3 touch:min-h-11 rounded-none transition-colors shadow-xs inline-flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed";
 const SECONDARY_BUTTON =
-  "text-[11px] bg-[#0000a8]/10 hover:bg-[#0000a8]/15 border border-[#0000a8]/20 text-[#1c1cc8] font-medium py-1.5 px-3 touch:min-h-11 rounded-lg transition-colors inline-flex items-center justify-center gap-1.5 disabled:opacity-50";
+  "text-[11px] bg-[#0000a8]/10 hover:bg-[#0000a8]/15 border border-[#0000a8]/20 text-[#1c1cc8] font-medium py-1.5 px-3 touch:min-h-11 rounded-none transition-colors inline-flex items-center justify-center gap-1.5 disabled:opacity-50";
 
 async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, init);
@@ -346,7 +346,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
       {/* Activity & System Summary Bar */}
       <section
         aria-label="Mailbox activity summary"
-        className="bg-[#fffef8] border border-[#e0ded5] rounded-xl p-3 shadow-xs"
+        className="bg-[#fffef8] border border-[#e0ded5] rounded-none p-3 shadow-xs"
       >
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-4 flex-wrap">
@@ -375,10 +375,10 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
 
           <div className="flex items-center gap-2 ml-auto">
             <span
-              className="text-[10px] font-mono text-[#15803d] bg-[#15803d]/10 border border-[#15803d]/20 px-2 py-0.5 rounded-full inline-flex items-center gap-1"
+              className="text-[10px] font-mono text-[#15803d] bg-[#15803d]/10 border border-[#15803d]/20 px-2 py-0.5 rounded-none inline-flex items-center gap-1"
               title="Cloudflare Email Routing + Mailbox Durable Objects"
             >
-              <span className="size-1.5 rounded-full bg-[#15803d]" />
+              <span className="size-1.5 rounded-none bg-[#15803d]" />
               Approval-Gated Send
             </span>
             <button
@@ -419,7 +419,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
             </div>
 
             {/* Currently Configured Mailboxes (Paired Lines) */}
-            <div className="bg-[#f6f4ed] border border-[#e0ded5] rounded-lg p-2.5">
+            <div className="bg-[#f6f4ed] border border-[#e0ded5] rounded-none p-2.5">
               <h5 className="text-[10px] font-mono uppercase tracking-wider text-[#6a6f63] mb-1.5">
                 Active Mailbox Lines
               </h5>
@@ -430,10 +430,10 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
                   {mailboxes.map((mb) => (
                     <div
                       key={mb.address}
-                      className="flex items-center justify-between gap-2 text-[11px] bg-[#fffef8] border border-[#e0ded5] rounded-md px-2.5 py-1.5"
+                      className="flex items-center justify-between gap-2 text-[11px] bg-[#fffef8] border border-[#e0ded5] rounded-none px-2.5 py-1.5"
                     >
                       <div className="flex items-center gap-2 min-w-0">
-                        <span className="size-2 rounded-full bg-[#15803d]" />
+                        <span className="size-2 rounded-none bg-[#15803d]" />
                         <span className="font-mono font-medium text-[#222320] truncate">{mb.address}</span>
                         {mb.label ? (
                           <span className="text-[10px] text-[#6a6f63] bg-[#f6f4ed] border border-[#e0ded5] rounded px-1.5 py-0.2">
@@ -451,13 +451,13 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
             </div>
 
             {/* Two-Step Pairing Form */}
-            <div className="border border-[#0000a8]/20 bg-[#0000a8]/5 rounded-xl p-3 flex flex-col gap-2.5">
+            <div className="border border-[#0000a8]/20 bg-[#0000a8]/5 rounded-none p-3 flex flex-col gap-2.5">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-mono uppercase font-bold tracking-wider text-[#1c1cc8]">
                   {pairingStep === 1 ? "Step 1: Define Mailbox Identity" : "Step 2: Security & Privacy Verification"}
                 </span>
                 <div className="flex items-center gap-1 text-[10px] font-mono text-[#6a6f63]">
-                  <span className={`size-2 rounded-full ${pairingStep === 1 ? "bg-[#0000a8]" : "bg-[#15803d]"}`} />
+                  <span className={`size-2 rounded-none ${pairingStep === 1 ? "bg-[#0000a8]" : "bg-[#15803d]"}`} />
                   <span>Step {pairingStep} of 2</span>
                 </div>
               </div>
@@ -479,7 +479,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
                         onChange={(e) => setNewAddress(e.target.value)}
                         placeholder="agent@shiba.dev"
                         aria-label="Mailbox address"
-                        className="w-full text-[11px] font-mono bg-[#fffef8] border border-[#e0ded5] rounded-md px-2.5 py-1.5 text-[#222320] placeholder:text-[#6a6f63] focus:outline-none focus:border-[#0000a8]"
+                        className="w-full text-[11px] font-mono bg-[#fffef8] border border-[#e0ded5] rounded-none px-2.5 py-1.5 text-[#222320] placeholder:text-[#6a6f63] focus:outline-none focus:border-[#0000a8]"
                       />
                     </div>
                     <div>
@@ -492,7 +492,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
                         onChange={(e) => setNewLabel(e.target.value)}
                         placeholder="e.g. Primary Assistant"
                         aria-label="Mailbox label"
-                        className="w-full text-[11px] bg-[#fffef8] border border-[#e0ded5] rounded-md px-2.5 py-1.5 text-[#222320] placeholder:text-[#6a6f63] focus:outline-none focus:border-[#0000a8]"
+                        className="w-full text-[11px] bg-[#fffef8] border border-[#e0ded5] rounded-none px-2.5 py-1.5 text-[#222320] placeholder:text-[#6a6f63] focus:outline-none focus:border-[#0000a8]"
                       />
                     </div>
                   </div>
@@ -523,7 +523,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
                 </div>
               ) : (
                 <div className="flex flex-col gap-2.5">
-                  <div className="bg-[#fffef8] border border-[#e0ded5] rounded-lg p-2.5 text-[11px] text-[#222320] flex flex-col gap-1.5">
+                  <div className="bg-[#fffef8] border border-[#e0ded5] rounded-none p-2.5 text-[11px] text-[#222320] flex flex-col gap-1.5">
                     <div className="flex items-center gap-2">
                       <span className="font-semibold">Selected Address:</span>
                       <span className="font-mono text-[#0000a8]">{newAddress}</span>
@@ -566,7 +566,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
         ) : null}
 
         {registerNotice !== null ? (
-          <p role="status" className="mt-2 text-[11px] text-[#15803d] bg-[#15803d]/10 border border-[#15803d]/20 rounded-lg px-2.5 py-1.5">
+          <p role="status" className="mt-2 text-[11px] text-[#15803d] bg-[#15803d]/10 border border-[#15803d]/20 rounded-none px-2.5 py-1.5">
             {registerNotice}
           </p>
         ) : null}
@@ -581,7 +581,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
               value={mailbox}
               onChange={(event) => setMailbox(event.target.value)}
               aria-label="Mailbox"
-              className="w-full text-[11px] font-mono bg-[#fffef8] border border-[#e0ded5] rounded-lg px-2.5 py-1.5 text-[#222320] focus:outline-none focus:border-[#0000a8]"
+              className="w-full text-[11px] font-mono bg-[#fffef8] border border-[#e0ded5] rounded-none px-2.5 py-1.5 text-[#222320] focus:outline-none focus:border-[#0000a8]"
             >
               <option value="">All mailboxes</option>
               {(mailboxes ?? []).map((record) => (
@@ -593,11 +593,11 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
           </div>
 
           {/* Filter Pills */}
-          <div className="flex items-center gap-1 bg-[#fffef8] border border-[#e0ded5] rounded-lg p-0.5">
+          <div className="flex items-center gap-1 bg-[#fffef8] border border-[#e0ded5] rounded-none p-0.5">
             <button
               type="button"
               onClick={() => setFilterView("all")}
-              className={`text-[11px] px-2.5 py-1 rounded-md font-medium transition-colors ${
+              className={`text-[11px] px-2.5 py-1 rounded-none font-medium transition-colors ${
                 filterView === "all"
                   ? "bg-[#0000a8] text-[#fffef8]"
                   : "text-[#6a6f63] hover:text-[#222320]"
@@ -608,7 +608,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
             <button
               type="button"
               onClick={() => setFilterView("unread")}
-              className={`text-[11px] px-2.5 py-1 rounded-md font-medium transition-colors ${
+              className={`text-[11px] px-2.5 py-1 rounded-none font-medium transition-colors ${
                 filterView === "unread"
                   ? "bg-[#0000a8] text-[#fffef8]"
                   : "text-[#6a6f63] hover:text-[#222320]"
@@ -619,7 +619,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
             <button
               type="button"
               onClick={() => setFilterView("drafts")}
-              className={`text-[11px] px-2.5 py-1 rounded-md font-medium transition-colors ${
+              className={`text-[11px] px-2.5 py-1 rounded-none font-medium transition-colors ${
                 filterView === "drafts"
                   ? "bg-[#0000a8] text-[#fffef8]"
                   : "text-[#6a6f63] hover:text-[#222320]"
@@ -655,7 +655,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search sender, recipient, subject, or message body…"
               aria-label="Search mail"
-              className="w-full text-[11px] font-mono bg-[#fffef8] border border-[#e0ded5] rounded-lg pl-3 pr-8 py-1.5 text-[#222320] placeholder:text-[#6a6f63] focus:outline-none focus:border-[#0000a8]"
+              className="w-full text-[11px] font-mono bg-[#fffef8] border border-[#e0ded5] rounded-none pl-3 pr-8 py-1.5 text-[#222320] placeholder:text-[#6a6f63] focus:outline-none focus:border-[#0000a8]"
             />
             {search.trim() !== "" ? (
               <button
@@ -681,10 +681,10 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
       {notice !== null ? (
         <div
           role="status"
-          className="text-[11px] text-[#15803d] bg-[#15803d]/10 border border-[#15803d]/20 rounded-xl p-3 flex items-center justify-between gap-3 shadow-xs"
+          className="text-[11px] text-[#15803d] bg-[#15803d]/10 border border-[#15803d]/20 rounded-none p-3 flex items-center justify-between gap-3 shadow-xs"
         >
           <div className="flex items-center gap-2 min-w-0">
-            <span className="size-2 rounded-full bg-[#15803d] shrink-0" />
+            <span className="size-2 rounded-none bg-[#15803d] shrink-0" />
             <span className="font-medium truncate">{notice}</span>
           </div>
           <button
@@ -700,7 +700,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
       {error !== null ? (
         <div
           role="alert"
-          className="text-[11px] text-[#fb2c36] bg-[#fb2c36]/10 border border-[#fb2c36]/20 rounded-xl p-3 flex items-center justify-between gap-3"
+          className="text-[11px] text-[#fb2c36] bg-[#fb2c36]/10 border border-[#fb2c36]/20 rounded-none p-3 flex items-center justify-between gap-3"
         >
           <span>{error}</span>
           <button
@@ -717,7 +717,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
       {(filterView === "all" || filterView === "drafts") && drafts.length > 0 ? (
         <section
           aria-label="Drafts requiring human approval"
-          className="border-2 border-[#f99c00]/60 rounded-xl bg-[#fffef8] p-3.5 shadow-xs flex flex-col gap-3"
+          className="border-2 border-[#f99c00]/60 rounded-none bg-[#fffef8] p-3.5 shadow-xs flex flex-col gap-3"
         >
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-2">
@@ -746,7 +746,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
               return (
                 <article
                   key={draft.id}
-                  className={`border rounded-lg bg-[#f6f4ed] p-3 transition-colors ${
+                  className={`border rounded-none bg-[#f6f4ed] p-3 transition-colors ${
                     isQueued ? "border-[#0000a8]/40 bg-[#0000a8]/5" : "border-[#e0ded5]"
                   }`}
                 >
@@ -769,7 +769,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
                     </div>
 
                     <span
-                      className={`text-[10px] font-mono uppercase font-bold tracking-wider border rounded-full px-2 py-0.5 shrink-0 ${draftChipClass(
+                      className={`text-[10px] font-mono uppercase font-bold tracking-wider border rounded-none px-2 py-0.5 shrink-0 ${draftChipClass(
                         draft.status,
                       )}`}
                     >
@@ -777,7 +777,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
                     </span>
                   </div>
 
-                  <p className="text-[11px] text-[#222320] font-mono whitespace-pre-wrap bg-[#fffef8] border border-[#e0ded5] rounded-md p-2.5 mb-2.5 max-h-36 overflow-auto">
+                  <p className="text-[11px] text-[#222320] font-mono whitespace-pre-wrap bg-[#fffef8] border border-[#e0ded5] rounded-none p-2.5 mb-2.5 max-h-36 overflow-auto">
                     {draft.body_text}
                   </p>
 
@@ -798,7 +798,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
                     ) : isQueued ? (
                       <div className="flex items-center gap-2">
                         <span className="text-[11px] font-medium text-[#0000a8] flex items-center gap-1">
-                          <span className="size-1.5 rounded-full bg-[#0000a8] animate-pulse" />
+                          <span className="size-1.5 rounded-none bg-[#0000a8] animate-pulse" />
                           Pending Human Decision
                         </span>
                         <button
@@ -822,12 +822,12 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
       {filterView !== "drafts" ? (
         <section aria-label="Inbox messages">
           {loading ? (
-            <div className="flex flex-col items-center justify-center py-12 border border-dashed border-[#e0ded5] rounded-xl bg-[#fffef8] px-4 text-center">
-              <div className="size-5 border-2 border-[#0000a8] border-t-transparent rounded-full animate-spin mb-2" />
+            <div className="flex flex-col items-center justify-center py-12 border border-dashed border-[#e0ded5] rounded-none bg-[#fffef8] px-4 text-center">
+              <div className="size-5 border-2 border-[#0000a8] border-t-transparent rounded-none animate-spin mb-2" />
               <p className="text-[#6a6f63] text-xs font-mono">Loading mail…</p>
             </div>
           ) : displayedEmails.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 border border-dashed border-[#e0ded5] rounded-xl bg-[#fffef8] px-4 text-center">
+            <div className="flex flex-col items-center justify-center py-12 border border-dashed border-[#e0ded5] rounded-none bg-[#fffef8] px-4 text-center">
               <span className="text-xl mb-1 text-[#6a6f63]">✉</span>
               <p className="text-[#222320] text-xs font-medium">
                 {mailboxes !== null && mailboxes.length === 0
@@ -852,7 +852,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
                 return (
                   <li
                     key={email.id}
-                    className={`border rounded-xl bg-[#fffef8] overflow-hidden transition-all shadow-xs ${
+                    className={`border rounded-none bg-[#fffef8] overflow-hidden transition-all shadow-xs ${
                       expanded
                         ? "border-[#0000a8] ring-1 ring-[#0000a8]/20"
                         : "border-[#e0ded5] hover:border-[#d3d2c8]"
@@ -867,7 +867,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         <span
-                          className={`size-2 rounded-full shrink-0 ${
+                          className={`size-2 rounded-none shrink-0 ${
                             isUnread ? "bg-[#0000a8] ring-4 ring-[#0000a8]/10" : "bg-transparent"
                           }`}
                           title={isUnread ? "Unread" : "Read"}
@@ -916,13 +916,13 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
                       <div className="p-4 pt-2 border-t border-[#e0ded5] bg-[#f6f4ed]/50 flex flex-col gap-3">
                         {detailLoading ? (
                           <div className="py-4 flex items-center justify-center gap-2 text-xs font-mono text-[#6a6f63]">
-                            <span className="size-3 border-2 border-[#0000a8] border-t-transparent rounded-full animate-spin" />
+                            <span className="size-3 border-2 border-[#0000a8] border-t-transparent rounded-none animate-spin" />
                             Loading message details…
                           </div>
                         ) : detail !== null ? (
                           <>
                             {/* Metadata Header */}
-                            <div className="bg-[#fffef8] border border-[#e0ded5] rounded-lg p-3 text-[11px] text-[#222320] flex flex-col gap-1.5 shadow-2xs">
+                            <div className="bg-[#fffef8] border border-[#e0ded5] rounded-none p-3 text-[11px] text-[#222320] flex flex-col gap-1.5 shadow-2xs">
                               <div className="flex items-center justify-between gap-2 flex-wrap">
                                 <div className="space-y-0.5">
                                   <div className="flex items-center gap-2">
@@ -940,7 +940,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
                                       Mailbox: {email.mailbox}
                                     </span>
                                   ) : null}
-                                  <span className={`text-[10px] font-mono border rounded-full px-2 py-0.5 ${emailChipClass(detail.email.status)}`}>
+                                  <span className={`text-[10px] font-mono border rounded-none px-2 py-0.5 ${emailChipClass(detail.email.status)}`}>
                                     {detail.email.status}
                                   </span>
                                 </div>
@@ -948,7 +948,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
                             </div>
 
                             {/* Message Body */}
-                            <div className="bg-[#fffef8] border border-[#e0ded5] rounded-xl p-3.5 shadow-2xs">
+                            <div className="bg-[#fffef8] border border-[#e0ded5] rounded-none p-3.5 shadow-2xs">
                               <pre className="font-mono text-xs text-[#222320] whitespace-pre-wrap break-words leading-relaxed max-h-72 overflow-auto">
                                 {detail.email.body_text ?? "(no plain-text body)"}
                               </pre>
@@ -962,7 +962,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
                                   {detail.attachments.map((attachment) => (
                                     <div
                                       key={attachment.part_id}
-                                      className="text-[11px] font-mono text-[#222320] border border-[#e0ded5] bg-[#fffef8] rounded-lg px-2.5 py-1.5 flex items-center gap-2 shadow-2xs"
+                                      className="text-[11px] font-mono text-[#222320] border border-[#e0ded5] bg-[#fffef8] rounded-none px-2.5 py-1.5 flex items-center gap-2 shadow-2xs"
                                     >
                                       <span>📎</span>
                                       <span className="font-medium">{attachment.filename ?? attachment.part_id}</span>
@@ -995,7 +995,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
 
                             {/* Thread Timeline */}
                             {thread !== null ? (
-                              <div className="border border-[#e0ded5] rounded-xl bg-[#fffef8] p-3 flex flex-col gap-2 mt-1">
+                              <div className="border border-[#e0ded5] rounded-none bg-[#fffef8] p-3 flex flex-col gap-2 mt-1">
                                 <h5 className="text-[10px] font-mono uppercase tracking-wider text-[#6a6f63]">
                                   Thread History ({thread.emails.length} messages)
                                 </h5>
@@ -1021,7 +1021,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
                                   e.preventDefault();
                                   void saveReply();
                                 }}
-                                className="border-2 border-[#0000a8]/30 bg-[#fffef8] rounded-xl p-3.5 flex flex-col gap-2.5 shadow-xs"
+                                className="border-2 border-[#0000a8]/30 bg-[#fffef8] rounded-none p-3.5 flex flex-col gap-2.5 shadow-xs"
                               >
                                 <div className="flex items-center justify-between gap-2 border-b border-[#e0ded5] pb-2">
                                   <div className="text-[11px] font-mono">
@@ -1045,7 +1045,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
                                   rows={5}
                                   placeholder="Compose reply message here. Saved drafts require human review before dispatch…"
                                   aria-label="Reply message body"
-                                  className="w-full text-xs font-mono bg-[#f6f4ed]/50 border border-[#e0ded5] rounded-lg p-3 text-[#222320] placeholder:text-[#6a6f63] focus:outline-none focus:border-[#0000a8] focus:bg-[#fffef8]"
+                                  className="w-full text-xs font-mono bg-[#f6f4ed]/50 border border-[#e0ded5] rounded-none p-3 text-[#222320] placeholder:text-[#6a6f63] focus:outline-none focus:border-[#0000a8] focus:bg-[#fffef8]"
                                 />
 
                                 <div className="flex items-center justify-between gap-2 pt-1">

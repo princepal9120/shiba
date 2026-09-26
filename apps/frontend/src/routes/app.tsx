@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Toaster } from "sonner";
 import { App } from "../app";
 import { ErrorBoundary } from "../components/ErrorBoundary";
-import { ThemeProvider } from "../components/ThemeProvider";
+import { ThemeProvider, useTheme } from "../components/ThemeProvider";
 
 export const Route = createFileRoute("/app")({
   component: DashboardRoute,
@@ -13,8 +13,19 @@ function DashboardRoute() {
     <ErrorBoundary>
       <ThemeProvider>
         <App />
-        <Toaster theme="light" position="bottom-right" richColors />
+        <ThemedToaster />
       </ThemeProvider>
     </ErrorBoundary>
+  );
+}
+
+function ThemedToaster() {
+  const { resolvedTheme } = useTheme();
+  return (
+    <Toaster
+      theme={resolvedTheme === "dark" ? "dark" : "light"}
+      position="bottom-right"
+      richColors
+    />
   );
 }

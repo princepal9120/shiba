@@ -7,10 +7,13 @@
 import type { JSX } from "react";
 
 export type AppNavView =
+  | "dashboard"
   | "tasks"
   | "vm"
   | "runs"
   | "agents"
+  | "inbox"
+  | "memory"
   | "automations"
   | "missions"
   | "gates"
@@ -23,10 +26,13 @@ export interface AppNavItem {
 }
 
 export const APP_NAV_ITEMS: AppNavItem[] = [
+  { id: "dashboard", label: "Dashboard", description: "Overview & At-a-Glance Stats" },
   { id: "tasks", label: "Tasks", description: "Tasks & Live Sessions" },
   { id: "vm", label: "VM", description: "VM Inspector & Terminals" },
   { id: "runs", label: "Runs", description: "Run Registry & Workspaces" },
-  { id: "agents", label: "Agents", description: "Agent CLIs in the Sandbox Image" },
+  { id: "agents", label: "Agents & MCP", description: "MCP Gateway & Capability Scopes" },
+  { id: "inbox", label: "Mailbox", description: "Cloudflare Email Routing & Send" },
+  { id: "memory", label: "Memory", description: "Vectorize Long-Term Semantic Memory" },
   { id: "automations", label: "Automations", description: "Automations & Triggers" },
   { id: "missions", label: "Missions", description: "Missions & Standing Goals" },
   { id: "gates", label: "Gates", description: "Review, QA & Security Gates" },
@@ -34,8 +40,9 @@ export const APP_NAV_ITEMS: AppNavItem[] = [
 ];
 
 const NAV_GROUPS: { label: string; items: AppNavView[] }[] = [
-  { label: "Workspace", items: ["tasks", "runs", "missions", "automations"] },
-  { label: "Sandbox", items: ["vm", "agents", "gates", "architecture"] },
+  { label: "Workspace", items: ["dashboard", "tasks", "runs", "missions", "automations"] },
+  { label: "Capabilities", items: ["agents", "inbox", "memory"] },
+  { label: "Sandbox & Safety", items: ["vm", "gates", "architecture"] },
 ];
 
 export interface AppNavRailProps {
@@ -54,6 +61,11 @@ export interface AppNavRailProps {
 }
 
 const ICONS: Record<AppNavView, JSX.Element> = {
+  dashboard: (
+    <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z" />
+    </svg>
+  ),
   tasks: (
     <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -67,6 +79,16 @@ const ICONS: Record<AppNavView, JSX.Element> = {
   runs: (
     <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M8 5.14v14l11-7-11-7z" />
+    </svg>
+  ),
+  inbox: (
+    <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+    </svg>
+  ),
+  memory: (
+    <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
     </svg>
   ),
   agents: (
@@ -116,9 +138,9 @@ function NavItem({
       aria-label={label}
       aria-current={active ? "page" : undefined}
       className={
-        "w-full flex items-center gap-2.5 rounded-md px-2.5 py-1.5 touch:min-h-11 text-[13px] font-medium transition-colors duration-100 " +
+        "w-full flex items-center gap-2.5 rounded-none px-2.5 py-1.5 touch:min-h-11 text-[13px] font-medium transition-colors duration-100 " +
         (active
-          ? "bg-[#0000a8] text-white shadow-sm"
+          ? "bg-[#0000a8] text-white shadow-[2px_2px_0_var(--paper-shadow)]"
           : "text-[#222320] hover:bg-[#e0ded5] hover:text-[#222320]")
       }
     >
@@ -163,12 +185,12 @@ export function AppNavRail({
         <img
           src="/assets/mascot/pet-logo.png"
           alt="Shiba"
-          className="size-8 rounded-full bg-white object-contain border border-[#d3d2c8] transition-transform duration-200 group-hover:scale-105"
+          className="size-8 rounded-full bg-white object-contain [image-rendering:pixelated] border border-[#d3d2c8] transition-transform duration-200 group-hover:scale-105"
         />
         <span className="min-w-0">
           <span className="flex items-center gap-1.5">
             <span className="font-display text-lg leading-none text-[#222320]">AI Coworker</span>
-            <span className="text-[9px] font-mono font-semibold uppercase tracking-wider text-[#0000a8] border border-[#0000a8]/25 bg-[#0000a8]/10 rounded px-1 py-px">
+            <span className="text-[9px] font-mono font-semibold uppercase tracking-wider text-[#0000a8] border border-[#0000a8]/25 bg-[#0000a8]/10 rounded-none px-1 py-px">
               Beta
             </span>
           </span>
@@ -180,7 +202,7 @@ export function AppNavRail({
           type="button"
           onClick={onClose}
           aria-label="Close navigation"
-          className="size-11 -mt-1.5 -mr-1.5 shrink-0 rounded-lg flex items-center justify-center text-[#6a6f63] hover:text-[#222320] hover:bg-[#e0ded5] transition-colors"
+          className="size-11 -mt-1.5 -mr-1.5 shrink-0 rounded-none flex items-center justify-center text-[#6a6f63] hover:text-[#222320] hover:bg-[#e0ded5] transition-colors"
         >
           <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -236,7 +258,7 @@ export function AppNavRail({
           badge={
             !setupComplete && setupRemaining !== null ? (
               <span
-                className="min-w-4 h-4 px-1 rounded-full bg-[#f99c00] text-white text-[9px] font-bold flex items-center justify-center"
+                className="min-w-4 h-4 px-1 rounded-none bg-[#f99c00] text-white text-[9px] font-bold flex items-center justify-center"
                 aria-hidden="true"
               >
                 {setupRemaining}
@@ -252,7 +274,7 @@ export function AppNavRail({
         <a
           href="/docs/"
           aria-label="Documentation"
-          className="w-full flex items-center gap-2.5 rounded-md px-2.5 py-1.5 touch:min-h-11 text-[13px] font-medium text-[#222320] hover:bg-[#e0ded5] hover:text-[#222320] transition-colors duration-100"
+          className="w-full flex items-center gap-2.5 rounded-none px-2.5 py-1.5 touch:min-h-11 text-[13px] font-medium text-[#222320] hover:bg-[#e0ded5] hover:text-[#222320] transition-colors duration-100"
         >
           <span className="text-[#6a6f63]" aria-hidden="true">
             <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>

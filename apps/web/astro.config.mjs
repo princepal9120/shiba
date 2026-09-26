@@ -12,7 +12,6 @@ export default defineConfig({
 	output: 'static',
 	redirects: {
 		'/docs': '/docs/overview/',
-		'/docs/': '/docs/overview/',
 	},
 	integrations: [
 		tailwind(),
@@ -73,7 +72,8 @@ export default defineConfig({
 						{ label: 'Configuration & Secrets', slug: 'docs/configuration' },
 						{ label: 'Local development', slug: 'docs/local-development' },
 						{ label: 'Deployment', slug: 'docs/deployment' },
-						{ label: 'Readiness checklist', slug: 'docs/readiness' },
+					{ label: 'Readiness checklist', slug: 'docs/readiness' },
+					{ label: 'Waitlist operations', slug: 'docs/waitlist' },
 						{ label: 'Troubleshooting', slug: 'docs/troubleshooting' },
 					],
 				},
@@ -88,4 +88,3 @@ export default defineConfig({
 		}),
 	],
 });
-

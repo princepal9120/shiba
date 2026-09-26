@@ -1,0 +1,387 @@
+---
+import MarketingPage from '../layouts/MarketingPage.astro';
+
+const articleSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'TechArticle',
+  headline: "Why I'm Building Shiba: The Self-Hosted Cloud Software Engineer on Your Own Cloudflare Account",
+  description: "Why Shiba is being built: an open-source, self-hosted AI software engineer that runs inside your own Cloudflare account with human approval gates, isolated sandbox micro-containers, and zero credential leakage.",
+  author: {
+    '@type': 'Person',
+    name: 'Prince Pal',
+    url: 'https://x.com/prince_twets',
+  },
+  publisher: {
+    '@type': 'Organization',
+    name: 'Shiba',
+    logo: {
+      '@type': 'ImageObject',
+      url: 'https://tryshiba.dev/assets/mascot/pet-logo.png',
+    },
+  },
+  datePublished: '2026-09-26',
+  dateModified: '2026-09-26',
+  mainEntityOfPage: 'https://tryshiba.dev/why-shiba/',
+  image: 'https://tryshiba.dev/assets/mascot/pet-logo.png',
+};
+---
+
+<MarketingPage
+  title="Why I'm Building Shiba — The Cloud Software Engineer You Own"
+  description="Why Shiba is being built: an open-source, self-hosted AI software engineer that runs in your own Cloudflare account with approval gates, isolated sandboxes, and zero credential leaks."
+  path="/why-shiba/"
+  type="article"
+  publishedTime="2026-09-26T00:00:00Z"
+  modifiedTime="2026-09-26T00:00:00Z"
+  schema={articleSchema}
+  breadcrumbs={[
+    { name: 'Home', path: '/' },
+    { name: 'Why Shiba', path: '/why-shiba/' },
+  ]}
+>
+  <!-- HERO MANIFESTO -->
+  <section class="shell hero">
+    <div class="inline-flex items-center gap-2 px-3 py-1.5 bg-[var(--card)] border border-[var(--line-2)] text-[10px] font-mono uppercase tracking-[0.14em] text-[var(--navy)] mb-6 shadow-[2px_2px_0_var(--paper-shadow)]">
+      <span class="w-2 h-2 bg-[var(--navy)] animate-pulse"></span>
+      <span>FOUNDER MANIFESTO · SEPTEMBER 2026</span>
+    </div>
+    <h1 class="manifesto-title text-[var(--ink)]">
+      Every developer deserves an <span class="text-[var(--navy)]">AI software engineer</span> they actually own.
+    </h1>
+    <p class="lead text-[var(--ink-2)]">
+      I am building <strong>Shiba</strong> because software engineering shouldn't be trapped inside closed, expensive SaaS black boxes. You should be able to run an autonomous, approval-gated coding coworker inside your <em>own Cloudflare account</em>—with your credentials protected, your code private, and zero idle compute costs.
+    </p>
+    <div class="hero-actions">
+      <a class="button" href="/waitlist/">
+        <span>Join the Waitlist &amp; Contribute</span>
+        <span aria-hidden="true">→</span>
+      </a>
+      <a class="button button-outline" href="/docs/getting-started/">
+        <span>Read Quickstart Guide</span>
+      </a>
+      <a class="button button-outline" href="https://github.com/princepal9120/shiba" target="_blank" rel="noopener noreferrer">
+        <span>GitHub Source ↗</span>
+      </a>
+    </div>
+  </section>
+
+  <!-- THE BREAKDOWN GRID -->
+  <div class="shell">
+    
+    <!-- 01: THE PROBLEM -->
+    <section class="story-section" aria-labelledby="section-problem">
+      <div class="section-label">
+        <span class="micro">01 / The Status Quo</span>
+      </div>
+      <div class="prose-body">
+        <h2 id="section-problem" class="text-[var(--ink)]">The Three Broken Traps of AI Coding Today</h2>
+        <p class="text-[var(--ink-2)]">
+          Over the past year, the industry split into three unsatisfactory extremes:
+        </p>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 my-8">
+          <div class="feature-card">
+            <div class="card-num">01</div>
+            <h3 class="text-[var(--ink)]">The $100/Seat SaaS Trap</h3>
+            <p class="text-[var(--ink-2)]">
+              Closed platforms demand $20 to $100+ per engineer per month. In return, you surrender your proprietary repositories, internal packages, and secrets to multi-tenant servers outside your security perimeter.
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="card-num">02</div>
+            <h3 class="text-[var(--ink)]">The Local CLI Bottleneck</h3>
+            <p class="text-[var(--ink-2)]">
+              Running CLI agents on your personal MacBook is private, but it locks up your terminal, drains your battery, dies when your laptop sleeps, and cannot collaborate with your team via Slack or GitHub webhooks.
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="card-num">03</div>
+            <h3 class="text-[var(--ink)]">The Heavy DevOps Nightmare</h3>
+            <p class="text-[var(--ink-2)]">
+              Traditional self-hosting requires AWS EC2, Kubernetes, Docker Compose, Postgres, Redis, and Celery. You end up paying $100+/mo for idle VMs and spending weekends maintaining infrastructure instead of shipping.
+            </p>
+          </div>
+        </div>
+        <p class="text-[var(--ink-2)]">
+          We don't need another proprietary SaaS middleman, and we don't need a fragile server farm. <strong>We need an autonomous coworker that lives in the cloud, runs on serverless infrastructure, and costs nothing when it isn't working.</strong>
+        </p>
+      </div>
+    </section>
+
+    <!-- 02: THE CLOUDFLARE FOUNDATION -->
+    <section class="story-section" aria-labelledby="section-cloudflare">
+      <div class="section-label">
+        <span class="micro">02 / The Solution</span>
+      </div>
+      <div class="prose-body">
+        <h2 id="section-cloudflare" class="text-[var(--ink)]">Why Cloudflare is the Ultimate Substrate for Everyone</h2>
+        <p class="text-[var(--ink-2)]">
+          Cloudflare is not just a CDN anymore. It has quietly built the most powerful serverless compute platform on Earth. By building Shiba natively on Cloudflare, anyone can deploy a personal or team software engineer into their own Cloudflare account in under 5 minutes.
+        </p>
+
+        <!-- 5 PILLARS -->
+        <div class="space-y-6 my-8">
+          
+          <div class="pillar-row">
+            <div class="pillar-icon">01</div>
+            <div>
+              <h3 class="text-xl font-bold text-[var(--ink)] mb-2">Cloudflare Workers: Sub-Millisecond Orchestrator</h3>
+              <p class="text-[var(--ink-2)] text-sm leading-relaxed">
+                The planning brain runs as an edge Worker using TypeScript and the Cloudflare Agents SDK. It handles incoming Slack mentions, dashboard commands, GitHub webhooks, and cron triggers with zero cold starts and sub-millisecond edge routing.
+              </p>
+            </div>
+          </div>
+
+          <div class="pillar-row">
+            <div class="pillar-icon">02</div>
+            <div>
+              <h3 class="text-xl font-bold text-[var(--ink)] mb-2">Cloudflare Sandbox Containers: Ephemeral Isolated MicroVMs</h3>
+              <p class="text-[var(--ink-2)] text-sm leading-relaxed">
+                Every task gets its own dedicated, isolated micro-container running a verified Docker toolchain. It spins up in seconds, clones your branch, runs tests, fixes bugs using headless OpenCode, Claude Code, or Codex, captures unified diffs, and terminates. No persistent compute bill.
+              </p>
+            </div>
+          </div>
+
+          <div class="pillar-row highlight">
+            <div class="pillar-icon accent">03</div>
+            <div>
+              <h3 class="text-xl font-bold text-[var(--navy)] mb-2">Cloudflare AI Gateway: The Sacred Security Perimeter</h3>
+              <p class="text-[var(--ink)] text-sm leading-relaxed">
+                <strong>Your real API keys never enter the container.</strong> Inside the sandbox, the agent CLI uses dummy credentials. All outbound LLM requests are intercepted at egress and authenticated through your account's Cloudflare AI Gateway. Even if untrusted third-party code runs in the sandbox, your provider credentials cannot be leaked.
+              </p>
+            </div>
+          </div>
+
+          <div class="pillar-row">
+            <div class="pillar-icon">04</div>
+            <div>
+              <h3 class="text-xl font-bold text-[var(--ink)] mb-2">Cloudflare Durable Objects &amp; SQLite: Reliable State &amp; Approvals</h3>
+              <p class="text-[var(--ink-2)] text-sm leading-relaxed">
+                Durable Objects provide atomic coordination: the Human Approval Queue, WebSocket hibernation for real-time log streaming, and session history stored in private embedded SQLite tables. Long-term memory is indexed via Cloudflare Vectorize.
+              </p>
+            </div>
+          </div>
+
+          <div class="pillar-row">
+            <div class="pillar-icon">05</div>
+            <div>
+              <h3 class="text-xl font-bold text-[var(--ink)] mb-2">Cloudflare Access (Zero Trust): Enterprise-Grade Security</h3>
+              <p class="text-[var(--ink-2)] text-sm leading-relaxed">
+                No complex JWT/OAuth servers to manage. Cloudflare Access fronts your web dashboard and runner APIs with single sign-on (SSO), email pins, or hardware keys. Machine callers (Slack HMAC, GitHub webhooks) authenticate via cryptographic signatures.
+              </p>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </section>
+
+    <!-- 03: CLOUDROOM CORE COMPARISON -->
+    <section class="story-section" aria-labelledby="section-cloudroom">
+      <div class="section-label">
+        <span class="micro">03 / Alternative Runtimes</span>
+      </div>
+      <div class="prose-body">
+        <h2 id="section-cloudroom" class="text-[var(--ink)]">How Shiba Compares to Cloudroom Core</h2>
+        <p class="text-[var(--ink-2)]">
+          There are other thoughtful open-source efforts tackling remote agent execution. For instance, <a href="https://github.com/davidondrej/cloudroom-core" target="_blank" rel="noopener noreferrer" class="text-[var(--navy)] underline font-bold">Cloudroom Core</a> is a pre-release Rust service that runs on an Ubuntu Linux VM backed by PostgreSQL.
+        </p>
+        <p class="text-[var(--ink-2)]">
+          While Cloudroom Core focuses on long-lived session continuity, journal replay, and local process management on a persistent server, <strong>Shiba</strong> is designed around an entirely different philosophy:
+        </p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 my-6 font-mono text-xs">
+          <div class="p-4 bg-[var(--card)] border border-[var(--line-2)] shadow-[2px_2px_0_var(--paper-shadow)]">
+            <h4 class="font-bold text-[var(--ink)] mb-2">Cloudroom Core</h4>
+            <ul class="text-[var(--ink-2)] space-y-1.5 list-disc pl-4">
+              <li>Rust service deployed on a dedicated Linux VM with systemd.</li>
+              <li>Requires a separate dedicated PostgreSQL database.</li>
+              <li>Focuses on durable multi-turn session journals and conversation replay.</li>
+              <li>Harness inference credentials live directly in the agent VM account.</li>
+            </ul>
+          </div>
+          <div class="p-4 bg-[var(--card)] border border-[var(--navy)] shadow-[2px_2px_0_var(--paper-shadow)]">
+            <h4 class="font-bold text-[var(--navy)] mb-2">Shiba (Cloudflare Native)</h4>
+            <ul class="text-[var(--ink)] space-y-1.5 list-disc pl-4">
+              <li>Serverless Cloudflare Worker with instant edge routing.</li>
+              <li>Ephemeral per-task micro-containers (Cloudflare Sandbox SDK).</li>
+              <li>Strict Human Approval Gate before any container boots.</li>
+              <li>Real API keys stay at Cloudflare AI Gateway egress — never in the sandbox.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 04: HOW TO RUN -->
+    <section class="story-section" aria-labelledby="section-deploy">
+      <div class="section-label">
+        <span class="micro">04 / Deployment</span>
+      </div>
+      <div class="prose-body">
+        <h2 id="section-deploy" class="text-[var(--ink)]">How Anyone Can Deploy Shiba in 4 Commands</h2>
+        <p class="text-[var(--ink-2)]">
+          You don't need a team of DevOps engineers. You can deploy Shiba to your Cloudflare account right now:
+        </p>
+
+        <div class="bg-[var(--card)] border border-[var(--line-2)] p-5 font-mono text-xs text-[var(--ink)] my-6 space-y-4 shadow-[2px_2px_0_var(--paper-shadow)]">
+          <div>
+            <span class="text-[var(--ink-2)]"># 1. Clone the open-source repository</span><br/>
+            <span class="text-[var(--navy)] font-bold">git clone</span> https://github.com/princepal9120/shiba.git<br/>
+            <span class="text-[var(--navy)] font-bold">cd</span> shiba &amp;&amp; <span class="text-[var(--navy)] font-bold">pnpm install</span>
+          </div>
+          <div>
+            <span class="text-[var(--ink-2)]"># 2. Configure Cloudflare credentials &amp; optional GitHub token</span><br/>
+            <span class="text-[var(--navy)] font-bold">cp</span> .dev.vars.example .dev.vars
+          </div>
+          <div>
+            <span class="text-[var(--ink-2)]"># 3. Test locally with live Sandbox micro-containers</span><br/>
+            <span class="text-[var(--navy)] font-bold">pnpm dev</span>
+          </div>
+          <div>
+            <span class="text-[var(--ink-2)]"># 4. Deploy production build to your personal or team Cloudflare account</span><br/>
+            <span class="text-[var(--navy)] font-bold">pnpm deploy</span>
+          </div>
+        </div>
+
+        <p class="text-xs text-[var(--ink-2)] font-mono">
+          For detailed instructions on Slack setup, GitHub App configuration, and Cloudflare Access SSO policies, consult the <a href="/docs/getting-started/" class="text-[var(--navy)] underline font-bold">Quickstart Documentation</a>.
+        </p>
+      </div>
+    </section>
+
+    <!-- CLOSING CTA -->
+    <section class="closing-section">
+      <div class="inline-block px-3 py-1.5 bg-[var(--card)] border border-[var(--line-2)] font-mono text-[var(--navy)] text-[10px] uppercase tracking-[0.14em] mb-4 shadow-[2px_2px_0_var(--paper-shadow)]">
+        BE PART OF THE FUTURE
+      </div>
+      <h2 class="text-3xl sm:text-5xl font-bold text-[var(--ink)] tracking-tight mb-4">
+        Help us build the software engineer you would actually trust.
+      </h2>
+      <p class="lead mb-8 text-[var(--ink-2)]">
+        Shiba is completely open-source under the MIT license. Whether you want to test the early access release, contribute code, design, write docs, or follow along—we invite you to join the journey.
+      </p>
+      <div class="hero-actions justify-center">
+        <a class="button text-sm px-8 py-3.5" href="/waitlist/">
+          <span>Join the Waitlist &amp; Contribute →</span>
+        </a>
+        <a class="button button-outline text-sm px-8 py-3.5" href="https://github.com/princepal9120/shiba" target="_blank" rel="noopener noreferrer">
+          <span>Star on GitHub ↗</span>
+        </a>
+      </div>
+    </section>
+
+  </div>
+</MarketingPage>
+
+<style>
+  .hero {
+    padding-top: clamp(60px, 9vw, 120px);
+    padding-bottom: clamp(50px, 7vw, 80px);
+    border-bottom: 1px solid var(--line);
+  }
+  .manifesto-title {
+    font-size: clamp(2.5rem, 5.5vw, 4.8rem);
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.04em;
+    max-width: 960px;
+    margin-bottom: 24px;
+  }
+  .hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-top: 36px;
+  }
+  .story-section {
+    border-bottom: 1px solid var(--line);
+    display: grid;
+    grid-template-columns: minmax(140px, 1fr) minmax(0, 3fr);
+    gap: 48px;
+    padding-block: 72px 84px;
+  }
+  .section-label {
+    padding-top: 8px;
+  }
+  .prose-body {
+    max-width: 820px;
+  }
+  .prose-body h2 {
+    font-size: clamp(1.8rem, 3.2vw, 2.8rem);
+    font-weight: 600;
+    margin-bottom: 20px;
+    letter-spacing: -0.03em;
+  }
+  .prose-body p {
+    font-size: 15px;
+    line-height: 1.75;
+    margin-bottom: 18px;
+  }
+  .feature-card {
+    background: var(--card);
+    border: 1px solid var(--line-2);
+    padding: 24px 20px;
+    box-shadow: 2px 2px 0 var(--paper-shadow);
+  }
+  .feature-card .card-num {
+    font-family: 'Geist Mono', monospace;
+    font-size: 11px;
+    color: var(--navy);
+    font-weight: 700;
+    margin-bottom: 12px;
+  }
+  .feature-card h3 {
+    font-size: 17px;
+    font-weight: 700;
+    margin-bottom: 10px;
+  }
+  .feature-card p {
+    font-size: 13px;
+    line-height: 1.6;
+    margin: 0;
+  }
+  .pillar-row {
+    display: flex;
+    gap: 20px;
+    background: var(--card);
+    border: 1px solid var(--line-2);
+    padding: 24px;
+    align-items: flex-start;
+    box-shadow: 2px 2px 0 var(--paper-shadow);
+  }
+  .pillar-row.highlight {
+    border-color: var(--navy);
+  }
+  .pillar-icon {
+    flex-shrink: 0;
+    width: 38px;
+    height: 38px;
+    background: var(--panel-2);
+    border: 1px solid var(--line-2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Geist Mono', monospace;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--navy);
+  }
+  .pillar-icon.accent {
+    background: var(--navy);
+    color: #fff;
+    border-color: var(--navy);
+  }
+  .closing-section {
+    padding-block: 96px;
+    text-align: center;
+    max-width: 800px;
+    margin-inline: auto;
+  }
+  @media (max-width: 800px) {
+    .story-section {
+      grid-template-columns: 1fr;
+      gap: 20px;
+      padding-block: 54px;
+    }
+  }
+</style>

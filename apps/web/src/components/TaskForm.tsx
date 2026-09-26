@@ -43,10 +43,12 @@ export function TaskForm({
   onSubmit,
   onClear,
 }: TaskFormProps = {}) {
-  const inputClass = "bg-[#0f1419] border border-[#2a3441] rounded-lg text-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#4f9cf0] placeholder-gray-600 w-full";
-  const labelClass = "text-sm font-medium text-gray-400";
-  const buttonPrimary = "bg-[#4f9cf0] hover:bg-[#3b82f6] text-[#06121f] font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm";
-  const buttonSecondary = "bg-transparent border border-[#2a3441] hover:bg-[#2a3441] text-gray-300 font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm";
+  // Theme-aware via CSS vars (dark fallbacks keep the form legible on dark
+  // canvases; MarketingPage defines light values under [data-theme='light']).
+  const inputClass = "bg-[var(--tf-input-bg,#0f1419)] border border-[var(--tf-line,#2a3441)] rounded-lg text-[var(--tf-ink,#e5e7eb)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--tf-accent,#4f9cf0)] placeholder-[var(--tf-muted,#4b5563)] w-full";
+  const labelClass = "text-sm font-medium text-[var(--tf-muted,#9ca3af)]";
+  const buttonPrimary = "bg-[var(--tf-accent,#4f9cf0)] hover:bg-[var(--tf-accent-hover,#3b82f6)] text-[var(--tf-on-accent,#06121f)] font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm";
+  const buttonSecondary = "bg-transparent border border-[var(--tf-line,#2a3441)] hover:bg-[var(--tf-hover,#2a3441)] text-[var(--tf-ink,#d1d5db)] font-semibold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm";
 
   return createElement(
     "form",

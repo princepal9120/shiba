@@ -50,6 +50,8 @@ import type { Mailbox } from "./apps/backend/src/mailbox-do.js";
 import type { McpGateway } from "./apps/backend/src/mcp-gateway.js";
 import type { Memory } from "./apps/backend/src/memory-do.js";
 import type { Sandbox } from "./apps/backend/src/sandbox.js";
+import type { Waitlist } from "./apps/backend/src/waitlist-do.js";
+import type { ModelConfig } from "./apps/backend/src/model-config-do.js";
 
 // alchemy loads .env into its own config store, not process.env — which
 // secrets()/configVars() read. Real env vars still win.
@@ -117,6 +119,7 @@ export const ACCESS_BYPASS_PATHS = [
   "/mcp",
   "/mcp/*",
   "/api/automations/*/trigger",
+  "/api/waitlist",
 ];
 const DashboardAccess = accessEnabled
   ? Cloudflare.Access.Application("DashboardAccess", {
@@ -185,6 +188,12 @@ export const Worker = Cloudflare.Worker("Worker", {
     }),
     Memory: Cloudflare.DurableObject<Memory>("Memory", {
       className: "Memory",
+    }),
+    Waitlist: Cloudflare.DurableObject<Waitlist>("Waitlist", {
+      className: "Waitlist",
+    }),
+    ModelConfig: Cloudflare.DurableObject<ModelConfig>("ModelConfig", {
+      className: "ModelConfig",
     }),
 
     // Megaplan stores — wrangler keeps `__PENDING__` ids until the resources

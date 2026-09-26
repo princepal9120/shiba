@@ -1,0 +1,402 @@
+---
+import MarketingPage from '../layouts/MarketingPage.astro';
+
+const waitlistSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  name: 'Join the Shiba Waitlist & Open Source Contributor Community',
+  description: 'Join the Shiba waitlist or become a contributor. Help build the open-source, self-hosted AI software engineer that runs on Cloudflare Workers and Sandbox containers.',
+  url: 'https://tryshiba.dev/waitlist/',
+  potentialAction: {
+    '@type': 'CommunicateAction',
+    target: 'https://tryshiba.dev/api/waitlist',
+  },
+};
+---
+
+<MarketingPage
+  title="Join the Shiba Waitlist, Contribute & Watch the Build"
+  description="Join the Shiba early access list or contribute to the open-source AI software engineer. Self-hosted on your own Cloudflare account with approval gates and isolated sandboxes."
+  path="/waitlist/"
+  type="website"
+  schema={waitlistSchema}
+  breadcrumbs={[
+    { name: 'Home', path: '/' },
+    { name: 'Join & Contribute', path: '/waitlist/' },
+  ]}
+>
+  <!-- TOP INTRO HERO -->
+  <section class="shell hero-grid">
+    
+    <!-- LEFT: THE INVITATION & WATCH -->
+    <div class="intro-pane" aria-labelledby="waitlist-title">
+      <div class="inline-flex items-center gap-2 px-3 py-1.5 bg-[var(--card)] border border-[var(--line-2)] text-[10px] font-mono uppercase tracking-[0.14em] text-[var(--navy)] mb-6 shadow-[2px_2px_0_var(--paper-shadow)]">
+        <span class="w-2 h-2 bg-[var(--navy)]"></span>
+        <span>OPEN SOURCE · CLOUDFLARE NATIVE</span>
+      </div>
+
+      <h1 id="waitlist-title" class="text-4xl sm:text-6xl font-bold tracking-tight text-[var(--ink)] leading-[1.08] mb-6">
+        The next software engineer is <span class="text-[var(--navy)]">built in the open.</span>
+      </h1>
+
+      <p class="lead text-base sm:text-lg text-[var(--ink-2)] leading-relaxed mb-6">
+        Shiba is completely open-source (MIT). You don't need permission or an invite code to self-host it—you can clone the repo and run it today on your own Cloudflare account.
+      </p>
+
+      <div class="truth-box">
+        <div class="text-[var(--navy)] text-xl font-bold">✦</div>
+        <div>
+          <h4 class="text-[var(--ink)] font-bold text-sm mb-1">Why join this list?</h4>
+          <p class="text-[var(--ink-2)] text-xs leading-relaxed">
+            Sign up to receive major release announcements, early access to pre-configured skills, and invitations to contributor design sprints. We never sell your data or spam your inbox.
+          </p>
+        </div>
+      </div>
+
+      <!-- WATCH THE BUILD QUICK LINKS -->
+      <div class="mt-8 pt-8 border-t border-[var(--line)] space-y-3 font-mono text-xs">
+        <div class="text-[var(--navy)] uppercase tracking-wider font-bold text-[11px]">Ways to follow the build</div>
+        <div class="flex flex-wrap gap-3">
+          <a href="https://github.com/princepal9120/shiba" target="_blank" rel="noopener noreferrer" class="watch-link">
+            <span>⭐ Star on GitHub</span>
+            <span class="text-[var(--navy)]">↗</span>
+          </a>
+          <a href="https://github.com/princepal9120/shiba/watchers" target="_blank" rel="noopener noreferrer" class="watch-link">
+            <span>👀 Watch Releases</span>
+            <span class="text-[var(--navy)]">↗</span>
+          </a>
+          <a href="https://x.com/prince_twets" target="_blank" rel="noopener noreferrer" class="watch-link">
+            <span>🐦 Follow @prince_twets</span>
+            <span class="text-[var(--navy)]">↗</span>
+          </a>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT: INTERACTIVE FORM CARD -->
+    <div class="form-pane">
+      <div class="form-card" aria-labelledby="form-heading">
+        
+        <div class="flex items-center justify-between border-b border-[var(--line)] pb-4 mb-6">
+          <div>
+            <span class="text-[var(--navy)] font-mono text-[10px] font-medium uppercase tracking-[0.14em]">Early Access &amp; Community</span>
+            <h2 id="form-heading" class="text-3xl text-[var(--ink)] font-bold tracking-tight mt-1">Join the build.</h2>
+          </div>
+          <span class="w-2.5 h-2.5 bg-[var(--navy)] shadow-[0_0_10px_var(--navy)]"></span>
+        </div>
+
+        <noscript>
+          <div class="p-3 bg-red-950/40 border border-red-500/30 text-red-200 text-xs mb-4 font-mono">
+            Please enable JavaScript in your browser to submit this form directly to the Cloudflare Worker API.
+          </div>
+        </noscript>
+
+        <form id="waitlist-form" method="post" action="/api/waitlist" class="space-y-4 font-mono text-xs">
+          
+          <div>
+            <label for="email" class="block text-[10px] uppercase tracking-[0.12em] font-medium text-[var(--ink)] mb-1.5">
+              Work or Personal Email <span class="text-[var(--navy)]">*</span>
+            </label>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              autocomplete="email"
+              placeholder="alex@company.com"
+              maxlength="254"
+              required
+              class="w-full bg-[var(--card)] border border-[var(--line-2)] px-3.5 py-3 text-[var(--ink)] placeholder:text-[var(--ink-2)] focus:border-[var(--navy)] focus:outline-none transition-colors"
+            />
+          </div>
+
+          <div>
+            <label for="interest" class="block text-[10px] uppercase tracking-[0.12em] font-medium text-[var(--ink)] mb-1.5">
+              How would you like to participate? <span class="text-[var(--navy)]">*</span>
+            </label>
+            <select
+              id="interest"
+              name="interest"
+              required
+              class="w-full bg-[var(--card)] border border-[var(--line-2)] px-3.5 py-3 text-[var(--ink)] focus:border-[var(--navy)] focus:outline-none transition-colors"
+            >
+              <option value="" disabled selected>Select an option</option>
+              <option value="early-access">Early Access User (Deploy &amp; use on my Cloudflare account)</option>
+              <option value="contribute">Open Source Contributor (Write code, docs, tests, design)</option>
+              <option value="both">Both (Deploy Shiba and contribute to the repository)</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="github" class="block text-[10px] uppercase tracking-[0.12em] font-medium text-[var(--ink)] mb-1.5">
+              GitHub Username <span class="text-[var(--ink-2)] font-normal">(optional, for contributor recognition)</span>
+            </label>
+            <div class="flex items-center bg-[var(--card)] border border-[var(--line-2)] px-3.5 py-2.5 focus-within:border-[var(--navy)] transition-colors">
+              <span class="text-[var(--navy)] mr-1.5">@</span>
+              <input
+                id="github"
+                name="github"
+                type="text"
+                autocomplete="off"
+                placeholder="username"
+                maxlength="39"
+                pattern="[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?"
+                class="w-full bg-transparent text-[var(--ink)] placeholder:text-[var(--ink-2)] focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <!-- Hidden Honeypot for Bot Mitigation -->
+          <div class="hidden" aria-hidden="true">
+            <label for="company">Company URL</label>
+            <input id="company" name="company" type="text" tabindex="-1" autocomplete="off" />
+          </div>
+
+          <div class="pt-2">
+            <label class="flex items-start gap-2.5 cursor-pointer text-[11px] text-[var(--ink-2)] leading-relaxed">
+              <input
+                type="checkbox"
+                name="consent"
+                required
+                class="mt-0.5 bg-[var(--card)] border-[var(--line-2)] text-[var(--navy)] focus:ring-0 focus:ring-offset-0"
+              />
+              <span>I agree to receive Shiba project release updates and contributor notices. Submissions are stored privately in our encrypted Durable Object and never published publicly.</span>
+            </label>
+          </div>
+
+          <button
+            type="submit"
+            class="button w-full justify-center text-sm py-3.5 mt-2"
+          >
+            <span>Submit Registration →</span>
+          </button>
+
+          <div id="form-status" role="status" aria-live="polite" class="min-h-[24px] text-center text-xs font-mono font-bold text-[var(--navy)]"></div>
+
+        </form>
+
+        <div class="border-t border-[var(--line)] pt-4 mt-4 text-[11px] text-[var(--ink-2)] leading-relaxed font-mono">
+          Stored directly in a dedicated SQLite-backed Cloudflare Durable Object. Rate-limited at edge with cryptographic IP hash buckets.
+        </div>
+
+      </div>
+    </div>
+
+  </section>
+
+  <!-- CONTRIBUTOR TRACKS SECTION -->
+  <section class="shell mt-24 pt-16 border-t border-[var(--line)]">
+    <div class="max-w-2xl mb-12">
+      <span class="micro">WANT TO CONTRIBUTE?</span>
+      <h2 class="text-3xl sm:text-4xl font-bold text-[var(--ink)] tracking-tight mt-2 mb-4">
+        Where we need your help right now
+      </h2>
+      <p class="text-[var(--ink-2)] text-sm leading-relaxed">
+        Whether you are a backend systems engineer, frontend designer, security researcher, or technical writer, there is high-impact work ready for you.
+      </p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      
+      <div class="contrib-card">
+        <div class="contrib-icon">01</div>
+        <h3 class="text-base font-bold text-[var(--ink)] mb-2">Edge Orchestrator</h3>
+        <p class="text-xs text-[var(--ink-2)] leading-relaxed mb-4">
+          Improve the TypeScript planning agent, durable tool loops, Claude Code / OpenCode / Codex harnesses, and task queuing logic.
+        </p>
+        <a href="https://github.com/princepal9120/shiba/tree/main/apps/backend" target="_blank" rel="noopener noreferrer" class="contrib-cta">
+          <span>Inspect Backend Code</span>
+          <span>↗</span>
+        </a>
+      </div>
+
+      <div class="contrib-card">
+        <div class="contrib-icon">02</div>
+        <h3 class="text-base font-bold text-[var(--ink)] mb-2">Sandbox &amp; MicroVMs</h3>
+        <p class="text-xs text-[var(--ink-2)] leading-relaxed mb-4">
+          Optimize container boot time, expand pre-installed CLI environments, and stress-test egress proxy TLS interception.
+        </p>
+        <a href="https://github.com/princepal9120/shiba/blob/main/apps/backend/Dockerfile" target="_blank" rel="noopener noreferrer" class="contrib-cta">
+          <span>View Container Spec</span>
+          <span>↗</span>
+        </a>
+      </div>
+
+      <div class="contrib-card">
+        <div class="contrib-icon">03</div>
+        <h3 class="text-base font-bold text-[var(--ink)] mb-2">Web Dashboard</h3>
+        <p class="text-xs text-[var(--ink-2)] leading-relaxed mb-4">
+          Polish the real-time WebSocket diff viewer, terminal emulator, memory explorer, and mobile responsive controls.
+        </p>
+        <a href="https://github.com/princepal9120/shiba/tree/main/apps/frontend" target="_blank" rel="noopener noreferrer" class="contrib-cta">
+          <span>Explore Frontend</span>
+          <span>↗</span>
+        </a>
+      </div>
+
+      <div class="contrib-card">
+        <div class="contrib-icon">04</div>
+        <h3 class="text-base font-bold text-[var(--ink)] mb-2">Docs &amp; Tutorials</h3>
+        <p class="text-xs text-[var(--ink-2)] leading-relaxed mb-4">
+          Write step-by-step guides for deploying on Cloudflare, Slack bot setup walkthroughs, and custom model provider recipes.
+        </p>
+        <a href="/docs/contributing/" class="contrib-cta">
+          <span>Read Contributor Docs</span>
+          <span>→</span>
+        </a>
+      </div>
+
+    </div>
+
+    <!-- QUICK GITHUB JUMP -->
+    <div class="mt-12 p-6 bg-[var(--card)] border border-[var(--line-2)] flex flex-col sm:flex-row items-center justify-between gap-6 shadow-[2px_2px_0_var(--paper-shadow)]">
+      <div class="space-y-1">
+        <h4 class="text-[var(--ink)] font-bold text-base">Ready to submit a pull request?</h4>
+        <p class="text-[var(--ink-2)] text-xs">Review open issues labeled <code>good first issue</code> or open a technical discussion thread.</p>
+      </div>
+      <div class="flex items-center gap-3 shrink-0 font-mono text-xs">
+        <a href="https://github.com/princepal9120/shiba/issues" target="_blank" rel="noopener noreferrer" class="button">
+          <span>Browse GitHub Issues ↗</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+</MarketingPage>
+
+<script>
+  const form = document.querySelector<HTMLFormElement>('#waitlist-form');
+  const status = document.querySelector<HTMLElement>('#form-status');
+
+  form?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!status || !form) return;
+
+    const button = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+    const data = new FormData(form);
+
+    status.textContent = 'Registering with Cloudflare Durable Object…';
+    status.className = 'min-h-[24px] text-center text-xs font-mono font-bold text-[var(--navy)]';
+    if (button) button.disabled = true;
+
+    try {
+      const response = await fetch('/api/waitlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: data.get('email'),
+          interest: data.get('interest'),
+          github: data.get('github'),
+          company: data.get('company'),
+          consent: data.get('consent') === 'on',
+        }),
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error ?? 'Could not save your registration. Please try again.');
+      }
+
+      status.textContent = result.alreadyJoined
+        ? "✓ You're already registered! Thanks for being an early supporter."
+        : "✓ You're in! Thank you for helping build the future of autonomous engineering.";
+      status.className = 'min-h-[24px] text-center text-xs font-mono font-bold status-ok';
+      form.reset();
+    } catch (error) {
+      status.textContent = error instanceof Error ? error.message : 'Registration failed. Please check your connection and try again.';
+      status.className = 'min-h-[24px] text-center text-xs font-mono font-bold status-err';
+    } finally {
+      if (button) button.disabled = false;
+    }
+  });
+</script>
+
+<style>
+  .hero-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(360px, 0.9fr);
+    gap: clamp(40px, 6vw, 80px);
+    padding-top: clamp(60px, 8vw, 100px);
+    align-items: start;
+  }
+  .truth-box {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    padding: 18px 20px;
+    background: var(--card);
+    border: 1px solid var(--line-2);
+    box-shadow: 2px 2px 0 var(--paper-shadow);
+    max-width: 620px;
+  }
+  .watch-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    background: var(--card);
+    border: 1px solid var(--line-2);
+    color: var(--ink);
+    box-shadow: 2px 2px 0 var(--paper-shadow);
+    transition: all 160ms ease;
+  }
+  .watch-link:hover {
+    border-color: var(--navy);
+    color: var(--navy);
+    transform: translateY(-1px);
+  }
+  .form-card {
+    background: var(--card);
+    border: 1px solid var(--line-2);
+    padding: clamp(24px, 4vw, 36px);
+    box-shadow: 3px 3px 0 var(--paper-shadow);
+  }
+  .contrib-card {
+    background: var(--card);
+    border: 1px solid var(--line-2);
+    padding: 24px 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 2px 2px 0 var(--paper-shadow);
+    transition: border-color 200ms ease;
+  }
+  .contrib-card:hover {
+    border-color: var(--navy);
+  }
+  .contrib-icon {
+    width: 32px;
+    height: 32px;
+    background: var(--panel-2);
+    border: 1px solid var(--line-2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Geist Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--navy);
+    margin-bottom: 16px;
+  }
+  .contrib-cta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    font-family: 'Geist Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--navy);
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+  }
+  .contrib-cta:hover {
+    color: var(--navy-2);
+  }
+  @media (max-width: 900px) {
+    .hero-grid {
+      grid-template-columns: 1fr;
+      gap: 48px;
+    }
+  }
+</style>

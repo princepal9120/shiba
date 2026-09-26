@@ -12,6 +12,7 @@ import { AgentsView } from "./components/AgentsView";
 import { MissionsView } from "./components/MissionsView";
 import { GatesView } from "./components/GatesView";
 import { ArchitectureView } from "./components/ArchitectureView";
+import { DashboardView } from "./components/DashboardView";
 import { OnboardingModal, detectSetupSteps } from "./components/OnboardingModal";
 import { SessionsSidebar, type SessionItem } from "./components/SessionsSidebar";
 import { StepTimeline } from "./components/StepTimeline";
@@ -300,12 +301,16 @@ export function App(): React.JSX.Element {
       if (runParam) {
         setSelectedRunId(runParam);
         setMainView("vm");
+      } else if (tabParam === "dashboard") {
+        setMainView("dashboard");
       } else if (tabParam === "vm" || tabParam === "vm-inspector") {
         setMainView("vm");
       } else if (tabParam === "runs" || tabParam === "run-registry") {
         setMainView("runs");
       } else if (tabParam === "automations") {
         setMainView("automations");
+      } else if (tabParam === "agents") {
+        setMainView("agents");
       } else if (tabParam === "missions") {
         setMainView("missions");
       } else if (tabParam === "gates" || tabParam === "quality-gates") {
@@ -916,7 +921,7 @@ export function App(): React.JSX.Element {
   if (identityIssue === "signin") {
     return (
       <div className="h-dvh bg-[#f6f4ed] text-[#222320] font-sans flex items-center justify-center p-6 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))]">
-        <div className="bg-[#fffef8] border border-[#e0ded5] rounded-xl max-w-sm w-full p-6 shadow-2xl flex flex-col items-center text-center gap-3">
+        <div className="bg-[#fffef8] border border-[#e0ded5] rounded-none max-w-sm w-full p-6 shadow-[3px_3px_0_var(--paper-shadow)] flex flex-col items-center text-center gap-3">
           <img
             src="/assets/mascot/pet-logo.png"
             alt="Shiba"
@@ -929,7 +934,7 @@ export function App(): React.JSX.Element {
           <button
             type="button"
             onClick={() => window.location.reload()}
-            className="mt-1 w-full min-h-11 rounded-lg bg-[#0000a8] hover:bg-[#1c1cc8] text-white text-sm font-semibold transition-colors shadow-sm active:scale-[0.98]"
+            className="mt-1 w-full min-h-11 rounded-none bg-[#0000a8] hover:bg-[#1c1cc8] text-white text-sm font-semibold transition-colors shadow-[2px_2px_0_var(--paper-shadow)] active:scale-[0.98]"
           >
             Sign in
           </button>
@@ -952,8 +957,16 @@ export function App(): React.JSX.Element {
     <div className="h-dvh overflow-hidden bg-[#f6f4ed] text-[#222320] font-sans selection:bg-[#0000a8] selection:text-white flex pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
       {/* LEFT: app navigation rail (lg+; phones use the sheet below) */}
       <AppNavRail
-        activeView={mainView}
-        onNavigate={setMainView}
+        activeView={mainView === "tasks" && !workspaceCollapsed && (workspaceTab === "inbox" || workspaceTab === "memory") ? workspaceTab : mainView}
+        onNavigate={(view) => {
+          if (view === "inbox" || view === "memory") {
+            setMainView("tasks");
+            setWorkspaceTab(view);
+            setWorkspaceCollapsed(false);
+          } else {
+            setMainView(view);
+          }
+        }}
         theme={theme}
         onToggleTheme={toggleTheme}
         activeSandboxCount={activeSandboxCount}
@@ -968,15 +981,21 @@ export function App(): React.JSX.Element {
           <button
             type="button"
             aria-label="Close navigation"
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/60"
             onClick={() => setMobileNavOpen(false)}
           />
-          <div className="absolute inset-y-0 left-0 shadow-2xl">
+          <div className="absolute inset-y-0 left-0 shadow-[3px_3px_0_var(--paper-shadow)]">
             <AppNavRail
               variant="sheet"
-              activeView={mainView}
+              activeView={mainView === "tasks" && !workspaceCollapsed && (workspaceTab === "inbox" || workspaceTab === "memory") ? workspaceTab : mainView}
               onNavigate={(view) => {
-                setMainView(view);
+                if (view === "inbox" || view === "memory") {
+                  setMainView("tasks");
+                  setWorkspaceTab(view);
+                  setWorkspaceCollapsed(false);
+                } else {
+                  setMainView(view);
+                }
                 setMobileNavOpen(false);
               }}
               theme={theme}
@@ -1006,7 +1025,7 @@ export function App(): React.JSX.Element {
           onClick={() => setMobileNavOpen(true)}
           aria-label="Open navigation"
           aria-expanded={mobileNavOpen}
-          className="lg:hidden size-11 -my-1 shrink-0 rounded-md flex items-center justify-center text-white/90 hover:bg-white/15 transition-colors"
+          className="lg:hidden size-11 -my-1 shrink-0 rounded-none flex items-center justify-center text-white/90 hover:bg-white/15 transition-colors"
         >
           <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
@@ -1027,7 +1046,7 @@ export function App(): React.JSX.Element {
               type="button"
               onClick={() => setCommandMenuOpen(true)}
               aria-label="Open command menu"
-              className="h-7 touch:h-9 touch:min-w-11 justify-center rounded-md border border-white/20 bg-white/10 text-white/90 hover:bg-white/20 hover:text-white flex items-center gap-1.5 px-2 text-[11px] font-medium transition-colors"
+              className="h-7 touch:h-9 touch:min-w-11 justify-center rounded-none border border-white/20 bg-white/10 text-white/90 hover:bg-white/20 hover:text-white flex items-center gap-1.5 px-2 text-[11px] font-medium transition-colors"
             >
               <svg className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 10.5a6.5 6.5 0 11-13 0 6.5 6.5 0 0113 0z" />
@@ -1056,7 +1075,7 @@ export function App(): React.JSX.Element {
               if (identityIssue) retryIdentity();
               else agent.reconnect();
             }}
-            className="shrink-0 touch:min-h-11 px-3 py-1 rounded-md border border-[#fb2c36]/40 bg-[#fffef8] text-[#b91c1c] font-medium hover:bg-[#fb2c36]/10 transition-colors"
+            className="shrink-0 touch:min-h-11 px-3 py-1 rounded-none border border-[#fb2c36]/40 bg-[#fffef8] text-[#b91c1c] font-medium hover:bg-[#fb2c36]/10 transition-colors"
           >
             Retry now
           </button>
@@ -1064,7 +1083,31 @@ export function App(): React.JSX.Element {
       ) : null}
 
       <div className="flex-1 flex min-w-0 min-h-0">
-      {mainView === "tasks" ? (
+      {mainView === "dashboard" ? (
+        <DashboardView
+          runs={retainedRuns}
+          pendingApprovals={pendingApprovals}
+          storedApprovals={visibleStoredApprovals}
+          agents={agentPrincipals}
+          connectionLabel={connectionState}
+          connectionTone={identityError || agent.connectionError ? "error" : agent.identified ? "ok" : "pending"}
+          runsError={runsError}
+          onNavigate={(view) => {
+            if (view === "inbox" || view === "memory") {
+              setMainView("tasks");
+              setWorkspaceTab(view);
+              setWorkspaceCollapsed(false);
+            } else {
+              setMainView(view);
+            }
+          }}
+          onNewTask={handleNewTask}
+          onInspectRun={(runId) => {
+            setSelectedRunId(runId);
+            setMainView("vm");
+          }}
+        />
+      ) : mainView === "tasks" ? (
       <div className="flex-1 flex overflow-hidden">
         {/* LEFT: Devin-style sessions rail with collapse / expand */}
         <div
@@ -1100,10 +1143,10 @@ export function App(): React.JSX.Element {
             <button
               type="button"
               aria-label="Close sessions"
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              className="absolute inset-0 bg-black/60"
               onClick={() => setMobileSessionsOpen(false)}
             />
-            <div className="absolute inset-y-0 left-0 shadow-2xl bg-[#f6f4ed] pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+            <div className="absolute inset-y-0 left-0 shadow-[3px_3px_0_var(--paper-shadow)] bg-[#f6f4ed] pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
               <SessionsSidebar
                 sessions={sessions}
                 agents={agentPrincipals}
@@ -1147,7 +1190,7 @@ export function App(): React.JSX.Element {
                   onClick={toggleSessionsCollapsed}
                   aria-label={sessionsCollapsed ? "Expand sidebar" : "Collapse sidebar"}
                   aria-expanded={!sessionsCollapsed}
-                  className="hidden lg:flex w-7 h-7 rounded-lg border border-black/[0.08] bg-[#fffef8] text-[#6a6f63] hover:text-[#222320] hover:bg-[#e0ded5] items-center justify-center transition-colors shrink-0"
+                  className="hidden lg:flex w-7 h-7 rounded-none border border-black/[0.08] bg-[#fffef8] text-[#6a6f63] hover:text-[#222320] hover:bg-[#e0ded5] items-center justify-center transition-colors shrink-0"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     {sessionsCollapsed ? (
@@ -1165,7 +1208,7 @@ export function App(): React.JSX.Element {
                 type="button"
                 onClick={() => setMobileSessionsOpen(true)}
                 aria-label="Open sessions"
-                className="lg:hidden w-7 h-7 touch:w-11 touch:h-11 rounded-lg border border-black/[0.08] bg-[#fffef8] text-[#6a6f63] hover:text-[#222320] flex items-center justify-center transition-colors shrink-0"
+                className="lg:hidden w-7 h-7 touch:w-11 touch:h-11 rounded-none border border-black/[0.08] bg-[#fffef8] text-[#6a6f63] hover:text-[#222320] flex items-center justify-center transition-colors shrink-0"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -1184,7 +1227,7 @@ export function App(): React.JSX.Element {
                 {liveSession ? liveSession.title : "New coding task"}
               </h1>
               <Tooltip content="Active real-time agent orchestration stream" side="bottom">
-              <span className="text-[10px] font-bold uppercase tracking-wider border rounded-full px-2 py-0.5 shrink-0 text-[#1c1cc8] border-[#0000a8]/15 bg-[#0000a8]/10">
+              <span className="text-[10px] font-bold uppercase tracking-wider border rounded-none px-2 py-0.5 shrink-0 text-[#1c1cc8] border-[#0000a8]/15 bg-[#0000a8]/10">
                 Live
               </span>
               </Tooltip>
@@ -1194,7 +1237,7 @@ export function App(): React.JSX.Element {
               type="button"
               onClick={() => setWorkspaceCollapsed(false)}
               aria-label="Open workspace panel"
-              className="md:hidden relative w-11 h-11 -my-1.5 rounded-lg border border-black/[0.08] bg-[#fffef8] text-[#6a6f63] hover:text-[#222320] flex items-center justify-center transition-colors shrink-0"
+              className="md:hidden relative w-11 h-11 -my-1.5 rounded-none border border-black/[0.08] bg-[#fffef8] text-[#6a6f63] hover:text-[#222320] flex items-center justify-center transition-colors shrink-0"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 5h16v14H4zM14 5v14" />
@@ -1225,7 +1268,7 @@ export function App(): React.JSX.Element {
               </span>
               </Tooltip>
               <Tooltip content="Container has zero secrets; provider keys stay at AI Gateway egress" side="bottom">
-              <span className="text-[10px] uppercase tracking-wider font-mono text-[#0000a8]/80 bg-[#0000a8]/10 border border-[#0000a8]/10 px-2 py-0.5 rounded">
+              <span className="text-[10px] uppercase tracking-wider font-mono text-[#0000a8]/80 bg-[#0000a8]/10 border border-[#0000a8]/10 px-2 py-0.5 rounded-none">
                 Zero-Trust Boundary
               </span>
               </Tooltip>
@@ -1237,7 +1280,7 @@ export function App(): React.JSX.Element {
                     type="button"
                     onClick={() => setWorkspaceCollapsed(false)}
                     aria-label="Expand workspace panel"
-                    className="w-7 h-7 rounded-lg border border-black/[0.08] bg-[#fffef8] text-[#6a6f63] hover:text-[#222320] hover:bg-[#e0ded5] flex items-center justify-center transition-colors shrink-0"
+                    className="w-7 h-7 rounded-none border border-black/[0.08] bg-[#fffef8] text-[#6a6f63] hover:text-[#222320] hover:bg-[#e0ded5] flex items-center justify-center transition-colors shrink-0"
                   >
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
@@ -1250,11 +1293,11 @@ export function App(): React.JSX.Element {
 
           {/* PENDING APPROVALS STRIP */}
           {(pendingApprovals.length + visibleStoredApprovals.length > 0 || approvalAnnouncement) ? (
-            <div className="bg-[#fffef8] border-b border-[#e0ded5] px-3 sm:px-5 xl:px-6 py-3 flex items-center justify-between gap-3 shadow-sm z-10 shrink-0">
+            <div className="bg-[#fffef8] border-b border-[#e0ded5] px-3 sm:px-5 xl:px-6 py-3 flex items-center justify-between gap-3 shadow-[2px_2px_0_var(--paper-shadow)] z-10 shrink-0">
               <p className="text-sm font-medium text-[#222320]" role="status" aria-live="polite">
                 {pendingApprovals.length + visibleStoredApprovals.length > 0 ? (
                   <span className="flex items-center gap-2 text-[#b45309]">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#b45309] animate-pulse shadow-[0_0_8px_rgba(249,156,0,0.6)]" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#b45309] animate-pulse" />
                     {pendingApprovals.length + visibleStoredApprovals.length} task{pendingApprovals.length + visibleStoredApprovals.length === 1 ? "" : "s"} waiting for your approval.
                   </span>
                 ) : (
@@ -1273,7 +1316,7 @@ export function App(): React.JSX.Element {
                     setWorkspaceTab("approvals");
                     setWorkspaceCollapsed(false);
                   }}
-                  className="shrink-0 text-xs font-semibold text-[#b45309] border border-[#b45309]/40 bg-[#b45309]/10 hover:bg-[#b45309]/15 rounded-lg px-3 py-1.5 touch:min-h-11 transition-colors"
+                  className="shrink-0 text-xs font-semibold text-[#b45309] border border-[#b45309]/40 bg-[#b45309]/10 hover:bg-[#b45309]/15 rounded-none px-3 py-1.5 touch:min-h-11 transition-colors"
                 >
                   Review
                 </button>
@@ -1285,7 +1328,7 @@ export function App(): React.JSX.Element {
           {notice || chat.error || runsError ? (
             <div className="px-3 sm:px-5 xl:px-6 pt-3 flex flex-col gap-2 shrink-0">
               {notice ? (
-                <div role="status" aria-live="polite" className="text-xs text-[#6a6f63] bg-[#fffef8] p-3 rounded-lg border border-[#e0ded5] flex items-start gap-2">
+                <div role="status" aria-live="polite" className="text-xs text-[#6a6f63] bg-[#fffef8] p-3 rounded-none border border-[#e0ded5] flex items-start gap-2">
                   <svg className="w-4 h-4 text-[#0000a8] shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
@@ -1293,7 +1336,7 @@ export function App(): React.JSX.Element {
                 </div>
               ) : null}
               {chat.error ? (
-                <div role="alert" className="text-xs text-[#fb2c36] bg-[#fb2c36]/10 p-3 rounded-lg border border-[#fb2c36]/30 flex items-start gap-2">
+                <div role="alert" className="text-xs text-[#fb2c36] bg-[#fb2c36]/10 p-3 rounded-none border border-[#fb2c36]/30 flex items-start gap-2">
                   <svg className="w-4 h-4 text-[#fb2c36] shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                   </svg>
@@ -1301,7 +1344,7 @@ export function App(): React.JSX.Element {
                 </div>
               ) : null}
               {runsError ? (
-                <div className="text-xs text-[#fb2c36] bg-[#fb2c36]/10 p-3 rounded-lg border border-[#fb2c36]/30 flex items-start gap-2">
+                <div className="text-xs text-[#fb2c36] bg-[#fb2c36]/10 p-3 rounded-none border border-[#fb2c36]/30 flex items-start gap-2">
                   <svg className="w-4 h-4 text-[#fb2c36] shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
@@ -1422,8 +1465,8 @@ export function App(): React.JSX.Element {
 
       {/* CLEAR HISTORY CONFIRMATION MODAL */}
       {showClearModal ? (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#fffef8] border border-[#e0ded5] rounded-xl max-w-md w-full p-6 shadow-2xl">
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-[#fffef8] border border-[#e0ded5] rounded-none max-w-md w-full p-6 shadow-[3px_3px_0_var(--paper-shadow)]">
             <h3 className="text-lg font-bold text-[#222320] mb-2">Clear Conversation & Runs?</h3>
             <p className="text-sm text-[#6a6f63] mb-5 leading-relaxed">
               This will erase all active conversation history and delete retained run registry records on the orchestrator. Active sandboxes will not be destroyed automatically.
@@ -1431,14 +1474,14 @@ export function App(): React.JSX.Element {
             <div className="flex items-center justify-end gap-3">
               <button
                 type="button"
-                className="px-4 py-2 rounded-lg text-sm font-medium text-[#6a6f63] hover:text-[#222320] bg-[#fffef8] border border-[#e0ded5] transition-colors"
+                className="px-4 py-2 rounded-none text-sm font-medium text-[#6a6f63] hover:text-[#222320] bg-[#fffef8] border border-[#e0ded5] transition-colors"
                 onClick={() => setShowClearModal(false)}
               >
                 Cancel
               </button>
               <button
                 type="button"
-                className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-[#fb2c36] hover:bg-[#fb2c36]/90 transition-colors shadow-sm"
+                className="px-4 py-2 rounded-none text-sm font-semibold text-white bg-[#fb2c36] hover:bg-[#fb2c36]/90 transition-colors shadow-[2px_2px_0_var(--paper-shadow)]"
                 onClick={confirmClearAll}
               >
                 Yes, Clear History
@@ -1461,8 +1504,8 @@ export function App(): React.JSX.Element {
 
       {/* KEYBOARD SHORTCUTS MODAL */}
       {showShortcutsModal ? (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#fffef8] border border-[#e0ded5] rounded-xl max-w-md w-full p-6 shadow-2xl">
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-[#fffef8] border border-[#e0ded5] rounded-none max-w-md w-full p-6 shadow-[3px_3px_0_var(--paper-shadow)]">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-base font-bold text-[#222320]">Keyboard Shortcuts</h3>
               <button
@@ -1476,43 +1519,43 @@ export function App(): React.JSX.Element {
             <div className="flex flex-col gap-2.5 text-xs">
               <div className="flex items-center justify-between py-1.5 border-b border-[#e0ded5]">
                 <span className="text-[#6a6f63]">Submit Task</span>
-                <span className="font-mono bg-[#fffef8] border border-[#e0ded5] px-2 py-0.5 rounded text-[#222320]">
+                <span className="font-mono bg-[#fffef8] border border-[#e0ded5] px-2 py-0.5 rounded-none text-[#222320]">
                   ⌘ / Ctrl + Enter
                 </span>
               </div>
               <div className="flex items-center justify-between py-1.5 border-b border-[#e0ded5]">
                 <span className="text-[#6a6f63]">Toggle Sessions Sidebar</span>
-                <span className="font-mono bg-[#fffef8] border border-[#e0ded5] px-2 py-0.5 rounded text-[#222320]">
+                <span className="font-mono bg-[#fffef8] border border-[#e0ded5] px-2 py-0.5 rounded-none text-[#222320]">
                   ⌘ / Ctrl + B  or  [
                 </span>
               </div>
               <div className="flex items-center justify-between py-1.5 border-b border-[#e0ded5]">
                 <span className="text-[#6a6f63]">Toggle Workspace Panel</span>
-                <span className="font-mono bg-[#fffef8] border border-[#e0ded5] px-2 py-0.5 rounded text-[#222320]">
+                <span className="font-mono bg-[#fffef8] border border-[#e0ded5] px-2 py-0.5 rounded-none text-[#222320]">
                   ⌘ / Ctrl + \  or  ]
                 </span>
               </div>
               <div className="flex items-center justify-between py-1.5 border-b border-[#e0ded5]">
                 <span className="text-[#6a6f63]">Close Modals</span>
-                <span className="font-mono bg-[#fffef8] border border-[#e0ded5] px-2 py-0.5 rounded text-[#222320]">
+                <span className="font-mono bg-[#fffef8] border border-[#e0ded5] px-2 py-0.5 rounded-none text-[#222320]">
                   Escape
                 </span>
               </div>
               <div className="flex items-center justify-between py-1.5 border-b border-[#e0ded5]">
                 <span className="text-[#6a6f63]">Open Shortcuts Guide</span>
-                <span className="font-mono bg-[#fffef8] border border-[#e0ded5] px-2 py-0.5 rounded text-[#222320]">
+                <span className="font-mono bg-[#fffef8] border border-[#e0ded5] px-2 py-0.5 rounded-none text-[#222320]">
                   ?
                 </span>
               </div>
               <div className="flex items-center justify-between py-1.5 border-b border-[#e0ded5]">
                 <span className="text-[#6a6f63]">Command Menu</span>
-                <span className="font-mono bg-[#fffef8] border border-[#e0ded5] px-2 py-0.5 rounded text-[#222320]">
+                <span className="font-mono bg-[#fffef8] border border-[#e0ded5] px-2 py-0.5 rounded-none text-[#222320]">
                   ⌘ / Ctrl + K
                 </span>
               </div>
               <div className="flex items-center justify-between py-1.5 border-b border-[#e0ded5]">
                 <span className="text-[#6a6f63]">Toggle Light / Dark Theme</span>
-                <span className="font-mono bg-[#fffef8] border border-[#e0ded5] px-2 py-0.5 rounded text-[#222320]">
+                <span className="font-mono bg-[#fffef8] border border-[#e0ded5] px-2 py-0.5 rounded-none text-[#222320]">
                   D
                 </span>
               </div>
@@ -1520,7 +1563,7 @@ export function App(): React.JSX.Element {
             <div className="mt-5 text-right">
               <button
                 type="button"
-                className="px-4 py-1.5 rounded-lg text-xs font-medium text-[#222320] bg-[#fffef8] border border-[#e0ded5] hover:bg-[#e0ded5] transition-colors"
+                className="px-4 py-1.5 rounded-none text-xs font-medium text-[#222320] bg-[#fffef8] border border-[#e0ded5] hover:bg-[#e0ded5] transition-colors"
                 onClick={() => setShowShortcutsModal(false)}
               >
                 Done

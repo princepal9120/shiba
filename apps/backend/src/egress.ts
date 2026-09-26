@@ -48,6 +48,10 @@ export const GATEWAY_PROVIDERS: Record<string, string> = {
   "generativelanguage.googleapis.com": "google-ai-studio",
   "api.anthropic.com": "anthropic",
   "api.openai.com": "openai",
+  // OpenCode Go rides the gateway as a configured custom provider slug
+  // (spec MODEL-CONNECTIONS-ARCHITECTURE.md §3). The slug names the gateway
+  // custom provider holding the Go API key as BYOK.
+  "opencode.ai": "opencode-go",
 };
 
 async function forwardProvider(request: Request, env: EgressEnv, host: string): Promise<Response> {
@@ -93,6 +97,17 @@ export function forwardAnthropic(request: Request, env: EgressEnv): Promise<Resp
 
 export function forwardOpenAI(request: Request, env: EgressEnv): Promise<Response> {
   return forwardProvider(request, env, "api.openai.com");
+}
+
+/**
+ * OpenCode Go (spec §5.6): pinned to the canonical opencode.ai origin and
+ * forwarded through the gateway's opencode-go custom provider, which holds
+ * the issued API key as BYOK. The container's dummy key and any
+ * container-supplied gateway controls are stripped by outboundHeaders; a
+ * stable per-run session id rides through untouched.
+ */
+export function forwardOpenCodeGo(request: Request, env: EgressEnv): Promise<Response> {
+  return forwardProvider(request, env, "opencode.ai");
 }
 
 /**

@@ -11,6 +11,7 @@ import {
   forwardGitHubScoped,
   forwardGoogle,
   forwardOpenAI,
+  forwardOpenCodeGo,
 } from "./egress.js";
 import type { Env as WorkerEnv } from "./env.js";
 
@@ -64,6 +65,7 @@ Sandbox.outboundByHost = {
   "generativelanguage.googleapis.com": forwardGoogle,
   "api.anthropic.com": forwardAnthropic,
   "api.openai.com": forwardOpenAI,
+  "opencode.ai": forwardOpenCodeGo,
   "api.devin.ai": forwardDevinApi,
   "server.codeium.com": forwardDevinInference,
   "github.com": denyUnscopedGitHub,

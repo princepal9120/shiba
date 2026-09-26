@@ -31,6 +31,10 @@ export interface Env {
    * across agents (megaplan T8, see `memory-do.ts`).
    */
   Memory: DurableObjectNamespace;
+  /** Deployment-wide model connection catalog and purpose policy. */
+  ModelConfig: DurableObjectNamespace;
+  /** Private launch/contributor registrations. */
+  Waitlist: DurableObjectNamespace;
   /**
    * Vectorize index holding the 768-dim bge-base embedding for every banked
    * fact, keyed by fact id (megaplan T8). Index name `shiba-memory`; the

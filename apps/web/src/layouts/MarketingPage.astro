@@ -1,0 +1,353 @@
+---
+import '../styles/tailwind.css';
+
+interface Props {
+  title: string;
+  description: string;
+  path: string;
+  type?: 'website' | 'article';
+  publishedTime?: string;
+  modifiedTime?: string;
+  schema?: Record<string, unknown> | Array<Record<string, unknown>>;
+  breadcrumbs?: Array<{ name: string; path: string }>;
+}
+const {
+  title,
+  description,
+  path,
+  type = 'website',
+  publishedTime,
+  modifiedTime,
+  schema,
+  breadcrumbs = [{ name: 'Home', path: '/' }],
+} = Astro.props;
+const canonical = new URL(path, 'https://tryshiba.dev').href;
+const ogImage = 'https://tryshiba.dev/assets/mascot/pet-logo.png';
+
+const defaultSchemas: Array<Record<string, unknown>> = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: 'Shiba',
+    url: 'https://tryshiba.dev/',
+    logo: ogImage,
+    sameAs: ['https://github.com/princepal9120/shiba', 'https://x.com/prince_twets'],
+  },
+];
+
+if (breadcrumbs && breadcrumbs.length > 0) {
+  defaultSchemas.push({
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: breadcrumbs.map((crumb, idx) => ({
+      '@type': 'ListItem',
+      position: idx + 1,
+      name: crumb.name,
+      item: new URL(crumb.path, 'https://tryshiba.dev').href,
+    })),
+  });
+}
+
+const finalSchemas = schema
+  ? [...defaultSchemas, ...(Array.isArray(schema) ? schema : [schema])]
+  : defaultSchemas;
+---
+<!doctype html>
+<html lang="en" class="scroll-smooth" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/app/apple-touch-icon.png" />
+    <link rel="canonical" href={canonical} />
+    <link rel="sitemap" href="/sitemap.xml" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <meta name="author" content="Shiba Open Source" />
+    <meta name="theme-color" content="#f6f4ed" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content={type} />
+    <meta property="og:site_name" content="Shiba" />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:alt" content="Shiba — Self-hosted AI software engineer on Cloudflare" />
+    {publishedTime && <meta property="article:published_time" content={publishedTime} />}
+    {modifiedTime && <meta property="article:modified_time" content={modifiedTime} />}
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@prince_twets" />
+    <meta name="twitter:creator" content="@prince_twets" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+
+    <!-- Preconnect Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+
+    <!-- Structured Data (JSON-LD) -->
+    {finalSchemas.map((s) => (
+      <script type="application/ld+json" set:html={JSON.stringify(s)} />
+    ))}
+
+    <!-- Instant Theme Initializer (No FOIT) -->
+    <script is:inline>
+      (function() {
+        try {
+          var stored = localStorage.getItem('shiba-theme');
+          document.documentElement.setAttribute('data-theme', stored === 'dark' ? 'dark' : 'light');
+        } catch (_) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <header class="site-header sticky top-0 z-50">
+      <div class="shell header-inner">
+        <a class="wordmark flex items-center gap-2.5" href="/" aria-label="Shiba home">
+          <img src="/assets/mascot/pet-logo.png" alt="Shiba Mascot" class="w-7 h-7 bg-white object-contain border border-[#d3d2c8] p-0.5 pixelated" />
+          <span class="wordmark-name">Shiba</span>
+        </a>
+        <span class="beta-badge">Beta · OSS MIT</span>
+        <nav aria-label="Main navigation" class="flex items-center gap-x-5 font-mono text-[13px] whitespace-nowrap overflow-x-auto">
+          <a href="/why-shiba/" class={path === '/why-shiba/' ? 'nav-link nav-active' : 'nav-link'}>Why Shiba</a>
+          <a href="/docs/overview/" class={path.startsWith('/docs') ? 'nav-link nav-active' : 'nav-link'}>Docs</a>
+          <a href="/docs/architecture/" class="nav-link">Architecture</a>
+          <a href="/docs/security/" class="nav-link">Security</a>
+          <a href="/app/" class="nav-ghost">Dashboard</a>
+          <button
+            type="button"
+            id="theme-toggle-btn"
+            aria-label="Toggle light or dark theme"
+            title="Toggle light or dark theme"
+            class="nav-theme-toggle"
+          >
+            <svg class="icon-sun size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+            <svg class="icon-moon size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+            </svg>
+          </button>
+          <a class="nav-cta" href="/waitlist/">
+            <span class="w-1.5 h-1.5 nav-cta-dot" aria-hidden="true"></span>
+            <span>Join the build</span>
+          </a>
+        </nav>
+      </div>
+    </header>
+    <main><slot /></main>
+    <footer class="border-t border-[var(--line)] bg-[var(--paper)] mt-24 pt-16 pb-12">
+      <div class="shell">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-10 mb-12">
+          <div class="md:col-span-2 space-y-4">
+            <div class="flex items-center gap-2.5">
+              <img src="/assets/mascot/pet-logo.png" alt="Shiba Mascot" class="w-7 h-7 bg-white object-contain border border-[var(--line-2)] p-0.5 pixelated" />
+              <span class="wordmark-name text-lg text-[var(--ink)]">Shiba</span>
+            </div>
+            <p class="text-xs text-[var(--ink-2)] max-w-sm leading-relaxed font-mono">
+              The self-hosted AI software engineer that runs in your own Cloudflare account. Approval-gated coding agents delegated to isolated Sandbox containers.
+            </p>
+            <div class="flex items-center gap-2 text-[10px] font-mono uppercase tracking-[0.12em] text-[var(--ink-2)]">
+              <span class="w-1.5 h-1.5 footer-ok-dot"></span>
+              <span>Open source (MIT) · Cloudflare Native</span>
+            </div>
+          </div>
+          <div class="space-y-3 font-mono text-xs">
+            <div class="footer-h text-[var(--ink)]">Product &amp; Story</div>
+            <ul class="space-y-2 text-[var(--ink-2)]">
+              <li><a href="/why-shiba/" class="hover:text-[var(--navy)] transition-colors">Why I'm building Shiba</a></li>
+              <li><a href="/waitlist/" class="hover:text-[var(--navy)] transition-colors">Join Waitlist &amp; Contribute</a></li>
+              <li><a href="/app/" class="hover:text-[var(--navy)] transition-colors">Web Dashboard</a></li>
+              <li><a href="https://github.com/princepal9120/shiba" target="_blank" rel="noopener noreferrer" class="hover:text-[var(--navy)] transition-colors">GitHub Repository ↗</a></li>
+            </ul>
+          </div>
+          <div class="space-y-3 font-mono text-xs">
+            <div class="footer-h text-[var(--ink)]">Technical Docs</div>
+            <ul class="space-y-2 text-[var(--ink-2)]">
+              <li><a href="/docs/overview/" class="hover:text-[var(--navy)] transition-colors">Overview</a></li>
+              <li><a href="/docs/getting-started/" class="hover:text-[var(--navy)] transition-colors">Quickstart</a></li>
+              <li><a href="/docs/architecture/" class="hover:text-[var(--navy)] transition-colors">Architecture Spec</a></li>
+              <li><a href="/docs/security/" class="hover:text-[var(--navy)] transition-colors">Security &amp; Egress Gates</a></li>
+              <li><a href="/docs/contributing/" class="hover:text-[var(--navy)] transition-colors">Contributor Guide</a></li>
+            </ul>
+          </div>
+        </div>
+        <div class="statusbar">
+          <div class="statuscell">© 2026 SHIBA · MIT LICENSE</div>
+          <div class="statuscell">CLOUDFLARE WORKERS + SANDBOX</div>
+          <div class="statuscell status-links">
+            <a href="/sitemap.xml">Sitemap</a>
+            <a href="/llms.txt">llms.txt</a>
+            <a href="https://x.com/prince_twets" target="_blank" rel="noopener noreferrer">@prince_twets ↗</a>
+          </div>
+        </div>
+      </div>
+    </footer>
+
+    <script>
+      var btn = document.getElementById('theme-toggle-btn');
+      btn?.addEventListener('click', function() {
+        var next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', next);
+        try {
+          localStorage.setItem('shiba-theme', next);
+        } catch (_) {}
+      });
+    </script>
+  </body>
+</html>
+
+<style is:global>
+  /* bezalel.sh paper-OS marketing system with Light & Dark Theme Support */
+  :root {
+    color-scheme: light;
+    --paper: #f6f4ed;
+    --card: #fffef8;
+    --panel-2: #f1efe6;
+    --ink: #222320;
+    --ink-2: #6a6f63;
+    --line: #e0ded5;
+    --line-2: #d3d2c8;
+    --input-line: #a5a69b;
+    --navy: #0000a8;
+    --navy-2: #1c1cc8;
+    --paper-title: #0000a8;
+    --paper-title-fg: #ffffff;
+    --paper-shadow: #2527261c;
+    --paper-dot: #24272919;
+    --ok: #227146;
+    --pending: #976400;
+    --danger: #b52b2b;
+    --surface: var(--card);
+    --text: var(--ink);
+    --muted: var(--ink-2);
+    --teal: var(--navy);
+  }
+
+  html[data-theme='dark'] {
+    color-scheme: dark;
+    --paper: #191a18;
+    --card: #222320;
+    --panel-2: #272824;
+    --ink: #eae8e1;
+    --ink-2: #aaa99f;
+    --line: #3b3d36;
+    --line-2: #4a4c44;
+    --input-line: #55564e;
+    --navy: #9cbce2;
+    --navy-2: #b4cde9;
+    --paper-title: #222320;
+    --paper-title-fg: #eae8e1;
+    --paper-shadow: rgba(0, 0, 0, 0.5);
+    --paper-dot: rgba(255, 255, 255, 0.08);
+    --ok: #8fbc6f;
+    --pending: #ebc04b;
+    --danger: #e26d5a;
+    --surface: var(--card);
+    --text: var(--ink);
+    --muted: var(--ink-2);
+    --teal: var(--navy);
+    --on-accent: #152335;
+  }
+
+  /* theme toggle icon swap (tailwind dark: is media-mode; use attr) */
+  .icon-sun { display: none; }
+  .icon-moon { display: block; }
+  html[data-theme='dark'] .icon-sun { display: block; }
+  html[data-theme='dark'] .icon-moon { display: none; }
+
+  .nav-cta-dot { background: #0000a8; }
+  .footer-ok-dot { background: #227146; }
+  html[data-theme='dark'] .footer-ok-dot { background: #8fbc6f; }
+  .status-ok { color: #227146; }
+  .status-err { color: #b52b2b; }
+  html[data-theme='dark'] .status-ok { color: #8fbc6f; }
+  html[data-theme='dark'] .status-err { color: #e26d5a; }
+
+  /* TaskForm (React island) theme tokens */
+  :root {
+    --tf-input-bg: #fffef8;
+    --tf-line: #d3d2c8;
+    --tf-ink: #222320;
+    --tf-muted: #6a6f63;
+    --tf-accent: #0000a8;
+    --tf-accent-hover: #1c1cc8;
+    --tf-on-accent: #ffffff;
+    --tf-hover: #f1efe6;
+  }
+  html[data-theme='dark'] {
+    --tf-input-bg: #191a18;
+    --tf-line: #3b3d36;
+    --tf-ink: #eae8e1;
+    --tf-muted: #aaa99f;
+    --tf-accent: #9cbce2;
+    --tf-accent-hover: #b4cde9;
+    --tf-on-accent: #152335;
+    --tf-hover: #272824;
+  }
+
+  * { box-sizing: border-box; border-radius: 0 !important; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font-family: 'Geist', ui-sans-serif, system-ui, -apple-system, sans-serif; line-height: 1.55; }
+  ::selection { background: var(--navy); color: #fff; }
+  html[data-theme='dark'] ::selection { background: var(--navy); color: #152335; }
+  a { color: inherit; }
+  a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--navy); outline-offset: 2px; }
+  .shell { width: min(1160px, calc(100% - 40px)); margin-inline: auto; }
+  .pixelated { image-rendering: pixelated; }
+
+  /* ---------- top nav ---------- */
+  .site-header { position: relative; z-index: 2; border-bottom: 1px solid var(--line); background: var(--paper); }
+  .header-inner { min-height: 58px; display: flex; align-items: center; gap: 14px; }
+  .wordmark { text-decoration: none; white-space: nowrap; }
+  .wordmark-name { font-family: 'Instrument Serif', Georgia, serif; font-size: 24px; letter-spacing: -0.01em; color: var(--ink); }
+  .beta-badge { font-family: 'Geist Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--navy); border: 1px solid var(--line-2); background: var(--card); padding: 3px 7px; box-shadow: 2px 2px 0 var(--paper-shadow); }
+  .site-header nav { margin-left: auto; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 20px; font-size: 12px; }
+  .nav-link { text-decoration: none; color: var(--ink-2); }
+  .nav-link:hover { color: var(--navy); }
+  .nav-active { color: var(--navy); font-weight: 600; }
+  .nav-ghost { display: inline-flex; align-items: center; height: 32px; padding: 0 12px; border: 1px solid var(--line-2); background: var(--card); color: var(--ink); text-decoration: none; font-size: 12px; box-shadow: 2px 2px 0 var(--paper-shadow); }
+  .nav-ghost:hover { background: var(--panel-2); }
+  .nav-ghost:active { transform: translateY(1px); }
+  .nav-theme-toggle { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 1px solid var(--line-2); background: var(--card); color: var(--ink); cursor: pointer; box-shadow: 2px 2px 0 var(--paper-shadow); transition: background 120ms ease; }
+  .nav-theme-toggle:hover { background: var(--panel-2); color: var(--navy); }
+  .nav-theme-toggle:active { transform: translateY(1px); }
+  .nav-cta { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; border: 1px solid var(--navy); background: var(--navy); color: #fff; text-decoration: none; font-size: 12px; font-weight: 600; box-shadow: 2px 2px 0 var(--paper-shadow); }
+  .nav-cta:hover { background: var(--navy-2); }
+  .nav-cta:active { transform: translateY(1px); }
+  html[data-theme='dark'] .nav-cta { color: #152335; }
+  html[data-theme='dark'] .nav-cta-dot { background: #152335; }
+  footer a { text-decoration: none; }
+  .footer-h { font-family: 'Geist Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.14em; font-weight: 600; }
+  .statusbar { display: flex; flex-wrap: wrap; border: 1px solid var(--line-2); background: var(--card); box-shadow: 2px 2px 0 var(--paper-shadow); }
+  .statuscell { font-family: 'Geist Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ink-2); padding: 8px 12px; border-right: 1px solid var(--line); }
+  .statuscell:last-child { border-right: none; }
+  .status-links { margin-left: auto; display: flex; gap: 14px; }
+  .status-links a:hover { color: var(--navy); }
+
+  /* ---------- shared primitives ---------- */
+  .eyebrow, .micro { font-family: 'Geist Mono', monospace; text-transform: uppercase; letter-spacing: 0.14em; font-size: 10px; color: var(--navy); font-weight: 500; }
+  h1, h2, h3, h4 { font-family: 'Instrument Serif', Georgia, serif; font-weight: 400; letter-spacing: -0.01em; line-height: 1.05; color: var(--ink); }
+  h1 { font-size: clamp(57px, 6.5vw, 94px); margin: 16px 0 24px; max-width: 900px; }
+  h2 { font-size: clamp(34px, 3.8vw, 56px); }
+  p { color: var(--ink-2); }
+  .lead { font-size: 15px; line-height: 1.65; max-width: 760px; color: var(--ink-2); }
+
+  /* bezalel buttons: square, hard 2px shadow, active translate */
+  .button { display: inline-flex; align-items: center; justify-content: center; gap: 10px; padding: 0 18px; height: 36px; border: 1px solid var(--navy); background: var(--navy); color: #fff; text-decoration: none; font-weight: 600; font-family: 'Geist Mono', monospace; font-size: 13px; cursor: pointer; box-shadow: 2px 2px 0 var(--paper-shadow); transition: background 120ms ease, border-color 120ms ease; }
+  .button:hover { background: var(--navy-2); border-color: var(--navy-2); }
+  .button:active { transform: translateY(1px); }
+  .button-outline { background: var(--card); color: var(--navy); border-color: var(--navy); }
+  .button-outline:hover { background: var(--panel-2); color: var(--navy); border-color: var(--navy-2); }
+  html[data-theme='dark'] .button:not(.button-outline) { color: #152335; }
+  @media (max-width: 768px) {
+    .header-inner { align-items: flex-start; padding-block: 14px; flex-direction: column; gap: 12px; }
+    .site-header nav { margin-left: 0; gap: 8px 14px; width: 100%; }
+  }
+</style>

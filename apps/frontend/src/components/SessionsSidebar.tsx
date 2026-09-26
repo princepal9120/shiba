@@ -89,8 +89,8 @@ function SessionRow({
         type="button"
         onClick={() => onSelect(session.id)}
         aria-current={selected ? "true" : undefined}
-        className={`group w-full text-left rounded-lg px-3 py-2 flex items-start gap-2.5 transition-colors ${
-          selected ? "bg-[#e0ded5] text-[#222320] shadow-sm" : "hover:bg-black/[0.04] text-[#222320]"
+        className={`group w-full text-left rounded-none px-3 py-2 flex items-start gap-2.5 transition-colors ${
+          selected ? "bg-[#e0ded5] text-[#222320] shadow-[2px_2px_0_var(--paper-shadow)]" : "hover:bg-black/[0.04] text-[#222320]"
         }`}
       >
         <span
@@ -123,7 +123,7 @@ function AgentRow({ agent }: { agent: AgentPrincipal }) {
     <Tooltip content={tooltipText} side="right" align="start" delayMs={400}>
       <div
         tabIndex={0}
-        className="group w-full text-left rounded-lg px-3 py-2 flex items-start gap-2.5 text-[#222320] focus:outline-none focus-visible:bg-black/[0.04]"
+        className="group w-full text-left rounded-none px-3 py-2 flex items-start gap-2.5 text-[#222320] focus:outline-none focus-visible:bg-black/[0.04]"
       >
         <span
           className={`mt-[7px] size-1.5 rounded-full shrink-0 ${
@@ -184,7 +184,7 @@ export function SessionsSidebar({
           <h2 className="text-[11px] font-mono font-semibold uppercase tracking-[0.12em] text-[#6a6f63]">
             Sessions
           </h2>
-          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-[#fffef8] border border-black/[0.06] text-[#6a6f63] tabular-nums">
+          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-none bg-[#fffef8] border border-black/[0.06] text-[#6a6f63] tabular-nums">
             {sessions.length}
           </span>
         </div>
@@ -195,7 +195,7 @@ export function SessionsSidebar({
               type="button"
               onClick={onToggleCollapse}
               aria-label={isMobileDrawer ? "Close sessions" : "Collapse sidebar"}
-              className="size-7 rounded-md flex items-center justify-center text-[#6a6f63] hover:text-[#222320] hover:bg-black/[0.06] transition-colors"
+              className="size-7 rounded-none flex items-center justify-center text-[#6a6f63] hover:text-[#222320] hover:bg-black/[0.06] transition-colors"
             >
               {isMobileDrawer ? (
                 <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -217,7 +217,7 @@ export function SessionsSidebar({
           <button
             type="button"
             onClick={onNewTask}
-            className="w-full inline-flex items-center justify-center gap-1.5 bg-[#0000a8] hover:bg-[#1c1cc8] text-white font-semibold text-[13px] h-9 px-3 rounded-lg transition-colors shadow-sm"
+            className="w-full inline-flex items-center justify-center gap-1.5 bg-[#0000a8] hover:bg-[#1c1cc8] text-white font-semibold text-[13px] h-9 px-3 rounded-none transition-colors shadow-[2px_2px_0_var(--paper-shadow)]"
           >
             <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
@@ -249,7 +249,7 @@ export function SessionsSidebar({
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search sessions…"
             aria-label="Search sessions"
-            className="w-full h-8 bg-[#fffef8] border border-transparent rounded-lg pl-8 pr-7 text-[13px] text-[#222320] placeholder:text-[#6a6f63]/50 focus:border-[#1c1cc8]/40 focus:outline-none transition-colors"
+            className="w-full h-8 bg-[#fffef8] border border-transparent rounded-none pl-8 pr-7 text-[13px] text-[#222320] placeholder:text-[#6a6f63]/50 focus:border-[#1c1cc8]/40 focus:outline-none transition-colors"
           />
           {query ? (
             <button
@@ -325,7 +325,7 @@ export function SessionsSidebar({
           <button
             type="button"
             onClick={onOpenSetup}
-            className={`inline-flex items-center gap-2 text-xs font-semibold rounded-lg px-2.5 py-1.5 border transition-colors w-fit ${
+            className={`inline-flex items-center gap-2 text-xs font-semibold rounded-none px-2.5 py-1.5 border transition-colors w-fit ${
               setupComplete
                 ? "text-[#1c1cc8] border-[#0000a8]/40 bg-[#0000a8]/10 hover:bg-[#0000a8]/20"
                 : "text-[#b45309] border-[#b45309]/40 bg-[#b45309]/10 hover:bg-[#b45309]/20"

@@ -37,8 +37,12 @@ import { handleSlackEvent } from "./slack-mention.js";
 import { ORCHESTRATOR_NAME, handleSlackCommand } from "./slack-routes.js";
 import { handleSandboxRoutes } from "./sandbox-routes.js";
 import { readSetupStatus } from "./setup-status.js";
+import { isPublicRequest } from "./public-routes.js";
+import { handleWaitlist } from "./waitlist.js";
+import { Waitlist } from "./waitlist-do.js";
+import { ModelConfig } from "./model-config-do.js";
 
-export { Automations, CodingOrchestrator, Mailbox, McpGateway, Memory, OpenCodeAgent, Sandbox, ContainerProxy };
+export { Automations, CodingOrchestrator, Mailbox, McpGateway, Memory, ModelConfig, OpenCodeAgent, Sandbox, ContainerProxy, Waitlist };
 export { assertLiveCodingModel } from "./coding-model.js";
 
 export function getUserId(request: Request): string | null {
@@ -972,9 +976,11 @@ export default {
     try {
       request = await withVerifiedAccessIdentity(request, env);
       const url = new URL(request.url);
-      if (!isAuthenticated(request, env)) {
+      if (!isPublicRequest(request) && !isAuthenticated(request, env)) {
         return Response.json({ error: "Authentication required." }, { status: 401 });
       }
+      const waitlistResponse = await handleWaitlist(request, env);
+      if (waitlistResponse) return waitlistResponse;
       if (SIGNATURE_AUTHENTICATED.includes(url.pathname) && request.method !== "POST") {
         return Response.json({ error: "Method not allowed." }, { status: 405 });
       }

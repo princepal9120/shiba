@@ -19,7 +19,7 @@ import {
 } from "./types.js";
 
 /** OpenCode is multi-provider; the gateway decides which are actually reachable. */
-export const OPENCODE_PROVIDERS = ["google", "anthropic", "openai"] as const;
+export const OPENCODE_PROVIDERS = ["google", "anthropic", "openai", "opencode-go"] as const;
 
 /** Thrown when a streamed OpenCode event line is malformed. */
 export class OpenCodeEventError extends Error {}

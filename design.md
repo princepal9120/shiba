@@ -1,178 +1,116 @@
-# Design — AI Coworker
+# Design — AI Coworker (bezalel.sh system)
 
-Locked design system. Every page redesign reads this file first. Do not
-regenerate per page — amend this file when the system needs to grow.
+Locked design system, derived from bezalel.sh. Every surface — dashboard
+(`apps/frontend`) and docs/marketing (`apps/web`) — reads this file first.
+Amend this file when the system needs to grow; do not fork per-page styles.
 
 ## Genre
 
-modern-minimal (dev-tool / infra)
+retro paper-OS ("designed-as-app"): cream paper, navy accents, square
+corners, hard offset shadows, window-chrome panels, mono microcopy,
+serif display type, pixel-crisp details. Light-first; dark is an
+inverted/dark-paper theme, not a separate palette invention.
 
-## Macrostructure family
+## Tokens (canonical — light)
 
-- Marketing pages: n/a (no marketing surface in this repo)
-- App pages:       Workbench — dashboard (`apps/frontend/src/`). Dense panels,
-  tab-nav, data rows; variation in card archetypes only.
-- Content pages:   Long Document — docs (`web/`, Starlight). Sidebar + prose
-  column; variation in aside/card archetypes only.
+```css
+--paper:        #f6f4ed;  /* app background */
+--card:         #fffef8;  /* raised surface */
+--panel-2:      #f1efe6;  /* sunken/secondary surface */
+--ink:          #222320;  /* text */
+--ink-2:        #6a6f63;  /* quiet/muted text */
+--line:         #e0ded5;  /* hairline */
+--line-2:       #d3d2c8;  /* stronger hairline / card border */
+--input-line:   #a5a69b;  /* input border */
+--navy:         #0000a8;  /* primary accent — the ONLY brand accent */
+--navy-2:       #1c1cc8;  /* hover */
+--paper-title:  #0000a8;  /* window titlebar bg */
+--paper-title-fg: #ffffff;
+--paper-shadow: #2527261c;/* hard offset shadow color */
+--paper-dot:    #24272919;/* dot-grid canvas dot */
+--ok:           #227146;
+--pending:      #976400;  /* text-safe amber */
+--pending-bg:   #f99c00;
+--danger:       #b52b2b;
+--danger-fg:    #fb2c36;  /* loud red only for dots/icons */
+```
 
-## Theme
+Dark (dashboard via invert-filter fallback; docs may use real tokens):
 
-Custom, anchored on brand teal `#0B9F95` ≈ `oklch(60% 0.11 185)`.
-
-Dark (dashboard, docs dark):
-- `--color-paper`   oklch(14% 0.010 260)   /* #0a0c10-ish charcoal */
-- `--color-paper-2` oklch(18% 0.012 260)
-- `--color-ink`     oklch(92% 0.010 240)
-- `--color-ink-2`   oklch(65% 0.015 240)
-- `--color-rule`    oklch(28% 0.015 260)
-- `--color-accent`  oklch(60% 0.110 185)   /* brand teal */
-- `--color-accent-2` oklch(78% 0.120 180)  /* #2dd4bf */
-- `--color-focus`   oklch(78% 0.120 180)
-
-Light (docs only):
-- `--color-paper`   oklch(98% 0.005 240)
-- `--color-paper-2` oklch(95% 0.008 240)
-- `--color-ink`     oklch(22% 0.020 260)
-- `--color-ink-2`   oklch(45% 0.020 260)
-- `--color-rule`    oklch(88% 0.010 240)
-- `--color-accent`  oklch(55% 0.110 185)
-- `--color-focus`   oklch(55% 0.110 185)
-
-Existing hex values in `styles.css` / `theme.css` are the deployed
-equivalents of these tokens — keep files referencing named tokens.
+```css
+--paper:#191a18; --card:#222320; --panel-2:#272824; --ink:#eae8e1;
+--ink-2:#aaa99f; --line:#3b3d36; --line-2:#3b3d36; --input-line:#707368;
+--navy:#9cbce2; --navy-2:#dceafa; --paper-title:#222320;
+--paper-title-fg:#eae8e1; --paper-shadow:#00000035; --paper-dot:#eae8e119;
+--ok:#95c4a0; --pending:#d9be80; --danger:#ee9690;
+```
 
 ## Typography
 
-- Display: Space Grotesk, weight 500–700, roman only
-- Body:    Inter, weight 400–600
-- Mono:    DM Mono, weight 400–500
-- Display tracking: -0.02em
-- Body size: 14–16px, line-height 1.5–1.65
+- Display: **Instrument Serif** 400, roman and italic; hero sizes clamp
+  (dashboard headings 15–24px; marketing hero up to clamp(57px,6.5vw,94px),
+  line-height ~1.03). Tracking -0.01em.
+- Body: **Geist** 400–600, 13–15px, line-height 1.5–1.65.
+- Mono: **Geist Mono** — every micro-label, meta line, tab label, chip,
+  count badge, statusbar. Microcopy is 9–11px, uppercase tracking
+  0.10–0.14em where it labels a group.
 
-## Spacing
+## Shape language (hard rules)
 
-8pt base scale (`--space: 8px`, `--gutter: 16px` in dashboard;
-Starlight defaults in docs). Named tokens only.
+1. `border-radius: 0` everywhere — no rounded cards, pills, or bubbles.
+   The only circles allowed are ≤10px status dots (size-1.5/size-2) and
+   the mascot avatar when masked as a real avatar.
+2. Shadows are hard offsets only: `2px 2px 0 var(--paper-shadow)` on
+   buttons/chips/cards and `3px 3px 0 var(--paper-shadow)` on
+   windows/dialogs. **No blur/glow/diffuse shadows, ever.**
+3. Buttons: `rounded-none`, h-8/9, `active:translate-y-px`. Primary =
+   `bg-[#0000a8] text-white border border-[#0000a8]
+   shadow-[2px_2px_0_var(--paper-shadow)] hover:bg-[#1c1cc8]`.
+   Secondary/ghost = border `--line`, paper bg, `hover:bg-[#e9e8df]`.
+4. Chips/badges: square, `text-[9–10px] font-mono uppercase`, 1px border,
+   tinted bg. Status colors: ok green, running navy, pending amber,
+   error red — same semantic map as `STATUS_CHIP_CLASSES`.
+5. Panels that feel like windows get a **titlebar**: mono 11px, min-h
+   ~31px, `bg-[#0000a8] text-white px-2`, left = icon + dotted/label,
+   right = optional "window marks" (three 14×13 beveled squares:
+   `bg-[#bdbdbd] border border-[#444] border-t-[#f5f5f5]
+   border-l-[#f5f5f5]` — first mark carries a 6px underscore rule,
+   second a small inner frame).
+6. Section content canvases may use the **dot grid**:
+   `background-image: radial-gradient(var(--paper-dot) .7px,
+   transparent .7px); background-size: 12px 12px`.
+7. **Statusbar** footers: mono ~9px row of square cells separated by 1px
+   border; cells carry terse facts ("3 agents", "1 token", counts).
+8. Numbered cards: cards in a grid may show a mono `01` `02` … index
+   top-right (icon top-left), like bezalel capability cards.
+9. Logo/mascot imagery: `image-rendering: pixelated` where it sits in
+   chrome/brand slots.
+10. Selection: `selection:bg-[#0000a8] selection:text-white`.
 
-## Motion
+## Layout grammar
 
-- Easings: `--ease-out cubic-bezier(0.16, 1, 0.3, 1)`
-- Reveal: none — app and docs render fully formed
-- Reduced-motion: opacity-only, ≤150ms (already enforced)
+- Dashboard keeps the Workbench three-pane arrangement (nav rail,
+  session list, timeline, workspace panel, composer) — same geometry,
+  bezalel surfaces: square, hairline `--line` borders, paper bg.
+- Section headings: left = serif `h2/h3`; right/above = mono 10px
+  quiet annotation ("7 capabilities · one token" style).
+- Compatibility-strip idiom: a flex row ruled top/bottom — mono uppercase
+  label, mono items, quiet trailing clause.
 
-## Microinteractions stance
+## Voice
 
-- Silent success; no celebratory toasts
-- Hover transitions ≤200ms, `transition-colors` on interactive rows/cards
-- Focus ring: 2px accent-2, 2px offset, instant (never animated)
+Terse mono microcopy; sentence-case UI prose; approval-gate copy stays
+unchanged and unhidden (approval gate is sacred).
 
-## CTA voice
+## What every surface MUST share
 
-- Primary: teal fill, black ink, 8–12px radius, semibold label
-- Secondary: transparent, 1px `--color-rule` border, ink label
+- Navy `#0000a8` as the sole accent; ≤5% of any viewport.
+- Cream `#f6f4ed` page field, `#fffef8` cards, hairline `#e0ded5` rules.
+- Instrument Serif display + Geist body + Geist Mono microcopy.
+- Zero radius, hard offset shadows, square chips, dot-grid canvas.
 
-## What pages MUST share
+## What surfaces MAY differ on
 
-- Accent teal and its ≤5% placement per viewport
-- Inter body + DM Mono code; Space Grotesk for display headings
-- Focus ring spec and CTA shape
-- Charcoal dark paper; docs additionally ship the light paper
-
-## What pages MAY differ on
-
-- Card/panel archetypes within the Workbench family
-- Aside/callout archetypes within the Long Document family
-- Density (dashboard is tighter than docs)
-
-## Exports
-
-### tokens.css
-
-```css
-:root {
-  --color-paper:      oklch(14% 0.010 260);
-  --color-paper-2:    oklch(18% 0.012 260);
-  --color-ink:        oklch(92% 0.010 240);
-  --color-ink-2:      oklch(65% 0.015 240);
-  --color-rule:       oklch(28% 0.015 260);
-  --color-accent:     oklch(60% 0.110 185);
-  --color-accent-2:   oklch(78% 0.120 180);
-  --color-focus:      oklch(78% 0.120 180);
-
-  --font-display: "Space Grotesk", sans-serif;
-  --font-body:    "Inter", sans-serif;
-  --font-mono:    "DM Mono", monospace;
-
-  --space-xs: 0.5rem; --space-sm: 1rem; --space-md: 1.5rem;
-  --space-lg: 2rem;   --space-xl: 3rem;
-
-  --ease-out:  cubic-bezier(0.16, 1, 0.3, 1);
-  --dur-short: 200ms;
-  --radius-card: 12px; --radius-input: 8px;
-}
-```
-
-## Workbench layout
-
-Devin-style three-pane agent workbench for the dashboard Tasks view
-(`apps/frontend/src/`). Other views keep working under the same slim top
-header (`h-14`): logo + Shiba, nav tabs, sandbox pill, connection,
-setup, docs.
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│ TOP HEADER (slim, h-14)                                      │
-├──────────┬────────────────────────────────┬──────────────────┤
-│ SESSIONS │  CONVERSATION TIMELINE         │  WORKSPACE PANEL │
-│ ~300px   │  · session header              │  ~400px, tabs    │
-│ search   │  · step feed (icon rail)       │  Runs|VM|Diff|   │
-│ +New task│  · inline approval cards       │  Approvals       │
-│ run rows │  · sticky TASK COMPOSER        │  collapsible→40px│
-└──────────┴────────────────────────────────┴──────────────────┘
-```
-
-### Panes
-
-- **Sessions sidebar (280px):** mono uppercase "SESSIONS" micro-label
-  + count, search input, "New task" primary teal CTA. Sessions grouped
-  "Active" (live chat + running/waiting runs pinned first) then
-  "Recent". Borderless rows: 6px status dot + 13px title (truncate)
-  + 11px mono meta line (repo · status · time-ago, tabular-nums).
-  Selected row: `#161a22` bg fill only — no border. Live row tints
-  title `--accent-light`. Footer: setup progress pill, Docs link,
-  truncated connection label with status dot. Below `lg` the sidebar
-  becomes a fixed left drawer (backdrop dim) opened from a sessions
-  button in the session header.
-- **Conversation timeline:** Devin-style step feed on a left icon
-  rail (Tailwind `before:` connector): 1px `--line` vertical line,
-  24px icon circles on `--panel`. Steps: "Ran <tool>" mono label
-  + status chip + expandable `<details>` output (mono, max-h-56
-  scroll). User messages stay right-aligned blue bubbles.
-  Waiting-approval steps also render an inline approval card
-  (amber `--pending` border, Approve `--ok` fill / Reject
-  `--danger` outline) — the approval gate is sacred: never
-  auto-approve, never hide.
-- **Workspace panel (~400px):** tab bar Runs | VM | Diff |
-  Approvals with mono count badges; controlled by app state so
-  session picks and Inspect-VM jump straight to the right tab.
-  Collapses to a 40px icon rail; below `lg` the expanded panel
-  becomes a fixed right drawer. Runs tab merges live tool runs
-  and retained runs with Select / Inspect VM / Reuse params /
-  Cancel actions; VM and Diff tabs read the merged run list.
-- **Task composer:** pinned at timeline bottom. Rounded-xl
-  `--panel` card, `--line` border. Auto-growing textarea (<=192px)
-  + config row (repo type=url required, branch, harness
-  select, PR checkbox, Clear ghost, Send primary teal — disabled
-  until repo + task are non-empty). Cmd+Enter submits.
-
-### Workbench rules
-
-- Accent teal stays ≤5% of viewport — rail icons, selected states,
-  primary CTAs only.
-- All surfaces from tokens: `--bg`, `--panel`, `--panel-elevated`,
-  `--line`, `--line-light`; ink `--text`/`--muted`; semantics
-  `--ok`, `--pending` (#c9a227 for approvals), `--danger`,
-  running blue #4f9cf0.
-- Status chips come from `statusChipClass` / `STATUS_CHIP_CLASSES` in `apps/frontend/src/ui-helpers.ts` (single source for every pane).
-- Density: 8pt spacing, radius 8–12px, `transition-colors` ≤200ms,
-  silent success (no toasts).
+- Which panels carry full window chrome (titlebar/marks/statusbar).
+- Dot-grid placement (hero canvases, dashboard stat wells, empty states).
+- Density: dashboard tighter than docs.

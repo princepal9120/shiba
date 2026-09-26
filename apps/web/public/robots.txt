@@ -1,5 +1,8 @@
 User-agent: *
 Allow: /
 Disallow: /api/
+Disallow: /app/
+Disallow: /agents/
+Disallow: /mcp/
 
 Sitemap: https://tryshiba.dev/sitemap.xml
