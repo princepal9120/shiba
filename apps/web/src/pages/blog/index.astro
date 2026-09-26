@@ -1,0 +1,121 @@
+---
+import MarketingPage from '../../layouts/MarketingPage.astro';
+import { CATEGORY_LABEL, PATTERN_LABEL, getPublishedPosts, readingTime } from '../../lib/journal';
+
+const posts = await getPublishedPosts();
+
+// Only surface categories that have at least one post. A filter chip that
+// leads to an empty page is a dead link, and the build's link check would
+// (correctly) fail on it.
+const CATEGORIES = (['guide', 'journal', 'note'] as const).filter((c) =>
+	posts.some((p) => p.data.category === c),
+);
+
+const fmt = (d: Date) =>
+	d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
+
+const collectionSchema = {
+	'@context': 'https://schema.org',
+	'@type': 'Blog',
+	name: 'Shiba Journal',
+	description:
+		'Guides and engineering notes on running approval-gated coding agents in your own Cloudflare account.',
+	url: 'https://tryshiba.dev/blog/',
+	blogPost: posts.map((p) => ({
+		'@type': 'BlogPosting',
+		headline: p.data.title,
+		url: 'https://tryshiba.dev/blog/' + p.id + '/',
+		datePublished: p.data.pubDate.toISOString(),
+	})),
+};
+---
+
+<MarketingPage
+	title="Journal — Shiba"
+	description="Guides and engineering notes on running approval-gated coding agents in your own Cloudflare account: credential boundaries, sandbox isolation, harness choice, and honest run evidence."
+	path="/blog/"
+	schema={collectionSchema}
+	breadcrumbs={[
+		{ name: 'Home', path: '/' },
+		{ name: 'Journal', path: '/blog/' },
+	]}
+>
+	<div class="shell">
+		<header class="blog-index-hero">
+			<div class="micro">Journal</div>
+			<h1>Notes on running coding agents you can actually inspect</h1>
+			<p class="blog-lede">
+				Shiba is an open-source, self-hosted coding coworker. It runs each task in an
+				isolated Cloudflare Sandbox container inside your own account, behind a human
+				approval gate. This journal is where the reasoning behind that design lives —
+				what the boundaries buy, what they cost, and what is not verified yet.
+			</p>
+			<ul class="blog-filters">
+				<li>
+					<a class="blog-filter" href="/blog/" aria-current="true">
+						<span>All</span>
+						<span class="blog-filter-count">{posts.length}</span>
+					</a>
+				</li>
+				{CATEGORIES.map((c) => (
+					<li>
+						<a class="blog-filter" href={`/blog/category/${c}/`}>
+							<span>{CATEGORY_LABEL[c]}</span>
+							<span class="blog-filter-count">
+								{posts.filter((p) => p.data.category === c).length}
+							</span>
+						</a>
+					</li>
+				))}
+				<li>
+					<a class="blog-filter" href="/blog/rss.xml">
+						<span>RSS</span>
+					</a>
+				</li>
+			</ul>
+		</header>
+
+		{posts.length === 0 ? (
+			<div class="blog-empty">
+				<h2>No posts published yet</h2>
+				<p>
+					The first entries are being written. In the meantime, the technical
+					reference covers the same ground with more precision.
+				</p>
+				<a class="button" href="/docs/overview/">
+					<span>Read the docs</span>
+					<span aria-hidden="true">→</span>
+				</a>
+			</div>
+		) : (
+			<ul class="post-list">
+				{posts.map((post) => (
+					<li class="post-row">
+						<a class="post-card" href={`/blog/${post.id}/`}>
+							<span class="post-card-rail">
+								<span class="post-card-date">
+									<time datetime={post.data.pubDate.toISOString().slice(0, 10)}>
+										{fmt(post.data.pubDate)}
+									</time>
+								</span>
+								<span class="post-card-read">{readingTime(post.body)} min read</span>
+							</span>
+							<span>
+								<span class="post-card-title">{post.data.title}</span>
+								<span class="post-card-summary">{post.data.summary}</span>
+								<span class="post-card-tags">
+									<span class="chip chip-accent">{CATEGORY_LABEL[post.data.category]}</span>
+									<span class="chip">{PATTERN_LABEL[post.data.pattern]}</span>
+								</span>
+								<span class="post-card-more">
+									<span>Read</span>
+									<span aria-hidden="true">→</span>
+								</span>
+							</span>
+						</a>
+					</li>
+				))}
+			</ul>
+		)}
+	</div>
+</MarketingPage>

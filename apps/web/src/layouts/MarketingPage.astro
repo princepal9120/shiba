@@ -1,5 +1,9 @@
 ---
 import '../styles/tailwind.css';
+// design.md tokens (--paper, --navy, --ink, …) are declared in this layout's
+// scoped <style>, so descendants need the shared sheet imported here rather
+// than per-page — a page-level import would compile but resolve to no tokens.
+import '../styles/blog.css';
 
 interface Props {
   title: string;
@@ -10,6 +14,8 @@ interface Props {
   modifiedTime?: string;
   schema?: Record<string, unknown> | Array<Record<string, unknown>>;
   breadcrumbs?: Array<{ name: string; path: string }>;
+  /** Overrides the default Open Graph card for this page. */
+  ogImage?: string;
 }
 const {
   title,
@@ -20,9 +26,10 @@ const {
   modifiedTime,
   schema,
   breadcrumbs = [{ name: 'Home', path: '/' }],
+  ogImage = '/assets/og/shiba-og.png',
 } = Astro.props;
 const canonical = new URL(path, 'https://tryshiba.dev').href;
-const ogImage = 'https://tryshiba.dev/assets/mascot/pet-logo.png';
+const ogImageUrl = new URL(ogImage, 'https://tryshiba.dev').href;
 
 const defaultSchemas: Array<Record<string, unknown>> = [
   {
@@ -30,7 +37,7 @@ const defaultSchemas: Array<Record<string, unknown>> = [
     '@type': 'Organization',
     name: 'Shiba',
     url: 'https://tryshiba.dev/',
-    logo: ogImage,
+    logo: ogImageUrl,
     sameAs: ['https://github.com/princepal9120/shiba', 'https://x.com/prince_twets'],
   },
 ];
@@ -73,8 +80,10 @@ const finalSchemas = schema
     <meta property="og:url" content={canonical} />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
-    <meta property="og:image" content={ogImage} />
-    <meta property="og:image:alt" content="Shiba — Self-hosted AI software engineer on Cloudflare" />
+    <meta property="og:image" content={ogImageUrl} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Shiba — It asks before it writes code. A self-hosted AI software engineer on Cloudflare." />
     {publishedTime && <meta property="article:published_time" content={publishedTime} />}
     {modifiedTime && <meta property="article:modified_time" content={modifiedTime} />}
 
@@ -84,7 +93,7 @@ const finalSchemas = schema
     <meta name="twitter:creator" content="@prince_twets" />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
-    <meta name="twitter:image" content={ogImage} />
+    <meta name="twitter:image" content={ogImageUrl} />
 
     <!-- Preconnect Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -120,6 +129,7 @@ const finalSchemas = schema
           <div class="nav-links">
             <a href="/why-shiba/" class={path === '/why-shiba/' ? 'nav-link nav-active' : 'nav-link'}>Why Shiba</a>
             <a href="/#harnesses" class="nav-link">Agents</a>
+            <a href="/blog/" class={path.startsWith('/blog') ? 'nav-link nav-active' : 'nav-link'}>Journal</a>
             <a href="/docs/overview/" class={path.startsWith('/docs') ? 'nav-link nav-active' : 'nav-link'}>Docs</a>
             <a href="/docs/architecture/" class="nav-link">Architecture</a>
             <a href="/docs/security/" class="nav-link">Security</a>
@@ -168,6 +178,7 @@ const finalSchemas = schema
             <div class="footer-h text-[var(--ink)]">Product &amp; Story</div>
             <ul class="space-y-2 text-[var(--ink-2)]">
               <li><a href="/why-shiba/" class="hover:text-[var(--navy)] transition-colors">Why I'm building Shiba</a></li>
+              <li><a href="/blog/" class="hover:text-[var(--navy)] transition-colors">Journal</a></li>
               <li><a href="/waitlist/" class="hover:text-[var(--navy)] transition-colors">Join Waitlist &amp; Contribute</a></li>
               <li><a href="https://github.com/princepal9120/shiba" target="_blank" rel="noopener noreferrer" class="hover:text-[var(--navy)] transition-colors">GitHub Repository ↗</a></li>
             </ul>
@@ -373,11 +384,26 @@ const finalSchemas = schema
     .button-outline:hover { background: var(--panel-2); color: var(--navy); border-color: var(--navy-2); }
   }
   @media (max-width: 960px) {
-    .header-inner { display:flex; align-items:stretch; padding-block:12px; flex-direction:column; gap:10px; }
-    .brand-group { justify-content:space-between; }
-    .site-header nav { margin-left:0; width:100%; display:grid; gap:10px; }
+    /* Two compact rows: brand + actions, then the scrolling link row.
+       .nav-actions is a child of <nav>, so lift it onto the header grid to
+       share the brand's row; order keeps links after the actions visually. */
+    .header-inner { display:grid; grid-template-columns:minmax(0,1fr) auto; grid-template-areas:'brand actions' 'links links'; align-items:center; padding-block:10px; gap:8px 12px; }
+    .brand-group { grid-area:brand; justify-content:flex-start; width:100%; min-width:0; }
+    .site-header nav { display:contents; }
+    .nav-actions { grid-area:actions; justify-content:flex-end; align-self:center; }
     .nav-links { justify-content:flex-start; width:100%; overflow-x:auto; padding-bottom:3px; scrollbar-width:thin; }
-    .nav-actions { justify-content:space-between; }
+    .nav-links { grid-area:links; }
+  }
+  /* Below 400px the two actions cannot share a row with the wordmark at 44px
+     touch targets, so the brand row drops the wordmark and keeps the mark. */
+  @media (max-width: 400px) {
+    .wordmark-name { font-size: 21px; }
+    .nav-cta { padding: 0 10px; }
+  }
+  /* Nav links need 330px of natural width. Below that they scroll, so give the
+     row a fade mask instead of a hard cut through "Security". */
+  @media (max-width: 370px) {
+    .nav-links { -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 28px), transparent 100%); mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 28px), transparent 100%); }
   }
   @media (pointer: coarse) {
     .nav-link, .nav-ghost, .nav-theme-toggle, .nav-cta, .button,

@@ -1,7 +1,7 @@
 ---
 import MarketingPage from '../layouts/MarketingPage.astro';
 
-const description = 'Shiba is an open-source, self-hosted AI software engineer. Give it a coding task, approve the exact work, and follow progress in isolated Cloudflare Sandboxes.';
+const description = 'A self-hosted AI engineer that asks before it writes code. Runs in your Cloudflare account, on Claude Code, Codex, OpenCode, or Devin.';
 const schema = {
   '@context': 'https://schema.org',
   '@type': 'SoftwareApplication',
@@ -28,17 +28,16 @@ const capabilities = [
   <section class="shell home-hero" aria-labelledby="home-title">
     <div class="hero-copy">
       <p class="eyebrow">OPEN-SOURCE DEVIN CLOUD ALTERNATIVE</p>
-      <h1 id="home-title">Your AI software engineer.<br /><em>On your terms.</em></h1>
-      <p class="hero-lead">Give Shiba a repository and a task. When deployed, review the exact plan before a sandbox starts by default, then follow work in your Cloudflare account.</p>
+      <h1 id="home-title">It asks before<br /><em>it writes code.</em></h1>
+      <p class="hero-lead">An AI engineer that runs in your own Cloudflare account, shows you the exact command it wants to run, and waits for your yes. Your keys stay outside the sandbox. Your repo, your models, your rules.</p>
       <div class="hero-actions">
-        <a class="button" href="/waitlist/">Join the build <span aria-hidden="true">↗</span></a>
-        <a class="button button-outline" href="/docs/getting-started/">Read the docs</a>
+        <a class="button" href="/docs/getting-started/">Run it on your repo <span aria-hidden="true">↗</span></a>
       </div>
-      <p class="hero-note">No hosted black box. By default, no sandbox starts before your approval.</p>
+      <p class="hero-note">No hosted black box. No sandbox starts before your approval.</p>
       <ul class="hero-proof">
-        <li class="hero-proof-item"><span class="hero-proof-label">DEPLOYED BY YOU</span><span class="hero-proof-detail">Runs in your Cloudflare account</span></li>
-        <li class="hero-proof-item"><span class="hero-proof-label">OPEN SOURCE</span><span class="hero-proof-detail">AGPL-3.0-only</span></li>
-        <li class="hero-proof-item"><span class="hero-proof-label">KEYS HELD BACK</span><span class="hero-proof-detail">Provider keys stay outside the sandbox</span></li>
+        <li class="hero-proof-item"><span class="hero-proof-label">0</span><span class="hero-proof-detail">servers you don't control. It runs in your Cloudflare account.</span></li>
+        <li class="hero-proof-item"><span class="hero-proof-label">1</span><span class="hero-proof-detail">approval before any code runs. Reject and nothing executes.</span></li>
+        <li class="hero-proof-item"><span class="hero-proof-label">4</span><span class="hero-proof-detail">agents to choose from: Claude Code, Codex, OpenCode, Devin.</span></li>
       </ul>
     </div>
 
@@ -178,7 +177,7 @@ const capabilities = [
 
   <section class="shell home-section" aria-labelledby="why-title">
     <div class="section-head"><h2 id="why-title">The agent does the work.<br /><em>You keep the keys.</em></h2><p class="micro">ONE DEPLOYMENT · ONE CONTROL PLANE</p></div>
-    <div class="section-copy"><p>AI coding tools are most useful when you can trust the boundary around them. Shiba runs in your Cloudflare account, requires human approval before sandbox execution by default, and shows resulting changes instead of asking you to take completion on faith.</p><a class="text-link" href="/why-shiba/">Why we built it <span aria-hidden="true">↗</span></a></div>
+    <div class="section-copy"><p>An AI coding tool is worth exactly as much as the boundary around it. Shiba runs in your Cloudflare account, requires human approval before sandbox execution by default, and shows resulting changes instead of asking you to take completion on faith.</p><a class="text-link" href="/why-shiba/">Why we built it <span aria-hidden="true">↗</span></a></div>
   </section>
 
   <section class="shell home-section capabilities" aria-labelledby="capabilities-title">
@@ -243,10 +242,12 @@ const capabilities = [
   /* Proof row: ruled strip, matching the compatibility-strip idiom in design.md.
      Mono label carries the fact, Geist carries the explanation. */
   .hero-proof { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); margin:var(--hero-gap-lg) 0 0; padding:0; list-style:none; border-top:1px solid var(--line); }
-  .hero-proof-item { display:flex; flex-direction:column; gap:6px; padding:14px 16px 0 0; }
+  .hero-proof-item { display:flex; flex-direction:column; gap:6px; padding:16px 16px 0 0; }
   .hero-proof-item + .hero-proof-item { padding-left:16px; border-left:1px solid var(--line); }
   .hero-proof-item:last-child { padding-right:0; }
-  .hero-proof-label { font:9px 'Geist Mono',monospace; text-transform:uppercase; letter-spacing:.14em; color:var(--navy); }
+  /* The label IS the number (0 / 1 / 4), so it takes display type rather than
+     the 9px mono caption the label idiom uses for words. */
+  .hero-proof-label { font-family:'Instrument Serif',Georgia,serif; font-size:44px; line-height:.9; color:var(--navy); }
   .hero-proof-detail { font-size:12px; line-height:1.45; color:var(--ink-2); }
   .work-window { border:1px solid var(--input-line); background:var(--panel-2); padding:4px; box-shadow:6px 6px 0 var(--paper-shadow); transition:transform 220ms ease, box-shadow 220ms ease; animation:hero-arrive 680ms 100ms cubic-bezier(.2,.7,.2,1) both; }
   .work-window:focus-within { transform:translateY(-3px); box-shadow:8px 9px 0 var(--paper-shadow); }
@@ -451,7 +452,7 @@ const capabilities = [
   @media(max-width:980px) { .approval-art { height:160px; } }
   @media(max-width:420px) { .approval-art { height:132px; } }
   @media(max-width:760px) { .home-hero { grid-template-columns:minmax(0,1fr); min-height:0; padding-block:48px 60px; } .work-window { width:100%; } .home-section { padding-top:75px; } .section-head { align-items:start; flex-direction:column; gap:10px; } .section-copy { grid-template-columns:1fr; gap:18px; } .capability-grid { grid-template-columns:repeat(2,1fr); } .steps-grid { grid-template-columns:1fr; } .closing { flex-direction:column; align-items:start; margin-top:75px; } }
-  @media(max-width:560px) { .hero-proof { grid-template-columns:minmax(0,1fr); } .hero-proof-item { flex-direction:row; align-items:baseline; gap:10px; padding:10px 0 0; border-left:0; } .hero-proof-item + .hero-proof-item { padding-left:0; border-top:1px solid var(--line); } .hero-proof-label { flex:none; min-width:112px; } }
+  @media(max-width:560px) { .hero-proof { grid-template-columns:minmax(0,1fr); } .hero-proof-item { flex-direction:row; align-items:baseline; gap:12px; padding:10px 0 0; border-left:0; } .hero-proof-item + .hero-proof-item { padding-left:0; border-top:1px solid var(--line); } .hero-proof-label { flex:none; min-width:34px; font-size:34px; } }
   @media(max-width:500px) { .channels-grid { grid-template-columns:1fr; } .capability-grid { grid-template-columns:1fr; } .capability-card { min-height:0; } .hero-actions .button { width:100%; } .window-status { flex-wrap:wrap; } .closing { padding:22px; } .closing-actions { width:100%; } .closing-actions .button { width:100%; } }
 
   .channels-section { padding-top:85px; }

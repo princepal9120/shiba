@@ -1,0 +1,77 @@
+---
+import type { GetStaticPaths } from 'astro';
+import MarketingPage from '../../../layouts/MarketingPage.astro';
+import { CATEGORY_LABEL, PATTERN_LABEL, getPublishedPosts, readingTime } from '../../../lib/journal';
+
+export const getStaticPaths = (async () => {
+	const posts = await getPublishedPosts();
+	const categories = [...new Set(posts.map((p) => p.data.category))];
+	return categories.map((category) => ({
+		params: { category },
+		props: { category, posts: posts.filter((p) => p.data.category === category) },
+	}));
+}) satisfies GetStaticPaths;
+
+interface Props {
+	category: 'guide' | 'journal' | 'note';
+	posts: Awaited<ReturnType<typeof getPublishedPosts>>;
+}
+
+const { category, posts } = Astro.props;
+const label = CATEGORY_LABEL[category];
+const path = `/blog/category/${category}/`;
+
+const fmt = (d: Date) =>
+	d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
+---
+
+<MarketingPage
+	title={`${label} — Shiba Journal`}
+	description={`Every ${label.toLowerCase()} post from the Shiba journal, in one list.`}
+	path={path}
+	breadcrumbs={[
+		{ name: 'Home', path: '/' },
+		{ name: 'Journal', path: '/blog/' },
+		{ name: label, path },
+	]}
+>
+	<div class="shell">
+		<header class="blog-index-hero">
+			<div class="micro">Journal / {label}</div>
+			<h1>{label}</h1>
+			<p class="blog-lede">
+				{posts.length} {posts.length === 1 ? 'post' : 'posts'} in this category.
+				<a href="/blog/">Back to all posts</a>.
+			</p>
+		</header>
+
+		<ul class="post-list">
+			{posts.map((post) => (
+				<li class="post-row">
+					<a class="post-card" href={`/blog/${post.id}/`}>
+						<span class="post-card-rail">
+							<span class="post-card-date">
+								<time datetime={post.data.pubDate.toISOString().slice(0, 10)}>
+									{fmt(post.data.pubDate)}
+								</time>
+							</span>
+							<span class="post-card-read">{readingTime(post.body)} min read</span>
+						</span>
+						<span>
+							<span class="post-card-title">{post.data.title}</span>
+							<span class="post-card-summary">{post.data.summary}</span>
+							<span class="post-card-tags">
+								<span class="chip chip-accent">{CATEGORY_LABEL[post.data.category]}</span>
+								<span class="chip">{PATTERN_LABEL[post.data.pattern]}</span>
+							</span>
+							<span class="post-card-more">
+								<span>Read</span>
+								<span aria-hidden="true">→</span>
+							</span>
+						</span>
+					</a>
+				</li>
+			))}
+		</ul>
+	</div>
+</MarketingPage>

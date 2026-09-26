@@ -1,0 +1,177 @@
+---
+import MarketingPage from './MarketingPage.astro';
+import {
+	CATEGORY_LABEL,
+	PATTERN_LABEL,
+	type JournalPost,
+	type RenderedPost,
+} from '../lib/journal';
+
+interface Props {
+	post: RenderedPost;
+	/** ASCII art, already trimmed. Omitted posts render an explicit notice. */
+	banner?: string;
+	/** Older and newer posts, for the continue-reading rail. */
+	prev?: { path: string; title: string } | null;
+	next?: { path: string; title: string } | null;
+}
+
+const { post, banner, prev, next } = Astro.props;
+const { Content, toc, minutes } = post;
+const data = post.post.data;
+const { title, description, pubDate, updatedDate } = data;
+// Destructuring the union-narrowed literal fields directly widens to `any`
+// under Astro's template type-checker; binding them through the entry type
+// keeps the index signatures on CATEGORY_LABEL/PATTERN_LABEL precise.
+const category: JournalPost['data']['category'] = data.category;
+const pattern: JournalPost['data']['pattern'] = data.pattern;
+const path = post.path;
+
+const fmt = (d: Date) =>
+	d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
+
+const articleSchema = {
+	'@context': 'https://schema.org',
+	'@type': 'TechArticle',
+	headline: title,
+	description,
+	author: { '@type': 'Person', name: 'Prince Pal', url: 'https://x.com/prince_twets' },
+	publisher: {
+		'@type': 'Organization',
+		name: 'Shiba',
+		logo: { '@type': 'ImageObject', url: 'https://tryshiba.dev/assets/mascot/pet-logo.png' },
+	},
+	datePublished: pubDate.toISOString(),
+	...(updatedDate ? { dateModified: updatedDate.toISOString() } : {}),
+	mainEntityOfPage: 'https://tryshiba.dev' + path,
+	image: 'https://tryshiba.dev/assets/mascot/pet-logo.png',
+	articleSection: CATEGORY_LABEL[category],
+};
+---
+
+<MarketingPage
+	title={`${title} — Shiba`}
+	description={description}
+	path={path}
+	type="article"
+	publishedTime={pubDate.toISOString()}
+	modifiedTime={updatedDate?.toISOString()}
+	schema={articleSchema}
+	breadcrumbs={[
+		{ name: 'Home', path: '/' },
+		{ name: 'Journal', path: '/blog/' },
+		{ name: title, path },
+	]}
+>
+	<article class="article-shell">
+		<div class="shell">
+			<header class="article-head">
+				<div class="article-kicker">
+					<span class="chip chip-accent">{CATEGORY_LABEL[category]}</span>
+					<span class="chip" title="The narrative structure this post uses">{PATTERN_LABEL[pattern]}</span>
+				</div>
+				<h1 class="article-title">{title}</h1>
+				<p class="article-dek">{description}</p>
+				<div class="byline">
+					<span class="byline-author">Prince Pal</span>
+					<span class="byline-sep" aria-hidden="true">/</span>
+					<span class="byline-date">
+						<time datetime={pubDate.toISOString().slice(0, 10)}>{fmt(pubDate)}</time>
+					</span>
+					<span class="byline-sep" aria-hidden="true">/</span>
+					<span>{minutes} min read</span>
+					{updatedDate && (
+						<>
+							<span class="byline-sep" aria-hidden="true">/</span>
+							<span>
+								Updated{' '}
+								<time datetime={updatedDate.toISOString().slice(0, 10)}>{fmt(updatedDate)}</time>
+							</span>
+						</>
+					)}
+				</div>
+			</header>
+
+			{banner ? (
+				<figure class="ascii-banner">
+					<figcaption class="ascii-banner-bar">
+						<span class="ascii-banner-dot" aria-hidden="true"></span>
+						<span>ascii/{post.post.id}.txt</span>
+					</figcaption>
+					<pre aria-label={`ASCII banner for ${title}`}>{banner}</pre>
+				</figure>
+			) : (
+				<p class="callout">
+					<span class="callout-label">Missing asset</span>
+					No ASCII banner was found for this post. That is a build gap, not a
+					statement about the product.
+				</p>
+			)}
+
+			<div class="article-body">
+				{toc.length > 0 && (
+					<aside class="article-toc-col">
+						<nav class="article-toc" aria-label="On this page">
+							<h2>On this page</h2>
+							<ol>
+								{toc.map((item) => (
+									<li>
+										<a href={`#${item.slug}`} data-depth={item.depth}>
+											{item.text}
+										</a>
+									</li>
+								))}
+							</ol>
+							<p class="article-toc-foot">
+								<a href="/blog/rss.xml">Subscribe via RSS</a>
+							</p>
+						</nav>
+					</aside>
+				)}
+
+				<div class="prose">
+					<Content />
+				</div>
+			</div>
+
+			<footer class="article-foot">
+				<div class="article-foot-cta">
+					<a class="button" href="/docs/overview/">
+						<span>Read the docs</span>
+						<span aria-hidden="true">→</span>
+					</a>
+					<a class="button button-outline" href="/waitlist/">
+						<span>Join the build</span>
+					</a>
+				</div>
+				<p class="article-foot-note">
+					Shiba is a local prototype. Typecheck, lint, tests, and build pass
+					locally; no live end-to-end cloud run is recorded yet. See
+					<a href="/docs/readiness/">Readiness</a> for the acceptance bar and
+					<a href="/docs/architecture/">Architecture</a> for how a run is gated.
+				</p>
+			</footer>
+
+			{(prev || next) && (
+				<ul class="article-next">
+					{prev && (
+						<li class="article-next-item">
+							<a class="article-next-link" href={prev.path} rel="prev">
+								<span class="article-next-label">← Older</span>
+								<span class="article-next-title">{prev.title}</span>
+							</a>
+						</li>
+					)}
+					{next && (
+						<li class="article-next-item">
+								<a class="article-next-link" href={next.path} rel="next">
+								<span class="article-next-label">Newer →</span>
+								<span class="article-next-title">{next.title}</span>
+							</a>
+						</li>
+					)}
+				</ul>
+			)}
+		</div>
+	</article>
+</MarketingPage>

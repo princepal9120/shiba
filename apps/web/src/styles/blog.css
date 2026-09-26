@@ -1,0 +1,679 @@
+/* Journal (/blog) styles. design.md is canonical: retro paper-OS, cream paper +
+   navy accent, border-radius 0, hard offset shadows, Instrument Serif display +
+   Geist body + Geist Mono micro-labels. No new tokens are introduced here —
+   every value is read from theme.css. */
+
+/* ---------- index: post list ---------- */
+
+.blog-index-hero {
+	padding-block: clamp(48px, 7vw, 92px) clamp(28px, 4vw, 48px);
+	border-bottom: 1px solid var(--line);
+}
+
+.blog-lede {
+	font-size: 15px;
+	line-height: 1.65;
+	max-width: 62ch;
+	color: var(--ink-2);
+	margin-top: 18px;
+	text-wrap: pretty;
+}
+
+.blog-filters {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-top: 28px;
+	padding: 0;
+	list-style: none;
+}
+
+/* Square chip: 1px border, mono 10px uppercase, no radius. Same idiom as the
+   capability chips on the landing page. */
+.blog-filter {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	height: 28px;
+	padding: 0 10px;
+	border: 1px solid var(--line-2);
+	background: var(--card);
+	color: var(--ink-2);
+	font-family: 'Geist Mono', monospace;
+	font-size: 10px;
+	text-transform: uppercase;
+	letter-spacing: 0.12em;
+	text-decoration: none;
+	box-shadow: 2px 2px 0 var(--paper-shadow);
+}
+
+.blog-filter-count {
+	font-variant-numeric: tabular-nums;
+	color: var(--navy);
+}
+
+.blog-filter[aria-current='true'] {
+	border-color: var(--navy);
+	background: var(--navy);
+	color: #fff;
+}
+
+html[data-theme='dark'] .blog-filter[aria-current='true'] {
+	color: #152335;
+}
+
+.blog-filter[aria-current='true'] .blog-filter-count {
+	color: inherit;
+}
+
+.post-list {
+	display: grid;
+	gap: 0;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	border-top: 1px solid var(--line);
+}
+
+.post-row {
+	border-bottom: 1px solid var(--line);
+}
+
+.post-card {
+	display: grid;
+	/* date rail | body — the rail keeps a scannable left edge like the docs
+	   sidebar without stealing measure from the summary. */
+	grid-template-columns: 8.5rem minmax(0, 1fr);
+	gap: 0 28px;
+	padding: 26px 0 28px;
+	text-decoration: none;
+	color: inherit;
+	transition: background 140ms ease;
+}
+
+.post-card-rail {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	font-family: 'Geist Mono', monospace;
+	font-size: 10px;
+	text-transform: uppercase;
+	letter-spacing: 0.12em;
+	color: var(--ink-2);
+	padding-top: 4px;
+}
+
+.post-card-date {
+	font-variant-numeric: tabular-nums;
+	color: var(--ink-2);
+}
+
+.post-card-read {
+	color: var(--ink-2);
+	opacity: 0.75;
+}
+
+.post-card-title {
+	font-family: 'Instrument Serif', Georgia, serif;
+	font-weight: 400;
+	font-size: clamp(22px, 2.4vw, 30px);
+	line-height: 1.12;
+	letter-spacing: -0.01em;
+	color: var(--ink);
+	text-wrap: balance;
+}
+
+.post-card-summary {
+	margin-top: 9px;
+	font-size: 13.5px;
+	line-height: 1.6;
+	max-width: 68ch;
+	color: var(--ink-2);
+	text-wrap: pretty;
+}
+
+.post-card-tags {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	margin-top: 14px;
+}
+
+/* Category chip. The category is the one navigational fact, so it carries the
+   accent; the pattern chip stays neutral because it is metadata, not a filter. */
+.chip {
+	display: inline-flex;
+	align-items: center;
+	height: 20px;
+	padding: 0 7px;
+	border: 1px solid var(--line-2);
+	background: var(--panel-2);
+	font-family: 'Geist Mono', monospace;
+	font-size: 9px;
+	text-transform: uppercase;
+	letter-spacing: 0.14em;
+	color: var(--ink-2);
+}
+
+.chip-accent {
+	border-color: var(--navy);
+	color: var(--navy);
+	background: transparent;
+}
+
+.post-card-more {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 14px;
+	font-family: 'Geist Mono', monospace;
+	font-size: 10px;
+	text-transform: uppercase;
+	letter-spacing: 0.12em;
+	color: var(--navy);
+}
+
+@media (hover: hover) and (pointer: fine) {
+	.post-card:hover {
+		background: var(--panel-2);
+	}
+	.post-card:hover .post-card-title {
+		color: var(--navy);
+	}
+}
+
+@media (max-width: 720px) {
+	.post-card {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 12px;
+	}
+	.post-card-rail {
+		flex-direction: row;
+		align-items: baseline;
+		gap: 12px;
+		padding-top: 0;
+	}
+}
+
+/* ---------- article ---------- */
+
+.article-shell {
+	padding-block: clamp(40px, 6vw, 72px) 0;
+}
+
+.article-head {
+	max-width: 46rem;
+}
+
+.article-kicker {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 20px;
+}
+
+.article-title {
+	font-size: clamp(34px, 4.6vw, 56px);
+	line-height: 1.05;
+	letter-spacing: -0.01em;
+	color: var(--ink);
+	text-wrap: balance;
+}
+
+.article-dek {
+	margin-top: 18px;
+	font-size: 15px;
+	line-height: 1.65;
+	max-width: 60ch;
+	color: var(--ink-2);
+	text-wrap: pretty;
+}
+
+.byline {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px 14px;
+	margin-top: 24px;
+	padding: 10px 0;
+	border-top: 1px solid var(--line);
+	border-bottom: 1px solid var(--line);
+	font-family: 'Geist Mono', monospace;
+	font-size: 10px;
+	text-transform: uppercase;
+	letter-spacing: 0.12em;
+	color: var(--ink-2);
+}
+
+.byline-author {
+	color: var(--ink);
+}
+
+.byline-sep {
+	color: var(--line-2);
+}
+
+.byline-date {
+	font-variant-numeric: tabular-nums;
+}
+
+/* ASCII banner. Rendered as text, not an image, so it stays legible at any zoom
+   and inherits the theme. Overflow scrolls rather than wrapping — wrapping an
+   ASCII figure destroys it. */
+.ascii-banner {
+	margin: 28px 0 0;
+	border: 1px solid var(--line-2);
+	background: var(--card);
+	box-shadow: 3px 3px 0 var(--paper-shadow);
+}
+
+.ascii-banner-bar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 28px;
+	padding: 0 10px;
+	border-bottom: 1px solid var(--line-2);
+	font-family: 'Geist Mono', monospace;
+	font-size: 9px;
+	text-transform: uppercase;
+	letter-spacing: 0.14em;
+	color: var(--ink-2);
+}
+
+.ascii-banner-dot {
+	width: 6px;
+	height: 6px;
+	flex: none;
+	background: var(--navy);
+}
+
+.ascii-banner pre {
+	margin: 0;
+	padding: 16px 14px;
+	overflow-x: auto;
+	font-family: 'Geist Mono', ui-monospace, monospace;
+	font-size: 9px;
+	line-height: 1.25;
+	color: var(--navy);
+	background: transparent;
+}
+
+.ascii-banner-missing {
+	padding: 16px 14px;
+	font-family: 'Geist Mono', monospace;
+	font-size: 10px;
+	color: var(--ink-2);
+}
+
+/* Article body: a two-column measure on wide screens so the TOC sits beside the
+   prose rather than pushing it down. Single column below 62rem. */
+.article-body {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: 40px;
+	margin-top: 44px;
+}
+
+@media (min-width: 62rem) {
+	.article-body {
+		grid-template-columns: 15rem minmax(0, 1fr);
+		gap: 56px;
+		align-items: start;
+	}
+
+	.article-toc-col {
+		position: sticky;
+		top: 78px;
+	}
+}
+
+.article-toc {
+	font-family: 'Geist Mono', monospace;
+	font-size: 10px;
+	line-height: 1.5;
+}
+
+.article-toc h2 {
+	font-family: 'Geist Mono', monospace;
+	font-size: 9px;
+	text-transform: uppercase;
+	letter-spacing: 0.14em;
+	color: var(--ink-2);
+	font-weight: 500;
+	margin: 0 0 10px;
+}
+
+.article-toc ol {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	border-left: 1px solid var(--line);
+}
+
+.article-toc li {
+	margin: 0;
+}
+
+.article-toc a {
+	display: block;
+	padding: 5px 0 5px 12px;
+	color: var(--ink-2);
+	text-decoration: none;
+	border-left: 2px solid transparent;
+	margin-left: -1px;
+}
+
+.article-toc a[data-depth='3'] {
+	padding-left: 24px;
+	color: var(--ink-2);
+	opacity: 0.8;
+}
+
+@media (hover: hover) and (pointer: fine) {
+	.article-toc a:hover {
+		color: var(--navy);
+		border-left-color: var(--navy);
+	}
+}
+
+.article-toc-foot {
+	margin-top: 18px;
+	padding-top: 12px;
+	border-top: 1px solid var(--line);
+	color: var(--ink-2);
+}
+
+.article-toc-foot a {
+	display: inline;
+	padding: 0;
+	border: 0;
+	margin: 0;
+	color: var(--navy);
+}
+
+/* Prose. Element-level rules only — no utility soup in the markdown output. */
+.prose {
+	max-width: 42rem;
+}
+
+.prose > * + * {
+	margin-top: 1.15em;
+}
+
+.prose h2 {
+	font-family: 'Instrument Serif', Georgia, serif;
+	font-size: clamp(24px, 2.6vw, 32px);
+	line-height: 1.12;
+	letter-spacing: -0.01em;
+	color: var(--ink);
+	margin-top: 2.2em;
+	margin-bottom: 0;
+	padding-top: 0.9em;
+	border-top: 1px solid var(--line);
+	text-wrap: balance;
+	scroll-margin-top: 84px;
+}
+
+.prose h3 {
+	font-family: 'Instrument Serif', Georgia, serif;
+	font-size: clamp(19px, 2vw, 23px);
+	line-height: 1.2;
+	color: var(--ink);
+	margin-top: 1.8em;
+	margin-bottom: 0;
+	text-wrap: balance;
+	scroll-margin-top: 84px;
+}
+
+.prose h2:first-child,
+.prose h3:first-child {
+	margin-top: 0;
+}
+
+.prose p,
+.prose li {
+	font-size: 15px;
+	line-height: 1.68;
+	color: var(--ink-2);
+	text-wrap: pretty;
+}
+
+.prose strong {
+	color: var(--ink);
+	font-weight: 600;
+}
+
+.prose em {
+	color: var(--ink);
+}
+
+.prose a {
+	color: var(--navy);
+	text-decoration: underline;
+	text-underline-offset: 3px;
+	text-decoration-thickness: 1px;
+}
+
+.prose ul,
+.prose ol {
+	margin-left: 0;
+	padding-left: 1.15em;
+}
+
+.prose li + li {
+	margin-top: 0.45em;
+}
+
+.prose li::marker {
+	color: var(--navy);
+}
+
+.prose blockquote {
+	margin: 1.6em 0;
+	padding: 2px 0 2px 18px;
+	border-left: 3px solid var(--navy);
+	font-family: 'Instrument Serif', Georgia, serif;
+	font-size: 19px;
+	line-height: 1.4;
+	color: var(--ink);
+}
+
+.prose blockquote p {
+	font-family: inherit;
+	font-size: inherit;
+	line-height: inherit;
+	color: inherit;
+}
+
+.prose code {
+	font-family: 'Geist Mono', monospace;
+	font-size: 0.86em;
+	background: var(--panel-2);
+	border: 1px solid var(--line);
+	padding: 1px 4px;
+	color: var(--ink);
+}
+
+.prose pre {
+	margin: 1.5em 0;
+	padding: 14px 16px;
+	overflow-x: auto;
+	border: 1px solid var(--line-2);
+	background: var(--card);
+	box-shadow: 2px 2px 0 var(--paper-shadow);
+}
+
+.prose pre code {
+	background: transparent;
+	border: 0;
+	padding: 0;
+	font-size: 12px;
+	line-height: 1.6;
+	color: var(--ink);
+}
+
+.prose table {
+	width: 100%;
+	border-collapse: collapse;
+	margin: 1.5em 0;
+	font-size: 13px;
+}
+
+.prose th,
+.prose td {
+	border: 1px solid var(--line);
+	padding: 8px 10px;
+	text-align: left;
+	color: var(--ink-2);
+	vertical-align: top;
+}
+
+.prose th {
+	background: var(--panel-2);
+	font-family: 'Geist Mono', monospace;
+	font-size: 10px;
+	text-transform: uppercase;
+	letter-spacing: 0.12em;
+	color: var(--ink);
+	font-weight: 500;
+}
+
+.prose hr {
+	border: 0;
+	border-top: 1px solid var(--line);
+	margin: 2.4em 0;
+}
+
+/* Standard callout, used for the standing prototype-status disclosure. Square
+   card, hard shadow, amber rail — same language as the dashboard status chips. */
+.callout {
+	margin: 1.8em 0;
+	border: 1px solid var(--line-2);
+	border-left: 3px solid var(--pending);
+	background: var(--card);
+	box-shadow: 2px 2px 0 var(--paper-shadow);
+	padding: 14px 16px;
+}
+
+.callout > * + * {
+	margin-top: 0.7em;
+}
+
+.callout-label {
+	display: block;
+	font-family: 'Geist Mono', monospace;
+	font-size: 9px;
+	text-transform: uppercase;
+	letter-spacing: 0.14em;
+	color: var(--pending);
+	margin-bottom: 6px;
+}
+
+.callout p {
+	font-size: 13.5px;
+	line-height: 1.6;
+}
+
+/* ---------- article footer ---------- */
+
+.article-foot {
+	max-width: 42rem;
+	margin-top: 56px;
+	padding-top: 24px;
+	border-top: 1px solid var(--line);
+}
+
+.article-foot-cta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 12px;
+}
+
+.article-foot-note {
+	margin-top: 16px;
+	font-family: 'Geist Mono', monospace;
+	font-size: 10px;
+	line-height: 1.6;
+	color: var(--ink-2);
+}
+
+.article-next {
+	display: grid;
+	gap: 0;
+	margin-top: 40px;
+	border-top: 1px solid var(--line);
+	list-style: none;
+	padding: 0;
+}
+
+.article-next-item {
+	border-bottom: 1px solid var(--line);
+}
+
+.article-next-link {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 18px 0;
+	text-decoration: none;
+}
+
+.article-next-label {
+	font-family: 'Geist Mono', monospace;
+	font-size: 9px;
+	text-transform: uppercase;
+	letter-spacing: 0.14em;
+	color: var(--ink-2);
+}
+
+.article-next-title {
+	font-family: 'Instrument Serif', Georgia, serif;
+	font-size: 20px;
+	line-height: 1.2;
+	color: var(--ink);
+	text-wrap: balance;
+}
+
+@media (hover: hover) and (pointer: fine) {
+	.article-next-link:hover .article-next-title {
+		color: var(--navy);
+	}
+}
+
+/* ---------- empty state: one clear next action ---------- */
+
+.blog-empty {
+	margin-top: 40px;
+	border: 1px solid var(--line-2);
+	background: var(--card);
+	box-shadow: 3px 3px 0 var(--paper-shadow);
+	padding: 28px;
+	max-width: 42rem;
+}
+
+.blog-empty h2 {
+	font-size: 24px;
+	margin: 0 0 10px;
+}
+
+.blog-empty p {
+	font-size: 14px;
+	line-height: 1.6;
+	max-width: 52ch;
+	color: var(--ink-2);
+	margin: 0 0 20px;
+}
+
+/* Motion: honour the OS setting. Only transform/opacity would ever animate
+   here, and only on hover, so the reduced-motion block just removes it. */
+@media (prefers-reduced-motion: reduce) {
+	.post-card,
+	.post-card-title,
+	.article-next-title {
+		transition: none;
+	}
+}
