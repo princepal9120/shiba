@@ -177,8 +177,9 @@ export class OpenCodeAgent extends AIChatAgent<Env> {
           await this.reportProgress({ message, fraction: event.fraction, phase });
           // Coworker cadence in the same Slack thread — the reporter
           // throttles and swallows its own failures, so this can't stall
-          // or fail the run.
-          await slackProgress?.onEvent(event);
+          // or fail the run. Safe values only: raw event text can carry
+          // secrets that safeText already stripped for the dashboard.
+          void slackProgress?.onEvent({ phase, message }).catch(() => undefined);
         };
         try {
           checkCancelled();

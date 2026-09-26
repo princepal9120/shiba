@@ -71,15 +71,18 @@ function asAppMention(event: unknown): AppMentionEvent | null {
 }
 
 /**
- * A DM to the intern is a task request, same as a channel @mention. Only
- * `message` events in an IM channel with no bot_id and no subtype qualify —
- * bot echoes and edits/joins/leaves are not tasks.
+ * A top-level DM to the intern is a task request, same as a channel
+ * @mention. Only `message` events in an IM channel with no bot_id and no
+ * subtype qualify — bot echoes and edits/joins/leaves are not tasks.
+ * Thread replies are ignored: "thanks" or "ok" under an old card must not
+ * queue a new run.
  */
 function asDirectMessage(event: unknown): AppMentionEvent | null {
   if (typeof event !== "object" || event === null) return null;
   const candidate = event as Record<string, unknown>;
   if (candidate.type !== "message" || candidate.channel_type !== "im") return null;
   if (typeof candidate.bot_id === "string" || typeof candidate.subtype === "string") return null;
+  if (typeof candidate.thread_ts === "string") return null;
   return event as AppMentionEvent;
 }
 

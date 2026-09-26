@@ -126,6 +126,19 @@ type DelegateInput = z.infer<typeof delegateInputSchema>;
  */
 const STALE_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 
+/**
+ * Accept a scraped "Pull request:" URL only when it points at a PR in the
+ * run's own repository — transcript text is agent-influenced, so a link to
+ * any other repo is rejected instead of posted to Slack.
+ */
+function repoPullUrl(output: string, repoUrl: string): string | undefined {
+  const url = extractPullRequestUrl(output);
+  if (!url) return undefined;
+  const { owner, repo } = parseGitHubRepoUrl(repoUrl);
+  const expected = `https://github.com/${owner}/${repo}/pull/`;
+  return url.toLowerCase().startsWith(expected.toLowerCase()) ? url : undefined;
+}
+
 export class CodingOrchestrator extends Think<Env, OrchestratorState> {
   /** The orchestrator plans and delegates; it never runs shell commands. */
   override workspaceBash = false;
@@ -456,12 +469,13 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
                   { summary: output.slice(0, 4000), diff: parsed?.diff ? parsed.diff.slice(0, 20000) : undefined, pullUrl: parsed.pullUrl },
                   slackRunCompleted({
                     repoUrl: fullInput.repoUrl,
-                    summary: parsed.summary ?? "",
+                    summary: redactSecrets(parsed.summary ?? "").slice(0, 4000),
                     changedFiles: parsed.changedFiles?.length,
                     // The envelope carries pullUrl; the transcript scrape is a
-                    // fallback for older children — never the source of truth,
-                    // so a fake "Pull request:" line can't spoof it.
-                    pullUrl: parsed.pullUrl ?? extractPullRequestUrl(output),
+                    // fallback for older children — never the source of truth.
+                    // A scraped link is accepted only inside the run's own repo,
+                    // so a "Pull request: https://evil" line cannot spoof it.
+                    pullUrl: parsed.pullUrl ?? repoPullUrl(output, fullInput.repoUrl),
                   }),
                 );
                 // TypeSafe Score: grade the run quality (fail-open — never
@@ -504,7 +518,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
               }, slackRunFailed({
                 repoUrl: fullInput.repoUrl,
                 userMessage: runErrorWire(failure.code).userMessage,
-                detail: parsed?.summary ?? output.slice(0, 1000),
+                detail: redactSecrets(parsed?.summary ?? output.slice(0, 1000)).slice(0, 1000),
                 unknown: failureStatus === "unknown",
               }));
               return output;
