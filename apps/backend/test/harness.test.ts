@@ -102,10 +102,17 @@ describe("provider validation (T23 fixes B11)", () => {
     expect(config.enabled_providers).toEqual(["anthropic"]);
   });
 
+  it("routes Grok (xAI) through OpenCode with an isolated xAI egress host", () => {
+    expect(opencodeHarness.egressHosts("xai/grok-4")).toEqual(["api.x.ai"]);
+    expect(opencodeHarness.buildConfig(input("xai/grok-4")).enabled_providers).toEqual(["xai"]);
+    expect(opencodeHarness.env(input("xai/grok-4"), null).XAI_API_KEY).toBe("shiba-ai-coworker-dummy-key");
+    expect(allowedHostsFor(opencodeHarness, "xai/grok-4")).toContain("api.x.ai");
+  });
+
   it("refuses a provider the selected harness cannot drive, naming what it supports", () => {
     expect(() => claudeCodeHarness.egressHosts("openai/gpt-5")).toThrow(/supports anthropic/);
     expect(() => codexHarness.egressHosts("anthropic/claude-opus-5")).toThrow(/supports openai/);
-    expect(() => opencodeHarness.egressHosts("mistral/large")).toThrow(/supports google, anthropic, openai/);
+    expect(() => opencodeHarness.egressHosts("mistral/large")).toThrow(/supports google, anthropic, openai, xai/);
   });
 });
 

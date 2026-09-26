@@ -62,6 +62,7 @@ export async function handleSandboxRoutes(request: Request, env: Env): Promise<R
           "generativelanguage.googleapis.com",
           "api.anthropic.com",
           "api.openai.com",
+          "api.x.ai",
           "github.com",
           "codeload.github.com",
         ],
@@ -195,4 +196,3 @@ export async function handleSandboxRoutes(request: Request, env: Env): Promise<R
     }, { status: 500 });
   }
 }
-

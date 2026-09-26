@@ -50,7 +50,7 @@ const CATALOG_META: Record<
 };
 
 const GATEWAY_PROVIDER: Record<string, string> = {
-  opencode: "google / anthropic / openai",
+  opencode: "google / anthropic / openai / xAI",
   "claude-code": "anthropic",
   codex: "openai",
 };
