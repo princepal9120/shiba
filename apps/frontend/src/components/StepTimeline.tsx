@@ -153,7 +153,7 @@ export function StepTimeline({
                 <span>You</span>
                 <span className="w-1.5 h-1.5 rounded-full bg-[#0000a8]" />
               </div>
-              <div className="flex flex-col gap-2 max-w-[92%] md:max-w-[85%] bg-[#0000a8] text-white rounded-none rounded-none p-4 font-medium shadow-[2px_2px_0_var(--paper-shadow)]">
+              <div className="flex flex-col gap-2 max-w-[92%] md:max-w-[85%] bg-[#0000a8] text-white rounded-none p-4 font-medium shadow-[2px_2px_0_var(--paper-shadow)]">
                 {message.parts.map((part, index) => {
                   const text = partText(part);
                   if (text === null) return null;
@@ -183,7 +183,7 @@ export function StepTimeline({
                       <span className="absolute -left-9 top-0.5 w-6 h-6 rounded-none bg-[#f1efe6] border border-[#e0ded5] flex items-center justify-center text-[#6a6f63]">
                         <RailIcon kind="text" />
                       </span>
-                      <div className="bg-[#f1efe6] border border-[#e0ded5] text-[#222320] rounded-none rounded-none p-4 shadow-[2px_2px_0_var(--paper-shadow)] max-w-[92%] md:max-w-[85%]">
+                      <div className="bg-[#f1efe6] border border-[#e0ded5] text-[#222320] rounded-none p-4 shadow-[2px_2px_0_var(--paper-shadow)] max-w-[92%] md:max-w-[85%]">
                         <pre className="whitespace-pre-wrap font-sans text-sm break-words leading-relaxed">
                           {text}
                         </pre>
@@ -275,7 +275,7 @@ export function StepTimeline({
                 className="w-4 h-4 rounded-full bg-white object-contain animate-bounce"
               />
             </span>
-            <div className="bg-[#f1efe6] border border-[#e0ded5] rounded-none rounded-none p-4 text-xs text-[#6a6f63] flex items-center gap-2 w-fit">
+            <div className="bg-[#f1efe6] border border-[#e0ded5] rounded-none p-4 text-xs text-[#6a6f63] flex items-center gap-2 w-fit">
               <span className="animate-spin inline-block w-3.5 h-3.5 border-2 border-[#1c1cc8] border-t-transparent rounded-full" />
               <span className="text-[#1c1cc8] font-semibold">Shiba is reasoning…</span>
             </div>

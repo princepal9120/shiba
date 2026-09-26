@@ -42,6 +42,7 @@ export function Tooltip({
   const [coords, setCoords] = useState<Coords | null>(null);
   const [mounted, setMounted] = useState(false);
   const triggerRef = useRef<HTMLElement | null>(null);
+  const tooltipRef = useRef<HTMLDivElement | null>(null);
   const timerRef = useRef<number | null>(null);
   const tooltipId = useId();
 
@@ -116,12 +117,23 @@ export function Tooltip({
         break;
     }
 
-    // Clamp into the viewport: edge-aligned tips can land off-screen on small widths.
+    // Clamp into the viewport: edge-aligned tips can land off-screen on small
+    // widths. The tooltip translates by -0/50/100% of its own width, so the
+    // anchor `left` alone doesn't say where the box lands — use the measured
+    // width when available, else the transform multiplier.
     const margin = 8;
     const vw = window.innerWidth;
-    if (left < margin) left = margin;
-    else if (left > vw - margin) left = vw - margin;
-    if (transform.includes("-100%") && left - 260 < margin) left = margin;
+    const measured = tooltipRef.current?.offsetWidth ?? 0;
+    const xMult = transform.startsWith("translate(-100%")
+      ? 1
+      : transform.startsWith("translate(-50%")
+        ? 0.5
+        : 0;
+    const width = measured || Math.min(260, vw - margin * 2);
+    let boxLeft = left - width * xMult;
+    if (boxLeft < margin) boxLeft = margin;
+    else if (boxLeft > vw - margin - width) boxLeft = Math.max(margin, vw - margin - width);
+    left = boxLeft + width * xMult;
 
     setCoords({ top, left, transform });
   }, [side, align]);
@@ -243,6 +255,7 @@ export function Tooltip({
     mounted && isOpen && coords && typeof document !== "undefined"
       ? createPortal(
           <div
+            ref={tooltipRef}
             id={tooltipId}
             role="tooltip"
             style={{

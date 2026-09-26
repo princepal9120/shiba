@@ -261,9 +261,15 @@ export function App(): React.JSX.Element {
   const mobileNavTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   // Return focus to the hamburger after the sheet unmounts, so Esc/backdrop
-  // closes don't strand keyboard users on a removed element.
+  // closes don't strand keyboard users on a removed element. Skip the first
+  // run — the sheet never opened — or the hamburger steals focus on load.
+  const mobileNavWasOpen = useRef(false);
   useEffect(() => {
-    if (!mobileNavOpen) mobileNavTriggerRef.current?.focus();
+    if (mobileNavOpen) {
+      mobileNavWasOpen.current = true;
+    } else if (mobileNavWasOpen.current) {
+      mobileNavTriggerRef.current?.focus();
+    }
   }, [mobileNavOpen]);
   const [sessionsCollapsed, setSessionsCollapsed] = useState(() =>
     typeof window !== "undefined"
@@ -1212,7 +1218,7 @@ export function App(): React.JSX.Element {
             </div>
 
             <div className="hidden md:flex items-center gap-4 text-xs font-mono text-[#6a6f63] shrink-0">
-              <Tooltip content="Tool runs actively isPending" side="bottom">
+              <Tooltip content="Tool runs currently in flight" side="bottom">
               <span className="cursor-default">
                 <span className="text-[#6a6f63]">Active</span>{" "}
                 <span className="text-[#0000a8] font-bold">{toolRuns.length}</span>
