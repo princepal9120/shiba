@@ -129,4 +129,10 @@ container, failures report real exit codes, and the dashboard shows no invented
 activity. The approval gate is the piece that makes those boundaries mean
 something, because it is the last point where a person is still in control.
 
-Read next: [credentials that never enter the container](/blog/credentials-that-never-enter-the-container/).
+## Why this is the spine
+
+The completion plan lists what to keep, what to cut, and what comes last. The approval gate is in the first list, above the fixes, above the features, above the differentiator.
+
+That ordering is the argument. The gate is what makes it reasonable to hand an agent a repository at all. Everything else — four harnesses, Slack, automations, pull requests — is a way of reaching the gate more often. Remove the gate and none of it is a product; it is an unattended shell with a nice dashboard.
+
+Next: what actually crosses the boundary when the gate opens, and what deliberately does not.
