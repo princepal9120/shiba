@@ -116,24 +116,21 @@ const finalSchemas = schema
   <body>
     <header class="site-header sticky top-0 z-50">
       <div class="shell header-inner">
-        <div class="brand-group">
-          <a class="wordmark flex items-center gap-2.5" href="/" aria-label="Shiba home">
-            <img src="/assets/mascot/pet-logo.png" alt="Shiba Mascot" class="w-7 h-7 bg-white object-contain border border-[#d3d2c8] p-0.5 pixelated" />
-            <span class="wordmark-name">Shiba</span>
-          </a>
-
-        </div>
-        <nav aria-label="Main navigation" class="font-mono text-[13px]">
-          <div class="nav-links">
-            <a href="/why-shiba/" class={path === '/why-shiba/' ? 'nav-link nav-active' : 'nav-link'}>Why Shiba</a>
-            <a href="/#harnesses" class="nav-link">Agents</a>
-            <a href="/docs/costs/" class="nav-link">Cost</a>
-            <a href="/blog/" class={path.startsWith('/blog') ? 'nav-link nav-active' : 'nav-link'}>Journal</a>
-            <a href="/docs/overview/" class={path.startsWith('/docs') ? 'nav-link nav-active' : 'nav-link'}>Docs</a>
-            <a href="/docs/architecture/" class="nav-link">Architecture</a>
-            <a href="/docs/security/" class="nav-link">Security</a>
-          </div>
-          <div class="nav-actions">
+        <a class="wordmark" href="/" aria-label="Shiba home">
+          <img src="/assets/mascot/pet-logo.png" alt="Shiba Mascot" class="w-7 h-7 bg-white object-contain border border-[#d3d2c8] p-0.5 pixelated" />
+          <span class="wordmark-name">Shiba</span>
+          <span class="wordmark-tag" aria-hidden="true">v0.4</span>
+        </a>
+        <nav aria-label="Main navigation" class="nav-links">
+          <a href="/why-shiba/" class={path === '/why-shiba/' ? 'nav-link nav-active' : 'nav-link'}><span class="nav-idx">01</span>Why Shiba</a>
+          <a href="/#harnesses" class="nav-link"><span class="nav-idx">02</span>Agents</a>
+          <a href="/docs/costs/" class="nav-link"><span class="nav-idx">03</span>Cost</a>
+          <a href="/blog/" class={path.startsWith('/blog') ? 'nav-link nav-active' : 'nav-link'}><span class="nav-idx">04</span>Journal</a>
+          <a href="/docs/overview/" class={path.startsWith('/docs') ? 'nav-link nav-active' : 'nav-link'}><span class="nav-idx">05</span>Docs</a>
+          <a href="/docs/architecture/" class="nav-link"><span class="nav-idx">06</span>Architecture</a>
+          <a href="/docs/security/" class="nav-link"><span class="nav-idx">07</span>Security</a>
+        </nav>
+        <div class="nav-actions">
           <button
             type="button"
             id="theme-toggle-btn"
@@ -149,11 +146,10 @@ const finalSchemas = schema
             </svg>
           </button>
           <a class="nav-cta" href="/waitlist/">
-            <span class="w-1.5 h-1.5 nav-cta-dot" aria-hidden="true"></span>
-            <span>Run it on your repo</span>
+            <span class="nav-cta-prompt" aria-hidden="true">▸</span>
+            <span>RUN IT ON YOUR REPO</span>
           </a>
-          </div>
-        </nav>
+        </div>
       </div>
     </header>
     <main><slot /></main>
@@ -288,7 +284,6 @@ const finalSchemas = schema
   html[data-theme='dark'] .icon-sun { display: block; }
   html[data-theme='dark'] .icon-moon { display: none; }
 
-  .nav-cta-dot { background: #0000a8; }
   .footer-ok-dot { background: #227146; }
   html[data-theme='dark'] .footer-ok-dot { background: #8fbc6f; }
   .status-ok { color: #227146; }
@@ -331,27 +326,25 @@ const finalSchemas = schema
   .shell { width: min(1160px, calc(100% - 40px)); margin-inline: auto; }
   .pixelated { image-rendering: pixelated; }
 
-  /* ---------- top nav ---------- */
+  /* ---------- top nav ----------
+     Ruled strip, same idiom as the footer statusbar: one hairline row, mono
+     indexed links, actions as cells. Index numbers carry position so the
+     labels stay short; active page gets the accent + a left marker. */
   .site-header { position: relative; z-index: 2; border-bottom: 1px solid var(--line); background: var(--paper); }
-  .header-inner { min-height: 58px; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: clamp(18px, 3vw, 42px); }
-  .brand-group, .nav-links, .nav-actions { display:flex; align-items:center; gap:12px; }
-  .brand-group { flex:none; }
-  .wordmark { text-decoration: none; white-space: nowrap; }
+  .header-inner { min-height: 60px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: clamp(18px, 3vw, 40px); }
+  .wordmark { display: flex; align-items: center; gap: 10px; text-decoration: none; white-space: nowrap; }
   .wordmark-name { font-family: 'Instrument Serif', Georgia, serif; font-size: 24px; letter-spacing: -0.01em; color: var(--ink); }
-  .beta-badge { font-family: 'Geist Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--navy); border: 1px solid var(--line-2); background: var(--card); padding: 3px 7px; box-shadow: 2px 2px 0 var(--paper-shadow); }
-  .site-header nav { min-width:0; display:flex; align-items:center; justify-content:space-between; gap:clamp(14px, 2vw, 28px); font-size:12px; }
-  .nav-links { position:static; transform:none; justify-content:center; gap:clamp(12px, 1.5vw, 20px); white-space:nowrap; }
-  .nav-actions { flex:none; gap:10px; }
-  .nav-link { text-decoration: none; color: var(--ink-2); }
+  .wordmark-tag { font-family: 'Geist Mono', monospace; font-size: 8px; letter-spacing: 0.1em; color: var(--ink-2); border: 1px solid var(--line-2); padding: 2px 5px; }
+  .nav-links { display: flex; align-items: stretch; justify-content: center; gap: clamp(8px, 1.4vw, 18px); min-width: 0; white-space: nowrap; }
+  .nav-link { display: inline-flex; align-items: center; gap: 6px; padding-block: 6px; font-family: 'Geist Mono', monospace; font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; text-decoration: none; color: var(--ink-2); border-bottom: 1px solid transparent; }
+  .nav-idx { font-size: 8px; color: var(--line-2); }
   .nav-active { color: var(--navy); font-weight: 600; }
-  .nav-ghost { display: inline-flex; align-items: center; height: 32px; padding: 0 12px; border: 1px solid var(--line-2); background: var(--card); color: var(--ink); text-decoration: none; font-size: 12px; box-shadow: 2px 2px 0 var(--paper-shadow); }
-  .nav-ghost:active { transform: translateY(1px); }
-  .nav-theme-toggle { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 1px solid var(--line-2); background: var(--card); color: var(--ink); cursor: pointer; box-shadow: 2px 2px 0 var(--paper-shadow); transition: background 120ms ease; }
-  .nav-theme-toggle:active { transform: translateY(1px); }
-  .nav-cta { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; border: 1px solid var(--navy); background: var(--navy); color: #fff; text-decoration: none; font-size: 12px; font-weight: 600; box-shadow: 2px 2px 0 var(--paper-shadow); }
-  .nav-cta:active { transform: translateY(1px); }
+  .nav-active .nav-idx { color: var(--navy); }
+  .nav-actions { display: flex; align-items: center; gap: 0; flex: none; border: 1px solid var(--line-2); background: var(--card); box-shadow: 2px 2px 0 var(--paper-shadow); }
+  .nav-theme-toggle { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 0; border-right: 1px solid var(--line-2); background: transparent; color: var(--ink); cursor: pointer; transition: background 120ms ease; }
+  .nav-cta { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 12px; background: var(--navy); color: #fff; text-decoration: none; font-family: 'Geist Mono', monospace; font-size: 9.5px; font-weight: 600; letter-spacing: 0.08em; }
+  .nav-cta-prompt { font-size: 10px; }
   html[data-theme='dark'] .nav-cta { color: #152335; }
-  html[data-theme='dark'] .nav-cta-dot { background: #152335; }
   footer a { text-decoration: none; }
   .footer-h { font-family: 'Geist Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.14em; font-weight: 600; }
   .statusbar { display: flex; flex-wrap: wrap; border: 1px solid var(--line-2); background: var(--card); box-shadow: 2px 2px 0 var(--paper-shadow); }
@@ -375,36 +368,29 @@ const finalSchemas = schema
   html[data-theme='dark'] .button:not(.button-outline) { color: #152335; }
   @media (hover: hover) and (pointer: fine) {
     .nav-link:hover, .status-links a:hover { color: var(--navy); }
-    .nav-ghost:hover, .nav-theme-toggle:hover { background: var(--panel-2); }
-    .nav-theme-toggle:hover { color: var(--navy); }
-    .nav-cta:hover, .button:hover { background: var(--navy-2); }
-    .nav-cta:hover, .button:hover { border-color: var(--navy-2); }
+    .nav-theme-toggle:hover { background: var(--panel-2); color: var(--navy); }
+    .nav-cta:hover, .button:hover { background: var(--navy-2); border-color: var(--navy-2); }
     .button-outline:hover { background: var(--panel-2); color: var(--navy); border-color: var(--navy-2); }
   }
   @media (max-width: 960px) {
-    /* Two compact rows: brand + actions, then the scrolling link row.
-       .nav-actions is a child of <nav>, so lift it onto the header grid to
-       share the brand's row; order keeps links after the actions visually. */
-    .header-inner { display:grid; grid-template-columns:minmax(0,1fr) auto; grid-template-areas:'brand actions' 'links links'; align-items:center; padding-block:10px; gap:8px 12px; }
-    .brand-group { grid-area:brand; justify-content:flex-start; width:100%; min-width:0; }
-    .site-header nav { display:contents; }
-    .nav-actions { grid-area:actions; justify-content:flex-end; align-self:center; }
-    .nav-links { justify-content:flex-start; width:100%; overflow-x:auto; padding-bottom:3px; scrollbar-width:thin; }
-    .nav-links { grid-area:links; }
+    /* Two compact rows: brand + actions, then the scrolling link row. */
+    .header-inner { grid-template-columns:minmax(0,1fr) auto; grid-template-areas:'brand actions' 'links links'; align-items:center; padding-block:10px; gap:8px 12px; }
+    .wordmark { grid-area:brand; }
+    .nav-actions { grid-area:actions; justify-self:end; }
+    .nav-links { grid-area:links; justify-content:flex-start; overflow-x:auto; padding-bottom:3px; scrollbar-width:thin;
+      -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 28px), transparent 100%); mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 28px), transparent 100%); }
+    .nav-idx { display:none; }
   }
   /* Below 400px the two actions cannot share a row with the wordmark at 44px
      touch targets, so the brand row drops the wordmark and keeps the mark. */
   @media (max-width: 400px) {
     .wordmark-name { font-size: 21px; }
+    .wordmark-tag { display:none; }
     .nav-cta { padding: 0 10px; }
   }
-  /* Nav links need 330px of natural width. Below that they scroll, so give the
-     row a fade mask instead of a hard cut through "Security". */
   @media (max-width: 370px) {
-    .nav-links { -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 28px), transparent 100%); mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 28px), transparent 100%); }
-  }
   @media (pointer: coarse) {
-    .nav-link, .nav-ghost, .nav-theme-toggle, .nav-cta, .button,
+    .nav-link, .nav-theme-toggle, .nav-cta, .button,
     footer li a, .watch-link { min-height:44px; }
     .nav-link { display:inline-flex; align-items:center; }
     .nav-theme-toggle { width:44px; }
