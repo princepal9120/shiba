@@ -11,31 +11,30 @@ const schema = {
   applicationCategory: 'DeveloperApplication',
   operatingSystem: 'Web',
   license: 'https://spdx.org/licenses/AGPL-3.0-only.html',
-  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
   sameAs: ['https://github.com/princepal9120/shiba', 'https://x.com/prince_twets'],
 };
 
 const capabilities = [
-  { number: '01', symbol: '▣', title: 'Approval before execution', detail: 'Review the exact repository, branch, task, and requested output. No sandbox starts until you approve.' },
+  { number: '01', symbol: '▣', title: 'Approval before execution', detail: 'Review the exact repository, branch, task, and requested output. By default, no sandbox starts until you approve.' },
   { number: '02', symbol: '▧', title: 'An isolated workspace', detail: 'Each approved task runs in its own Cloudflare Sandbox container, separate from your Worker and other runs.' },
   { number: '03', symbol: '◫', title: 'Work you can inspect', detail: 'Follow agent progress, changed files, and a unified diff in the dashboard before deciding what to do next.' },
   { number: '04', symbol: '⌁', title: 'Your account, your controls', detail: 'Self-host the Worker, choose your model route, and keep provider credentials outside the container.' },
   { number: '05', symbol: '↗', title: 'Optional pull requests', detail: 'Ask Shiba to open a branch and pull request when you configure a GitHub token; diff-only tasks need no token.' },
-  { number: '06', symbol: '≋', title: 'Slack, iPhone & More', detail: 'Trigger @shiba from Slack, iPhone, or web dashboard. Telegram and Discord integrations coming soon end-to-end.' },
+  { number: '06', symbol: '≋', title: 'Chat and dashboard entry points', detail: 'Start and review tasks from the dashboard, Slack, Telegram, Discord, or the mobile web app. A native iPhone app is on the roadmap.' },
 ];
 ---
 
-<MarketingPage title="Shiba - The best AI software engineer" description={description} path="/" schema={schema}>
+<MarketingPage title="Shiba - Your AI software engineer" description={description} path="/" schema={schema}>
   <section class="shell home-hero" aria-labelledby="home-title">
     <div class="hero-copy">
       <p class="eyebrow">OPEN-SOURCE DEVIN CLOUD ALTERNATIVE</p>
       <h1 id="home-title">Your AI software engineer.<br /><em>On your terms.</em></h1>
-      <p class="hero-lead">Give Shiba a repository and a task. Review the exact plan before a sandbox starts, then watch the work unfold in your own Cloudflare account.</p>
+      <p class="hero-lead">Give Shiba a repository and a task. When deployed, review the exact plan before a sandbox starts by default, then follow work in your Cloudflare account.</p>
       <div class="hero-actions">
         <a class="button" href="/waitlist/">Join the build <span aria-hidden="true">↗</span></a>
         <a class="button button-outline" href="/docs/getting-started/">Read the docs</a>
       </div>
-      <p class="hero-note">No hosted black box. No sandbox before your approval.</p>
+      <p class="hero-note">No hosted black box. By default, no sandbox starts before your approval.</p>
     </div>
 
     <div class="work-window" aria-label="Illustration of Shiba's approval-gated task flow">
@@ -89,7 +88,7 @@ const capabilities = [
     </div>
   </section>
 
-  <div class="shell compatibility" aria-label="Ways to use Shiba"><span>USE FROM</span><span>Web</span><span>Slack</span><span>iPhone</span><span>GitHub</span><span class="compatibility-end">Telegram &amp; Discord soon · end-to-end control.</span></div>
+  <div class="shell compatibility" aria-label="Ways to use Shiba"><span>USE FROM</span><span>Web</span><span>Slack</span><span>Telegram</span><span>Discord</span><span>GitHub</span><span class="compatibility-end">Mobile web is available; native iPhone app is on the roadmap.</span></div>
 
   <section id="harnesses" class="shell harness-section" aria-labelledby="harness-title">
     <p class="eyebrow">TOOLS &amp; MODEL PROVIDERS</p>
@@ -112,7 +111,7 @@ const capabilities = [
         <p class="eyebrow">TRIGGER FROM ANYWHERE</p>
         <h2 id="channels-title">Trigger @shiba.<br /><em>Get work done from anywhere.</em></h2>
       </div>
-      <p class="micro">SLACK · IPHONE · TELEGRAM · DISCORD</p>
+      <p class="micro">SLACK · MOBILE WEB · TELEGRAM · DISCORD</p>
     </div>
     <div class="channels-intro">
       <p>Whether you are at your desk, on Slack, or on your phone, trigger <code>@shiba</code> to delegate a task. Review the exact plan, approve with one tap, and follow sandbox progress end-to-end.</p>
@@ -134,9 +133,9 @@ const capabilities = [
       <div class="channel-card">
         <div class="channel-top">
           <span class="channel-icon"><img src="/assets/channels/iphone.svg" alt="" width="22" height="22" /></span>
-          <span class="channel-badge live">● PWA LIVE</span>
+          <span class="channel-badge live">● MOBILE WEB</span>
         </div>
-        <h3>iPhone</h3>
+        <h3>Mobile web</h3>
         <div class="channel-bubble">
           <span class="bubble-prompt"><strong class="highlight">Add to Home Screen</strong> · Standalone App</span>
           <span class="bubble-reply">↳ 1-tap review &amp; sandbox approval</span>
@@ -174,7 +173,7 @@ const capabilities = [
 
   <section class="shell home-section" aria-labelledby="why-title">
     <div class="section-head"><h2 id="why-title">The agent does the work.<br /><em>You keep the keys.</em></h2><p class="micro">ONE DEPLOYMENT · ONE CONTROL PLANE</p></div>
-    <div class="section-copy"><p>AI coding tools are most useful when you can trust the boundary around them. Shiba runs in your Cloudflare account, puts a human decision before every sandboxed task, and shows the resulting changes instead of asking you to take completion on faith.</p><a class="text-link" href="/why-shiba/">Why we built it <span aria-hidden="true">↗</span></a></div>
+    <div class="section-copy"><p>AI coding tools are most useful when you can trust the boundary around them. Shiba runs in your Cloudflare account, requires human approval before sandbox execution by default, and shows resulting changes instead of asking you to take completion on faith.</p><a class="text-link" href="/why-shiba/">Why we built it <span aria-hidden="true">↗</span></a></div>
   </section>
 
   <section class="shell home-section capabilities" aria-labelledby="capabilities-title">
@@ -189,11 +188,7 @@ const capabilities = [
     <div class="steps-grid">
       <div class="step-card">
         <div class="step-dither-screen" aria-hidden="true">
-          <div class="step-illustration"><img src="/assets/mascot/shiba-connect.svg" alt="" width="360" height="164" loading="lazy" /></div>
-          <div class="dither-terminal-meta">
-            <span class="terminal-tag">SYS.01 // REPO_INGEST</span>
-            <span class="terminal-status"><i class="status-indicator"></i> READY</span>
-          </div>
+          <div class="step-illustration"><img src="/assets/shiba-card-01-repo.png" alt="" width="1672" height="941" loading="lazy" /></div>
         </div>
         <span class="micro">01 / CONNECT</span>
         <h3>Bring a repository</h3>
@@ -202,24 +197,16 @@ const capabilities = [
 
       <div class="step-card">
         <div class="step-dither-screen" aria-hidden="true">
-          <div class="step-illustration"><img src="/assets/mascot/shiba-approve.svg" alt="" width="360" height="164" loading="lazy" /></div>
-          <div class="dither-terminal-meta">
-            <span class="terminal-tag">SYS.02 // APPROVAL_GATE</span>
-            <span class="terminal-status gate-active"><i class="status-indicator"></i> YOUR CALL</span>
-          </div>
+          <div class="step-illustration"><img src="/assets/shiba-card-02-approval.png" alt="" width="1672" height="941" loading="lazy" /></div>
         </div>
         <span class="micro">02 / DECIDE</span>
         <h3>Approve or reject</h3>
-        <p>Inspect the proposed tool input. Shiba cannot start a sandbox until you approve it.</p>
+        <p>Inspect the proposed tool input. By default, Shiba waits for your approval before starting a sandbox.</p>
       </div>
 
       <div class="step-card">
         <div class="step-dither-screen" aria-hidden="true">
-          <div class="step-illustration"><img src="/assets/mascot/shiba-inspect.svg" alt="" width="360" height="164" loading="lazy" /></div>
-          <div class="dither-terminal-meta">
-            <span class="terminal-tag">SYS.03 // ISOLATED_DIFF</span>
-            <span class="terminal-status sandbox"><i class="status-indicator"></i> SANDBOX</span>
-          </div>
+          <div class="step-illustration"><img src="/assets/shiba-card-03-diff.png" alt="" width="1672" height="941" loading="lazy" /></div>
         </div>
         <span class="micro">03 / REVIEW</span>
         <h3>See what changed</h3>
@@ -228,7 +215,7 @@ const capabilities = [
     </div>
   </section>
 
-  <section class="shell closing" aria-labelledby="closing-title"><div><p class="eyebrow">BUILD WITH YOUR OWN AGENT</p><h2 id="closing-title">Put software engineer in your cloud.</h2><p>Deploy Shiba in your Cloudflare account, or join the open-source build.</p></div><div class="closing-actions"><a class="button" href="/docs/getting-started/">Get started <span aria-hidden="true">↗</span></a><a class="button button-outline" href="/waitlist/">Join the build</a></div></section>
+  <section class="shell closing" aria-labelledby="closing-title"><div><p class="eyebrow">BUILD WITH YOUR OWN AGENT</p><h2 id="closing-title">Put software engineer in your cloud.</h2><p>Explore the self-hosting docs for account setup, or join the open-source build.</p></div><div class="closing-actions"><a class="button" href="/docs/getting-started/">Get started <span aria-hidden="true">↗</span></a><a class="button button-outline" href="/waitlist/">Join the build</a></div></section>
 </MarketingPage>
 
 <style>
@@ -240,7 +227,10 @@ const capabilities = [
   .hero-actions, .closing-actions { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-top:28px; }
   .hero-note { margin-top:22px; font:10px 'Geist Mono',monospace; letter-spacing:.02em; }
   .work-window { border:1px solid var(--input-line); background:var(--panel-2); padding:4px; box-shadow:6px 6px 0 var(--paper-shadow); transition:transform 220ms ease, box-shadow 220ms ease; animation:hero-arrive 680ms 100ms cubic-bezier(.2,.7,.2,1) both; }
-  .work-window:hover, .work-window:focus-within { transform:translateY(-3px); box-shadow:8px 9px 0 var(--paper-shadow); }
+  .work-window:focus-within { transform:translateY(-3px); box-shadow:8px 9px 0 var(--paper-shadow); }
+  @media (hover: hover) and (pointer: fine) {
+    .work-window:hover { transform:translateY(-3px); box-shadow:8px 9px 0 var(--paper-shadow); }
+  }
   .window-titlebar { display:flex; justify-content:space-between; align-items:center; min-height:29px; padding:3px 4px 3px 9px; color:var(--paper-title-fg); background:var(--paper-title); font:11px 'Geist Mono',monospace; }
   .window-brand { display:flex; align-items:center; gap:7px; }
   .window-brand img, .task-icon img { image-rendering:pixelated; background:#fff; }
@@ -253,7 +243,10 @@ const capabilities = [
   .approval-art { position:relative; height:190px; overflow:hidden; margin-bottom:18px; border:1px solid var(--line-2); background:#171918; }
   .approval-art { height:240px; }
   .approval-art img.shiba-working-img { display:block; width:100%; height:100%; object-fit:cover; object-position:center 22%; transition:transform 700ms cubic-bezier(.2,.7,.2,1); }
-  .work-window:hover .approval-art img, .work-window:focus-within .approval-art img { transform:scale(1.045) translateY(-5px); }
+  .work-window:focus-within .approval-art img { transform:scale(1.045) translateY(-5px); }
+  @media (hover: hover) and (pointer: fine) {
+    .work-window:hover .approval-art img { transform:scale(1.045) translateY(-5px); }
+  }
   .art-stamp { position:absolute; left:12px; bottom:12px; padding:6px 8px; border:1px solid #9cbce277; background:#171918d9; color:#b4cde9; font:9px 'Geist Mono',monospace; letter-spacing:.12em; }
   /* ── Animated illustration overlay ── */
   .anim-overlay { position:absolute; inset:0; pointer-events:none; }
@@ -305,7 +298,9 @@ const capabilities = [
   .workflow-step { display:grid; grid-template-columns:26px 1fr auto; align-items:center; gap:11px; padding:15px 10px; border-top:1px solid var(--line); }
   .workflow-step.current { background:var(--panel-2); border:1px solid var(--navy); }
   .workflow-step { transition:background 160ms ease, padding-inline 160ms ease; }
-  .workflow-step:not(.current):hover { padding-inline:14px; background:var(--panel-2); }
+  @media (hover: hover) and (pointer: fine) {
+    .workflow-step:not(.current):hover { padding-inline:14px; background:var(--panel-2); }
+  }
   .workflow-step.current .step-state { animation:approval-pulse 2.6s ease-in-out infinite; }
   .workflow-step strong { color:var(--ink); font-size:13px; font-weight:600; margin-bottom:3px; }
   .step-num, .step-state { color:var(--navy); }
@@ -392,21 +387,12 @@ const capabilities = [
   .step-card { border-top:2px solid var(--navy); padding-top:18px; display:flex; flex-direction:column; }
   /* Screen card — dark navy matching illustration backgrounds */
   .step-dither-screen { position:relative; overflow:hidden; background:#131520; border:1px solid #2a3050; margin-bottom:20px; box-shadow:3px 3px 0 #0006; display:flex; flex-direction:column; transition:transform 300ms cubic-bezier(.2,.7,.2,1), box-shadow 300ms ease; }
-  .step-card:hover .step-dither-screen { transform:translateY(-4px); box-shadow:5px 8px 0 #0009; }
-  .step-illustration { position:relative; width:100%; aspect-ratio:360 / 164; flex:none; overflow:hidden; background:#131520; }
-  .step-illustration img { display:block; width:100%; height:100%; object-fit:contain; object-position:center center; transition:transform 400ms cubic-bezier(.2,.7,.2,1); }
-  .step-card:hover .step-illustration img { transform:scale(1.04); }
-  /* Terminal meta bar at bottom of each card screen */
-  .dither-terminal-meta { display:flex; justify-content:space-between; align-items:center; padding:6px 10px; background:#0d1020; border-top:1px solid #2a3050; font-family:'Geist Mono',monospace; font-size:8.5px; letter-spacing:0.1em; color:#6e7a9f; position:relative; z-index:6; }
-  .terminal-tag { font-weight:600; color:#8fa0cc; }
-  .terminal-status { display:inline-flex; align-items:center; gap:5px; font-weight:700; letter-spacing:.12em; }
-  .status-indicator { width:5px; height:5px; background:var(--ok); display:inline-block; }
-  .terminal-status.gate-active .status-indicator { background:var(--pending); animation:blink 1.2s infinite; }
-  /* Per-card status colours */
-  .terminal-status          { color:#3ddfa5; } /* READY – green  */
-  .terminal-status.gate-active { color:#f4c553; } /* YOUR CALL – amber */
-  .terminal-status.sandbox  { color:#63b3ff; } /* SANDBOX – blue  */
-  .terminal-status.sandbox .status-indicator { background:#63b3ff; }
+  @media (hover: hover) and (pointer: fine) {
+    .step-card:hover .step-dither-screen { transform:translateY(-4px); box-shadow:5px 8px 0 #0009; }
+    .step-card:hover .step-illustration img { transform:scale(1.04); }
+  }
+  .step-illustration { position:relative; width:100%; aspect-ratio:1672 / 941; flex:none; overflow:hidden; background:#131520; }
+  .step-illustration img { display:block; width:100%; height:100%; object-fit:cover; object-position:center center; transition:transform 400ms cubic-bezier(.2,.7,.2,1); }
   .window-dither-monitor { margin-bottom:18px; border:1px solid var(--line-2); background:var(--panel-2); box-shadow:2px 2px 0 var(--paper-shadow); }
   .dither-monitor-screen { position:relative; overflow:hidden; padding:10px 14px; background:var(--panel-2); font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:0.06em; }
   .dither-monitor-mesh { position:absolute; inset:0; pointer-events:none; background-image:radial-gradient(var(--navy) 0.8px, transparent 0.8px); background-size:4px 4px; opacity:0.2; }
@@ -427,8 +413,7 @@ const capabilities = [
     .dither-monitor-sweep,
     .dither-monitor-radar,
     .step-pulse,
-    .hero-dither-sweep,
-    .terminal-status.gate-active .status-indicator {
+    .hero-dither-sweep {
       animation: none !important;
       transform: none !important;
       opacity: 0.25 !important;

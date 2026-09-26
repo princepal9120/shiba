@@ -1,5 +1,9 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  future: {
+    // Prevent persistent :hover styles after taps on touchscreens.
+    hoverOnlyWhenSupported: true,
+  },
   content: [
     "./src/**/*.{js,ts,jsx,tsx,html,astro,md,mdx}",
   ],

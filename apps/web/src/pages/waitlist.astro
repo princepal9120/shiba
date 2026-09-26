@@ -4,8 +4,8 @@ import MarketingPage from '../layouts/MarketingPage.astro';
 const waitlistSchema = {
   '@context': 'https://schema.org',
   '@type': 'WebPage',
-  name: 'Join the Shiba Waitlist & Open Source Contributor Community',
-  description: 'Join the Shiba waitlist or become a contributor. Help build the open-source, self-hosted AI software engineer that runs on Cloudflare Workers and Sandbox containers.',
+  name: 'Shiba Project Updates & Open Source Contributor Community',
+  description: 'Get Shiba project updates or contribute. Shiba is open-source software you can self-host; the list is not required for access.',
   url: 'https://tryshiba.dev/waitlist/',
   potentialAction: {
     '@type': 'CommunicateAction',
@@ -16,7 +16,7 @@ const waitlistSchema = {
 
 <MarketingPage
   title="Join the Shiba Waitlist, Contribute & Watch the Build"
-  description="Join the Shiba early access list or contribute to the open-source AI software engineer. Self-hosted on your own Cloudflare account with approval gates and isolated sandboxes."
+  description="Get Shiba project updates or contribute to the open-source coding agent. Self-hosting uses Cloudflare Workers and Sandbox containers."
   path="/waitlist/"
   type="website"
   schema={waitlistSchema}
@@ -40,7 +40,7 @@ const waitlistSchema = {
       </h1>
 
       <p class="lead text-base sm:text-lg text-[var(--ink-2)] leading-relaxed mb-6">
-        Shiba is completely open-source (AGPL-3.0-only). You don't need permission or an invite code to self-host it—you can clone the repo and run it today on your own Cloudflare account.
+        Shiba is completely open-source (AGPL-3.0-only). You don't need permission or an invite code to self-host it. Start with the repository's setup guide to check prerequisites and configure your Cloudflare account.
       </p>
 
       <div class="truth-box">
@@ -48,7 +48,7 @@ const waitlistSchema = {
         <div>
           <h4 class="text-[var(--ink)] font-bold text-sm mb-1">Why join this list?</h4>
           <p class="text-[var(--ink-2)] text-xs leading-relaxed">
-            Sign up to receive major release announcements, early access to pre-configured skills, and invitations to contributor design sprints. We never sell your data or spam your inbox.
+            Sign up for project updates and contributor opportunities. Shiba is open source and available to self-host; this list is not required for access.
           </p>
         </div>
       </div>
@@ -80,7 +80,7 @@ const waitlistSchema = {
         
         <div class="flex items-center justify-between border-b border-[var(--line)] pb-4 mb-6">
           <div>
-            <span class="text-[var(--navy)] font-mono text-[10px] font-medium uppercase tracking-[0.14em]">Early Access &amp; Community</span>
+            <span class="text-[var(--navy)] font-mono text-[10px] font-medium uppercase tracking-[0.14em]">Project Updates &amp; Community</span>
             <h2 id="form-heading" class="text-3xl text-[var(--ink)] font-bold tracking-tight mt-1">Join the build.</h2>
           </div>
           <span class="w-2.5 h-2.5 bg-[var(--navy)] shadow-[0_0_10px_var(--navy)]"></span>
@@ -121,7 +121,7 @@ const waitlistSchema = {
               class="w-full bg-[var(--card)] border border-[var(--line-2)] px-3.5 py-3 text-[var(--ink)] focus:border-[var(--navy)] focus:outline-none transition-colors"
             >
               <option value="" disabled selected>Select an option</option>
-              <option value="early-access">Early Access User (Deploy &amp; use on my Cloudflare account)</option>
+              <option value="early-access">Self-host Shiba and share setup feedback</option>
               <option value="contribute">Open Source Contributor (Write code, docs, tests, design)</option>
               <option value="both">Both (Deploy Shiba and contribute to the repository)</option>
             </select>
@@ -160,7 +160,7 @@ const waitlistSchema = {
                 required
                 class="mt-0.5 bg-[var(--card)] border-[var(--line-2)] text-[var(--navy)] focus:ring-0 focus:ring-offset-0"
               />
-              <span>I agree to receive Shiba project release updates and contributor notices. Submissions are stored privately in our encrypted Durable Object and never published publicly.</span>
+              <span>I agree to receive Shiba project release updates and contributor notices. Submissions are stored privately in a Cloudflare Durable Object and never published publicly.</span>
             </label>
           </div>
 
@@ -212,7 +212,7 @@ const waitlistSchema = {
 
       <div class="contrib-card">
         <div class="contrib-icon">02</div>
-        <h3 class="text-base font-bold text-[var(--ink)] mb-2">Sandbox &amp; MicroVMs</h3>
+        <h3 class="text-base font-bold text-[var(--ink)] mb-2">Sandbox containers</h3>
         <p class="text-xs text-[var(--ink-2)] leading-relaxed mb-4">
           Optimize container boot time, expand pre-installed CLI environments, and stress-test egress proxy TLS interception.
         </p>
@@ -299,7 +299,7 @@ const waitlistSchema = {
 
       status.textContent = result.alreadyJoined
         ? "✓ You're already registered! Thanks for being an early supporter."
-        : "✓ You're in! Thank you for helping build the future of autonomous engineering.";
+        : "✓ You're in! Thank you for supporting this approval-gated open-source project.";
       status.className = 'min-h-[24px] text-center text-xs font-mono font-bold status-ok';
       form.reset();
     } catch (error) {
@@ -340,10 +340,14 @@ const waitlistSchema = {
     box-shadow: 2px 2px 0 var(--paper-shadow);
     transition: border-color 160ms ease, color 160ms ease, transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
   }
-  .watch-link:hover {
-    border-color: var(--navy);
-    color: var(--navy);
-    transform: translateY(-1px);
+  @media (hover: hover) and (pointer: fine) {
+    .watch-link:hover {
+      border-color: var(--navy);
+      color: var(--navy);
+      transform: translateY(-1px);
+    }
+    .contrib-card:hover { border-color: var(--navy); box-shadow: 3px 3px 0 var(--paper-shadow); }
+    .contrib-cta:hover { color: var(--navy-2); }
   }
   .form-card {
     background: var(--card);
@@ -360,9 +364,6 @@ const waitlistSchema = {
     justify-content: space-between;
     box-shadow: 2px 2px 0 var(--paper-shadow);
     transition: border-color 200ms ease, box-shadow 200ms ease;
-  }
-  .contrib-card:hover {
-    border-color: var(--navy);
   }
   .contrib-icon {
     width: 32px;
@@ -389,9 +390,6 @@ const waitlistSchema = {
     margin-top: 12px;
     padding-top: 12px;
     border-top: 1px solid var(--line);
-  }
-  .contrib-cta:hover {
-    color: var(--navy-2);
   }
   /* ≥16px stops iOS Safari zooming on focus; ID selector outranks the Tailwind text-xs on the form. */
   #waitlist-form :is(input:not([type='checkbox']), select, textarea) {
@@ -426,7 +424,6 @@ const waitlistSchema = {
   #waitlist-form .consent input:focus-visible { outline: 2px solid var(--navy); outline-offset: 2px; }
   #waitlist-form button[type='submit'] { min-height: 48px; }
   .watch-link:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--paper-shadow); }
-  .contrib-card:hover { box-shadow: 3px 3px 0 var(--paper-shadow); }
   @media (prefers-reduced-motion: reduce) {
     .watch-link, .contrib-card, #waitlist-form :is(input, select) { transition: none; }
     .watch-link:hover, .watch-link:active { transform: none; }

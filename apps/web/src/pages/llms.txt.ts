@@ -11,21 +11,20 @@ export async function GET() {
 
 	const body = `# Shiba
 
-> Shiba is an open-source, self-hosted AI software engineer — an open-source Devin Cloud alternative. It runs approval-gated coding tasks in isolated Cloudflare Sandbox containers inside your own Cloudflare account, from task intake to merged pull request.
+> Shiba is an open-source, self-hosted, approval-gated coding coworker and Devin Cloud alternative. It runs coding tasks in isolated Cloudflare Sandbox containers in your Cloudflare account. Review a diff, and optionally request a pull request when GitHub access is configured.
 
 - Website: ${SITE}/
 - Why I am building Shiba: ${SITE}/why-shiba/
 - Join waitlist & contribute: ${SITE}/waitlist/
-- Dashboard: ${SITE}/app/
 - GitHub Source (AGPL-3.0-only): https://github.com/princepal9120/shiba
 
 ## Core Architecture & Security
 
-- Edge Orchestrator: Cloudflare Workers + Agents SDK (TypeScript) running sub-millisecond edge routing.
-- Sandbox MicroVMs: Cloudflare Sandbox SDK + Containers spinning up isolated Linux containers per task in seconds.
-- Credential Perimeter: Real model provider keys never touch the container. Egress TLS proxy routes to Cloudflare AI Gateway for credential injection.
+- Edge Orchestrator: Cloudflare Workers + Agents SDK (TypeScript) routing requests at the edge.
+- Sandbox containers: Cloudflare Sandbox SDK + Containers provide isolated Linux containers per task.
+- Credentials: Provider credentials are added by Worker-side egress handling and are not passed into the sandbox process.
 - State & Memory: Cloudflare Durable Objects + SQLite for human approval queues, live logs, and Vectorize for long-term memory.
-- Zero Trust Identity: Cloudflare Access fronts dashboard and runner endpoints.
+- Access: Designed to sit behind operator-configured Cloudflare Access for dashboard and runner endpoints.
 
 ## Documentation
 

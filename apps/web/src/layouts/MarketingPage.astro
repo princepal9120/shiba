@@ -56,7 +56,7 @@ const finalSchemas = schema
 <html lang="en" class="scroll-smooth" data-theme="dark">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
     <link rel="icon" href="/favicon.ico" type="image/x-icon" />
     <link rel="apple-touch-icon" href="/app/apple-touch-icon.png" />
     <link rel="canonical" href={canonical} />
@@ -334,16 +334,12 @@ const finalSchemas = schema
   .nav-links { position:static; transform:none; justify-content:center; gap:clamp(12px, 1.5vw, 20px); white-space:nowrap; }
   .nav-actions { flex:none; gap:10px; }
   .nav-link { text-decoration: none; color: var(--ink-2); }
-  .nav-link:hover { color: var(--navy); }
   .nav-active { color: var(--navy); font-weight: 600; }
   .nav-ghost { display: inline-flex; align-items: center; height: 32px; padding: 0 12px; border: 1px solid var(--line-2); background: var(--card); color: var(--ink); text-decoration: none; font-size: 12px; box-shadow: 2px 2px 0 var(--paper-shadow); }
-  .nav-ghost:hover { background: var(--panel-2); }
   .nav-ghost:active { transform: translateY(1px); }
   .nav-theme-toggle { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 1px solid var(--line-2); background: var(--card); color: var(--ink); cursor: pointer; box-shadow: 2px 2px 0 var(--paper-shadow); transition: background 120ms ease; }
-  .nav-theme-toggle:hover { background: var(--panel-2); color: var(--navy); }
   .nav-theme-toggle:active { transform: translateY(1px); }
   .nav-cta { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; border: 1px solid var(--navy); background: var(--navy); color: #fff; text-decoration: none; font-size: 12px; font-weight: 600; box-shadow: 2px 2px 0 var(--paper-shadow); }
-  .nav-cta:hover { background: var(--navy-2); }
   .nav-cta:active { transform: translateY(1px); }
   html[data-theme='dark'] .nav-cta { color: #152335; }
   html[data-theme='dark'] .nav-cta-dot { background: #152335; }
@@ -353,7 +349,6 @@ const finalSchemas = schema
   .statuscell { font-family: 'Geist Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ink-2); padding: 8px 12px; border-right: 1px solid var(--line); }
   .statuscell:last-child { border-right: none; }
   .status-links { margin-left: auto; display: flex; gap: 14px; }
-  .status-links a:hover { color: var(--navy); }
 
   /* ---------- shared primitives ---------- */
   .eyebrow, .micro { font-family: 'Geist Mono', monospace; text-transform: uppercase; letter-spacing: 0.14em; font-size: 10px; color: var(--navy); font-weight: 500; }
@@ -365,12 +360,18 @@ const finalSchemas = schema
 
   /* bezalel buttons: square, hard 2px shadow, active translate */
   .button { display: inline-flex; align-items: center; justify-content: center; gap: 10px; padding: 0 18px; height: 36px; border: 1px solid var(--navy); background: var(--navy); color: #fff; text-decoration: none; font-weight: 600; font-family: 'Geist Mono', monospace; font-size: 13px; cursor: pointer; box-shadow: 2px 2px 0 var(--paper-shadow); transition: background 120ms ease, border-color 120ms ease, transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out); }
-  .button:hover { background: var(--navy-2); border-color: var(--navy-2); }
   .button:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--paper-shadow); transition-duration: 60ms; }
   .button:disabled { opacity: .6; cursor: progress; transform: none; }
   .button-outline { background: var(--card); color: var(--navy); border-color: var(--navy); }
-  .button-outline:hover { background: var(--panel-2); color: var(--navy); border-color: var(--navy-2); }
   html[data-theme='dark'] .button:not(.button-outline) { color: #152335; }
+  @media (hover: hover) and (pointer: fine) {
+    .nav-link:hover, .status-links a:hover { color: var(--navy); }
+    .nav-ghost:hover, .nav-theme-toggle:hover { background: var(--panel-2); }
+    .nav-theme-toggle:hover { color: var(--navy); }
+    .nav-cta:hover, .button:hover { background: var(--navy-2); }
+    .nav-cta:hover, .button:hover { border-color: var(--navy-2); }
+    .button-outline:hover { background: var(--panel-2); color: var(--navy); border-color: var(--navy-2); }
+  }
   @media (max-width: 960px) {
     .header-inner { display:flex; align-items:stretch; padding-block:12px; flex-direction:column; gap:10px; }
     .brand-group { justify-content:space-between; }

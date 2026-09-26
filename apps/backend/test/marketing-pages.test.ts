@@ -23,7 +23,8 @@ describe.skipIf(!built)("new marketing pages", () => {
     expect(waitlist).toContain("theme-toggle-btn");
     expect(why).toContain("theme-toggle-btn");
     expect(waitlist).toContain("shiba-theme");
-    expect(why).toContain("I loved sending work to the cloud");
+    // Founder-voice narrative body copy, not just layout chrome.
+    expect(why).toContain("I wanted Devin-style autonomy and computer use");
     expect(why).toContain("AGPL-3.0-only");
   });
 });

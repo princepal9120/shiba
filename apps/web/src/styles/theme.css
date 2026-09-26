@@ -216,9 +216,11 @@ p, .sl-markdown-content p {
   transition: color 0.15s ease, border-color 0.15s ease;
 }
 
-.sl-markdown-content a:not(.ai-step-card):not([class*='action']):hover {
-  color: var(--navy-2);
-  border-bottom-color: currentColor;
+@media (hover: hover) and (pointer: fine) {
+  .sl-markdown-content a:not(.ai-step-card):not([class*='action']):hover {
+    color: var(--navy-2);
+    border-bottom-color: currentColor;
+  }
 }
 
 .sl-markdown-content code:not(pre code) {
@@ -329,9 +331,11 @@ button[data-open-modal] {
   transition: border-color 0.15s ease, color 0.15s ease !important;
 }
 
-button[data-open-modal]:hover {
-  border-color: var(--navy) !important;
-  color: var(--navy) !important;
+@media (hover: hover) and (pointer: fine) {
+  button[data-open-modal]:hover {
+    border-color: var(--navy) !important;
+    color: var(--navy) !important;
+  }
 }
 
 button[data-open-modal] kbd {
@@ -430,13 +434,15 @@ details[open] > summary .caret {
   font-size: 0.85rem !important;
   font-weight: 450 !important;
   color: var(--sl-color-gray-2) !important;
-  transition: all 0.15s ease !important;
+  transition: color 0.15s ease, border-color 0.15s ease !important;
   border-left: 2px solid transparent !important;
 }
 
-.sidebar-content a:hover {
-  color: var(--ink) !important;
-  border-left-color: var(--line-2) !important;
+@media (hover: hover) and (pointer: fine) {
+  .sidebar-content a:hover {
+    color: var(--ink) !important;
+    border-left-color: var(--line-2) !important;
+  }
 }
 
 .sidebar-content a[aria-current='page'] {
@@ -480,10 +486,12 @@ mobile-starlight-toc summary::-webkit-details-marker {
   transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
 }
 
-.card:hover,
-.starlight-card:hover {
-  border-color: var(--card-border-hover) !important;
-  box-shadow: 3px 3px 0 var(--paper-shadow) !important;
+@media (hover: hover) and (pointer: fine) {
+  .card:hover,
+  .starlight-card:hover {
+    border-color: var(--card-border-hover) !important;
+    box-shadow: 3px 3px 0 var(--paper-shadow) !important;
+  }
 }
 
 .card .title {
@@ -584,8 +592,10 @@ starlight-toc a,
   transition: color 0.15s ease;
 }
 
-starlight-toc a:hover {
-  color: var(--accent-text);
+@media (hover: hover) and (pointer: fine) {
+  starlight-toc a:hover {
+    color: var(--accent-text);
+  }
 }
 
 starlight-toc a[aria-current='true'],
@@ -621,9 +631,11 @@ starlight-toc a[aria-current] {
   transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
 }
 
-.pagination-links a:hover {
-  border-color: var(--card-border-hover) !important;
-  box-shadow: 3px 3px 0 var(--paper-shadow) !important;
+@media (hover: hover) and (pointer: fine) {
+  .pagination-links a:hover {
+    border-color: var(--card-border-hover) !important;
+    box-shadow: 3px 3px 0 var(--paper-shadow) !important;
+  }
 }
 
 /* ==========================================================================
@@ -703,9 +715,11 @@ starlight-toc a[aria-current] {
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.arch-stage:hover {
-  border-color: var(--navy);
-  box-shadow: 3px 3px 0 var(--paper-shadow);
+@media (hover: hover) and (pointer: fine) {
+  .arch-stage:hover {
+    border-color: var(--navy);
+    box-shadow: 3px 3px 0 var(--paper-shadow);
+  }
 }
 
 .arch-stage-meta {
@@ -753,8 +767,10 @@ starlight-toc a[aria-current] {
   justify-content: space-between;
 }
 
-.arch-card:hover {
-  border-color: var(--navy);
+@media (hover: hover) and (pointer: fine) {
+  .arch-card:hover {
+    border-color: var(--navy);
+  }
 }
 
 .arch-card-header {
@@ -926,9 +942,11 @@ starlight-toc a[aria-current] {
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.docs-flow-step:hover {
-  border-color: var(--navy);
-  box-shadow: var(--shadow-lift);
+@media (hover: hover) and (pointer: fine) {
+  .docs-flow-step:hover {
+    border-color: var(--navy);
+    box-shadow: var(--shadow-lift);
+  }
 }
 
 .docs-flow-num {
@@ -1082,9 +1100,11 @@ starlight-toc a[aria-current] {
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-a.ai-step-card:hover {
-  border-color: var(--navy);
-  box-shadow: 3px 3px 0 var(--paper-shadow);
+@media (hover: hover) and (pointer: fine) {
+  a.ai-step-card:hover {
+    border-color: var(--navy);
+    box-shadow: 3px 3px 0 var(--paper-shadow);
+  }
 }
 
 .ai-step-num {

@@ -5,6 +5,10 @@ const root = dirname(fileURLToPath(import.meta.url));
 
 /** @type {import('tailwindcss').Config} */
 export default {
+  future: {
+    // Prevent persistent :hover styles after taps on touchscreens.
+    hoverOnlyWhenSupported: true,
+  },
   content: [
     resolve(root, "src/**/*.{js,ts,jsx,tsx,html}"),
     resolve(root, "../web/src/**/*.{astro,html,js,jsx,md,mdx,svelte,ts,tsx,vue}"),

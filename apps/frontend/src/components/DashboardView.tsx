@@ -100,7 +100,7 @@ export function DashboardView({
           <button
             type="button"
             onClick={onNewTask}
-            className="min-h-9 rounded-none bg-[#0000a8] hover:bg-[#1c1cc8] text-white text-[13px] font-semibold px-4 flex items-center gap-2 transition-colors shadow-[2px_2px_0_var(--paper-shadow)] active:scale-[0.98]"
+            className="primary-action min-h-11 rounded-none text-[13px] font-semibold px-4 flex items-center gap-2"
           >
             <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />

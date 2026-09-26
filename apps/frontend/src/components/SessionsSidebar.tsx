@@ -217,7 +217,7 @@ export function SessionsSidebar({
           <button
             type="button"
             onClick={onNewTask}
-            className="w-full inline-flex items-center justify-center gap-1.5 bg-[#0000a8] hover:bg-[#1c1cc8] text-white font-semibold text-[13px] h-9 px-3 rounded-none transition-colors shadow-[2px_2px_0_var(--paper-shadow)]"
+            className="primary-action w-full inline-flex min-h-11 items-center justify-center gap-1.5 font-semibold text-[13px] px-3 rounded-none"
           >
             <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
@@ -359,4 +359,3 @@ export function SessionsSidebar({
     </aside>
   );
 }
-

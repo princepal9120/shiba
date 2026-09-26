@@ -49,6 +49,34 @@ body {
   overflow-x: hidden;
 }
 
+/* One consistent tactile state for primary actions: the paper shadow lifts on
+   hover and settles by one pixel on press. Hover is only meaningful for a
+   precise pointer; touch gets immediate :active feedback instead. */
+.primary-action {
+  color: var(--accent-ink);
+  border: 1px solid var(--accent);
+  background-color: var(--accent);
+  box-shadow: 2px 2px 0 var(--paper-shadow);
+  transition: background-color 120ms ease, border-color 120ms ease,
+    box-shadow 120ms ease, transform 120ms ease;
+  touch-action: manipulation;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .primary-action:hover {
+    background-color: var(--accent-light);
+    border-color: var(--accent-light);
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 var(--paper-shadow);
+  }
+}
+
+.primary-action:active {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0 var(--paper-shadow);
+  transition-duration: 60ms;
+}
+
 h1, h2, h3, .font-display {
   font-family: var(--font-display);
   font-style: normal;
