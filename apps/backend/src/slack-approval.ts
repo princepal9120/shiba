@@ -44,6 +44,8 @@ export interface SlackApprovalDeps {
   dispatchReject?: (pointer: ApprovalPointer, userId: string) => Promise<void>;
   /** Ephemeral reply via response_url. Defaults to a best-effort POST. */
   respond?: (responseUrl: string, text: string) => Promise<void>;
+  /** Replace the clicked card via response_url. Defaults to a best-effort POST. */
+  replaceCard?: (responseUrl: string, body: Record<string, unknown>) => Promise<void>;
   /** Fallback when no dispatch callbacks are injected. */
   orchestratorStub?: { fetch: (request: Request) => Promise<Response> };
   /** Resolve the DO that owns this pointer; mention cards live on thread DOs. */
@@ -126,6 +128,14 @@ export function escapeMrkdwn(text: string): string {
     .replace(/>/g, "&gt;");
 }
 
+// Slack rejects a section over 3000 chars; the full task stays on the dashboard card.
+const CARD_TASK_LIMIT = 2500;
+function clipTask(task: string): string {
+  return task.length <= CARD_TASK_LIMIT
+    ? task
+    : `${task.slice(0, CARD_TASK_LIMIT)}… (${task.length - CARD_TASK_LIMIT} more chars, full task on the dashboard)`;
+}
+
 /**
  * Plain-text mirror of the card headline for the chat.postMessage
  * `text` field — notifications and other block-less surfaces render
@@ -136,8 +146,8 @@ export function approvalCardText(input: ApprovalCardInput): string {
   const isEmail = input.kind === "email_send" || input.kind === "email_delete";
   return isEmail
     ? `${escapeMrkdwn(input.agent ?? input.repoUrl)} requests ${escapeMrkdwn(input.task)}`
-    : `Approval requested\nRepo: ${input.repoUrl}\nTask: ${input.task}` +
-        (input.harness ? `\nAgent: ${input.harness}` : "");
+    : `Approval requested\nRepo: ${escapeMrkdwn(input.repoUrl)}\nTask: ${escapeMrkdwn(clipTask(input.task))}` +
+        (input.harness ? `\nAgent: ${escapeMrkdwn(input.harness)}` : "");
 }
 
 /**
@@ -157,8 +167,8 @@ export function buildApprovalBlocks(input: ApprovalCardInput): unknown[] {
   const isEmail = input.kind === "email_send" || input.kind === "email_delete";
   const headline = isEmail
     ? `*${escapeMrkdwn(input.agent ?? input.repoUrl)}* requests ${escapeMrkdwn(input.task)}`
-    : `*Approval requested*\n*Repo:* ${input.repoUrl}\n*Task:* ${input.task}` +
-        (input.harness ? `\n*Agent:* ${input.harness}` : "");
+    : `*Approval requested*\n*Repo:* ${escapeMrkdwn(input.repoUrl)}\n*Task:* ${escapeMrkdwn(clipTask(input.task))}` +
+        (input.harness ? `\n*Agent:* ${escapeMrkdwn(input.harness)}` : "");
   return [
     {
       type: "section",
@@ -186,6 +196,8 @@ interface BlockActionPayload {
   actionId: string;
   pointer: ApprovalPointer;
   responseUrl: string;
+  /** Blocks of the clicked card — kept so the decision can replace it in place. */
+  blocks: unknown[];
 }
 
 function parseBlockActionsPayload(payloadParam: string | null): BlockActionPayload {
@@ -209,13 +221,15 @@ function parseBlockActionsPayload(payloadParam: string | null): BlockActionPaylo
   const actionId = typeof first?.action_id === "string" ? first.action_id : "";
   const value = typeof first?.value === "string" ? first.value : "";
   const responseUrl = typeof record["response_url"] === "string" ? (record["response_url"] as string) : "";
+  const message = record["message"] as { blocks?: unknown } | undefined;
+  const blocks = Array.isArray(message?.blocks) ? (message.blocks as unknown[]) : [];
   if (userId === "" || actionId === "" || value === "" || responseUrl === "") {
     throw new Error("Interaction payload is missing user, action, value, or response_url.");
   }
   if (!isSlackResponseUrl(responseUrl)) {
     throw new Error("Invalid Slack response URL.");
   }
-  return { userId, actionId, pointer: parseApprovalValue(value), responseUrl };
+  return { userId, actionId, pointer: parseApprovalValue(value), responseUrl, blocks };
 }
 
 export function isSlackResponseUrl(value: string): boolean {
@@ -249,6 +263,48 @@ async function respondEphemeral(
     });
   } catch {
     // Intentionally swallowed — the ack already went out.
+  }
+}
+
+/**
+ * Swap the clicked card for a receipt: its blocks minus the buttons, plus who
+ * decided. A payload without `message.blocks` leaves just the decision line.
+ */
+async function replaceCardWithDecision(
+  interaction: BlockActionPayload,
+  approved: boolean,
+  replaceCard?: SlackApprovalDeps["replaceCard"],
+): Promise<void> {
+  const kept = interaction.blocks.filter(
+    (block) => typeof block === "object" && block !== null && (block as { type?: unknown }).type !== "actions",
+  );
+  const decision = approved ? "Approved" : "Rejected";
+  const status = approved ? "run starting" : "no run started";
+  const body: Record<string, unknown> = {
+    replace_original: true,
+    text: `${decision} by <@${interaction.userId}> — ${status}.`,
+    blocks: [
+      ...kept,
+      {
+        type: "context",
+        elements: [
+          { type: "mrkdwn", text: `*${decision}* by <@${interaction.userId}> — ${status}` },
+        ],
+      },
+    ],
+  };
+  if (replaceCard) {
+    await replaceCard(interaction.responseUrl, body);
+    return;
+  }
+  const response = await fetch(interaction.responseUrl, {
+    method: "POST",
+    redirect: "error",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw new Error(`Slack response_url replace failed (${response.status}).`);
   }
 }
 
@@ -361,6 +417,11 @@ export async function handleSlackInteract(
   const work = (async () => {
     const dispatch = approved ? dispatchApprove : dispatchReject;
     await dispatch(interaction.pointer, interaction.userId);
+    // The dispatch landed — retire the buttons so the card can't be
+    // clicked again, and show who decided plus what happens next.
+    await replaceCardWithDecision(interaction, approved, deps.replaceCard).catch((error: unknown) => {
+      console.error("Slack approval card update failed", redactSecrets(String(error)));
+    });
   })();
   // The ack already went out, so a dispatch failure must surface to the human
   // in Slack rather than vanish into an unhandled rejection.

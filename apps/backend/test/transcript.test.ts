@@ -108,6 +108,8 @@ describe("renderRunTranscript", () => {
     expect(text).toContain("[clone] Cloned.");
     expect(text).toContain("Changed files: a.ts");
     expect(text).toContain("Pull request: https://github.com/owner/repo/pull/1");
+    // The PR line precedes the (up to 20k-char) diff so a truncating reader keeps it.
+    expect(lines.indexOf("Pull request: https://github.com/owner/repo/pull/1")).toBeLessThan(lines.indexOf("Diff:"));
   });
 
   it("renders failures honestly", () => {

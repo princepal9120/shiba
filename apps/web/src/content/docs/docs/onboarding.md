@@ -96,13 +96,12 @@ Protect your Worker application using Cloudflare Zero Trust Access:
 Slack and GitHub cannot complete an interactive Cloudflare Access browser login! If you do not create a bypass policy, Slack mentions and GitHub webhooks will fail silently with HTTP 302 / 403.
 :::
 
-In your Access Application policies:
-- **Add a Bypass Policy**:
-  - Selector: **Path Begins With**
-  - Paths:
-    - `/api/slack/` (covers `/api/slack/events`, `/api/slack/interact`, and `/api/slack/command`)
-    - `/api/github/webhook`
-- These endpoints are protected by cryptographic HMAC signatures (`X-Slack-Signature` and `X-Hub-Signature-256`) evaluated fail-closed inside the Worker code.
+`pnpm run bootstrap` creates this for you. By hand: add a **second self-hosted Access application** whose destinations are the exact paths below on your Worker host, with one policy: Action **Bypass**, Include **Everyone**. Path-specific applications take precedence over the host-wide one.
+- `/api/slack/events`, `/api/slack/command`, `/api/slack/interact`
+- `/api/github/webhook`
+- `/mcp`, `/mcp/*` (Claude Code, bearer token)
+- `/api/automations/*/trigger` (shared secret)
+- The Worker authenticates each of these itself — Slack/GitHub HMAC signatures, MCP bearer tokens, the automation secret — fail-closed.
 
 In your environment or `.dev.vars`:
 ```sh

@@ -17,7 +17,9 @@ import {
 } from "../opencode-input.js";
 import {
   MAX_CONCURRENT_RUNS,
+  RUN_DEADLINE_MS,
   RunStore,
+  AGENT_PRINCIPAL_HEADER,
   canStartRun,
   createRun,
   isActiveStatus,
@@ -166,12 +168,19 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       .filter((run): run is DelegatedRun => run !== null && isActiveStatus(run.status));
     // Do not retry potentially published work after losing the execution context.
     for (const run of interrupted) {
-      this.store.transition(run.runId, "unknown", {
+      const updated = this.store.transition(run.runId, "unknown", {
         error: "Execution interrupted by orchestrator restart. Inspect repository state before retrying.",
         errorCode: "outcome_unknown",
       });
+      if (updated !== null) this.postOutcomeUnknown(updated);
     }
-    await Promise.all(interrupted.map((run) => this.destroySandbox(run.sandboxId)));
+    // Teardown runs in the background: awaiting container I/O here would block the DO's start.
+    const teardown = Promise.all(interrupted.map((run) => this.destroySandbox(run.sandboxId)));
+    if (typeof this.ctx === "object" && this.ctx !== null && "waitUntil" in this.ctx) {
+      this.ctx.waitUntil(teardown);
+    } else {
+      void teardown;
+    }
     // Before anything re-drives, free the draft claims a dead attempt
     // could leave behind: a `sending` row at DO start belongs to a
     // dispatch that died with the last lifetime — claims are only
@@ -408,6 +417,14 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         return `Run ${runId} did not start — it is already ${this.store.get(runId)?.status ?? "missing"}.`;
       }
       const generation = running.generation;
+      // Durable backstop: reclaim fires at the deadline even when no request ever arrives.
+      yield* Effect.promise(async () => {
+        try {
+          await this.schedule(Math.ceil(RUN_DEADLINE_MS / 1000) + 60, "reclaimRuns");
+        } catch (error) {
+          console.warn(`Run ${runId} reclaim schedule failed`, redactSecrets(String(error)));
+        }
+      });
       this.postToSlackThread(
         slackRunStarted({ repoUrl: fullInput.repoUrl, baseBranch: fullInput.baseBranch, harness: fullInput.harness }),
       );
@@ -436,7 +453,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
               if (parsed?.status === "completed") {
                 const finished = finish(
                   "completed",
-                  { summary: output.slice(0, 4000), diff: parsed?.diff ? parsed.diff.slice(0, 20000) : undefined },
+                  { summary: output.slice(0, 4000), diff: parsed?.diff ? parsed.diff.slice(0, 20000) : undefined, pullUrl: parsed.pullUrl },
                   slackRunCompleted({
                     repoUrl: fullInput.repoUrl,
                     summary: parsed.summary ?? "",
@@ -543,7 +560,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
    * the pointer via POST /api/approvals. Email-kind approvals freeze a
    * mailbox payload instead of a run input.
    */
-  private async queueSlackRun(input: { repoUrl?: unknown; task?: unknown; baseBranch?: unknown; publishPullRequest?: unknown; threadKey?: unknown; kind?: unknown; mailbox?: unknown; payload?: unknown; harness?: unknown }): Promise<Response> {
+  private async queueSlackRun(input: { repoUrl?: unknown; task?: unknown; baseBranch?: unknown; publishPullRequest?: unknown; threadKey?: unknown; kind?: unknown; mailbox?: unknown; payload?: unknown; harness?: unknown; queuedBy?: unknown }): Promise<Response> {
     const kind = typeof input.kind === "string" && input.kind.trim() ? input.kind.trim() : "run";
     if (kind === "email_send" || kind === "email_delete") {
       return this.queueEmailApprovalRecord(kind, input);
@@ -586,6 +603,11 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         baseBranch: typeof input.baseBranch === "string" && input.baseBranch.trim() ? input.baseBranch.slice(0, 200) : "main",
         publishPullRequest,
         ...(harness !== undefined ? { harness } : {}),
+        // Worker-vouched principal (X-Agent-Principal) — never the raw body,
+        // so an operator-queued record can't be claimed by an agent token.
+        ...(typeof input.queuedBy === "string" && input.queuedBy.trim()
+          ? { queuedBy: input.queuedBy.trim().slice(0, 200) }
+          : {}),
         createdAt: Date.now(),
       }));
     } catch (error) {
@@ -684,11 +706,14 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     } catch (error) {
       return Response.json({ error: error instanceof Error ? error.message : "Could not queue approval." }, { status: 409 });
     }
+    const body = kind === "email_send" ? String(fields.body_text).trim() : "";
+    const excerpt = body.length > 500 ? `${body.slice(0, 499)}…` : body;
     this.postEmailApprovalCard({
       threadKey,
       approvalId,
       repoUrl: mailbox,
-      task,
+      // The card builder mrkdwn-escapes `task`, so the untrusted body excerpt is escaped with it.
+      task: excerpt ? `${task}\n${excerpt}` : task,
       kind,
       ...(registration.agent ? { agent: registration.agent } : {}),
     });
@@ -712,9 +737,11 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ channel, text: approvalCardText(input).slice(0, 3000), blocks: buildApprovalBlocks(input) }),
-    }).then((response) => {
-      if (!response.ok) {
-        console.error(`Slack email approval card post failed (${response.status})`);
+    }).then(async (response) => {
+      // Slack reports app-level failures (not_in_channel, …) as HTTP 200 with ok:false.
+      const body = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+      if (!response.ok || body?.ok !== true) {
+        console.error(`Slack email approval card post failed (${response.status}): ${body?.error ?? "unparseable response"}`);
       }
     }).catch((error) => {
       console.error("Slack email approval card post failed", redactSecrets(String(error)));
@@ -792,6 +819,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       task: record.task,
       baseBranch: record.baseBranch ?? "main",
       publishPullRequest: record.publishPullRequest ?? false,
+      queuedBy: record.queuedBy,
     }) : undefined;
     // One state write reserves capacity and records the decision before any await.
     this.setState({
@@ -840,7 +868,10 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
           }
         }
       };
-      void dispatch();
+      // Slack/dashboard approvals hold no socket open, so without the heartbeat the DO can idle out mid-run.
+      this.keepAliveWhile(dispatch).catch((error) => {
+        console.error(`Run ${run.runId} dispatch failed`, redactSecrets(String(error)));
+      });
     }
     if (record && isEmailRecord) {
       this.dispatchApprovedEmail(record);
@@ -967,6 +998,16 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     );
   }
 
+  /** Terminal "unknown" notice for runs that end outside `finish` (restart, reclaim). */
+  private postOutcomeUnknown(run: DelegatedRun): void {
+    this.postToSlackThread(slackRunFailed({
+      repoUrl: run.repoUrl,
+      userMessage: runErrorWire(run.errorCode ?? "outcome_unknown").userMessage,
+      detail: run.error?.slice(0, 1000),
+      unknown: true,
+    }));
+  }
+
   /** Wire projection for API responses: errorCode -> {status, code, userMessage}. */
   private serializeRun(run: DelegatedRun): DelegatedRun & { errorWire?: RunErrorWire } {
     return run.errorCode ? { ...run, errorWire: runErrorWire(run.errorCode) } : run;
@@ -1001,20 +1042,15 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     await destroyManagedContainer(this.env, sandboxId);
   }
 
-  private async reclaimRuns(): Promise<void> {
+  /** Public: also the `schedule()` callback armed when a run starts. */
+  async reclaimRuns(): Promise<void> {
     this.armLeakPersistence();
     const { runs, reclaimed } = reclaimStaleRuns(this.store.list(), Date.now());
     if (reclaimed.length > 0) {
       this.setState({ ...this.state, runs });
       await Promise.all(runs.filter((run) => reclaimed.includes(run.runId)).map(async (run) => {
+        this.postOutcomeUnknown(run);
         this.runControllers.get(run.runId)?.abort();
-        // Reclaimed runs go terminal without ever reaching `finish`'s
-        // slackText seam — the thread deserves the same honest ending.
-        this.postToSlackThread(slackRunFailed({
-          repoUrl: run.repoUrl,
-          userMessage: runErrorWire("outcome_unknown").userMessage,
-          unknown: true,
-        }));
         await this.destroySandbox(run.sandboxId);
       }));
     }
@@ -1191,7 +1227,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
    * aged out. Decided records are dropped from the listing — a
    * resolved pointer must never be re-listed.
    */
-  private listApprovals(): Response {
+  private listApprovals(agentPrincipal: string | null): Response {
     const now = Date.now();
     const expiredSends = this.expiredEmailSends(now);
     const pruned = pruneExpiredApprovals(this.approvals, now);
@@ -1200,17 +1236,27 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       this.releaseEmailApprovalDrafts(expiredSends, this.liveApprovalDrafts(now));
     }
     this.sweepStaleDrafts(expiredSends.length > 0);
+    // Agent principals see only records they queued; operator surfaces
+    // (no principal header) keep the full listing.
+    const visible = agentPrincipal === null
+      ? pruned
+      : pruned.filter((approval) => approval.queuedBy === agentPrincipal);
     return Response.json({
-      approvals: pruned.filter((approval) => approval.status === "pending"),
+      approvals: visible.filter((approval) => approval.status === "pending"),
       // Decided records leave the pending arm but stay listed — the
       // execution stamp (including a failed send) is durable state no
       // other surface renders, so the listing returns recent ones.
-      decided: decidedApprovals(pruned),
+      decided: decidedApprovals(visible),
     });
   }
 
   override async onRequest(request: Request): Promise<Response> {
     const url = new URL(request.url);
+    // Worker-vouched agent identity: only mcp-run-tools sets this after
+    // bearer auth, so it scopes reads/cancels to records that principal
+    // queued. External callers never reach this DO without an Access or
+    // signature-authenticated identity on the Worker first.
+    const agentPrincipal = request.headers.get(AGENT_PRINCIPAL_HEADER)?.trim() || null;
     // Cron backstop for the poll-driven stale-draft sweep — in a quiet
     // system no approvals fetch or DO restart ever calls it, so a human
     // who stops polling would leave `sending`-locked drafts held forever.
@@ -1219,9 +1265,13 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       return Response.json({ ok: true });
     }
     if (url.pathname === "/api/approvals" && request.method === "GET") {
-      return this.listApprovals();
+      return this.listApprovals(agentPrincipal);
     }
     if (request.method === "POST" && url.pathname === "/api/approvals") {
+      // Approving is a human act — an agent principal can never decide.
+      if (agentPrincipal !== null) {
+        return Response.json({ error: "Agent principals cannot decide approvals." }, { status: 403 });
+      }
       let approvalBody: unknown;
       try {
         approvalBody = await request.json();
@@ -1250,7 +1300,9 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       if (typeof queueBody !== "object" || queueBody === null || Array.isArray(queueBody)) {
         return Response.json({ error: "Request body must be a JSON object." }, { status: 400 });
       }
-      return this.queueSlackRun(queueBody as Record<string, unknown>);
+      // queuedBy comes only from the vouched header — a body field would
+      // let any caller attribute its run to another principal.
+      return this.queueSlackRun({ ...(queueBody as Record<string, unknown>), queuedBy: agentPrincipal ?? undefined });
     }
     if (request.method !== "GET" && request.method !== "DELETE") {
       return Response.json({ error: "Method not allowed." }, { status: 405 });
@@ -1263,19 +1315,39 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     }
     await this.reclaimRuns();
     if (request.method === "GET" && id === null) {
-      return Response.json({ runs: this.store.list().map((run) => this.serializeRun(run)) });
+      const visible = agentPrincipal === null
+        ? this.store.list()
+        : this.store.list().filter((run) => run.queuedBy === agentPrincipal);
+      const limitParam = url.searchParams.get("limit");
+      if (limitParam !== null) {
+        const limit = Number(limitParam);
+        if (!Number.isInteger(limit) || limit < 1) {
+          return Response.json({ error: "limit must be a positive integer." }, { status: 400 });
+        }
+        // Store order is oldest-first; a bounded listing serves newest first.
+        return Response.json({ runs: visible.slice(-Math.min(limit, 500)).reverse().map((run) => this.serializeRun(run)) });
+      }
+      return Response.json({ runs: visible.map((run) => this.serializeRun(run)) });
     }
     if (request.method === "DELETE" && id === null) {
+      // Registry clear is an operator action — never agent-bulk-deletable.
+      if (agentPrincipal !== null) {
+        return Response.json({ error: "Agent principals cannot clear the run registry." }, { status: 403 });
+      }
       await this.clearRuns();
       return Response.json({ ok: true });
     }
     if (id !== null && request.method === "GET") {
       const run = this.store.get(id);
-      return run
+      return run && (agentPrincipal === null || run.queuedBy === agentPrincipal)
         ? Response.json({ run: this.serializeRun(run) })
         : Response.json({ error: "Run not found." }, { status: 404 });
     }
     if (id !== null && request.method === "DELETE") {
+      const existing = this.store.get(id);
+      if (!existing || (agentPrincipal !== null && existing.queuedBy !== agentPrincipal)) {
+        return Response.json({ error: "Run not found." }, { status: 404 });
+      }
       const run = await this.cancelRun(id);
       return run
         ? Response.json({ run: this.serializeRun(run) })

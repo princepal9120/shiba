@@ -136,4 +136,9 @@ export interface Env {
    * except SIGNATURE_AUTHENTICATED. Unset for `wrangler dev`.
    */
   REQUIRE_ACCESS?: string;
+  /**
+   * Optional. Access application AUD tag. When set, identity comes only from a
+   * verified `Cf-Access-Jwt-Assertion`, and Access is required as with REQUIRE_ACCESS.
+   */
+  ACCESS_AUD?: string;
 }

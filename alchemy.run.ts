@@ -40,6 +40,7 @@
  * Store after a one-time `npx alchemy provider cloudflare bootstrap`
  * (needs a token with the account Secrets Store scope).
  */
+import { existsSync } from "node:fs";
 import { Effect, Redacted } from "effect";
 import * as Alchemy from "alchemy";
 import * as Cloudflare from "alchemy/Cloudflare";
@@ -49,6 +50,10 @@ import type { Mailbox } from "./apps/backend/src/mailbox-do.js";
 import type { McpGateway } from "./apps/backend/src/mcp-gateway.js";
 import type { Memory } from "./apps/backend/src/memory-do.js";
 import type { Sandbox } from "./apps/backend/src/sandbox.js";
+
+// alchemy loads .env into its own config store, not process.env — which
+// secrets()/configVars() read. Real env vars still win.
+if (existsSync(".env")) process.loadEnvFile(".env");
 
 const secrets = (names: readonly string[]) => {
   const entries: Record<string, ReturnType<typeof Redacted.make>> = {};
@@ -85,6 +90,56 @@ const resSuffix = isLiveStage ? "" : `-${(stage as string).replaceAll("_", "-")}
 if (!/^[a-z][a-z0-9-]{0,62}$/.test(workerName) || !/^[a-z][a-z0-9-]{0,62}$/.test(containerName)) {
   throw new Error(`ALCHEMY_STAGE '${stage}' cannot form a valid Worker name`);
 }
+
+// Cloudflare Access: hostname apps, not the Worker `access` prop — Worker-level
+// Access 403s WebSocket upgrades, and the dashboard runs on one.
+const accessEmails = (process.env.ACCESS_EMAILS ?? "").split(",").map((e: string) => e.trim()).filter(Boolean);
+const workersSubdomain = process.env.WORKERS_SUBDOMAIN?.trim();
+const workerHost = workersSubdomain ? `${workerName}.${workersSubdomain}.workers.dev` : undefined;
+const accessEnabled = isLiveStage && workerHost !== undefined && accessEmails.length > 0;
+if (isLiveStage && !accessEnabled) {
+  // REQUIRE_ACCESS is set for live stages below, so a deploy without a
+  // managed Access app fails closed: every dashboard/API request 401s
+  // unless an operator-managed Access app already fronts the hostname.
+  console.warn(
+    "alchemy: live stage without DashboardAccess — set ACCESS_EMAILS and " +
+      "WORKERS_SUBDOMAIN to manage Access here, or every request will 401 " +
+      "unless an external Access application fronts the worker hostname.",
+  );
+}
+// Machine callers authenticate inside the Worker (Slack/GitHub HMAC, MCP bearer,
+// automation secret) and cannot complete an Access login.
+export const ACCESS_BYPASS_PATHS = [
+  "/api/slack/events",
+  "/api/slack/command",
+  "/api/slack/interact",
+  "/api/github/webhook",
+  "/mcp",
+  "/mcp/*",
+  "/api/automations/*/trigger",
+];
+const DashboardAccess = accessEnabled
+  ? Cloudflare.Access.Application("DashboardAccess", {
+      type: "self_hosted",
+      name: workerName,
+      destinations: [{ type: "public", uri: workerHost as string }],
+      sessionDuration: "24h",
+      policies: [{ name: "owners", decision: "allow", include: accessEmails.map((email: string) => ({ email })) }],
+    })
+  : undefined;
+const MachineBypass = accessEnabled
+  ? Cloudflare.Access.Application("MachineBypass", {
+      type: "self_hosted",
+      name: `${workerName}-machine-callers`,
+      destinations: ACCESS_BYPASS_PATHS.map((path) => ({ type: "public" as const, uri: `${workerHost}${path}` })),
+      policies: [{ name: "worker-authenticates", decision: "bypass", include: ["everyone"] }],
+    })
+  : undefined;
+
+// Hoisted so the stack can print its id: scripts/mint-token.mjs writes tokens into it.
+const AgentTokens = Cloudflare.KV.Namespace("AGENT_TOKENS", {
+  title: `shiba-agent-tokens${resSuffix}`,
+});
 
 export const Worker = Cloudflare.Worker("Worker", {
   name: workerName,
@@ -134,9 +189,7 @@ export const Worker = Cloudflare.Worker("Worker", {
 
     // Megaplan stores — wrangler keeps `__PENDING__` ids until the resources
     // are created; alchemy provisions them on first deploy.
-    AGENT_TOKENS: Cloudflare.KV.Namespace("AGENT_TOKENS", {
-      title: `shiba-agent-tokens${resSuffix}`,
-    }),
+    AGENT_TOKENS: AgentTokens,
     ATTACHMENTS: Cloudflare.R2.Bucket("ATTACHMENTS", {
       name: `shiba-attachments${resSuffix}`,
     }),
@@ -171,6 +224,9 @@ export const Worker = Cloudflare.Worker("Worker", {
       "AI_GATEWAY_TOKEN",
       "DEVIN_API_KEY",
     ]),
+    // Live deploys fail closed: no Access identity = 401 on the dashboard/API.
+    ...(isLiveStage ? { REQUIRE_ACCESS: "1" } : {}),
+    ...(DashboardAccess ? { ACCESS_AUD: DashboardAccess.pipe(Effect.map((app) => app.aud)) } : {}),
     ...configVars([
       "REQUIRE_ACCESS",
       "AUTOMATIONS_ENABLED",
@@ -218,6 +274,28 @@ export default Alchemy.Stack(
       );
     }
     const worker = yield* Worker;
-    return { url: worker.url };
+    // Scoped memory recall filters on `agent`; Vectorize ignores unindexed metadata.
+    yield* Cloudflare.Vectorize.MetadataIndex("MemoryAgentIndex", {
+      indexName: `shiba-memory${resSuffix}`,
+      propertyName: "agent",
+      indexType: "string",
+    });
+    if (DashboardAccess && MachineBypass) {
+      yield* DashboardAccess;
+      yield* MachineBypass;
+    } else if (isLiveStage) {
+      yield* Effect.logWarning(
+        "Cloudflare Access not configured (set ACCESS_EMAILS and WORKERS_SUBDOMAIN): the dashboard/API will answer 401 until it is.",
+      );
+    }
+    const tokens = yield* AgentTokens;
+    const base = workerHost ? `https://${workerHost}` : worker.url;
+    return {
+      url: base,
+      mcp: workerHost ? `${base}/mcp` : undefined,
+      slackEvents: workerHost ? `${base}/api/slack/events` : undefined,
+      githubWebhook: workerHost ? `${base}/api/github/webhook` : undefined,
+      agentTokensNamespace: tokens.namespaceId,
+    };
   }).pipe(Alchemy.AdoptPolicy.adopt(isLiveStage)),
 );

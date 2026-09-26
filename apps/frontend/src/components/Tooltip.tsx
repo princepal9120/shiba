@@ -122,6 +122,8 @@ export function Tooltip({
   const show = useCallback(
     (immediate = false) => {
       if (disabled || !content) return;
+      // Touch taps emit mouseenter/focus; a hover hint would then stick over the control.
+      if (window.matchMedia?.("(hover: none)").matches) return;
       if (timerRef.current !== null) {
         window.clearTimeout(timerRef.current);
       }

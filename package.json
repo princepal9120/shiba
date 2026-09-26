@@ -7,7 +7,7 @@
   "scripts": {
     "build": "turbo run build && node scripts/copy-docs.mjs && pnpm run docs:verify",
     "build:dashboard": "turbo run build --filter=@shiba-ai-coworker/frontend",
-    "deploy": "alchemy deploy",
+    "deploy": "pnpm build && alchemy deploy",
     "deploy:preview": "alchemy plan",
     "deploy:preview:wrangler": "node scripts/plan-deploy.mjs",
     "deploy:destroy": "alchemy destroy",
@@ -18,7 +18,7 @@
     "docs:preview": "pnpm -C apps/web preview",
     "docs:verify": "node scripts/check-docs.mjs",
     "lint": "turbo run lint",
-    "setup": "node scripts/setup.mjs",
+    "bootstrap": "node scripts/setup.mjs",
     "test": "turbo run test",
     "test:ephemeral": "node scripts/ephemeral-stack.mjs --alchemy",
     "test:live": "pnpm -C apps/backend test:live",
@@ -44,5 +44,10 @@
     "pnpm": ">=10.0.0"
   },
   "packageManager": "pnpm@10.34.4",
-  "homepage": "https://shiba-ai-coworker.pages.dev/"
+  "homepage": "https://shiba-ai-coworker.pages.dev/",
+  "pnpm": {
+    "overrides": {
+      "jiti": "2.7.0"
+    }
+  }
 }

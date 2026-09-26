@@ -1,116 +1,98 @@
 /**
- * pnpm setup — one-command bootstrap for a self-hosted deploy.
- * Automates what's automatable (deploy, secrets, AI Gateway, Access) and
- * prints exact manual steps for what isn't (BYOK provider key, Slack app).
- * Node stdlib + wrangler CLI only.
+ * pnpm run bootstrap — one-command self-hosted deploy with Alchemy.
+ * Collects config into .env (gitignored), connects Alchemy to Cloudflare
+ * once (browser OAuth), then builds and runs `alchemy deploy`. Re-run anytime; answers persist.
+ * Node stdlib only.
  */
 import { spawnSync } from "node:child_process";
 import { createInterface } from "node:readline/promises";
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
+const ENV_FILE = ".env";
 const rl = createInterface({ input: process.stdin, output: process.stdout });
-const ask = (q, fallback = "") => rl.question(`${q}${fallback ? ` [${fallback}]` : ""}: `).then((a) => a.trim() || fallback);
-const askSecret = (q) => ask(`${q} (blank = skip)`);
 const ok = (s) => console.log(`  ✓ ${s}`);
-const note = (s) => console.log(`  · ${s}`);
+const run = (cmd, args, opts = {}) => spawnSync(cmd, args, { stdio: "inherit", ...opts });
+const capture = (cmd, args) => spawnSync(cmd, args, { encoding: "utf8" });
 
-const run = (cmd, args, input) =>
-  spawnSync(cmd, args, { input, encoding: "utf8", stdio: input !== undefined ? ["pipe", "inherit", "inherit"] : "inherit" });
-
-const CF_API = "https://api.cloudflare.com/client/v4";
-async function cf(token, method, path, body) {
-  const res = await fetch(`${CF_API}${path}`, {
-    method,
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  return res.json();
-}
-
-// 1. wrangler auth
-console.log("\n== shiba-ai-coworker setup ==\n");
-const whoami = spawnSync("npx", ["wrangler", "whoami"], { encoding: "utf8" });
-if (whoami.status !== 0 || /not authenticated/i.test(whoami.stdout + whoami.stderr)) {
-  console.log("Not logged in. Run: npx wrangler login — then re-run pnpm setup.");
-  process.exit(1);
-}
-const accountId = (whoami.stdout.match(/[0-9a-f]{32}/) ?? [])[0];
-ok(`wrangler authenticated${accountId ? ` (account ${accountId.slice(0, 8)}…)` : ""}`);
-
-// 2. deploy
-if ((await ask("Deploy now with `wrangler deploy`? (y/n)", "y")).toLowerCase() === "y") {
-  const deploy = run("npx", ["wrangler", "deploy", "--config", "apps/backend/wrangler.jsonc"]);
-  if (deploy.status !== 0) { console.log("Deploy failed — fix the error above and re-run."); process.exit(1); }
-  ok("deployed");
-}
-const workerHost = await ask("Worker host (no scheme)", "shiba-ai-coworker.<subdomain>.workers.dev");
-const workerUrl = `https://${workerHost}`;
-
-// 3. secrets
-console.log("\n== Secrets (blank skips; re-run anytime) ==");
-const secrets = [
-  ["SLACK_SIGNING_SECRET", "Slack signing secret (app Basic Information page)"],
-  ["SLACK_BOT_TOKEN", "Slack bot token xoxb-… (enables mention approval cards)"],
-  ["SLACK_APPROVERS", "Approver Slack user ids, comma-separated (e.g. U0123,U0456)"],
-  ["AI_GATEWAY_TOKEN", "AI Gateway token (gateway → settings → authenticated gateway)"],
-  ["GITHUB_TOKEN", "Fine-grained GitHub PAT (only needed to open PRs)"],
-  ["GITHUB_WEBHOOK_SECRET", "GitHub webhook secret (automations)"],
-  ["TYPESAFE_API_KEY", "TypeSafe API key (optional; run_when falls back to Workers AI)"],
-];
-const collected = {};
-for (const [name, hint] of secrets) {
-  const value = await askSecret(`${name} — ${hint}`);
-  if (!value) { note(`${name} skipped`); continue; }
-  const r = run("npx", ["wrangler", "secret", "put", name, "--config", "apps/backend/wrangler.jsonc"], value + "\n");
-  if (r.status === 0) { ok(`${name} set`); collected[name] = value; }
-  else note(`${name} failed — set later with: npx wrangler secret put ${name} --config apps/backend/wrangler.jsonc`);
-}
-if (await ask("Require Cloudflare Access on the dashboard/API? (y/n)", "y") === "y") {
-  collected.REQUIRE_ACCESS = "1";
-  // Plain var, not a secret — wrangler secret put cannot set it.
-  note('add "REQUIRE_ACCESS": "1" under "vars" in apps/backend/wrangler.jsonc and re-run wrangler deploy --config apps/backend/wrangler.jsonc');
-}
-
-// 4. optional CF API automation
-console.log("\n== Optional: Cloudflare API automation ==");
-const apiToken = await askSecret("API token w/ AI Gateway + Access edit on this account");
-if (apiToken && accountId) {
-  const gw = await cf(apiToken, "POST", `/accounts/${accountId}/ai-gateway/gateways`, { id: "default", name: "default" });
-  gw.success || (gw.errors ?? []).some((e) => /already exists|taken/i.test(e.message))
-    ? ok('AI Gateway "default" ready')
-    : note(`gateway create failed: ${JSON.stringify(gw.errors)}`);
-  const email = await ask("Access: allow which email?", "");
-  if (email) {
-    const app = await cf(apiToken, "POST", `/accounts/${accountId}/access/apps`, {
-      name: "shiba-ai-coworker", domain: workerHost, type: "self_hosted", session_duration: "24h",
-    });
-    if (app.success) {
-      const pol = await cf(apiToken, "POST", `/accounts/${accountId}/access/apps/${app.result.id}/policies`, {
-        name: "owner", decision: "allow", include: [{ email: { email } }], precedence: 1,
-      });
-      pol.success ? ok(`Access policy allows ${email}`) : note(`Access policy failed: ${JSON.stringify(pol.errors)}`);
-    } else note(`Access app failed: ${JSON.stringify(app.errors)}`);
+const env = {};
+if (existsSync(ENV_FILE)) {
+  for (const line of readFileSync(ENV_FILE, "utf8").split("\n")) {
+    const m = /^([A-Z0-9_]+)=(.*)$/.exec(line.trim());
+    if (m) env[m[1]] = m[2];
   }
 }
+const save = () =>
+  writeFileSync(ENV_FILE, Object.entries(env).filter(([, v]) => v !== "").map(([k, v]) => `${k}=${v}`).join("\n") + "\n", { mode: 0o600 });
+const ask = async (name, hint, fallback = env[name] ?? "") => {
+  const shown = fallback && /TOKEN|SECRET|KEY/.test(name) ? "<kept>" : fallback;
+  const answer = (await rl.question(`${name} — ${hint}${shown ? ` [${shown}]` : ""}: `)).trim();
+  env[name] = answer || fallback;
+};
 
-// 5. local dev vars
-if (Object.keys(collected).length && await ask("Write secrets to .dev.vars for `wrangler dev`? (y/n)", "n") === "y") {
-  const lines = Object.entries(collected).map(([k, v]) => `${k}=${v}`).join("\n") + "\n";
-  const existing = existsSync("apps/backend/.dev.vars") ? readFileSync("apps/backend/.dev.vars", "utf8") : "";
-  writeFileSync("apps/backend/.dev.vars", existing + lines);
-  ok("apps/backend/.dev.vars appended (gitignored)");
+console.log("\n== shiba-ai-coworker bootstrap (Alchemy) ==\n");
+
+// 1. Preflight: container images build locally.
+if (capture("docker", ["info"]).status !== 0) {
+  console.log("Docker daemon not running — start Docker Desktop/OrbStack and re-run.");
+  process.exit(1);
+}
+ok("docker running");
+
+// 2. Cloudflare credentials for Alchemy: browser OAuth (includes Access scopes), stored in ~/.alchemy.
+const who = capture("npx", ["wrangler", "whoami"]);
+const accountEmail = (/associated with the email (\S+?)\.?\s/.exec(`${who.stdout}${who.stderr}`) ?? [])[1] ?? "";
+const profile = capture("npx", ["alchemy", "profile", "show", "--no-input"]);
+if (!process.env.CLOUDFLARE_API_TOKEN && !env.CLOUDFLARE_API_TOKEN && !/cloudflare/i.test(`${profile.stdout}`)) {
+  console.log("Connecting Alchemy to Cloudflare (a browser window opens — approve it)…");
+  if (run("npx", ["alchemy", "profile", "edit", "--add", "Cloudflare", "--method", "oauth"]).status !== 0) {
+    console.log("Login failed — or set CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID in .env, then re-run.");
+    process.exit(1);
+  }
+}
+ok("alchemy connected to Cloudflare");
+
+// 3. Config. Access gates the dashboard; the workers.dev subdomain names its hostname.
+console.log("\n== Access (dashboard login for web + iPhone) ==");
+await ask("ACCESS_EMAILS", "emails allowed to sign in, comma-separated", env.ACCESS_EMAILS ?? accountEmail);
+await ask("WORKERS_SUBDOMAIN", "your account's workers.dev subdomain (the <x> in *.<x>.workers.dev)");
+
+console.log("\n== Secrets (blank = skip; stored only in .env) ==");
+for (const [name, hint] of [
+  ["GITHUB_TOKEN", "fine-grained GitHub PAT (clone + open PRs)"],
+  ["AI_GATEWAY_TOKEN", "AI Gateway token, if the 'default' gateway is authenticated"],
+  ["SLACK_SIGNING_SECRET", "Slack app signing secret"],
+  ["SLACK_BOT_TOKEN", "Slack bot token xoxb-…"],
+  ["SLACK_APPROVERS", "Slack user ids allowed to approve, comma-separated"],
+  ["SLACK_CHANNEL_REPOS", "channel→repo map, e.g. C0123=https://github.com/o/r"],
+  ["GITHUB_WEBHOOK_SECRET", "GitHub webhook secret (automations)"],
+  ["TYPESAFE_API_KEY", "TypeSafe key (optional)"],
+  ["DEVIN_API_KEY", "Devin API key (optional)"],
+]) {
+  await ask(name, hint);
+}
+save();
+ok(".env written (mode 600, gitignored) — alchemy.run.ts binds every secret present there");
+rl.close();
+
+// 4. Build + deploy. Alchemy replaces all secrets on each deploy, so .env is the source of truth.
+if (run("pnpm", ["build"]).status !== 0) process.exit(1);
+if (run("npx", ["alchemy", "deploy"]).status !== 0) {
+  console.log("Deploy failed — fix the error above and re-run `pnpm run bootstrap`.");
+  process.exit(1);
 }
 
-// 6. manual steps
+const host = env.WORKERS_SUBDOMAIN ? `shiba-ai-coworker.${env.WORKERS_SUBDOMAIN}.workers.dev` : "<worker-host>";
 console.log(`
-== Manual steps (cannot be automated) ==
-1. Slack app: https://api.slack.com/apps?new_app=1 → "From a manifest" →
-   paste slack-app-manifest.yaml with YOUR-WORKER = ${workerHost}
-   URLs: events ${workerUrl}/api/slack/events · interact .../api/slack/interact · command .../api/slack/command
-2. AI Gateway: add a BYOK provider key (Google/Anthropic/OpenAI) at
-   https://dash.cloudflare.com/?to=/:account/ai/ai-gateway → gateway "default".
-   If the gateway is auth-gated, mint a token and set AI_GATEWAY_TOKEN.
-3. Verify: ${workerUrl}/api/setup/status should show all green, then
-   open ${workerUrl}/app/ for the guided first run.
+== Deployed ==
+Dashboard (web + iPhone: open in Safari → Share → Add to Home Screen):
+  https://${host}/app/
+Claude Code (MCP):
+  node scripts/mint-token.mjs --agent claude-code --scopes sandbox:exec --host ${host} \\
+    --namespace-id <agentTokensNamespace from the deploy output above> --write
+  → prints the \`claude mcp add\` line to paste
+Slack: https://api.slack.com/apps?new_app=1 → From a manifest → slack-app-manifest.yaml
+  with YOUR-WORKER.workers.dev replaced by ${host}; then add the signing secret and
+  bot token to .env and re-run \`pnpm run bootstrap\`.
+AI Gateway: add a provider key (BYOK) to gateway "default" in the dashboard.
+Check: https://${host}/api/setup/status (after signing in)
 `);
-rl.close();

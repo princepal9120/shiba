@@ -1,5 +1,6 @@
 /**
- * AppNavRail — left app sidebar (224px, all views).
+ * AppNavRail — left app sidebar (224px, all views, lg+). Below lg the same
+ * nav renders as a slide-in sheet (`variant="sheet"`) opened from the top bar.
  * Bezalel-style: logo block on top, grouped text nav with navy active
  * state, utility cluster (setup, docs, shortcuts, theme) at the bottom.
  */
@@ -47,6 +48,9 @@ export interface AppNavRailProps {
   setupTotal: number;
   onOpenSetup: () => void;
   onOpenShortcuts: () => void;
+  variant?: "rail" | "sheet";
+  /** Sheet only: renders a close button in the brand row. */
+  onClose?: () => void;
 }
 
 const ICONS: Record<AppNavView, JSX.Element> = {
@@ -112,7 +116,7 @@ function NavItem({
       aria-label={label}
       aria-current={active ? "page" : undefined}
       className={
-        "w-full flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-colors duration-100 " +
+        "w-full flex items-center gap-2.5 rounded-md px-2.5 py-1.5 touch:min-h-11 text-[13px] font-medium transition-colors duration-100 " +
         (active
           ? "bg-[#0000a8] text-white shadow-sm"
           : "text-[#222320] hover:bg-[#e0ded5] hover:text-[#222320]")
@@ -137,6 +141,8 @@ export function AppNavRail({
   onOpenShortcuts,
   theme,
   onToggleTheme,
+  variant = "rail",
+  onClose,
 }: AppNavRailProps): JSX.Element {
   const setupComplete = setupDone !== null && setupDone >= setupTotal;
   const setupRemaining =
@@ -144,11 +150,16 @@ export function AppNavRail({
 
   return (
     <nav
-      className="w-56 shrink-0 flex flex-col bg-[#f6f4ed] border-r border-[#e0ded5] py-3 px-3 z-30 select-none overflow-y-auto"
+      className={
+        variant === "sheet"
+          ? "w-72 max-w-[85vw] h-full flex flex-col bg-[#f6f4ed] border-r border-[#e0ded5] px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-[max(0.75rem,env(safe-area-inset-left))] select-none overflow-y-auto"
+          : "hidden lg:flex w-56 shrink-0 flex-col bg-[#f6f4ed] border-r border-[#e0ded5] py-3 px-3 z-30 select-none overflow-y-auto"
+      }
       aria-label="Primary"
     >
+      <div className="flex items-start gap-2">
       {/* Brand */}
-      <a href="/" className="flex items-center gap-2.5 px-1.5 pb-3 mb-1 group focus:outline-none" aria-label="AI Coworker Home">
+      <a href="/" className="flex-1 min-w-0 flex items-center gap-2.5 px-1.5 pb-3 mb-1 group focus:outline-none" aria-label="AI Coworker Home">
         <img
           src="/assets/mascot/pet-logo.png"
           alt="Shiba"
@@ -164,6 +175,19 @@ export function AppNavRail({
           <span className="block text-[11px] text-[#6a6f63] leading-tight">agent plane</span>
         </span>
       </a>
+      {onClose ? (
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close navigation"
+          className="size-11 -mt-1.5 -mr-1.5 shrink-0 rounded-lg flex items-center justify-center text-[#6a6f63] hover:text-[#222320] hover:bg-[#e0ded5] transition-colors"
+        >
+          <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      ) : null}
+      </div>
 
       {/* Grouped primary nav */}
       <div className="flex flex-col gap-4">
@@ -228,7 +252,7 @@ export function AppNavRail({
         <a
           href="/docs/"
           aria-label="Documentation"
-          className="w-full flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium text-[#222320] hover:bg-[#e0ded5] hover:text-[#222320] transition-colors duration-100"
+          className="w-full flex items-center gap-2.5 rounded-md px-2.5 py-1.5 touch:min-h-11 text-[13px] font-medium text-[#222320] hover:bg-[#e0ded5] hover:text-[#222320] transition-colors duration-100"
         >
           <span className="text-[#6a6f63]" aria-hidden="true">
             <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>

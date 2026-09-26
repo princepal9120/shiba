@@ -8,10 +8,10 @@
  */
 import { getAgentByName } from "agents/routing";
 import type { Env } from "./env.js";
-import { parseGitHubRepoUrl } from "./security.js";
-import { buildApprovalBlocks } from "./slack-approval.js";
+import { parseGitHubRepoUrl, redactSecrets } from "./security.js";
+import { buildApprovalBlocks, type ExecutionContextLike } from "./slack-approval.js";
+import { buildSlackRunPayload, resolveSlackHarness } from "./slack-thread.js";
 import { verifySlackRequest } from "./slack.js";
-import { resolveSlackHarness } from "./slack-thread.js";
 
 export const SLACK_COMMAND_PATH = "/api/slack/command";
 export const SLASH_COMMAND = "/shiba-ai-coworker";
@@ -25,6 +25,8 @@ export interface OrchestratorStub {
 
 export interface SlackCommandDeps {
   orchestratorStub?: OrchestratorStub;
+  /** Deliver the queued card/error to the command's response_url. */
+  respond?: (responseUrl: string, body: Record<string, unknown>) => Promise<void>;
 }
 
 export interface ParsedSlackCommand {
@@ -65,13 +67,106 @@ export function parseSlackCommand(text: string): ParsedSlackCommand {
 }
 
 /**
+ * Slash-command response_urls live under hooks.slack.com/commands/ — the
+ * /actions/ check in slack-approval.ts covers interactivity URLs only.
+ */
+export function isSlackCommandResponseUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" &&
+      ["hooks.slack.com", "hooks.slack-gov.com"].includes(url.hostname) &&
+      url.username === "" && url.password === "" && url.port === "" &&
+      url.pathname.startsWith("/commands/");
+  } catch {
+    return false;
+  }
+}
+
+async function respondToCommand(
+  responseUrl: string,
+  body: Record<string, unknown>,
+  respond?: SlackCommandDeps["respond"],
+): Promise<void> {
+  if (respond) {
+    await respond(responseUrl, body);
+    return;
+  }
+  const response = await fetch(responseUrl, {
+    method: "POST",
+    redirect: "error",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw new Error(`Slack response_url POST failed (${response.status}).`);
+  }
+}
+
+/**
+ * Queue the run on the shared orchestrator and shape the reply Slack shows:
+ * the approval card on success, an ephemeral error otherwise. Never throws.
+ */
+async function queueSlackRun(
+  env: Env,
+  deps: SlackCommandDeps,
+  parsed: ParsedSlackCommand,
+  params: URLSearchParams,
+): Promise<Record<string, unknown>> {
+  // The card shows the exact agent the human is approving.
+  const harness = resolveSlackHarness(env);
+  let queued: Response;
+  try {
+    const stub: OrchestratorStub =
+      deps.orchestratorStub ?? (await getAgentByName(env.CodingOrchestrator, ORCHESTRATOR_NAME));
+    queued = await stub.fetch(
+      new Request("https://internal/api/runs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // Same payload as the mention lane: publishPullRequest on, channel/user carried.
+        body: JSON.stringify(buildSlackRunPayload({
+          repoUrl: parsed.repoUrl,
+          task: parsed.task,
+          channelId: params.get("channel_id") ?? undefined,
+          userId: params.get("user_id") ?? undefined,
+          harness,
+        })),
+      }),
+    );
+  } catch {
+    return { response_type: "ephemeral", text: "Failed to queue the task — the orchestrator is unreachable." };
+  }
+  const queuedBody = (await queued.json().catch(() => ({}))) as { approvalId?: string; error?: unknown };
+  if (!queued.ok || !queuedBody.approvalId) {
+    // Surface the orchestrator's reason: a config error (e.g. no GITHUB_TOKEN) won't clear on retry.
+    const reason = typeof queuedBody.error === "string" ? queuedBody.error : "Try again in a moment.";
+    return { response_type: "ephemeral", text: `Failed to queue the task. ${reason}` };
+  }
+  return {
+    response_type: "ephemeral",
+    text: `Task queued for ${parsed.repoUrl}: ${parsed.task}`,
+    blocks: buildApprovalBlocks({
+      threadKey: ORCHESTRATOR_NAME,
+      approvalId: queuedBody.approvalId,
+      repoUrl: parsed.repoUrl,
+      task: parsed.task,
+      harness,
+    }),
+  };
+}
+
+/**
  * Handle POST /api/slack/command. Returns null for any other path or
  * method so the Worker can fall through to the remaining routes.
+ *
+ * With a ctx and a response_url it acks at once (Slack's 3s window) and
+ * posts the card or failure to the response_url under `ctx.waitUntil`;
+ * otherwise it awaits the queue and returns the card inline.
  */
 export async function handleSlackCommand(
   request: Request,
   env: Env & { SLACK_SIGNING_SECRET?: string },
   deps: SlackCommandDeps = {},
+  ctx?: ExecutionContextLike,
 ): Promise<Response | null> {
   const url = new URL(request.url);
   if (url.pathname !== SLACK_COMMAND_PATH || request.method !== "POST") {
@@ -97,50 +192,23 @@ export async function handleSlackCommand(
   try {
     parsed = parseSlackCommand(params.get("text") ?? "");
   } catch (error) {
-    return Response.json(
-      { error: error instanceof Error ? error.message : "Invalid command text." },
-      { status: 400 },
-    );
+    // A 4xx renders as Slack's generic "failed" — a 200 ephemeral carries
+    // the usage hint back to the user instead.
+    return Response.json({
+      response_type: "ephemeral",
+      text: error instanceof Error ? error.message : "Invalid command text.",
+    });
   }
-  const stub: OrchestratorStub =
-    deps.orchestratorStub ?? (await getAgentByName(env.CodingOrchestrator, ORCHESTRATOR_NAME));
-  const harness = resolveSlackHarness(env);
-  let queued: Response;
-  try {
-    queued = await stub.fetch(
-      new Request("https://internal/api/runs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          repoUrl: parsed.repoUrl,
-          task: parsed.task,
-          source: "slack",
-          harness,
-          channel_id: params.get("channel_id"),
-          user_id: params.get("user_id"),
+  const responseUrl = params.get("response_url") ?? "";
+  if (ctx && isSlackCommandResponseUrl(responseUrl)) {
+    ctx.waitUntil(
+      queueSlackRun(env, deps, parsed, params)
+        .then((body) => respondToCommand(responseUrl, body, deps.respond))
+        .catch((error: unknown) => {
+          console.error("Slack command reply failed", redactSecrets(String(error)));
         }),
-      }),
     );
-  } catch {
-    return Response.json({ error: "Failed to queue orchestrator run." }, { status: 502 });
+    return Response.json({ response_type: "ephemeral", text: "Queueing your task…" });
   }
-  if (!queued.ok) {
-    return Response.json({ error: "Failed to queue orchestrator run." }, { status: 502 });
-  }
-  const queuedBody = (await queued.json().catch(() => ({}))) as { approvalId?: string };
-  if (!queuedBody.approvalId) {
-    return Response.json({ error: "Orchestrator did not return an approval id." }, { status: 502 });
-  }
-  // The card rides in the command reply — no bot token needed to deliver it.
-  return Response.json({
-    response_type: "ephemeral",
-    text: `Task queued for ${parsed.repoUrl}: ${parsed.task}`,
-    blocks: buildApprovalBlocks({
-      threadKey: ORCHESTRATOR_NAME,
-      approvalId: queuedBody.approvalId,
-      repoUrl: parsed.repoUrl,
-      task: parsed.task,
-      harness,
-    }),
-  });
+  return Response.json(await queueSlackRun(env, deps, parsed, params));
 }

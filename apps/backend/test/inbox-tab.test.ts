@@ -212,6 +212,44 @@ describe("dashboard inbox routes", () => {
     ]);
   });
 
+  it("with ACCESS_AUD set, a forged Access email header is refused (no JWT)", async () => {
+    const { env } = makeEnvWithTwoMailboxes();
+    const response = await worker.fetch(
+      new Request("https://worker/api/mailboxes", {
+        headers: { "CF-Access-Authenticated-User-Email": "attacker@evil.test" },
+      }),
+      { ...env, ACCESS_AUD: "aud-tag" } as Env,
+      ctx,
+    );
+    expect(response.status).toBe(401);
+  });
+
+  it("POST /api/mailboxes registers through the directory stub; directory 400 stays 400", async () => {
+    const directory = makeStub([
+      { method: "POST", match: "/internal/mailbox/mailboxes", body: { mailbox: { address: "agent@shiba.dev" } }, status: 201 },
+    ]);
+    const env = makeEnv({ [DIRECTORY]: directory });
+    const payload = JSON.stringify({ address: "agent@shiba.dev", label: "Agent" });
+    const response = await worker.fetch(
+      new Request("https://worker/api/mailboxes", { method: "POST", body: payload }),
+      env,
+      ctx,
+    );
+    expect(response.status).toBe(201);
+    expect(((await response.json()) as { mailbox: { address: string } }).mailbox.address).toBe("agent@shiba.dev");
+    expect(directory.calls[0]).toMatchObject({ method: "POST", body: payload });
+
+    const rejecting = makeStub([
+      { method: "POST", match: "/internal/mailbox/mailboxes", body: { error: "address required" }, status: 400 },
+    ]);
+    const bad = await worker.fetch(
+      new Request("https://worker/api/mailboxes", { method: "POST", body: "{}" }),
+      makeEnv({ [DIRECTORY]: rejecting }),
+      ctx,
+    );
+    expect(bad.status).toBe(400);
+  });
+
   it("GET /api/emails fans out across mailboxes, tags each row, sorts newest first", async () => {
     const { env, stubA, stubB } = makeEnvWithTwoMailboxes();
     const response = await worker.fetch(new Request("https://worker/api/emails"), env, ctx);

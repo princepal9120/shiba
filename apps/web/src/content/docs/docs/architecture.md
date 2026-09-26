@@ -182,7 +182,7 @@ The parent uses Workers AI for planning. Real model-provider and GitHub credenti
 | src/provider-gateway.ts | Server-side provider forwarding |
 | apps/backend/src/github.ts | GitHub REST publication |
 | src/runs.ts and src/transcript.ts | State and transcript helpers |
-| apps/frontend/src/main.tsx and apps/frontend/src/app.tsx | Mounted dashboard |
+| apps/frontend/src/router.tsx, src/routes/__root.tsx, and src/routes/app.tsx | TanStack Start dashboard shell and /app route |
 | docs/ and scripts/ | Static documentation and build checks |
 
 No D1, KV, Queues, R2, Postgres, Redis, or separate frontend service is required. State resides in Agents/Sandbox Durable Objects.

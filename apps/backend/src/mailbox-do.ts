@@ -198,7 +198,7 @@ export class Mailbox {
   ) {
     const exec: SqlExec = (sql, ...params) =>
       ctx.storage.sql.exec(sql, ...params).toArray() as unknown as SqlRow[];
-    this.store = new MailboxStore(exec);
+    this.store = new MailboxStore(exec, (fn) => ctx.storage.transactionSync(fn));
     ctx.blockConcurrencyWhile(async () => {
       this.store.init();
     });

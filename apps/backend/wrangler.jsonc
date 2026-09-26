@@ -44,12 +44,12 @@
   // Megaplan T4: agent bearer tokens, records keyed `tok_<sha256(raw)>`.
   // Provision: `wrangler kv namespace create AGENT_TOKENS` then paste the id.
   "kv_namespaces": [
-    { "binding": "AGENT_TOKENS", "id": "__PENDING__" },
+    { "binding": "AGENT_TOKENS", "id": "59cf73c3a6e0447fad8ced723d03fd13" },
   ],
   // Megaplan T4: MCP tool-call audit log. Provision:
   // `wrangler d1 create shiba-audit` then paste the database_id.
   "d1_databases": [
-    { "binding": "AGENT_AUDIT", "database_name": "shiba-audit", "database_id": "__PENDING__" },
+    { "binding": "AGENT_AUDIT", "database_name": "shiba-audit", "database_id": "a426d79d-295d-4875-ae93-90b8679aa466" },
   ],
   // Megaplan T8: bge-base-en-v1.5 embeddings of banked facts, keyed by
   // fact id (768-dim, cosine); `agent` metadata powers scoped recall

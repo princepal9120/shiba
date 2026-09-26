@@ -123,6 +123,22 @@ html.dark canvas {
   filter: invert(1) hue-rotate(180deg);
 }
 
+/* iOS Safari zooms into any focused field under 16px. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

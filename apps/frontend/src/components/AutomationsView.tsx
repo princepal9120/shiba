@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type JSX } from "react";
+import { LoadErrorState } from "./LoadErrorState";
 
 interface AutomationRecord {
   id: string;
@@ -82,6 +83,7 @@ export function AutomationsView(): JSX.Element {
   const [repoUrl, setRepoUrl] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const copyToClipboard = (text: string, label: string) => {
     void navigator.clipboard.writeText(text);
@@ -90,12 +92,16 @@ export function AutomationsView(): JSX.Element {
   };
 
   const refresh = useCallback(() => {
+    setLoadError(null);
     fetch("/api/automations")
-      .then(async (r) => (r.ok ? ((await r.json()) as { automations?: AutomationRecord[] }) : null))
-      .then((body) => {
-        if (body?.automations) setAutomations(body.automations);
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`Automations could not be loaded (${r.status}).`);
+        return (await r.json()) as { automations?: AutomationRecord[] };
       })
-      .catch(() => {});
+      .then((body) => setAutomations(body.automations ?? []))
+      .catch((error: unknown) => {
+        setLoadError(error instanceof Error ? error.message : "Automations could not be loaded.");
+      });
   }, []);
 
   useEffect(refresh, [refresh]);
@@ -126,6 +132,8 @@ export function AutomationsView(): JSX.Element {
         setNotice(`Deployed "${recipe.name}".`);
         refresh();
       }
+    } catch {
+      setNotice("Deploy failed: the backend could not be reached.");
     } finally {
       setBusyId(null);
     }
@@ -147,6 +155,8 @@ export function AutomationsView(): JSX.Element {
         setNotice(body.fired ? `Fired "${id}" — approval queued.` : `Skipped "${id}" — see lastSkip.`);
         refresh();
       }
+    } catch {
+      setNotice("Trigger failed: the backend could not be reached.");
     } finally {
       setBusyId(null);
     }
@@ -242,7 +252,9 @@ export function AutomationsView(): JSX.Element {
               Refresh
             </button>
           </div>
-          {automations === null ? (
+          {loadError !== null ? (
+            <LoadErrorState message={loadError} onRetry={refresh} />
+          ) : automations === null ? (
             <div className="flex items-center gap-2 text-xs text-[#6a6f63] font-mono py-2">
               <span className="animate-spin inline-block w-3 h-3 border-2 border-[#6a6f63] border-t-transparent rounded-full" />
               <span>Loading…</span>

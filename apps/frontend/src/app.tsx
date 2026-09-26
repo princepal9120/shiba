@@ -85,7 +85,11 @@ function useStoredApprovals(refreshToken: number): {
 
   useEffect(() => {
     let cancelled = false;
+    // A slow poll landing after a newer one must not repaint a resolved card.
+    let sent = 0;
+    let applied = 0;
     const load = () => {
+      const seq = ++sent;
       fetch("/api/approvals")
         .then(async (response) => {
           if (!response.ok) {
@@ -95,14 +99,15 @@ function useStoredApprovals(refreshToken: number): {
             approvals?: StoredApproval[];
             decided?: StoredApproval[];
           };
-          if (!cancelled) {
+          if (!cancelled && seq > applied) {
+            applied = seq;
             setApprovals(Array.isArray(body.approvals) ? body.approvals : []);
             setDecided(Array.isArray(body.decided) ? body.decided : []);
             setError(null);
           }
         })
         .catch((fetchError: unknown) => {
-          if (!cancelled) {
+          if (!cancelled && seq > applied) {
             setError(fetchError instanceof Error ? fetchError.message : String(fetchError));
           }
         });
@@ -126,14 +131,18 @@ function useAgentPrincipals(refreshToken: number): AgentPrincipal[] {
 
   useEffect(() => {
     let cancelled = false;
+    let sent = 0;
+    let applied = 0;
     const load = () => {
+      const seq = ++sent;
       fetch("/api/agents")
         .then(async (response) => {
           if (!response.ok) {
             throw new Error(`Agents request failed: ${response.status}`);
           }
           const body = (await response.json()) as { principals?: AgentPrincipal[] };
-          if (!cancelled) {
+          if (!cancelled && seq > applied) {
+            applied = seq;
             setPrincipals(Array.isArray(body.principals) ? body.principals : []);
           }
         })
@@ -148,6 +157,40 @@ function useAgentPrincipals(refreshToken: number): AgentPrincipal[] {
   }, [refreshToken]);
 
   return principals;
+}
+
+type IdentityIssue = "signin" | "unreachable" | "error";
+type IdentityResult = { agent: string } | { issue: IdentityIssue; message: string };
+
+async function fetchIdentity(): Promise<IdentityResult> {
+  let res: Response;
+  try {
+    // manual: Cloudflare Access answers an expired session with a cross-origin
+    // login redirect, which would otherwise surface as an opaque CORS failure.
+    res = await fetch("/api/whoami", { redirect: "manual", cache: "no-store" });
+  } catch {
+    return { issue: "unreachable", message: "Network error reaching /api/whoami." };
+  }
+  if (res.type === "opaqueredirect" || res.status === 401) {
+    return { issue: "signin", message: "Sign-in required." };
+  }
+  // Non-JSON means something other than the Worker answered (static host, dev proxy).
+  const body = (await res.json().catch(() => null)) as { agent?: unknown } | null;
+  if (body === null || res.status === 404 || res.status === 502 || res.status === 503 || res.status === 504) {
+    return { issue: "unreachable", message: `GET /api/whoami returned ${res.status}.` };
+  }
+  if (!res.ok) return { issue: "error", message: `GET /api/whoami failed with ${res.status}.` };
+  return typeof body.agent === "string" && body.agent !== ""
+    ? { agent: body.agent }
+    : { issue: "error", message: "The server did not return an agent identity." };
+}
+
+// Live tool-run records carry the delegate call's input, not a typed payload.
+function toolRunInput(run: ToolRunRecord): Record<string, unknown> {
+  const preview = run.inputPreview;
+  return typeof preview === "object" && preview !== null && !Array.isArray(preview)
+    ? (preview as Record<string, unknown>)
+    : {};
 }
 
 type MainView = AppNavView;
@@ -217,6 +260,7 @@ export function App(): React.JSX.Element {
   );
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("runs");
   const [mobileSessionsOpen, setMobileSessionsOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [sessionsCollapsed, setSessionsCollapsed] = useState(() =>
     typeof window !== "undefined"
       ? localStorage.getItem("shiba-ai-coworker:sidebar-collapsed") === "true"
@@ -282,29 +326,39 @@ export function App(): React.JSX.Element {
   // DO name or the dashboard would read one identity's runs and chat to another.
   const [orchestratorName, setOrchestratorName] = useState<string | null>(null);
   const [identityError, setIdentityError] = useState<string | null>(null);
+  const [identityIssue, setIdentityIssue] = useState<IdentityIssue | null>(null);
+  // Bumping this re-runs the whoami check (retry timer, "Retry now", wake-up).
+  const [identityAttempt, setIdentityAttempt] = useState(0);
+  const identityFailures = useRef(0);
+  const retryIdentity = useCallback(() => setIdentityAttempt((n) => n + 1), []);
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/whoami")
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`GET /api/whoami failed with ${res.status}`);
-        return (await res.json()) as { agent?: string };
-      })
-      .then((body) => {
-        if (!cancelled && typeof body.agent === "string" && body.agent !== "") {
-          setOrchestratorName(body.agent);
-        } else {
-          setIdentityError("The server did not return an agent identity.");
-        }
-      })
-      .catch((error: unknown) => {
-        if (!cancelled) {
-          setIdentityError(error instanceof Error ? error.message : "Identity lookup failed.");
-        }
-      });
+    let timer: number | undefined;
+    void fetchIdentity().then((result) => {
+      if (cancelled) return;
+      if ("agent" in result) {
+        identityFailures.current = 0;
+        setOrchestratorName(result.agent);
+        setIdentityError(null);
+        setIdentityIssue(null);
+        return;
+      }
+      setIdentityError(result.message);
+      setIdentityIssue(result.issue);
+      if (result.issue === "signin") return;
+      const delay = Math.min(30_000, 1_000 * 2 ** identityFailures.current);
+      identityFailures.current += 1;
+      timer = window.setTimeout(() => setIdentityAttempt((n) => n + 1), delay);
+    });
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
-  }, []);
+  }, [identityAttempt]);
+
+  const [online, setOnline] = useState(() =>
+    typeof navigator === "undefined" ? true : navigator.onLine,
+  );
 
   const agent = useAgent({
     agent: ORCHESTRATOR_AGENT,
@@ -347,6 +401,40 @@ export function App(): React.JSX.Element {
   const decidedStoredRef = useRef<Set<string>>(new Set());
 
   const refreshRuns = useCallback(() => setRefreshToken((token) => token + 1), []);
+
+  // Waking from background or regaining network: reconnect now instead of
+  // waiting out the socket's backoff, and refetch runs/approvals/identity.
+  const hiddenAt = useRef<number | null>(null);
+  useEffect(() => {
+    const revive = (force: boolean) => {
+      if (force || agent.readyState !== WebSocket.OPEN) agent.reconnect();
+      refreshRuns();
+      retryIdentity();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        hiddenAt.current = Date.now();
+        return;
+      }
+      const hiddenFor = hiddenAt.current === null ? 0 : Date.now() - hiddenAt.current;
+      hiddenAt.current = null;
+      // iOS freezes background sockets without closing them, so readyState can lie.
+      revive(hiddenFor > 15_000);
+    };
+    const onOnline = () => {
+      setOnline(true);
+      revive(true);
+    };
+    const onOffline = () => setOnline(false);
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
+  }, [agent, refreshRuns, retryIdentity]);
 
   // Drop decision bookkeeping for approvals that no longer wait on us.
   useEffect(() => {
@@ -590,7 +678,9 @@ export function App(): React.JSX.Element {
         setShowShortcutsModal(false);
         setShowOnboardingModal(false);
         setMobileSessionsOpen(false);
+        setMobileNavOpen(false);
         setCommandMenuOpen(false);
+        if (window.matchMedia("(max-width: 1023px)").matches) setWorkspaceCollapsed(true);
         return;
       }
       if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
@@ -629,6 +719,17 @@ export function App(): React.JSX.Element {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isSubmitting, repoUrl, task, submitTask, toggleSessionsCollapsed, toggleTheme]);
 
+  // First-seen time per live run: a stable createdAt so ordering doesn't churn.
+  const firstSeen = useRef(new Map<string, number>());
+  const seenAt = useCallback((runId: string) => {
+    let at = firstSeen.current.get(runId);
+    if (at === undefined) {
+      at = Date.now();
+      firstSeen.current.set(runId, at);
+    }
+    return at;
+  }, []);
+
   const allRuns: VMRun[] = useMemo(() => {
     const map = new Map<string, VMRun>();
     for (const r of retainedRuns) {
@@ -656,16 +757,18 @@ export function App(): React.JSX.Element {
         if (tr.summary) existing.summary = tr.summary;
         if (tr.error) existing.error = tr.error;
       } else {
+        const input = toolRunInput(tr);
+        const at = seenAt(tr.runId);
         map.set(tr.runId, {
           runId: tr.runId,
           sandboxId: tr.runId,
-          repoUrl: repoUrl || "https://github.com/repository",
-          task: task || "Coding task in sandbox",
-          baseBranch: baseBranch || "main",
-          publishPullRequest: false,
+          repoUrl: typeof input.repoUrl === "string" ? input.repoUrl : "",
+          task: typeof input.task === "string" ? input.task : `Delegated run ${tr.runId.slice(0, 8)}`,
+          baseBranch: typeof input.baseBranch === "string" ? input.baseBranch : "main",
+          publishPullRequest: input.publishPullRequest === true,
           status: tr.status || "running",
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
+          createdAt: at,
+          updatedAt: at,
           summary: tr.summary,
           error: tr.error,
           diff: completedDiff || undefined,
@@ -673,7 +776,7 @@ export function App(): React.JSX.Element {
       }
     }
     return Array.from(map.values()).sort((a, b) => b.createdAt - a.createdAt);
-  }, [retainedRuns, toolRuns, repoUrl, task, baseBranch]);
+  }, [retainedRuns, toolRuns, seenAt]);
 
   // Devin-style session list: the live chat session first, then retained and
   // in-flight delegated runs newest-first.
@@ -708,12 +811,14 @@ export function App(): React.JSX.Element {
     }
     for (const run of toolRuns) {
       if (seen.has(run.runId)) continue;
+      const input = toolRunInput(run);
       items.push({
         id: run.runId,
-        title: `Delegated run ${run.runId.slice(0, 8)}`,
-        repoName: run.agentType ?? "sandbox",
+        title: typeof input.task === "string" ? input.task : `Delegated run ${run.runId.slice(0, 8)}`,
+        repoName:
+          typeof input.repoUrl === "string" ? parseRepoName(input.repoUrl) : run.agentType ?? "sandbox",
         status: run.status,
-        updatedAt: Date.now(),
+        updatedAt: seenAt(run.runId),
       });
     }
     return items;
@@ -726,6 +831,7 @@ export function App(): React.JSX.Element {
     pendingApprovals.length,
     retainedRuns,
     toolRuns,
+    seenAt,
   ]);
 
   // The center pane always shows the live chat session; picking a sidebar
@@ -807,9 +913,44 @@ export function App(): React.JSX.Element {
     },
   ];
 
+  if (identityIssue === "signin") {
+    return (
+      <div className="h-dvh bg-[#f6f4ed] text-[#222320] font-sans flex items-center justify-center p-6 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+        <div className="bg-[#fffef8] border border-[#e0ded5] rounded-xl max-w-sm w-full p-6 shadow-2xl flex flex-col items-center text-center gap-3">
+          <img
+            src="/assets/mascot/pet-logo.png"
+            alt="Shiba"
+            className="size-14 rounded-full bg-white object-contain border border-[#0000a8]/40"
+          />
+          <h1 className="text-2xl text-[#222320]">Sign in to continue</h1>
+          <p className="text-sm text-[#6a6f63] leading-relaxed">
+            Your Cloudflare Access session has expired or you are not signed in yet.
+          </p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="mt-1 w-full min-h-11 rounded-lg bg-[#0000a8] hover:bg-[#1c1cc8] text-white text-sm font-semibold transition-colors shadow-sm active:scale-[0.98]"
+          >
+            Sign in
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const bannerMessage = !online
+    ? "You're offline. Changes will sync when the network returns."
+    : identityIssue === "unreachable"
+      ? "Backend not connected — open your Worker URL."
+      : identityIssue === "error"
+        ? `Identity lookup failed: ${identityError ?? "unknown error"}`
+        : orchestratorName && agent.connectionError
+          ? `Live connection lost: ${agent.connectionError.message ?? "unknown"}. Reconnecting…`
+          : null;
+
   return (
-    <div className="min-h-dvh bg-[#f6f4ed] text-[#222320] font-sans selection:bg-[#0000a8] selection:text-white flex">
-      {/* LEFT: app navigation rail (all views) */}
+    <div className="h-dvh overflow-hidden bg-[#f6f4ed] text-[#222320] font-sans selection:bg-[#0000a8] selection:text-white flex pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
+      {/* LEFT: app navigation rail (lg+; phones use the sheet below) */}
       <AppNavRail
         activeView={mainView}
         onNavigate={setMainView}
@@ -822,9 +963,55 @@ export function App(): React.JSX.Element {
         onOpenShortcuts={() => setShowShortcutsModal(true)}
       />
 
+      {mobileNavOpen ? (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <button
+            type="button"
+            aria-label="Close navigation"
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setMobileNavOpen(false)}
+          />
+          <div className="absolute inset-y-0 left-0 shadow-2xl">
+            <AppNavRail
+              variant="sheet"
+              activeView={mainView}
+              onNavigate={(view) => {
+                setMainView(view);
+                setMobileNavOpen(false);
+              }}
+              theme={theme}
+              onToggleTheme={toggleTheme}
+              activeSandboxCount={activeSandboxCount}
+              setupDone={setupDone}
+              setupTotal={SETUP_TOTAL_STEPS}
+              onOpenSetup={() => {
+                setMobileNavOpen(false);
+                setShowOnboardingModal(true);
+              }}
+              onOpenShortcuts={() => {
+                setMobileNavOpen(false);
+                setShowShortcutsModal(true);
+              }}
+              onClose={() => setMobileNavOpen(false)}
+            />
+          </div>
+        </div>
+      ) : null}
+
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
       {/* NAVY TOP BAR — bezalel-style breadcrumb + quick actions */}
-      <header className="h-11 shrink-0 bg-[#0000a8] text-white flex items-center gap-2.5 px-4 z-20">
+      <header className="h-[calc(2.75rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] shrink-0 bg-[#0000a8] text-white flex items-center gap-2.5 pl-2 pr-3 lg:px-4 z-20">
+        <button
+          type="button"
+          onClick={() => setMobileNavOpen(true)}
+          aria-label="Open navigation"
+          aria-expanded={mobileNavOpen}
+          className="lg:hidden size-11 -my-1 shrink-0 rounded-md flex items-center justify-center text-white/90 hover:bg-white/15 transition-colors"
+        >
+          <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
         <nav aria-label="Breadcrumb" className="flex items-center gap-2 min-w-0">
           <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.14em] text-white/60">
             AI Coworker
@@ -840,7 +1027,7 @@ export function App(): React.JSX.Element {
               type="button"
               onClick={() => setCommandMenuOpen(true)}
               aria-label="Open command menu"
-              className="h-7 rounded-md border border-white/20 bg-white/10 text-white/90 hover:bg-white/20 hover:text-white flex items-center gap-1.5 px-2 text-[11px] font-medium transition-colors"
+              className="h-7 touch:h-9 touch:min-w-11 justify-center rounded-md border border-white/20 bg-white/10 text-white/90 hover:bg-white/20 hover:text-white flex items-center gap-1.5 px-2 text-[11px] font-medium transition-colors"
             >
               <svg className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 10.5a6.5 6.5 0 11-13 0 6.5 6.5 0 0113 0z" />
@@ -850,6 +1037,31 @@ export function App(): React.JSX.Element {
           </Tooltip>
         </div>
       </header>
+
+      {bannerMessage ? (
+        <div
+          role="alert"
+          className="shrink-0 flex items-center gap-3 px-4 py-2 bg-[#fb2c36]/10 border-b border-[#fb2c36]/30 text-xs text-[#b91c1c]"
+        >
+          <span className="size-2 shrink-0 rounded-full bg-[#fb2c36] animate-pulse" aria-hidden="true" />
+          <span className="flex-1 min-w-0 break-words">
+            {bannerMessage}
+            {online && identityIssue ? (
+              <span className="text-[#6a6f63]"> Retrying automatically.</span>
+            ) : null}
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              if (identityIssue) retryIdentity();
+              else agent.reconnect();
+            }}
+            className="shrink-0 touch:min-h-11 px-3 py-1 rounded-md border border-[#fb2c36]/40 bg-[#fffef8] text-[#b91c1c] font-medium hover:bg-[#fb2c36]/10 transition-colors"
+          >
+            Retry now
+          </button>
+        </div>
+      ) : null}
 
       <div className="flex-1 flex min-w-0 min-h-0">
       {mainView === "tasks" ? (
@@ -891,7 +1103,7 @@ export function App(): React.JSX.Element {
               className="absolute inset-0 bg-black/60 backdrop-blur-sm"
               onClick={() => setMobileSessionsOpen(false)}
             />
-            <div className="absolute inset-y-0 left-0 shadow-2xl">
+            <div className="absolute inset-y-0 left-0 shadow-2xl bg-[#f6f4ed] pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
               <SessionsSidebar
                 sessions={sessions}
                 agents={agentPrincipals}
@@ -922,7 +1134,7 @@ export function App(): React.JSX.Element {
         {/* CENTER: conversation timeline + composer */}
         <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#f6f4ed]" aria-busy={busy}>
           {/* SESSION HEADER */}
-          <div className="border-b border-black/[0.08] bg-[#f6f4ed]/60 px-5 xl:px-6 py-2.5 flex items-center justify-between gap-3 shrink-0">
+          <div className="border-b border-black/[0.08] bg-[#f6f4ed]/60 px-3 sm:px-5 xl:px-6 py-2.5 flex items-center justify-between gap-3 shrink-0">
             <div className="flex items-center gap-2.5 min-w-0">
               {/* Desktop sidebar toggle button */}
               <Tooltip
@@ -953,10 +1165,10 @@ export function App(): React.JSX.Element {
                 type="button"
                 onClick={() => setMobileSessionsOpen(true)}
                 aria-label="Open sessions"
-                className="lg:hidden w-7 h-7 rounded-lg border border-black/[0.08] bg-[#fffef8] text-[#6a6f63] hover:text-[#222320] flex items-center justify-center transition-colors shrink-0"
+                className="lg:hidden w-7 h-7 touch:w-11 touch:h-11 rounded-lg border border-black/[0.08] bg-[#fffef8] text-[#6a6f63] hover:text-[#222320] flex items-center justify-center transition-colors shrink-0"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </button>
               </Tooltip>
@@ -977,6 +1189,20 @@ export function App(): React.JSX.Element {
               </span>
               </Tooltip>
             </div>
+            {/* Phones: the collapsed rail is hidden, so the workspace opens from here. */}
+            <button
+              type="button"
+              onClick={() => setWorkspaceCollapsed(false)}
+              aria-label="Open workspace panel"
+              className="md:hidden relative w-11 h-11 -my-1.5 rounded-lg border border-black/[0.08] bg-[#fffef8] text-[#6a6f63] hover:text-[#222320] flex items-center justify-center transition-colors shrink-0"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 5h16v14H4zM14 5v14" />
+              </svg>
+              {pendingApprovals.length + visibleStoredApprovals.length > 0 ? (
+                <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-[#b45309] animate-pulse" aria-hidden="true" />
+              ) : null}
+            </button>
             <div className="hidden md:flex items-center gap-4 text-xs font-mono text-[#6a6f63] shrink-0">
               <Tooltip content="Tool runs actively isPending" side="bottom">
               <span className="cursor-default">
@@ -1024,7 +1250,7 @@ export function App(): React.JSX.Element {
 
           {/* PENDING APPROVALS STRIP */}
           {(pendingApprovals.length + visibleStoredApprovals.length > 0 || approvalAnnouncement) ? (
-            <div className="bg-[#fffef8] border-b border-[#e0ded5] px-5 xl:px-6 py-3 flex items-center justify-between shadow-sm z-10 shrink-0">
+            <div className="bg-[#fffef8] border-b border-[#e0ded5] px-3 sm:px-5 xl:px-6 py-3 flex items-center justify-between gap-3 shadow-sm z-10 shrink-0">
               <p className="text-sm font-medium text-[#222320]" role="status" aria-live="polite">
                 {pendingApprovals.length + visibleStoredApprovals.length > 0 ? (
                   <span className="flex items-center gap-2 text-[#b45309]">
@@ -1040,12 +1266,24 @@ export function App(): React.JSX.Element {
                   </span>
                 )}
               </p>
+              {visibleStoredApprovals.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWorkspaceTab("approvals");
+                    setWorkspaceCollapsed(false);
+                  }}
+                  className="shrink-0 text-xs font-semibold text-[#b45309] border border-[#b45309]/40 bg-[#b45309]/10 hover:bg-[#b45309]/15 rounded-lg px-3 py-1.5 touch:min-h-11 transition-colors"
+                >
+                  Review
+                </button>
+              ) : null}
             </div>
           ) : null}
 
           {/* NOTICES / ERRORS */}
           {notice || chat.error || runsError ? (
-            <div className="px-5 xl:px-6 pt-3 flex flex-col gap-2 shrink-0">
+            <div className="px-3 sm:px-5 xl:px-6 pt-3 flex flex-col gap-2 shrink-0">
               {notice ? (
                 <div role="status" aria-live="polite" className="text-xs text-[#6a6f63] bg-[#fffef8] p-3 rounded-lg border border-[#e0ded5] flex items-start gap-2">
                   <svg className="w-4 h-4 text-[#0000a8] shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1074,7 +1312,7 @@ export function App(): React.JSX.Element {
           ) : null}
 
           {/* TIMELINE (scrollable) */}
-          <div className="flex-1 overflow-y-auto px-5 xl:px-8 py-5">
+          <div className="flex-1 overflow-y-auto overscroll-contain px-3 sm:px-5 xl:px-8 py-5">
             <StepTimeline
               messages={chat.messages}
               isStreaming={chat.isStreaming || chat.status === "streaming"}
@@ -1090,7 +1328,7 @@ export function App(): React.JSX.Element {
           </div>
 
           {/* COMPOSER (sticky bottom) */}
-          <div className="border-t border-black/[0.08] bg-[#f6f4ed]/60 px-5 xl:px-8 py-4 shrink-0">
+          <div className="border-t border-black/[0.08] bg-[#f6f4ed]/60 px-3 sm:px-5 xl:px-8 pt-3 sm:pt-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-[max(1rem,env(safe-area-inset-bottom))] shrink-0">
             <TaskComposer
               repoUrl={repoUrl}
               task={task}
