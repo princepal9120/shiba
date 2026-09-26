@@ -7,7 +7,7 @@
   "scripts": {
     "build": "astro build",
     "check": "astro check",
-    "dev": "astro dev stop; ASTRO_DEV_BACKGROUND=1 astro dev --port 4321",
+    "dev": "ASTRO_DEV_BACKGROUND=1 astro dev --port 4321",
     "preview": "astro preview --port 4321"
   },
   "dependencies": {
