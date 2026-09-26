@@ -117,6 +117,7 @@ export const ACCESS_BYPASS_PATHS = [
   "/mcp",
   "/mcp/*",
   "/api/automations/*/trigger",
+  "/api/trigger",
 ];
 const DashboardAccess = accessEnabled
   ? Cloudflare.Access.Application("DashboardAccess", {
