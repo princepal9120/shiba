@@ -248,4 +248,4 @@ Cost surfaces include Workers, Workers AI planning inference, Durable Objects, C
 
 ## License
 
-AGPL-3.0-only. See [LICENSE](LICENSE).
+AGPL-3.0-only. See [LICENSE](LICENSE). Earlier MIT-licensed material retains its notice in [LICENSE-MIT-PRIOR](LICENSE-MIT-PRIOR).

@@ -33,7 +33,7 @@ export const Route = createRootRoute({
       { title: "AI Coworker Dashboard · Self-Hosted AI Software Engineer" },
     ],
     links: [
-      { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
+      { rel: "icon", type: "image/x-icon", href: "/favicon.ico" },
       { rel: "apple-touch-icon", sizes: "180x180", href: "/app/apple-touch-icon.png" },
       // use-credentials keeps the Access cookie on the manifest fetch.
       {

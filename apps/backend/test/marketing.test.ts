@@ -23,6 +23,9 @@ describe.skipIf(!built)("marketing landing page", () => {
     expect(markup).toContain('data-theme="dark"');
     expect(markup).toContain("theme-toggle-btn");
     expect(markup).toContain("AGPL-3.0");
+    for (const harness of ["OpenCode", "Claude Code", "Codex", "Devin CLI"]) {
+      expect(markup).toContain(harness);
+    }
   });
 
   test("every referenced asset exists in the build output", () => {
