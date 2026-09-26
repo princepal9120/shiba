@@ -10,7 +10,7 @@ import { getAgentByName } from "agents/routing";
 import type { Env } from "./env.js";
 import { parseGitHubRepoUrl, redactSecrets } from "./security.js";
 import { buildApprovalBlocks, type ExecutionContextLike } from "./slack-approval.js";
-import { buildSlackRunPayload } from "./slack-thread.js";
+import { buildSlackRunPayload, resolveSlackHarness } from "./slack-thread.js";
 import { verifySlackRequest } from "./slack.js";
 
 export const SLACK_COMMAND_PATH = "/api/slack/command";
@@ -112,6 +112,8 @@ async function queueSlackRun(
   parsed: ParsedSlackCommand,
   params: URLSearchParams,
 ): Promise<Record<string, unknown>> {
+  // The card shows the exact agent the human is approving.
+  const harness = resolveSlackHarness(env);
   let queued: Response;
   try {
     const stub: OrchestratorStub =
@@ -126,6 +128,7 @@ async function queueSlackRun(
           task: parsed.task,
           channelId: params.get("channel_id") ?? undefined,
           userId: params.get("user_id") ?? undefined,
+          harness,
         })),
       }),
     );
@@ -146,6 +149,7 @@ async function queueSlackRun(
       approvalId: queuedBody.approvalId,
       repoUrl: parsed.repoUrl,
       task: parsed.task,
+      harness,
     }),
   };
 }

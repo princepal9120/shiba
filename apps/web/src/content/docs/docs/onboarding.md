@@ -43,4 +43,6 @@ Before using real repositories, complete the [readiness checklist](/docs/readine
 - **Locally exercised:** the dated 2026-09-19 record covers OpenCode container startup, repository clone, egress routing, and error cleanup under local `wrangler dev`; provider inference returned 401.
 - **Cloud-live:** no end-to-end cloud run is recorded as of the 2026-09-24 verification entry.
 
+For Slack app setup (scopes, endpoints, approver allowlist) see [Slack Integration](/docs/slack/). For the full runtime environment variable reference see [Configuration](/docs/configuration/).
+
 Claude Code, Codex, and Devin are implemented and have unit-tested harness/configuration paths. Their successful execution against live provider services is not established by the dated verification record. OpenCode is the only harness exercised in the recorded local end-to-end run, and that run did not complete model inference.

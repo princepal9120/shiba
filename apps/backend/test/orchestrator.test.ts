@@ -404,6 +404,46 @@ describe("combined cancellation signals", () => {
   });
 });
 
+describe("slack thread wiring", () => {
+  it("freezes the queued harness and thread into the executed envelope", async () => {
+    const threadKey = "slack:T1:C1:1758217400.000100";
+    const instance = agent();
+    // In production this DO instance is resolved by thread name; the
+    // fabricated test instance gets the same name pinned on directly.
+    Object.assign(instance, { name: threadKey });
+    const queued = await instance.onRequest(new Request("https://internal/api/runs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ repoUrl: "https://github.com/o/r", task: "fix", harness: "claude-code", threadKey }),
+    }));
+    expect(queued.status).toBe(200);
+    const { approvalId } = await queued.json() as { approvalId: string };
+    const approved = await instance.onRequest(new Request("https://internal/api/approvals", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ threadKey: "slack:T1:C1:1758217400.000100", approvalId, approved: true, decidedBy: "U1" }),
+    }));
+    expect(approved.status).toBe(200);
+    await vi.waitFor(() => expect(mocks.execute).toHaveBeenCalled());
+    const calls = mocks.execute.mock.calls as unknown as [[string]];
+    expect(parseAgentToolInput([{ role: "user", text: calls[0]![0]! }])).toMatchObject({
+      harness: "claude-code",
+      slackThread: { channelId: "C1", threadTs: "1758217400.000100" },
+    });
+  });
+
+  it("rejects a queue request naming an unknown harness", async () => {
+    const instance = agent();
+    const queued = await instance.onRequest(new Request("https://internal/api/runs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ repoUrl: "https://github.com/o/r", task: "fix", harness: "bogus-agent" }),
+    }));
+    expect(queued.status).toBe(400);
+    expect(instance.state.pendingApprovals ?? []).toHaveLength(0);
+  });
+});
+
 describe("run reliability", () => {
   const INPUT = { repoUrl: "https://github.com/o/r", task: "fix", baseBranch: "main", publishPullRequest: false };
 
@@ -472,7 +512,7 @@ describe("run reliability", () => {
     expect(instance.state.runs[0]?.status).toBe("unknown");
     expect(mocks.destroy).toHaveBeenCalledOnce();
     expect(posts).toHaveLength(1);
-    expect(posts[0]!.text).toContain("Run outcome unknown for https://github.com/o/r");
+    expect(posts[0]!.text).toContain("not sure how the o/r run ended");
     expect(posts[0]!.text).toContain("deadline");
   });
 
@@ -493,7 +533,7 @@ describe("run reliability", () => {
     expect(instance.state.runs[0]?.status).toBe("unknown");
     expect(mocks.destroy).toHaveBeenCalledOnce();
     expect(waitUntil).toHaveBeenCalled();
-    const notice = posts.find((post) => post.text.includes("Run outcome unknown"));
+    const notice = posts.find((post) => post.text.includes("not sure how the o/r run ended"));
     expect(notice?.text).toContain("orchestrator restart");
   });
 
@@ -513,7 +553,7 @@ describe("run reliability", () => {
     expect(run.status).toBe("completed");
     expect(run.pullUrl).toBe(pullUrl);
     expect(run.summary).not.toContain(pullUrl);
-    const completed = posts.find((post) => post.text.startsWith("Run completed"));
+    const completed = posts.find((post) => post.text.startsWith("done — here's what changed in o/r"));
     expect(completed?.text).toContain(`PR: ${pullUrl}`);
     expect(completed?.text).toContain("1 changed files.");
     expect(completed!.text.length).toBeLessThan(1200);

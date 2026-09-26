@@ -14,6 +14,7 @@ Non-secret defaults are in `apps/backend/wrangler.jsonc` and `alchemy.run.ts`. F
 | `CODEX_MODEL` | `openai/gpt-5.3-codex` | Codex default model |
 | `DEVIN_MODEL` | `devin/swe-2` | Devin default model |
 | `AGENT_HARNESS` | `opencode` | Deployment fallback; a task can select a harness explicitly |
+| `SLACK_AGENT_HARNESS` | `AGENT_HARNESS`, then `claude-code` | Harness for Slack-originated runs (mentions, DMs, /shiba-ai-coworker) |
 | `RUNTIME` | `sandbox` | Runtime adapter; current default is Cloudflare Sandbox |
 | `INSTANCE_TYPE` | `standard-1` | Configured Cloudflare container size |
 | `REQUIRE_ACCESS` | Wrangler default unset; live Alchemy stages set `1` | Require Access identity at the Worker boundary |
@@ -39,6 +40,7 @@ Subscription credentials (such as Claude or ChatGPT consumer subscriptions) are 
 | `DEVIN_API_KEY` | Required for Devin API access |
 | `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, `SLACK_APPROVERS` | Optional Slack integration and approver allowlist |
 | `SLACK_CHANNEL_REPOS` | Optional channel-to-repository mapping |
+| `TRIGGER_TOKEN` | Bearer token for `POST /api/trigger` (e.g. iPhone Apple Shortcuts); unset disables the route |
 | `TYPESAFE_API_KEY` | Optional TypeSafe integration |
 
 Local example:

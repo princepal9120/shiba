@@ -29,13 +29,14 @@ The Slack integration is powered by the Orchestrator Worker and Durable Objects:
    - `chat:write` (post messages and replies)
    - `app_mentions:read` (listen for @AI Coworker mentions)
    - `channels:history` (read thread context)
+   - `im:history` (read and reply to direct messages)
 
 3. **Enable Event Subscriptions**
    Set the Request URL to your Cloudflare Worker endpoint:
    ```
    https://your-worker.workers.dev/api/slack/events
    ```
-   Subscribe to bot events: `app_mention`.
+   Subscribe to bot events: `app_mention` and `message.im` (the second one powers DM conversations with the coworker).
 
 4. **Enable Interactivity**
    Under **Interactivity & Shortcuts**, enable interactivity and set the Request URL:
@@ -49,22 +50,18 @@ The Slack integration is powered by the Orchestrator Worker and Durable Objects:
    pnpm wrangler secret put SLACK_BOT_TOKEN --config apps/backend/wrangler.jsonc
    pnpm wrangler secret put SLACK_SIGNING_SECRET --config apps/backend/wrangler.jsonc
    ```
-   Mentions need `SLACK_BOT_TOKEN`. Map channels to repos with the `SLACK_CHANNEL_REPOS` var (`{"C123":"https://github.com/owner/repo"}`). `SLACK_APPROVERS` is a comma-separated list of Slack user ids; unset means nobody can approve.
+   Mentions need `SLACK_BOT_TOKEN`. Map channels to repos with the `SLACK_CHANNEL_REPOS` var (`{"C123":"https://github.com/owner/repo"}`). `SLACK_APPROVERS` is a comma-separated list of Slack user ids; unset means nobody can approve. Slack-originated runs launch `claude-code` by default; set the `SLACK_AGENT_HARNESS` var to override (it falls back to `AGENT_HARNESS`, then `claude-code`).
 
 </Steps>
 
 ## Example Interaction (illustrative, not a verification result)
 
-In any public or private channel where the bot is invited:
+In any channel where the bot is invited — or in a DM:
 
 > **Developer**: `@AI Coworker fix the typo in README.md and add pnpm instructions`
 >
-> **AI Coworker**:
-> 📋 **Approval requested**
-> - Target: `princepal9120/shiba` (`main` branch)
-> - Action: Update `README.md`
-> - Test Command: `pnpm test`
+> **AI Coworker**: Approval requested for the repository and proposed action; approve or reject before a sandbox starts.
 >
-> [ **Approve Run** ]   [ **Reject** ]
+> [ **Approve** ]   [ **Reject** ]
 
 After approval, the Worker attempts the run and posts its outcome to the Slack thread. A PR link is posted only when publishing was requested and succeeds. The recorded local OpenCode run stopped at a provider 401; no cloud end-to-end run is recorded (see [Verification status](/docs/claude-code/)).

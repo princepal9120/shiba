@@ -51,6 +51,44 @@ async function hmacHex(secret: string, message: string): Promise<string> {
     .join("");
 }
 
+const SLACK_POST_MESSAGE = "https://slack.com/api/chat.postMessage";
+
+/**
+ * Bounded wait on any Slack write: a hung API must not stall the run's
+ * critical path (progress posts share the emit loop) — callers still
+ * decide whether the resulting timeout error is fatal.
+ */
+export const SLACK_POST_TIMEOUT_MS = 8000;
+
+/**
+ * chat.postMessage to a channel (or thread when `threadTs` is set).
+ * Throws on transport failure or a Slack `error` field — callers decide
+ * whether a failed post is fatal (cards) or best-effort (progress).
+ */
+export async function postSlackMessage(
+  token: string,
+  input: { channel: string; threadTs?: string; text: string; blocks?: unknown[] },
+): Promise<void> {
+  const response = await fetch(SLACK_POST_MESSAGE, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json; charset=utf-8",
+    },
+    signal: AbortSignal.timeout(SLACK_POST_TIMEOUT_MS),
+    body: JSON.stringify({
+      channel: input.channel,
+      ...(input.threadTs ? { thread_ts: input.threadTs } : {}),
+      text: input.text,
+      ...(input.blocks ? { blocks: input.blocks } : {}),
+    }),
+  });
+  const json = (await response.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+  if (!response.ok || json.ok !== true) {
+    throw new Error(typeof json.error === "string" ? json.error : `Slack API ${response.status}`);
+  }
+}
+
 /**
  * Verify an inbound Slack request. Returns true only when the `v0=` HMAC
  * signature matches the raw body and the timestamp is within 5 minutes of

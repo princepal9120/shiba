@@ -82,6 +82,8 @@ export interface PendingApproval {
    * dispatch revalidates it and never substitutes another model.
    */
   route?: ApprovedRoute;
+  /** Coding agent the human approved (e.g. "claude-code"). */
+  harness?: string;
   /** Approval kind; absent on records written before email kinds landed — treated as `"run"`. */
   kind?: ApprovalKind;
   /** Frozen email send/delete input for email-kind approvals. */
@@ -121,6 +123,7 @@ export interface CreateApprovalInput {
   baseBranch?: string;
   publishPullRequest?: boolean;
   route?: ApprovedRoute;
+  harness?: string;
   kind?: ApprovalKind;
   payload?: JsonValue;
   queuedBy?: string;
@@ -144,6 +147,7 @@ export function createPendingApproval(
       ...(input.baseBranch !== undefined ? { baseBranch: input.baseBranch } : {}),
       ...(input.publishPullRequest !== undefined ? { publishPullRequest: input.publishPullRequest } : {}),
       ...(input.route !== undefined ? { route: input.route } : {}),
+      ...(input.harness !== undefined ? { harness: input.harness } : {}),
       ...(input.kind !== undefined ? { kind: input.kind } : {}),
       ...(input.payload !== undefined ? { payload: input.payload } : {}),
       ...(input.queuedBy !== undefined ? { queuedBy: input.queuedBy } : {}),

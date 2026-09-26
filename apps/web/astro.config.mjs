@@ -10,7 +10,7 @@ export default defineConfig({
 	srcDir: './src',
 	outDir: 'dist',
 	output: 'static',
-	// Static host: ship source images as-is; avoids the native sharp dep in CI.
+	// sharp's native dep is unavailable in CI; marketing images ship as authored.
 	image: { service: passthroughImageService() },
 	redirects: {
 		'/docs': '/docs/overview/',
@@ -59,6 +59,7 @@ export default defineConfig({
 						{ label: 'Slack Integration', slug: 'docs/slack' },
 						{ label: 'Telegram Integration', slug: 'docs/telegram' },
 						{ label: 'Discord Interactions', slug: 'docs/discord' },
+						{ label: 'HTTP Triggers (iPhone)', slug: 'docs/triggers' },
 						{ label: 'GitHub Pull Requests', slug: 'docs/github' },
 						{ label: 'Automations & Cron', slug: 'docs/automations' },
 						{ label: 'Use from Claude Code', slug: 'docs/mcp' },

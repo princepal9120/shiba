@@ -109,6 +109,8 @@ export interface ApprovalCardInput extends ApprovalPointer {
    * label). Falls back to the mailbox address the record already carries.
    */
   agent?: string;
+  /** Coding agent the run will execute — shown so the human approves it too. */
+  harness?: string;
 }
 
 /**
@@ -144,7 +146,8 @@ export function approvalCardText(input: ApprovalCardInput): string {
   const isEmail = input.kind === "email_send" || input.kind === "email_delete";
   return isEmail
     ? `${escapeMrkdwn(input.agent ?? input.repoUrl)} requests ${escapeMrkdwn(input.task)}`
-    : `Approval requested\nRepo: ${escapeMrkdwn(input.repoUrl)}\nTask: ${escapeMrkdwn(clipTask(input.task))}`;
+    : `Approval requested\nRepo: ${escapeMrkdwn(input.repoUrl)}\nTask: ${escapeMrkdwn(clipTask(input.task))}` +
+        (input.harness ? `\nAgent: ${escapeMrkdwn(input.harness)}` : "");
 }
 
 /**
@@ -164,7 +167,8 @@ export function buildApprovalBlocks(input: ApprovalCardInput): unknown[] {
   const isEmail = input.kind === "email_send" || input.kind === "email_delete";
   const headline = isEmail
     ? `*${escapeMrkdwn(input.agent ?? input.repoUrl)}* requests ${escapeMrkdwn(input.task)}`
-    : `*Approval requested*\n*Repo:* ${escapeMrkdwn(input.repoUrl)}\n*Task:* ${escapeMrkdwn(clipTask(input.task))}`;
+    : `*Approval requested*\n*Repo:* ${escapeMrkdwn(input.repoUrl)}\n*Task:* ${escapeMrkdwn(clipTask(input.task))}` +
+        (input.harness ? `\n*Agent:* ${escapeMrkdwn(input.harness)}` : "");
   return [
     {
       type: "section",

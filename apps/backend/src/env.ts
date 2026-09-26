@@ -99,6 +99,8 @@ export interface Env {
   /** Per-lane harness overrides; fall back to AGENT_HARNESS when unset. */
   TELEGRAM_AGENT_HARNESS?: string;
   DISCORD_AGENT_HARNESS?: string;
+  /** Optional. Harness for Slack-originated runs; defaults to AGENT_HARNESS, then "claude-code". */
+  SLACK_AGENT_HARNESS?: string;
   /** "sandbox" (default) or "computer" (preview-only refusal). */
   RUNTIME?: string;
   /**
@@ -156,6 +158,12 @@ export interface Env {
   DEVIN_API_KEY?: string;
   /** Optional. Verifies incoming GitHub webhook signatures. */
   GITHUB_WEBHOOK_SECRET?: string;
+  /**
+   * Optional. Bearer token for POST /api/trigger — external HTTP clients
+   * (e.g. an iPhone Apple Shortcut) queue approvals with it. Unset disables
+   * the route with a 503.
+   */
+  TRIGGER_TOKEN?: string;
   /**
    * Optional. When set, require Cloudflare Access identity on every path
    * except SIGNATURE_AUTHENTICATED. Unset for `wrangler dev`.
