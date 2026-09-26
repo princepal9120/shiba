@@ -63,7 +63,8 @@ export class Waitlist {
         entry.email, entry.interest, entry.github, now,
       );
     }
-    return Response.json({ ok: true, alreadyJoined: existing }, { status: existing ? 200 : 201 });
+    // Uniform 200: a 201-vs-200 split would reveal whether an email is on the list.
+    return Response.json({ ok: true, alreadyJoined: existing });
   }
 
   async alarm(): Promise<void> {

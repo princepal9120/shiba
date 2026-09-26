@@ -29,4 +29,5 @@ shiba-ai-coworker-docs/
 .superdesign/tmp/
 .agents/
 .claude/
+.tgrep/ 
 audit/

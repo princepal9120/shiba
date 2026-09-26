@@ -16,6 +16,13 @@ Every detail here comes from `README.md` and
 unit coverage on these paths. That is not proof of a cloud deployment, and this
 post makes no claim about a live end-to-end run.
 
+<div class="callout">
+  <span class="callout-label">Prototype status</span>
+  <p>The credential boundary has unit coverage using fakes.
+  <code>security.md</code> says not to treat that as proof of a cloud
+  deployment, and no inference success is claimed here.</p>
+</div>
+
 ## The one-sentence rule
 
 `README.md` says it directly: do not add provider credentials to the container.

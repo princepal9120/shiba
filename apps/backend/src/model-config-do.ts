@@ -38,7 +38,7 @@ export function modelConfigStub(env: Pick<Env, "ModelConfig">): DurableObjectStu
 }
 
 /** Registration rejects pasted secrets: a credentialRef names a reference. */
-const SECRET_SHAPED = /^(sk-|sk_live_|sk-ant-|ghp_|gho_|github_pat_|xox[baprs]-|AKIA|AIza|eyJ[A-Za-z0-9_-]{10,}\.)/;
+const SECRET_SHAPED = /^(sk-|sk_live_|sk-ant-|ghp_|gho_|ghu_|ghs_|ghr_|github_pat_|xox[baprs]-|AKIA|AIza|glpat-|gsk_|xai-|hf_|ya29\.|eyJ[A-Za-z0-9_-]{10,}\.|[A-Fa-f0-9]{64,})/;
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim() !== "";

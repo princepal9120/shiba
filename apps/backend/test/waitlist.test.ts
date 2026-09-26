@@ -88,8 +88,11 @@ describe("waitlist storage", () => {
     const submit = (value: unknown) => object.fetch(new Request("https://internal/internal/waitlist", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(value),
     }));
-    expect((await submit(payload)).status).toBe(201);
+    // Uniform 200 + body flag: the status code must not reveal list membership.
     expect((await submit(payload)).status).toBe(200);
+    const repeat = await submit(payload);
+    expect(repeat.status).toBe(200);
+    expect(((await repeat.json()) as { alreadyJoined?: boolean }).alreadyJoined).toBe(true);
     expect(sql.signups.size).toBe(1);
     expect((await (await object.fetch(new Request("https://internal/internal/waitlist"))).json() as { signups: unknown[] }).signups).toHaveLength(1);
     for (let i = 0; i < 3; i++) await submit({ ...payload, email: `user${i}@example.com` });

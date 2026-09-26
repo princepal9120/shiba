@@ -46,6 +46,7 @@ export function registerRunTools(registry: ToolRegistry, env: Env): void {
           task: args.task,
           baseBranch: args.baseBranch,
           publishPullRequest: args.publishPullRequest,
+          harness: args.harness,
         }),
       }, ctx.principal.principal);
       const approvalId = String(body.approvalId);
@@ -60,7 +61,7 @@ export function registerRunTools(registry: ToolRegistry, env: Env): void {
     {
       description:
         "Queue a coding task on a GitHub repo as a pending approval. Never starts a run: a human " +
-        "approves it in the dashboard or Slack, then it runs with the deployment's default harness and model.",
+        "approves it in the dashboard or Slack, then it runs with the requested or default harness and model.",
       inputSchema: {
         repoUrl: z.string().describe("HTTPS GitHub repository URL, e.g. https://github.com/owner/repo."),
         task: z.string().describe("The coding task to perform in the repository."),
@@ -69,6 +70,10 @@ export function registerRunTools(registry: ToolRegistry, env: Env): void {
           .boolean()
           .optional()
           .describe("Open a pull request with the result. Requires GITHUB_TOKEN on the deployment."),
+        harness: z
+          .enum(["opencode", "claude-code", "codex", "devin"])
+          .optional()
+          .describe("Coding agent harness. Defaults to the deployment's AGENT_HARNESS."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false },
     },

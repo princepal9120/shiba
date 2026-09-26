@@ -14,13 +14,14 @@ const schema = {
   sameAs: ['https://github.com/princepal9120/shiba', 'https://x.com/prince_twets'],
 };
 
-const capabilities = [
-  { number: '01', symbol: '▣', title: 'Approval before execution', detail: 'Review the exact repository, branch, task, and requested output. By default, no sandbox starts until you approve.' },
-  { number: '02', symbol: '▧', title: 'An isolated workspace', detail: 'Each approved task runs in its own Cloudflare Sandbox container, separate from your Worker and other runs.' },
-  { number: '03', symbol: '◫', title: 'Work you can inspect', detail: 'Follow agent progress, changed files, and a unified diff in the dashboard before deciding what to do next.' },
-  { number: '04', symbol: '⌁', title: 'Your account, your controls', detail: 'Self-host the Worker, choose your model route, and keep provider credentials outside the container.' },
-  { number: '05', symbol: '↗', title: 'Optional pull requests', detail: 'Ask Shiba to open a branch and pull request when you configure a GitHub token; diff-only tasks need no token.' },
-  { number: '06', symbol: '≋', title: 'Chat and dashboard entry points', detail: 'Start and review tasks from the dashboard, Slack, Telegram, Discord, or the mobile web app. A native iPhone app is on the roadmap.' },
+// The switch reasons, stated as flat claims. Adjectives are deliberately
+// absent — each row names a concrete thing the buyer either gets or does not.
+const comparisons = [
+  { point: 'Runs in infrastructure you own', shiba: 'Your Cloudflare account', them: "The provider's account" },
+  { point: 'Model and harness per run', shiba: 'Claude Code, Codex, OpenCode, Devin', them: 'Chosen by the provider' },
+  { point: 'Approval before code runs', shiba: 'Required by default', them: 'Varies by product' },
+  { point: 'Who holds the credentials', shiba: 'You do, at egress', them: 'Held by the provider' },
+  { point: 'License', shiba: 'AGPL-3.0, source readable', them: 'Proprietary' },
 ];
 ---
 
@@ -29,7 +30,7 @@ const capabilities = [
     <div class="hero-copy">
       <p class="eyebrow">OPEN-SOURCE DEVIN CLOUD ALTERNATIVE</p>
       <h1 id="home-title">It asks before<br /><em>it writes code.</em></h1>
-      <p class="hero-lead">An AI engineer that runs in your own Cloudflare account, shows you the exact command it wants to run, and waits for your yes. Your keys stay outside the sandbox. Your repo, your models, your rules.</p>
+      <p class="hero-lead">An AI engineer that runs in your own Cloudflare account, shows you the exact command it wants to run, and waits for your yes. Your keys stay outside the Cloudflare Sandbox. Your repo, your models, your rules.</p>
       <div class="hero-actions">
         <a class="button" href="/docs/getting-started/">Run it on your repo <span aria-hidden="true">↗</span></a>
       </div>
@@ -52,30 +53,17 @@ const capabilities = [
         <div class="approval-art" aria-hidden="true">
           <img src="/assets/shiba-working.png" alt="" width="1200" height="1200" fetchpriority="high" class="shiba-working-img" />
           <div class="anim-overlay">
-            <!-- Keyboard RGB glow -->
-            <div class="kb-glow"></div>
-            <!-- Floating code lines (match illustration style) -->
-            <div class="floating-code anim-code-1"><span class="c-kw">def</span> <span class="c-fn">keep_building</span>():<span class="cursor-blink">▌</span></div>
-            <div class="floating-code anim-code-2">&nbsp;&nbsp;<span class="c-kw">while</span> <span class="c-id">True</span>: <span class="c-fn">code</span>(<span class="c-str">idea</span>)</div>
-            <div class="floating-code anim-code-3"><span class="c-ok">✓</span> <span class="c-str">No errors · You got this!</span></div>
-            <!-- Glowing approval badge -->
-            <div class="glow-check">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="11" fill="#1a6bcc44" stroke="#3b9eff" stroke-width="2"/><polyline points="6,12 10,16 18,8" stroke="#7dd3fc" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              <span>Build · Deploy · <em>Good boy! 🎉</em></span>
+            <!-- The pending tool input, verbatim. The agent is stopped here
+                 until a human answers — which is the whole product. -->
+            <div class="ask-card">
+              <div class="ask-head"><span class="ask-pulse"></span><span>APPROVAL REQUIRED</span></div>
+              <pre class="ask-cmd"><code><span class="ask-verb">delegate_coding_task</span>(&#123;
+  repo:   <span class="ask-str">"acme/api"</span>,
+  task:   <span class="ask-str">"fix token refresh race"</span>,
+  branch: <span class="ask-str">"fix/auth-race"</span>
+&#125;)</code></pre>
+              <div class="ask-actions"><span class="ask-yes">APPROVE</span><span class="ask-no">REJECT</span></div>
             </div>
-            <!-- Steam from mug (positioned over mug area ~65% from left) -->
-            <div class="steam-particles">
-              <span class="steam s1"></span>
-              <span class="steam s2"></span>
-              <span class="steam s3"></span>
-            </div>
-            <!-- Terminal snippet bottom-right -->
-            <div class="terminal-snip">
-              <span class="t-prompt">›</span> <span class="c-fn">npm run dev</span><br/>
-              <span class="c-ok">✓ Compiled!</span> <span class="t-dots"><span></span><span></span><span></span></span>
-            </div>
-            <!-- Paw-tap ripple on keyboard -->
-            <div class="paw-ripple"></div>
           </div>
           <span class="art-stamp">A CLEAR PLAN. YOUR CALL.</span>
         </div>
@@ -180,10 +168,21 @@ const capabilities = [
     <div class="section-copy"><p>An AI coding tool is worth exactly as much as the boundary around it. Shiba runs in your Cloudflare account, requires human approval before sandbox execution by default, and shows resulting changes instead of asking you to take completion on faith.</p><a class="text-link" href="/why-shiba/">Why we built it <span aria-hidden="true">↗</span></a></div>
   </section>
 
-  <section class="shell home-section capabilities" aria-labelledby="capabilities-title">
-    <div class="section-head"><h2 id="capabilities-title">What Shiba gives you</h2><p class="micro">SIX PRACTICAL CAPABILITIES</p></div>
-    <div class="capability-grid">
-      {capabilities.map((item) => <article class="capability-card"><div class="capability-top"><span class="capability-icon" aria-hidden="true">{item.symbol}</span><span class="micro">{item.number}</span></div><h3>{item.title}</h3><p>{item.detail}</p></article>)}
+  <section class="shell home-section compare" aria-labelledby="compare-title">
+    <div class="section-head"><h2 id="compare-title">Why switch off a hosted agent.</h2><p class="micro">SHIBA VS A MANAGED CLOUD AGENT</p></div>
+    <div class="compare-grid" role="table" aria-label="Shiba compared with a managed cloud coding agent">
+      <div class="compare-row compare-head" role="row">
+        <span role="columnheader"></span>
+        <span role="columnheader" class="compare-shiba"><span class="compare-col-label">Shiba</span><span class="compare-col-full">SHIBA</span></span>
+        <span role="columnheader"><span class="compare-col-label">Managed cloud agent</span><span class="compare-col-full">MANAGED CLOUD AGENT</span></span>
+      </div>
+      {comparisons.map((row) => (
+        <div class="compare-row" role="row">
+          <span role="cell">{row.point}</span>
+          <span role="cell" class="compare-shiba"><span class="compare-col-label">Shiba</span><span class="compare-col-full">{row.shiba}</span></span>
+          <span role="cell"><span class="compare-col-label">Managed cloud agent</span><span class="compare-col-full">{row.them}</span></span>
+        </div>
+      ))}
     </div>
   </section>
 
@@ -219,7 +218,7 @@ const capabilities = [
     </div>
   </section>
 
-  <section class="shell closing" aria-labelledby="closing-title"><div><p class="eyebrow">BUILD WITH YOUR OWN AGENT</p><h2 id="closing-title">Put software engineer in your cloud.</h2><p>Explore the self-hosting docs for account setup, or join the open-source build.</p></div><div class="closing-actions"><a class="button" href="/docs/getting-started/">Get started <span aria-hidden="true">↗</span></a><a class="button button-outline" href="/waitlist/">Join the build</a></div></section>
+  <section class="shell closing" aria-labelledby="closing-title"><div><p class="eyebrow">BUILD WITH YOUR OWN AGENT</p><h2 id="closing-title">Put software engineer in your cloud.</h2><p>Open source (AGPL-3.0), self-hosted, and yours to fork. It takes one command to run it against a repo you own.</p></div><div class="closing-actions"><a class="button" href="/docs/getting-started/">Run it on your repo <span aria-hidden="true">↗</span></a></div></section>
 </MarketingPage>
 
 <style>
@@ -273,20 +272,25 @@ const capabilities = [
   .art-stamp { position:absolute; left:12px; bottom:12px; padding:6px 8px; border:1px solid #9cbce277; background:#171918d9; color:#b4cde9; font:9px 'Geist Mono',monospace; letter-spacing:.12em; }
   /* ── Animated illustration overlay ── */
   .anim-overlay { position:absolute; inset:0; pointer-events:none; }
-  /* Keyboard RGB underglow */
-  .kb-glow { position:absolute; bottom:0; left:50%; translate:-50% 0; width:55%; height:8px; background:linear-gradient(90deg,#00e5ff33,#1e90ff88,#00e5ff33); filter:blur(6px); border-radius:50%; animation:kb-shimmer 2.4s ease-in-out infinite; }
-  /* Floating code chips */
-  .floating-code { position:absolute; padding:4px 9px; background:#0d1117f0; border:1px solid #2a3040; border-radius:4px; font:9.5px/1.4 'Geist Mono',monospace; white-space:nowrap; opacity:0; backdrop-filter:blur(2px); }
-  .c-kw  { color:#c792ea; }
-  .c-id  { color:#82aaff; }
-  .c-fn  { color:#c3e88d; }
-  .c-str { color:#f78c6c; }
-  .c-ok  { color:#3ddfa5; }
-  .anim-code-1 { top:8px;  left:6px; animation:chip-in 0.5s 0.3s cubic-bezier(.2,.8,.2,1) forwards, code-float 5s 0.8s ease-in-out infinite; }
-  .anim-code-2 { top:34px; left:6px; animation:chip-in 0.5s 0.7s cubic-bezier(.2,.8,.2,1) forwards, code-float 5s 1.4s ease-in-out infinite; }
-  .anim-code-3 { top:60px; left:6px; animation:chip-in 0.5s 1.1s cubic-bezier(.2,.8,.2,1) forwards, code-float 5s 2s   ease-in-out infinite; }
-  /* Blinking cursor in code */
-  .cursor-blink { animation:blink 1.1s step-end infinite; color:#8be9fd; }
+  /* The card is centred over the illustration: it is the subject, not a
+     decoration on top of one. */
+  .anim-overlay { display:flex; align-items:center; justify-content:center; padding:16px; }
+  /* Opaque, not translucent: the illustration behind it is busy, and the
+     payload has to be readable at a glance. */
+  .ask-card { width:100%; max-width:330px; background:#0e0f0e; border:1px solid var(--navy); box-shadow:3px 3px 0 #0008; animation:chip-in 0.5s 0.25s cubic-bezier(.2,.8,.2,1) both; }
+  /* #0000a8 is fixed in both themes, so the header text stays white — the
+     theme-aware navy is a light tint in dark mode and would vanish here. */
+  .ask-head { display:flex; align-items:center; gap:7px; padding:7px 10px; background:#0000a8; color:#fff; font:8.5px 'Geist Mono',monospace; letter-spacing:.14em; }
+  .ask-pulse { width:5px; height:5px; background:currentColor; animation:blink 1.1s steps(2,start) infinite; }
+  .ask-cmd { margin:0; padding:11px 12px; font:9.5px/1.65 'Geist Mono',monospace; color:var(--ink); white-space:pre; overflow-x:auto; }
+  .ask-verb { color:var(--navy); font-weight:600; }
+  .ask-str { color:var(--ink-2); }
+  .ask-actions { display:flex; border-top:1px solid var(--line); }
+  /* Approve is the only filled control — one filled action per screen. */
+  .ask-actions span { flex:1; padding:7px 10px; text-align:center; font:8.5px 'Geist Mono',monospace; letter-spacing:.12em; }
+  .ask-yes { background:var(--navy); color:#fff; }
+  html[data-theme='dark'] .ask-yes { color:#152335; }
+  .ask-no { border-left:1px solid var(--line); color:var(--ink-2); }
   /* Glowing approval badge — top-right, matches illustration's neon card */
   .glow-check { position:absolute; top:8px; right:6px; display:flex; align-items:center; gap:6px; padding:5px 10px; background:#071525f0; border:1px solid #1e6bcc; border-radius:5px; font:8.5px 'Geist Mono',monospace; color:#7dd3fc; opacity:0; animation:chip-in 0.7s 1.6s cubic-bezier(.2,.8,.2,1) forwards, glow-pulse 3s 2.3s ease-in-out infinite; }
   .glow-check em { font-style:normal; color:#c3e88d; }
@@ -307,12 +311,6 @@ const capabilities = [
   .paw-ripple { position:absolute; bottom:18px; left:50%; translate:-50% 0; width:28px; height:14px; border-radius:50%; border:2px solid #1e90ff55; opacity:0; animation:paw-tap 2.4s 1s ease-out infinite; }
   /* ── Keyframes ── */
   @keyframes chip-in     { from { opacity:0; transform:translateY(8px) scale(.95); } to { opacity:1; transform:translateY(0) scale(1); } }
-  @keyframes code-float  { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-4px); } }
-  @keyframes glow-pulse  { 0%,100% { box-shadow:0 0 0 #1e90ff00; border-color:#1e6bcc; } 50% { box-shadow:0 0 14px #1e90ff55; border-color:#3b9eff; } }
-  @keyframes steam-rise  { 0% { opacity:0; transform:translateY(0) scaleX(1); } 35% { opacity:.55; } 100% { opacity:0; transform:translateY(-26px) scaleX(1.5) rotate(8deg); } }
-  @keyframes dot-bounce  { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-3px); } }
-  @keyframes kb-shimmer  { 0%,100% { opacity:.5; transform:scaleX(1); } 50% { opacity:1; transform:scaleX(1.12); } }
-  @keyframes paw-tap     { 0% { opacity:0; transform:scale(.4); } 20% { opacity:.7; } 100% { opacity:0; transform:scale(2.2); } }
   .task-paper { display:flex; align-items:center; gap:18px; padding:19px; background:var(--paper); border:1px solid var(--line-2); margin-bottom:20px; }
   .task-icon { display:grid; place-items:center; width:57px; height:57px; flex:none; border:1px solid var(--line-2); background:#fff; }
   .task-paper strong, .task-paper small, .workflow-step strong, .workflow-step small { display:block; }
@@ -337,8 +335,7 @@ const capabilities = [
     .hero-copy, .work-window { animation:none; }
     .work-window, .approval-art img, .workflow-step { transition:none; }
     .workflow-step.current .step-state { animation:none; }
-    .floating-code, .glow-check, .terminal-snip { animation:none; opacity:1; }
-    .cursor-blink, .steam, .t-dots span, .kb-glow, .paw-ripple { animation:none; opacity:0.6; }
+    .ask-card, .ask-pulse { animation:none; opacity:1; }
     .step-dither-screen { transition:none; }
     .step-card:hover .step-dither-screen, .work-window:hover .approval-art img, .work-window:focus-within .approval-art img { transform:none; }
   }
@@ -399,12 +396,24 @@ const capabilities = [
   .section-copy { display:grid; grid-template-columns:2fr 1fr; align-items:end; gap:50px; padding-top:32px; }
   .section-copy p { max-width:720px; margin:0; font-size:17px; line-height:1.75; }
   .text-link { color:var(--navy); font:12px 'Geist Mono',monospace; text-underline-offset:4px; }
-  .capability-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:1px; margin-top:30px; border:1px solid var(--line-2); background:var(--line-2); }
-  .capability-card { min-height:225px; padding:25px; background:var(--card); }
-  .capability-top { display:flex; align-items:start; justify-content:space-between; color:var(--navy); }
-  .capability-icon { font:30px 'Geist Mono',monospace; line-height:1; }
-  .capability-card h3, .steps-grid h3 { font-size:27px; margin:30px 0 9px; }
-  .capability-card p, .steps-grid p { font-size:13px; line-height:1.7; margin:0; }
+  /* Comparison table — the decision aid, on the page where the decision is
+     made. Ruled rows rather than cards: the reader is scanning for a
+     difference, so aligned columns and hairlines beat boxed tiles. */
+  .compare-grid { margin-top:30px; border:1px solid var(--line-2); background:var(--card); box-shadow:3px 3px 0 var(--paper-shadow); }
+  .compare-row { display:grid; grid-template-columns:1.15fr 1fr 1fr; border-top:1px solid var(--line); }
+  .compare-row:first-child { border-top:0; }
+  .compare-row > span { padding:14px 16px; font-size:13px; line-height:1.5; color:var(--ink-2); border-left:1px solid var(--line); }
+  .compare-row > span:first-child { border-left:0; color:var(--ink); }
+  .compare-head > span { font:9px 'Geist Mono',monospace; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-2); }
+  /* The Shiba column is the one the page argues for. Tinting a single column
+     keeps the navy accent in one place instead of scattering it. */
+  .compare-shiba { background:var(--panel-2); color:var(--ink); font-weight:500; }
+  .compare-head .compare-shiba { color:var(--navy); font-weight:600; }
+  /* The per-cell column label is redundant beside its header on wide screens
+     and load-bearing once the columns stack, so it is switched, not repeated. */
+  .compare-col-label { display:none; }
+  .steps-grid h3 { font-size:27px; margin:30px 0 9px; }
+  .steps-grid p { font-size:13px; line-height:1.7; margin:0; }
   .steps-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:32px; padding-top:30px; }
   .steps-grid { gap:20px; padding-top:36px; }
   .step-card { border-top:2px solid var(--navy); padding-top:18px; display:flex; flex-direction:column; }
@@ -451,9 +460,20 @@ const capabilities = [
   @media(max-width:980px) { .channels-grid { grid-template-columns:repeat(2,1fr); } .home-hero { gap:30px; } .work-window { align-self:start; } .window-body { padding:14px; } .task-paper { padding:12px; } .compatibility-end { margin-left:0; } }
   @media(max-width:980px) { .approval-art { height:160px; } }
   @media(max-width:420px) { .approval-art { height:132px; } }
-  @media(max-width:760px) { .home-hero { grid-template-columns:minmax(0,1fr); min-height:0; padding-block:48px 60px; } .work-window { width:100%; } .home-section { padding-top:75px; } .section-head { align-items:start; flex-direction:column; gap:10px; } .section-copy { grid-template-columns:1fr; gap:18px; } .capability-grid { grid-template-columns:repeat(2,1fr); } .steps-grid { grid-template-columns:1fr; } .closing { flex-direction:column; align-items:start; margin-top:75px; } }
+  @media(max-width:760px) { .home-hero { grid-template-columns:minmax(0,1fr); min-height:0; padding-block:48px 60px; } .work-window { width:100%; } .home-section { padding-top:75px; } .section-head { align-items:start; flex-direction:column; gap:10px; } .section-copy { grid-template-columns:1fr; gap:18px; } .steps-grid { grid-template-columns:1fr; } .closing { flex-direction:column; align-items:start; margin-top:75px; } }
   @media(max-width:560px) { .hero-proof { grid-template-columns:minmax(0,1fr); } .hero-proof-item { flex-direction:row; align-items:baseline; gap:12px; padding:10px 0 0; border-left:0; } .hero-proof-item + .hero-proof-item { padding-left:0; border-top:1px solid var(--line); } .hero-proof-label { flex:none; min-width:34px; font-size:34px; } }
-  @media(max-width:500px) { .channels-grid { grid-template-columns:1fr; } .capability-grid { grid-template-columns:1fr; } .capability-card { min-height:0; } .hero-actions .button { width:100%; } .window-status { flex-wrap:wrap; } .closing { padding:22px; } .closing-actions { width:100%; } .closing-actions .button { width:100%; } }
+  @media(max-width:500px) { .channels-grid { grid-template-columns:1fr; } .hero-actions .button { width:100%; } .window-status { flex-wrap:wrap; } .closing { padding:22px; } .closing-actions { width:100%; } .closing-actions .button { width:100%; } }
+  /* Stacked on narrow screens: each comparison point becomes a labelled block
+     so no column is squeezed below readability. */
+  @media(max-width:640px) {
+    .compare-row { grid-template-columns:1fr; }
+    .compare-row > span { border-left:0; padding:8px 16px; }
+    .compare-row > span:first-child { padding-top:16px; font-weight:600; color:var(--ink); }
+    .compare-shiba { border-left:3px solid var(--navy) !important; padding-left:13px !important; }
+    .compare-row > span:nth-child(3) { padding-bottom:16px; }
+    .compare-col-label { display:block; font:9px 'Geist Mono',monospace; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-2); margin-bottom:3px; }
+    .compare-head { display:none; }
+  }
 
   .channels-section { padding-top:85px; }
   .channels-intro { padding-top:24px; max-width:720px; font-size:15px; line-height:1.75; color:var(--ink-2); }

@@ -17,6 +17,13 @@ Sources: `README.md`, `apps/web/src/content/docs/docs/claude-code.mdx`, and
 end-to-end cloud run, benchmark, latency figure, or dollar saving is claimed
 here.
 
+<div class="callout">
+  <span class="callout-label">Prototype status</span>
+  <p>Harness selection is unit-tested. The one recorded local end-to-end
+  exercise returned a 401, so no successful model call is claimed for any
+  harness, and no cost or latency comparison appears in this post.</p>
+</div>
+
 ## The situation: two dials
 
 Shiba ships four coding harnesses in one pinned image: `opencode` (the default,

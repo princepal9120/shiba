@@ -83,15 +83,31 @@ export function parseDecisionData(value: string): ChatDecision | null {
   return { approved: match[1] === "approve", approvalId: match[2]! };
 }
 
-// Discord caps a message at 2000 chars; the full task stays on the dashboard.
+// Discord caps a message at 2000 chars; oversized tasks post as follow-up
+// chunks in the same thread — the card can never hide approved text.
 const CARD_TASK_LIMIT = 1500;
 
 /** Plain-text card body: the exact frozen input the approver is deciding on. */
-export function chatApprovalText(input: { repoUrl: string; task: string; approvalId: string }): string {
+export function chatApprovalText(input: { repoUrl: string; task: string; approvalId: string; route?: string }): string {
   const task = input.task.length <= CARD_TASK_LIMIT
     ? input.task
-    : `${input.task.slice(0, CARD_TASK_LIMIT)}… (${input.task.length - CARD_TASK_LIMIT} more chars, full task on the dashboard)`;
-  return `Approval requested\nRepo: ${input.repoUrl}\nTask: ${task}\napproval ${input.approvalId}`;
+    : `${input.task.slice(0, CARD_TASK_LIMIT)}… (${input.task.length - CARD_TASK_LIMIT} more chars — full task in this thread)`;
+  const route = input.route ? `\nRoute: ${input.route}` : "";
+  return `Approval requested\nRepo: ${input.repoUrl}\nTask: ${task}${route}\napproval ${input.approvalId}`;
+}
+
+/**
+ * Task text split to fit a platform message cap, or [] when it fits in one.
+ * Lanes post these as follow-ups next to the card so an approver can always
+ * read the entire task before pressing Approve.
+ */
+export function chatTaskChunks(task: string, limit: number): string[] {
+  if (task.length <= limit) return [];
+  const chunks: string[] = [];
+  for (let i = 0; i < task.length; i += limit) {
+    chunks.push(task.slice(i, i + limit));
+  }
+  return chunks;
 }
 
 export function decisionLine(approved: boolean, who: string): string {
@@ -113,7 +129,7 @@ export async function queueChatRun(
   env: Env,
   input: { platform: ChatPlatform; threadKey: string; repoUrl: string; task: string; userId: string; harness?: string },
   resolve: ResolveOrchestrator = defaultResolver(env),
-): Promise<{ approvalId: string } | { error: string }> {
+): Promise<{ approvalId: string; route?: string } | { error: string }> {
   let response: Response;
   try {
     const stub = await resolve(input.threadKey);
@@ -137,12 +153,16 @@ export async function queueChatRun(
   } catch {
     return { error: "The orchestrator is unreachable." };
   }
-  const body = (await response.json().catch(() => ({}))) as { approvalId?: unknown; error?: unknown };
+  const body = (await response.json().catch(() => ({}))) as { approvalId?: unknown; route?: unknown; error?: unknown };
   if (!response.ok || typeof body.approvalId !== "string") {
     // Surface the orchestrator's reason: a config error (e.g. no GITHUB_TOKEN) won't clear on retry.
     return { error: typeof body.error === "string" ? body.error : "Try again in a moment." };
   }
-  return { approvalId: body.approvalId };
+  return {
+    approvalId: body.approvalId,
+    // The frozen route is shown on the card so approvers see what will run.
+    ...(typeof body.route === "string" ? { route: body.route } : {}),
+  };
 }
 
 /**
@@ -204,6 +224,9 @@ export function createSeenRing(max: number) {
   };
 }
 
+/** Outbound chat-API calls hang forever without a bound; 30s matches github-project.ts. */
+const API_TIMEOUT_MS = 30_000;
+
 /** Telegram Bot API call. The token rides the URL path, so errors never include the URL. */
 export async function telegramApi(
   token: string,
@@ -216,6 +239,7 @@ export async function telegramApi(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(API_TIMEOUT_MS),
     });
   } catch {
     throw new Error(`Telegram ${method} request failed.`);
@@ -246,6 +270,7 @@ export async function discordApi(label: string, path: string, init: DiscordReque
         ...(init.botToken ? { Authorization: `Bot ${init.botToken}` } : {}),
       },
       ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
+      signal: AbortSignal.timeout(API_TIMEOUT_MS),
     });
   } catch {
     throw new Error(`Discord ${label} request failed.`);

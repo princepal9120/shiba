@@ -5,7 +5,7 @@
  * 3. Authorized Agent Principals & Scopes from KV (AGENT_TOKENS).
  * 4. Pinned Sandbox CLIs catalog (OpenCode, Claude Code, Codex, Devin / swe-2).
  */
-import { useEffect, useState, type JSX } from "react";
+import { useEffect, useRef, useState, type JSX } from "react";
 import type { AgentPrincipal } from "../types";
 import { formatTimeAgo } from "../ui-helpers";
 
@@ -81,10 +81,17 @@ export function AgentsView(): JSX.Element {
     };
   }, []);
 
+  const copyTimerRef = useRef<number | null>(null);
   const copyToClipboard = (text: string, label: string) => {
     void navigator.clipboard.writeText(text);
     setCopiedSnippet(label);
-    setTimeout(() => setCopiedSnippet(null), 2000);
+    // A rapid second click restarts the countdown instead of leaving the
+    // first timer to clear the new label early.
+    if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = window.setTimeout(() => {
+      copyTimerRef.current = null;
+      setCopiedSnippet(null);
+    }, 2000);
   };
 
   const origin = typeof window !== "undefined" ? window.location.origin : "https://your-worker.workers.dev";
