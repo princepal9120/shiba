@@ -94,10 +94,6 @@ const capabilities = [
         <div class="window-caption">The agent proposes. You decide when it runs.</div>
       </div>
     </div>
-    <figure class="hero-showcase" aria-label="Shiba workspace, retro desktop style">
-      <img class="hero-showcase-img hero-showcase-light" src="/assets/shiba-hero-window.png" alt="Retro desktop window of the Shiba workspace: harness chips, a pixel workstation, capability icons, and a status bar reading your Cloudflare account, one approval, four harnesses" width="1672" height="941" loading="lazy" />
-      <img class="hero-showcase-img hero-showcase-dark" src="/assets/shiba-hero-window-dark.png" alt="" width="1672" height="941" loading="lazy" aria-hidden="true" />
-    </figure>
   </section>
 
   <div class="shell compatibility" aria-label="Ways to use Shiba"><span>USE FROM</span><span>Web</span><span>Slack</span><span>Telegram</span><span>Discord</span><span>GitHub</span><span class="compatibility-end">Mobile web is available; native iPhone app is on the roadmap.</span></div>
@@ -218,7 +214,7 @@ const capabilities = [
     <div class="steps-grid">
       <div class="step-card">
         <div class="step-dither-screen" aria-hidden="true">
-          <div class="step-illustration"><img src="/assets/shiba-card-01-repo.png" alt="" width="1672" height="941" loading="lazy" /></div>
+          <div class="step-illustration"><img class="dithered-light" src="/assets/shiba-card-01-repo.png" alt="" width="1672" height="941" loading="lazy" /><img class="dithered-dark" src="/assets/shiba-card-01-repo-dark.png" alt="" width="1672" height="941" loading="lazy" aria-hidden="true" /></div>
         </div>
         <span class="micro">01 / CONNECT</span>
         <h3>Bring a repository</h3>
@@ -227,7 +223,7 @@ const capabilities = [
 
       <div class="step-card">
         <div class="step-dither-screen" aria-hidden="true">
-          <div class="step-illustration"><img src="/assets/shiba-card-02-approval.png" alt="" width="1672" height="941" loading="lazy" /></div>
+          <div class="step-illustration"><img class="dithered-light" src="/assets/shiba-card-02-approval.png" alt="" width="1672" height="941" loading="lazy" /><img class="dithered-dark" src="/assets/shiba-card-02-approval-dark.png" alt="" width="1672" height="941" loading="lazy" aria-hidden="true" /></div>
         </div>
         <span class="micro">02 / DECIDE</span>
         <h3>Approve or reject</h3>
@@ -236,7 +232,7 @@ const capabilities = [
 
       <div class="step-card">
         <div class="step-dither-screen" aria-hidden="true">
-          <div class="step-illustration"><img src="/assets/shiba-card-03-diff.png" alt="" width="1672" height="941" loading="lazy" /></div>
+          <div class="step-illustration"><img class="dithered-light" src="/assets/shiba-card-03-diff.png" alt="" width="1672" height="941" loading="lazy" /><img class="dithered-dark" src="/assets/shiba-card-03-diff-dark.png" alt="" width="1672" height="941" loading="lazy" aria-hidden="true" /></div>
         </div>
         <span class="micro">03 / REVIEW</span>
         <h3>See what changed</h3>
@@ -276,13 +272,6 @@ const capabilities = [
   .hero-proof-label { font-family:'Instrument Serif',Georgia,serif; font-size:44px; line-height:.9; color:var(--navy); }
   .hero-proof-detail { font-size:12px; line-height:1.45; color:var(--ink-2); }
   .work-window { border:1px solid var(--line-2); background:var(--panel-2); padding:3px; box-shadow:5px 5px 0 var(--paper-shadow); transition:transform 220ms ease, box-shadow 220ms ease; animation:hero-arrive 680ms 100ms cubic-bezier(.2,.7,.2,1) both; }
-  /* The bezalel-style showcase spans both hero columns. Two dithered PNG
-     variants carry the site palette; data-theme picks which one renders. */
-  .hero-showcase { grid-column:1 / -1; margin:8px 0 0; border:1px solid var(--line-2); background:var(--card); padding:3px; box-shadow:5px 5px 0 var(--paper-shadow); }
-  .hero-showcase-img { display:block; width:100%; height:auto; image-rendering:pixelated; }
-  :root[data-theme='dark'] .hero-showcase-light { display:none; }
-  .hero-showcase-dark { display:none; }
-  :root[data-theme='dark'] .hero-showcase-dark { display:block; }
   .work-window:focus-within { transform:translateY(-2px); box-shadow:7px 7px 0 var(--paper-shadow); }
   @media (hover: hover) and (pointer: fine) {
     .work-window:hover { transform:translateY(-2px); box-shadow:7px 7px 0 var(--paper-shadow); }
@@ -421,6 +410,10 @@ const capabilities = [
   }
   .step-illustration { position:relative; width:100%; aspect-ratio:1672 / 941; flex:none; overflow:hidden; background:#131520; }
   .step-illustration img { display:block; width:100%; height:100%; object-fit:cover; object-position:center center; transition:transform 400ms cubic-bezier(.2,.7,.2,1); }
+  .step-illustration img { image-rendering:pixelated; }
+  .step-illustration .dithered-dark { display:none; position:absolute; inset:0; }
+  :root[data-theme='dark'] .step-illustration .dithered-light { visibility:hidden; }
+  :root[data-theme='dark'] .step-illustration .dithered-dark { display:block; }
   @media (prefers-reduced-motion: reduce) {
     .step-illustration img { transition: none; transform: none; }
   }
