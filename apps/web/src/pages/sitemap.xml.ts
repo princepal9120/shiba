@@ -6,6 +6,7 @@ export async function GET() {
 	const docs = await getCollection('docs');
 	const staticPages = [
 		{ path: '/', changefreq: 'daily', priority: '1.0' },
+		{ path: '/open-source-devin-alternative/', changefreq: 'weekly', priority: '0.9' },
 		{ path: '/why-shiba/', changefreq: 'weekly', priority: '0.9' },
 		{ path: '/waitlist/', changefreq: 'daily', priority: '0.9' },
 	];
