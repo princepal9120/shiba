@@ -1,84 +1,108 @@
 ---
 title: What a failed run looks like
-description: Exit codes, bounded stderr, and the rule that a failed run may never render as a successful one.
+description: Shiba reports failures with a real exit code, a bounded stderr tail, and an error envelope, and never dresses a failure up as a success.
 pubDate: 2026-09-17
 category: journal
 pattern: protagonist-arc
-summary: The most important property of a coding agent is not that it succeeds. It is that its failures are legible.
+summary: A run is stopped mid-flight, and the record it leaves behind is an error with evidence rather than a success badge.
 ---
 
-<div class="callout">
-  <span class="callout-label">Prototype status</span>
-  <p>Shiba is a local prototype. The failure shapes described here are enforced in code and recorded in the repository's dated verification file. No live end-to-end cloud run is claimed.</p>
-</div>
+This is a build log entry, told as a story. A coding run is queued, it starts,
+and it does not finish. What matters is what the record looks like afterwards.
 
-An agent that fails obviously is a tool. An agent that fails quietly is a liability.
+Sources: `spec/GOAL.md`, `PLAN.md`, `VERIFICATION.md`, and
+`apps/web/src/content/docs/docs/troubleshooting.md`. Shiba is a local
+prototype, and this post describes required and unit-tested behaviour rather
+than a verified live cloud run.
 
-This is the least glamorous thing in the repository and the thing I would defend hardest in review, because the pressure to make failure look like success is constant and it is almost always locally rational. A run that reports an error is an unpleasant screen. A run that reports success is a relieved user. Everything that makes the second option tempting is a short-term improvement and a long-term betrayal.
+## The requirement
 
-## The requirement, written down before anything existed
+`spec/GOAL.md` gives the sandbox a numbered list, and item six is the one this
+post is about: report failures honestly, including process exit code and a
+bounded stderr tail.
 
-The specification's list of what the sandbox must do includes one item that is not a feature: *report failures honestly, including process exit code and a bounded stderr tail.*
+Item five, capturing changed files and a unified diff including new files, sits
+directly above it. A run that produced a diff and then failed still has a diff,
+and the report has to say so without dressing the partial work up as a finished
+task.
 
-The same document's closing rules are blunter still — no fake successful output, no generated placeholder implementation. Those are constraints on the build, not features, and they were written before the run pipeline existed. That ordering matters. When the failure path is specified in the same breath as the happy path, the happy path cannot quietly absorb it.
+`spec/GOAL.md` closes the same section with a rule about the assistant's own
+output: no generated placeholder implementation, no fake successful output, no
+external deployment, no push. If a dry run cannot complete because no compatible
+local container engine is running, the exact limitation gets recorded, while
+the TypeScript build and unit tests still have to pass.
 
-## The envelope, and why the transport is not enough
+## The envelope
 
-The implementation answer is a structured result envelope. When a run finishes, the parent receives a marker-wrapped structure carrying a status, and that structure — not the transport, not the exit of some intermediate process, not the presence of a completion badge — is the source of truth for whether the run worked.
+`PLAN.md` describes the structured result a run returns. Error envelopes must
+report `error`. A malformed result, or an absent one, is `error` too. The plan's
+word for the failure mode is never silent success.
 
-The design note is worth quoting because it is the kind of line that only gets written after it has been learned the hard way: trust the parsed envelope, not the transport type. A stream can end cleanly while the work failed. A tool can report progress while the process is dying. Only a parsed, structured, terminal status answers the question.
+`troubleshooting.md` turns that into a symptom you can actually see. If a
+completed badge conflicts with the output, inspect the structured result
+envelope, because failed runs should report error rather than successful
+completion.
 
-The invariant is testable and tested: an error envelope never reads as completed. If the status is an error, the UI shows an error, no matter what else happened along the way.
+That conflict is the bug this rule exists to prevent. A UI that shows a green
+completion for a run whose envelope says `error` is lying about the run, and the
+envelope is the source of truth.
 
-## What a failure actually carries
+## What the failure message carries
 
-The parts of a failure report that matter are the ones that let you act without re-running the job:
+`PLAN.md` requires failure messages to include the real error and the real exit
+code, passed through `safeText` and `redactSecrets` before they leave the
+runtime. Redaction is not optional formatting; it is what allows a real error to
+be reported at all.
 
-- **The real exit code.** Not a generic 1. If the harness exited non-zero, that number is what you get.
-- **A bounded stderr tail.** Enough of the actual error text to diagnose, and explicitly bounded so a runaway process cannot fill a Durable Object with megabytes of log. The current bound is 8,000 characters.
-- **The phase.** Whether the run died cloning, launching the harness, or collecting the diff changes what you investigate first.
-- **Redaction.** Known credential patterns are stripped from output paths before anything is stored or displayed.
+The tail is bounded. `costs.md` lists the stderr tail at 8,000 characters, with
+the collected diff at 120,000, the transcript diff display at 20,000, captured
+files at 50, per-file captured contents at 100,000 characters, and total captured
+contents at 500,000. These are application settings, not guaranteed in-memory
+read bounds, and capture truncation can make a publication incomplete.
 
-Redaction is described in the documentation as a bound and a known-pattern filter, explicitly *not* a guarantee against arbitrary secrets or binary data. The instruction that follows is the operative one: never put secrets in tasks or repositories. A redaction filter is a safety net, not a licence to be careless.
+So a failure report is deliberately partial. It is partial by design, and the
+limit is documented rather than discovered.
 
-## A real failure, from the dated record
+## The record-keeping rule
 
-The 2026-09-19 local end-to-end exercise is the most useful failure in the repository, precisely because it did not succeed.
+`PLAN.md` also sets the standard for the build log itself. Record the date, the
+versions, and every failure. A failing task reports its real exit code.
 
-The chain worked: a task was queued, a locally signed Slack approval was accepted, the Durable Object dispatched, a real container came up, GitHub egress was scoped to the requested repository, the clone succeeded, and the harness launched with the expected arguments. Then the provider call was rewritten to the AI Gateway and returned 401. No gateway credential was configured in the local environment.
+`VERIFICATION.md` is written to that standard, which is why it contains awkward
+lines. A live cloud run is listed as not attempted. The one local end-to-end
+exercise with OpenCode on 2026-09-19 returned a 401, so model inference was not
+verified. Claude Code and Codex have not run live. `troubleshooting.md` adds
+that the verification file is dated, that unit tests use fakes, and that none of
+it establishes successful cloud deployment or model inference.
 
-And that 401 was reported as a 401. The run was marked as an error, the structured envelope carried it, and the container was destroyed. The verification file does not describe this run as a success with a caveat. It describes the model call as not verified, names the missing account configuration, and separately notes that a 401 means the provider call was not successful — egress routing is not inference.
+An unflattering 401 in the record is the system working. A green run nobody can
+reproduce is the failure mode.
 
-That is the behaviour this whole post is about. The most flattering possible summary of that run would have been "end-to-end pipeline verified." It would even have been mostly true. It is also exactly the kind of sentence that makes a system untrustworthy six months later.
+## How to report one yourself
 
-## Failure modes that are refused by design
+`troubleshooting.md` gives the format for a bug report: the command, the
+versions, bounded redacted output, the expected and actual behavior, and whether
+the evidence is a unit test, a local exercise, or a cloud run. Never send secrets
+or private run transcripts.
 
-Some failures are prevented rather than reported, and those are the interesting ones:
+Label the evidence type and the claim follows it. A 401 means the provider call
+was not successful, and egress routing alone is not inference. If the container
+engine is missing, say the container engine is missing, because static build
+success does not validate container startup.
 
-**A retired or unsupported model id** is refused at startup rather than failing on the first provider call. A model that no longer exists should not cost you a container to discover.
+## Why the honesty costs something
 
-**A mismatched harness and model pairing** is refused while the approval is prepared, so a plan you are looking at is always a plan that can run.
+Bounded tails mean you cannot always see why a run failed. Redaction means the
+exact secret-adjacent line is gone. Truncation means a publication can be
+incomplete. A refused config check means a run you wanted did not start.
 
-**A pull request requested with no token configured** fails before any coding starts, with a configuration error, rather than doing the work and then failing to publish it.
+Each of those is a worse experience than a confident success message. The
+project takes them anyway, because the alternative is a dashboard that reports
+activity it cannot back up, and `spec/GOAL.md` rules out fake metrics,
+testimonials, and fabricated activity outright.
 
-**An oversized file tree** fails the run instead of publishing a partial pull request. A truncated result presented as a complete one is a correctness bug, not a degraded mode.
+The rule is simple enough to state and hard enough to keep. A run that fails is
+reported as failed, with the exit code it actually had, the stderr it actually
+produced, up to a documented limit, with secrets removed.
 
-**An automation whose `run_when` gate errors** fails closed — no run — and records why. Here the failure is *not running*, which is the safe direction.
-
-## The limits of honest failure
-
-Honest failure reporting does not make a system reliable. It makes it legible, and legibility is what lets you decide whether to trust it.
-
-The repository is careful about the difference. Publication of results is content-based and is not a lossless Git patch transport, so a published pull request can miss deletions or file modes. Capture truncation can make publication incomplete. Cancellation is best-effort — it is not process cancellation and not complete Durable Object erasure. A run appearing to stall may be a concurrency or capacity condition, not a bug.
-
-None of those are hidden, and none of them are dressed up as features.
-
-## What still has to be proven
-
-The completion plan's central acceptance bar includes a failing task reporting its real exit code and a pull request showing a deleted file as deleted. That bar has not been met against a live cloud run, and the verification file says so. The local unit coverage and the local end-to-end exercise are real evidence of what has been tested; they are not evidence of a deployed system behaving the same way.
-
-The gap is stated rather than papered over, which is the same discipline this post is about. A prototype that tells you exactly which of its failure paths are proven, and which are still assertions, is usable. One that claims all of them are proven is not — and you cannot tell the difference until the day it matters.
-
-## The rule I would keep
-
-If you take one thing from this, make it the ordering. Build the failure path first, or at least specify it first. Make the success path unable to swallow it. Then, when something breaks at two in the morning, the system will hand you an exit code and a stderr tail instead of a reassuring green badge — and you will know exactly how much of the rest to believe.
+Read next: [why the approval gate comes before the container](/blog/approval-gate/).

@@ -1,9 +1,9 @@
-+------------------------------------------------------------+
-|  [ PROPOSAL ]   delegate_coding_task                        |
-|  repoUrl ......... https://github.com/owner/repo            |
-|  task ............ fix input sanitization in auth.ts        |
-|  baseBranch ...... main                                      |
-|  publishPR ....... false                                     |
-|                                                            |
-|     no container starts until a human approves this          |
-+------------------------------------------------------------+
+  .-----------------------------------------.
+  |  APPROVAL GATE                          |
+  |                                         |
+  |   plan  ->  human  ->  container        |
+  |            |                            |
+  |            +-- approve --> provision    |
+  |                                         |
+  |   no container starts before approve    |
+  '-----------------------------------------'
