@@ -7,6 +7,8 @@ pattern: what-is-what-could-be
 summary: What self-hosted usually means, what it could mean, and the three belongings that decide which one you actually get.
 ---
 
+![Three glass pillars holding up a floating terminal platform](/blog/why-self-host-a-coding-agent.png)
+
 This is a note about a phrase. Self-hosted gets attached to a lot of software
 that hands you the container and keeps the leverage. Shiba is built around a
 stricter reading, and it is worth writing down what that reading is.

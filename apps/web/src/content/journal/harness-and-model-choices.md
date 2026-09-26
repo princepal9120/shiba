@@ -7,6 +7,8 @@ pattern: situation-complication-resolution
 summary: The situation is a per-run choice, the complication is that nobody has measured the outcome, and the resolution is to publish limits instead of claims.
 ---
 
+![Two glass consoles branching to different holographic model nodes](/blog/harness-and-model-choices.png)
+
 This post is a situation, a complication, and a resolution. It is about how you
 pick a coding harness and model for a run in Shiba, and about why the
 accompanying documentation refuses to tell you which option is faster or

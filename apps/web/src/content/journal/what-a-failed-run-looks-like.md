@@ -7,6 +7,8 @@ pattern: protagonist-arc
 summary: A run is stopped mid-flight, and the record it leaves behind is an error with evidence rather than a success badge.
 ---
 
+![Glass console beneath a fractured holographic error panel](/blog/what-a-failed-run-looks-like.png)
+
 This is a build log entry, told as a story. A coding run is queued, it starts,
 and it does not finish. What matters is what the record looks like afterwards.
 

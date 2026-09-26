@@ -7,6 +7,8 @@ pattern: protagonist-arc
 summary: A planned run reaches an irreversible step, a human holds it, and the gate decides what happens next.
 ---
 
+![Isometric glass terminal console blocked by a holographic approval gate](/blog/approval-gate.png)
+
 The subject of this post is a pause. A coding agent has a plan, the plan needs
 shell access and a git push, and something in the middle says not yet. That
 something is the approval gate. This is a guide to why it sits where it sits

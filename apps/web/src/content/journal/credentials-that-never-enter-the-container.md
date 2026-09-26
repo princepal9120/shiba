@@ -7,6 +7,8 @@ pattern: choreography
 summary: Actors, keys, and handoffs traced from your machine to the sandbox and back out to the provider.
 ---
 
+![Sealed glass container with key glyphs orbiting outside its boundary](/blog/credentials-that-never-enter-the-container.png)
+
 This post is a choreography. It follows four actors across time and shows where
 each secret lives at every step. The cast is the sandbox container, the Sandbox
 Durable Object, the Worker, and Cloudflare AI Gateway.

@@ -7,6 +7,8 @@ pattern: situation-complication-resolution
 summary: What the search for an open-source coding agent usually means, what Shiba actually is, and how to evaluate it against your own work.
 ---
 
+![Glass terminal console with holographic diffs floating above it](/blog/open-source-coding-agent-alternative.png)
+
 Searching for an open-source alternative to a hosted coding agent returns a
 mix of projects, and this is a guide to one of them. We build Shiba, so this
 guide explains our approach and its limits. It is not a benchmark, not a

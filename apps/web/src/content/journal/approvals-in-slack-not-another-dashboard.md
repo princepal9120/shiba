@@ -7,6 +7,8 @@ pattern: choreography
 summary: A Slack mention, a signed card, a named approver, and the run that only starts when the right person clicks.
 ---
 
+![Chat bubble holograms converging into a single approval card](/blog/approvals-in-slack-not-another-dashboard.png)
+
 This is a guide to the second front door. The dashboard is one way to approve a
 coding run. Slack is the other one, and it exists so the person holding the
 gate does not have to open a new tab to hold it.
