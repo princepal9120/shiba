@@ -1,0 +1,9 @@
+  .---------------------------------------.
+  |  HARNESS + MODEL SELECTION             |
+  |                                        |
+  |   AGENT_HARNESS  = deploy default      |
+  |   CODING_MODEL   = provider/model      |
+  |                                        |
+  |   per-run choice  ->  approval card    |
+  |   bad pairing     ->  refused early    |
+  '---------------------------------------'
