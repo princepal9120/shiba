@@ -22,6 +22,7 @@ describe.skipIf(!built)("marketing landing page", () => {
     expect(markup).not.toContain("manga-panel");
     expect(markup).toContain('data-theme="light"');
     expect(markup).toContain("theme-toggle-btn");
+    expect(markup).toContain("locale-toggle-btn");
   });
 
   test("every referenced asset exists in the build output", () => {

@@ -1,8 +1,26 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
+import assert from "node:assert";
 
-describe("theme, docs, marketing, i18n & mascot specifications", () => {
+// Local test runner when vitest node_modules is unavailable
+const runnerIt = typeof it !== "undefined" ? it : (name: string, fn: () => void) => {
+  fn();
+};
+const runnerDescribe = typeof describe !== "undefined" ? describe : (name: string, fn: () => void) => {
+  fn();
+};
+const runnerExpect = (actual: any) => ({
+  toContain: (expected: string) => {
+    if (typeof expect !== "undefined") {
+      expect(actual).toContain(expected);
+    } else {
+      assert.ok(typeof actual === "string" && actual.includes(expected));
+    }
+  },
+});
+
+runnerDescribe("theme, docs, marketing, i18n & mascot specifications", () => {
   const root = join(import.meta.dirname, "..", "..", "..");
   const marketingPath = join(root, "apps", "web", "src", "layouts", "MarketingPage.astro");
   const themeProviderPath = join(root, "apps", "frontend", "src", "components", "ThemeProvider.tsx");
@@ -10,39 +28,39 @@ describe("theme, docs, marketing, i18n & mascot specifications", () => {
   const mascotJsPath = join(root, "apps", "web", "public", "assets", "mascot", "pet-mascot.js");
   const docsThemePath = join(root, "apps", "web", "src", "styles", "theme.css");
 
-  it("shares consistent theme preference key across frontend app and web/astro", () => {
+  runnerIt("shares consistent theme preference key across frontend app and web/astro", () => {
     const tpContent = readFileSync(themeProviderPath, "utf-8");
     const mpContent = readFileSync(marketingPath, "utf-8");
 
     // Both should use and synchronize the theme storage key
-    expect(tpContent).toContain('shiba-theme');
-    expect(mpContent).toContain('shiba-theme');
+    runnerExpect(tpContent).toContain('shiba-theme');
+    runnerExpect(mpContent).toContain('shiba-theme');
   });
 
-  it("has dark-first fallback and dark mode support in MarketingPage and ThemeProvider", () => {
+  runnerIt("has dark-first fallback and dark mode support in MarketingPage and ThemeProvider", () => {
     const mpContent = readFileSync(marketingPath, "utf-8");
-    expect(mpContent).toContain("data-theme");
-    expect(mpContent).toContain("theme-toggle-btn");
+    runnerExpect(mpContent).toContain("data-theme");
+    runnerExpect(mpContent).toContain("theme-toggle-btn");
 
     const docsTheme = readFileSync(docsThemePath, "utf-8");
-    expect(docsTheme).toContain(":root[data-theme='dark']");
+    runnerExpect(docsTheme).toContain(":root[data-theme='dark']");
   });
 
-  it("supports en and hi-IN locales in marketing layout", () => {
+  runnerIt("supports en and hi-IN locales in marketing layout", () => {
     const mpContent = readFileSync(marketingPath, "utf-8");
-    expect(mpContent).toContain('lang={lang}');
-    expect(mpContent).toContain('locale-toggle');
+    runnerExpect(mpContent).toContain('lang={lang}');
+    runnerExpect(mpContent).toContain('locale-toggle');
   });
 
-  it("respects prefers-reduced-motion in mascot animations", () => {
+  runnerIt("respects prefers-reduced-motion in mascot animations", () => {
     const mascotContent = readFileSync(mascotJsPath, "utf-8");
-    expect(mascotContent).toContain("prefers-reduced-motion");
+    runnerExpect(mascotContent).toContain("prefers-reduced-motion");
   });
 
-  it("provides refined marketing copy with clear value proposition and approval gate guarantees", () => {
+  runnerIt("provides refined marketing copy with clear value proposition and approval gate guarantees", () => {
     const homeContent = readFileSync(homePath, "utf-8");
-    expect(homeContent).toContain("approval");
-    expect(homeContent).toContain("Cloudflare Sandbox");
-    expect(homeContent).toContain("Zero-Trust Boundary");
+    runnerExpect(homeContent).toContain("approval");
+    runnerExpect(homeContent).toContain("Cloudflare Sandbox");
+    runnerExpect(homeContent).toContain("Zero-Trust Boundary");
   });
 });

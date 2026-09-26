@@ -22,5 +22,7 @@ describe.skipIf(!built)("new marketing pages", () => {
     expect(waitlist).toContain("theme-toggle-btn");
     expect(why).toContain("theme-toggle-btn");
     expect(waitlist).toContain("shiba-theme");
+    expect(waitlist).toContain("locale-toggle-btn");
+    expect(why).toContain("locale-toggle-btn");
   });
 });
