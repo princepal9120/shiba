@@ -180,7 +180,9 @@ export async function decideChatApproval(
       error: typeof body.error === "string" ? body.error : `The decision could not be recorded (${response.status}).`,
     };
   }
-  if (body.result === "unknown") {
+  // Anything but a recorded decision is not a success — covers "unknown" today
+  // and any future non-approved/rejected result string.
+  if (body.result !== "approved" && body.result !== "rejected") {
     return { ok: false, error: "This approval is already resolved or expired — nothing to do." };
   }
   return { ok: true };

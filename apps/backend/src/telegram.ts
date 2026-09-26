@@ -194,7 +194,7 @@ export async function handleTelegramWebhook(
     return null;
   }
   const token = env.TELEGRAM_BOT_TOKEN?.trim() ?? "";
-  const secret = env.TELEGRAM_WEBHOOK_SECRET ?? "";
+  const secret = env.TELEGRAM_WEBHOOK_SECRET?.trim() ?? "";
   if (!token || !secret) {
     return Response.json(
       { error: "Telegram is not configured: set TELEGRAM_BOT_TOKEN and TELEGRAM_WEBHOOK_SECRET." },
