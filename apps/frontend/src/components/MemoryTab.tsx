@@ -183,7 +183,7 @@ export function MemoryTab(props: MemoryTabProps): JSX.Element {
   return (
     <div className={`flex flex-col gap-3.5 ${className}`}>
       {/* Header & Activity Summary (Bezalel-inspired settings & privacy rationale) */}
-      <header className="border border-[#e0ded5] rounded-none bg-[#fffef8] p-3.5 shadow-sm">
+      <header className="border border-[#e0ded5] rounded-none bg-[#fffef8] p-3.5 shadow-[2px_2px_0_var(--paper-shadow)]">
         <div className="flex items-center justify-between gap-2 mb-1.5">
           <div>
             <h3 className="font-display text-[17px] text-[#222320] leading-tight">
@@ -244,7 +244,7 @@ export function MemoryTab(props: MemoryTabProps): JSX.Element {
           onClick={() => setViewMode("facts")}
           className={`flex-1 text-[11px] font-medium py-1 px-3 rounded-none transition-all touch:min-h-11 ${
             viewMode === "facts"
-              ? "bg-[#fffef8] text-[#222320] shadow-sm font-semibold"
+              ? "bg-[#fffef8] text-[#222320] shadow-[2px_2px_0_var(--paper-shadow)] font-semibold"
               : "text-[#6a6f63] hover:text-[#222320]"
           }`}
         >
@@ -255,7 +255,7 @@ export function MemoryTab(props: MemoryTabProps): JSX.Element {
           onClick={() => setViewMode("sessions")}
           className={`flex-1 text-[11px] font-medium py-1 px-3 rounded-none transition-all touch:min-h-11 ${
             viewMode === "sessions"
-              ? "bg-[#fffef8] text-[#222320] shadow-sm font-semibold"
+              ? "bg-[#fffef8] text-[#222320] shadow-[2px_2px_0_var(--paper-shadow)] font-semibold"
               : "text-[#6a6f63] hover:text-[#222320]"
           }`}
         >
@@ -331,7 +331,7 @@ export function MemoryTab(props: MemoryTabProps): JSX.Element {
                   onClick={() => setSourceFilter(src)}
                   className={`px-2 py-0.5 rounded-none border transition-colors ${
                     sourceFilter === src
-                      ? "bg-[#fffef8] text-[#222320] border-[#0000a8]/40 font-semibold shadow-xs"
+                      ? "bg-[#fffef8] text-[#222320] border-[#0000a8]/40 font-semibold shadow-[2px_2px_0_var(--paper-shadow)]"
                       : "bg-transparent border-transparent hover:border-[#e0ded5] text-[#6a6f63]"
                   }`}
                 >
@@ -346,7 +346,7 @@ export function MemoryTab(props: MemoryTabProps): JSX.Element {
                 <select
                   value={agentFilter}
                   onChange={(e) => setAgentFilter(e.target.value)}
-                  className="text-[10px] font-mono bg-[#fffef8] border border-[#e0ded5] rounded px-1.5 py-0.5 text-[#222320] focus:outline-none focus:border-[#0000a8]/50"
+                  className="text-[10px] font-mono bg-[#fffef8] border border-[#e0ded5] rounded-none px-1.5 py-0.5 text-[#222320] focus:outline-none focus:border-[#0000a8]/50"
                 >
                   <option value="all">All agents</option>
                   {availableAgents.map((ag) => (
@@ -447,7 +447,7 @@ export function MemoryTab(props: MemoryTabProps): JSX.Element {
                 return (
                   <li
                     key={fact.id}
-                    className="border border-[#e0ded5] hover:border-[#d3d2c8] rounded-none bg-[#fffef8] p-3.5 shadow-xs transition-all flex flex-col gap-2"
+                    className="border border-[#e0ded5] hover:border-[#d3d2c8] rounded-none bg-[#fffef8] p-3.5 shadow-[2px_2px_0_var(--paper-shadow)] transition-all flex flex-col gap-2"
                   >
                     <pre className="font-mono text-[11px] text-[#222320] whitespace-pre-wrap break-words leading-relaxed bg-[#f6f4ed]/50 p-2.5 rounded-none border border-[#e0ded5]/60">
                       {fact.fact}
@@ -462,7 +462,7 @@ export function MemoryTab(props: MemoryTabProps): JSX.Element {
                         {fact.source}
                       </span>
 
-                      <span className="text-[10px] font-mono text-[#6a6f63] bg-[#f6f4ed] border border-[#e0ded5] px-1.5 py-0.5 rounded">
+                      <span className="text-[10px] font-mono text-[#6a6f63] bg-[#f6f4ed] border border-[#e0ded5] px-1.5 py-0.5 rounded-none">
                         @{fact.agent}
                       </span>
 
@@ -574,7 +574,7 @@ export function MemoryTab(props: MemoryTabProps): JSX.Element {
                   <li
                     key={session.id}
                     className={`border rounded-none bg-[#fffef8] overflow-hidden transition-colors ${
-                      expanded ? "border-[#0000a8]/50 shadow-xs" : "border-[#e0ded5] hover:border-[#d3d2c8]"
+                      expanded ? "border-[#0000a8]/50 shadow-[2px_2px_0_var(--paper-shadow)]" : "border-[#e0ded5] hover:border-[#d3d2c8]"
                     }`}
                   >
                     <button
@@ -593,7 +593,7 @@ export function MemoryTab(props: MemoryTabProps): JSX.Element {
                       >
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                       </svg>
-                      <span className="text-[10px] font-mono text-[#1c1cc8] bg-[#0000a8]/10 border border-[#0000a8]/20 px-1.5 py-0.5 rounded font-semibold">
+                      <span className="text-[10px] font-mono text-[#1c1cc8] bg-[#0000a8]/10 border border-[#0000a8]/20 px-1.5 py-0.5 rounded-none font-semibold">
                         @{session.agent}
                       </span>
                       <span className="font-mono text-[11px] text-[#222320] truncate flex-1">

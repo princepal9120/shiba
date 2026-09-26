@@ -109,7 +109,7 @@ export function DiffView({
         ) : activeDiff ? (
           <div className="max-w-6xl mx-auto flex flex-col gap-4">
             {/* Run summary strip */}
-            <div className="bg-[#fffef8] border border-[#e0ded5] p-4 rounded-none flex items-center justify-between gap-4 flex-wrap shadow-xs">
+            <div className="bg-[#fffef8] border border-[#e0ded5] p-4 rounded-none flex items-center justify-between gap-4 flex-wrap shadow-[2px_2px_0_var(--paper-shadow)]">
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap mb-1">
                   <span className="font-semibold text-sm text-[#222320]">
@@ -138,7 +138,7 @@ export function DiffView({
             </div>
 
             {/* Diff Viewer Card */}
-            <div className="bg-[#fffef8] border border-[#e0ded5] rounded-none p-4 shadow-xs">
+            <div className="bg-[#fffef8] border border-[#e0ded5] rounded-none p-4 shadow-[2px_2px_0_var(--paper-shadow)]">
               <DiffViewer diff={activeDiff} runId={activeRun.runId} />
             </div>
           </div>

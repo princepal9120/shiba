@@ -18,7 +18,7 @@ import { formatTimeAgo } from "../ui-helpers";
 const GHOST_BUTTON =
   "text-[11px] bg-transparent hover:bg-[#fffef8] border border-[#e0ded5] hover:border-[#d3d2c8] text-[#6a6f63] hover:text-[#222320] font-medium py-1.5 px-3 touch:min-h-11 rounded-none transition-colors inline-flex items-center justify-center gap-1.5";
 const ACCENT_BUTTON =
-  "text-[11px] bg-[#0000a8] hover:bg-[#1c1cc8] text-[#fffef8] font-medium py-1.5 px-3 touch:min-h-11 rounded-none transition-colors shadow-xs inline-flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed";
+  "text-[11px] bg-[#0000a8] hover:bg-[#1c1cc8] text-[#fffef8] font-medium py-1.5 px-3 touch:min-h-11 rounded-none transition-colors shadow-[2px_2px_0_var(--paper-shadow)] inline-flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed";
 const SECONDARY_BUTTON =
   "text-[11px] bg-[#0000a8]/10 hover:bg-[#0000a8]/15 border border-[#0000a8]/20 text-[#1c1cc8] font-medium py-1.5 px-3 touch:min-h-11 rounded-none transition-colors inline-flex items-center justify-center gap-1.5 disabled:opacity-50";
 
@@ -346,7 +346,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
       {/* Activity & System Summary Bar */}
       <section
         aria-label="Mailbox activity summary"
-        className="bg-[#fffef8] border border-[#e0ded5] rounded-none p-3 shadow-xs"
+        className="bg-[#fffef8] border border-[#e0ded5] rounded-none p-3 shadow-[2px_2px_0_var(--paper-shadow)]"
       >
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-4 flex-wrap">
@@ -436,7 +436,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
                         <span className="size-2 rounded-none bg-[#15803d]" />
                         <span className="font-mono font-medium text-[#222320] truncate">{mb.address}</span>
                         {mb.label ? (
-                          <span className="text-[10px] text-[#6a6f63] bg-[#f6f4ed] border border-[#e0ded5] rounded px-1.5 py-0.2">
+                          <span className="text-[10px] text-[#6a6f63] bg-[#f6f4ed] border border-[#e0ded5] rounded-none px-1.5 py-0.2">
                             {mb.label}
                           </span>
                         ) : null}
@@ -681,7 +681,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
       {notice !== null ? (
         <div
           role="status"
-          className="text-[11px] text-[#15803d] bg-[#15803d]/10 border border-[#15803d]/20 rounded-none p-3 flex items-center justify-between gap-3 shadow-xs"
+          className="text-[11px] text-[#15803d] bg-[#15803d]/10 border border-[#15803d]/20 rounded-none p-3 flex items-center justify-between gap-3 shadow-[2px_2px_0_var(--paper-shadow)]"
         >
           <div className="flex items-center gap-2 min-w-0">
             <span className="size-2 rounded-none bg-[#15803d] shrink-0" />
@@ -717,7 +717,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
       {(filterView === "all" || filterView === "drafts") && drafts.length > 0 ? (
         <section
           aria-label="Drafts requiring human approval"
-          className="border-2 border-[#f99c00]/60 rounded-none bg-[#fffef8] p-3.5 shadow-xs flex flex-col gap-3"
+          className="border-2 border-[#f99c00]/60 rounded-none bg-[#fffef8] p-3.5 shadow-[2px_2px_0_var(--paper-shadow)] flex flex-col gap-3"
         >
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-2">
@@ -758,7 +758,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
                           {draft.to_addr}
                         </span>
                         {draft.mailbox ? (
-                          <span className="text-[10px] font-mono text-[#6a6f63] bg-[#fffef8] border border-[#e0ded5] rounded px-1.5">
+                          <span className="text-[10px] font-mono text-[#6a6f63] bg-[#fffef8] border border-[#e0ded5] rounded-none px-1.5">
                             via {draft.mailbox}
                           </span>
                         ) : null}
@@ -852,7 +852,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
                 return (
                   <li
                     key={email.id}
-                    className={`border rounded-none bg-[#fffef8] overflow-hidden transition-all shadow-xs ${
+                    className={`border rounded-none bg-[#fffef8] overflow-hidden transition-all shadow-[2px_2px_0_var(--paper-shadow)] ${
                       expanded
                         ? "border-[#0000a8] ring-1 ring-[#0000a8]/20"
                         : "border-[#e0ded5] hover:border-[#d3d2c8]"
@@ -874,7 +874,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
                         />
 
                         <span
-                          className={`text-[10px] font-mono uppercase px-1.5 py-0.2 rounded border shrink-0 ${
+                          className={`text-[10px] font-mono uppercase px-1.5 py-0.2 rounded-none border shrink-0 ${
                             isInbound
                               ? "bg-[#15803d]/10 text-[#15803d] border-[#15803d]/20"
                               : "bg-[#0000a8]/10 text-[#0000a8] border-[#0000a8]/20"
@@ -892,7 +892,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
                         </span>
 
                         {email.mailbox ? (
-                          <span className="text-[10px] font-mono text-[#6a6f63] border border-[#e0ded5] rounded px-1.5 bg-[#f6f4ed] shrink-0">
+                          <span className="text-[10px] font-mono text-[#6a6f63] border border-[#e0ded5] rounded-none px-1.5 bg-[#f6f4ed] shrink-0">
                             {email.mailbox}
                           </span>
                         ) : null}
@@ -936,7 +936,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
                                 </div>
                                 <div className="flex items-center gap-2">
                                   {email.mailbox ? (
-                                    <span className="text-[10px] font-mono text-[#6a6f63] bg-[#f6f4ed] border border-[#e0ded5] rounded px-1.5 py-0.5">
+                                    <span className="text-[10px] font-mono text-[#6a6f63] bg-[#f6f4ed] border border-[#e0ded5] rounded-none px-1.5 py-0.5">
                                       Mailbox: {email.mailbox}
                                     </span>
                                   ) : null}
@@ -1021,7 +1021,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
                                   e.preventDefault();
                                   void saveReply();
                                 }}
-                                className="border-2 border-[#0000a8]/30 bg-[#fffef8] rounded-none p-3.5 flex flex-col gap-2.5 shadow-xs"
+                                className="border-2 border-[#0000a8]/30 bg-[#fffef8] rounded-none p-3.5 flex flex-col gap-2.5 shadow-[2px_2px_0_var(--paper-shadow)]"
                               >
                                 <div className="flex items-center justify-between gap-2 border-b border-[#e0ded5] pb-2">
                                   <div className="text-[11px] font-mono">
@@ -1030,7 +1030,7 @@ export function InboxTab({ onOpenApprovals }: InboxTabProps): JSX.Element {
                                     <span className="text-[#6a6f63] ml-2">from </span>
                                     <span className="font-semibold text-[#0000a8]">{replyMailbox(detail, mailbox) || "(selected mailbox)"}</span>
                                   </div>
-                                  <span className="text-[10px] font-mono text-[#b45309] bg-[#f99c00]/10 border border-[#f99c00]/30 rounded px-2 py-0.5">
+                                  <span className="text-[10px] font-mono text-[#b45309] bg-[#f99c00]/10 border border-[#f99c00]/30 rounded-none px-2 py-0.5">
                                     🔒 Approval Gate
                                   </span>
                                 </div>

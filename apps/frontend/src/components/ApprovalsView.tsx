@@ -192,7 +192,7 @@ export function ApprovalsView({
                 Cryptographic Audit Log (D1 + SHA-256)
               </h3>
             </div>
-            <div className="bg-[#fffef8] border border-[#e0ded5] p-4 rounded-none shadow-xs">
+            <div className="bg-[#fffef8] border border-[#e0ded5] p-4 rounded-none shadow-[2px_2px_0_var(--paper-shadow)]">
               <AuditPanel />
             </div>
           </section>
