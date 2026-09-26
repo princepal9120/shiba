@@ -7,7 +7,7 @@ description: Public cloning, optional publishing, and acknowledgment-only webhoo
 
 Use an HTTPS GitHub repository URL and its actual base branch (default main). Embedded credentials and other hosts are rejected.
 
-**Private cloning is not implemented.** The Sandbox adapter calls gitCheckout without transport authorization. Setting GITHUB_TOKEN does not change that. Never embed credentials in the clone URL.
+**Private cloning is not implemented.** The Sandbox adapter calls `gitCheckout` without transport authorization. `GITHUB_TOKEN` is used for optional PR publishing, not cloning. Never embed credentials in the clone URL.
 
 ## Optional publishing
 
@@ -17,7 +17,7 @@ Publishing is off by default. The parent checks for GITHUB_TOKEN before a reques
 npx wrangler secret put GITHUB_TOKEN --config apps/backend/wrangler.jsonc
 ~~~
 
-The Worker creates blobs, a tree, a commit, an shiba-ai-coworker/<sandboxId> branch, and a PR via REST. It does not merge the PR or put the token in the container. API failures can leave branches/commits behind; inspect the repository before retrying.
+The Worker publisher is implemented to create blobs, a tree, a commit, an `shiba-ai-coworker/<sandboxId>` branch, and a PR via REST. It does not merge the PR or put the token in the container. API failures can leave branches/commits behind; inspect the repository before retrying. These implementation details and unit tests are not evidence of a live end-to-end publish. `VERIFICATION.md` records no live cloud run.
 
 ### Fidelity limits
 
@@ -28,4 +28,3 @@ The publisher accepts captured contents, not a complete Git patch. Capture is bo
 Set GITHUB_WEBHOOK_SECRET and configure /api/github/webhook with the same secret, subject to deployment authentication. The handler verifies HMAC-SHA256 and acknowledges valid JSON. It does **not** create tasks, respond to issues, or auto-approve work.
 
 Source: apps/backend/src/github.ts, apps/backend/src/agents/opencode-agent.ts, apps/backend/src/index.ts.
-

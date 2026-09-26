@@ -1,13 +1,15 @@
 ---
-title: Claude Code & OpenCode Harnesses
-description: Running OpenCode, Claude Code, or Codex inside Sandbox containers — chosen per task from the dashboard.
+title: Coding Harnesses
+description: OpenCode, Claude Code, Codex, and Devin harness selection, implementation, and verification status.
 ---
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
 
-**Current behavior (as implemented):** one image carries all three CLIs (`opencode-ai@1.18.31`, `@anthropic-ai/claude-code@2.1.277`, `@openai/codex@0.155.0`), and a run picks its harness at approval time. The dashboard's New Coding Task form has a harness picker; `delegate_coding_task` accepts optional `harness` and `codingModel` inputs, validated before a container starts. Only OpenCode has been exercised against a live CLI; the Claude Code and Codex event parsers are asserted from their documented stream formats and pinned by CLI version.
+**Implemented and selectable:** the dashboard and `delegate_coding_task` accept per-run harness and model choices; the approved choice is passed to the runtime. The image installs OpenCode 1.18.31, Claude Code 2.1.277, Codex 0.155.0, and Devin CLI 3000.10.31. Harness tests cover selection, argv/config/env construction, provider allowlists, and event parsing. These tests do not prove the CLIs can complete a task end to end.
 
-**Specification target (GOAL / PLAN T22):** API-key harnesses only. Subscription credentials are not proxied.
+**Verification status:** `VERIFICATION.md` records one local `wrangler dev` end-to-end exercise with OpenCode on 2026-09-19. The provider call returned 401, so model inference and successful task completion were not verified. The 2026-09-24 verification says no live cloud end-to-end run has been performed. Claude Code, Codex, and Devin have unit coverage only; no local or cloud harness end-to-end run is recorded for them.
+
+**Credential boundary:** Claude Code and Codex use API-key provider traffic through AI Gateway; subscription credentials are not proxied. Devin uses its own `DEVIN_API_KEY` service credential. OpenCode, Claude Code, and Codex use AI Gateway BYOK.
 
 <CardGrid>
   <Card title="OpenCode" icon="setting">
@@ -19,6 +21,9 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
   <Card title="Codex" icon="puzzle">
     `openai/*` models, e.g. `openai/gpt-5.3-codex`. Stream format: `codex exec --json`.
   </Card>
+  <Card title="Devin CLI" icon="puzzle">
+    `devin/*` models (default `devin/swe-2`); uses Devin's CLI and service API key.
+  </Card>
 </CardGrid>
 
-Per-run selection beats the deploy default: the dashboard harness picker (or the delegate tool's `harness` input) overrides `AGENT_HARNESS`. An unsupported harness/model pair fails on the approval card, never inside a container the human already approved. `registry.npmjs.org` is not on the egress allowlist, so `npm install` inside a run is refused.
+Per-run selection overrides the deploy default `AGENT_HARNESS`. Unsupported harness/model pairs are rejected while preparing the approval, before execution. The Dockerfile's version checks establish that binaries report versions during image build; they are not an end-to-end test. `registry.npmjs.org` is not on the egress allowlist, so `npm install` inside a run is refused.
