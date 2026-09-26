@@ -242,6 +242,9 @@ const finalSchemas = schema
     --text: var(--ink);
     --muted: var(--ink-2);
     --teal: var(--navy);
+    --dur-fast: 150ms;
+    --dur-med: 300ms;
+    --ease-out: cubic-bezier(.22, 1, .36, 1);
   }
 
   html[data-theme='dark'] {
@@ -307,12 +310,15 @@ const finalSchemas = schema
   }
 
   * { box-sizing: border-box; border-radius: 0 !important; }
-  html { scroll-behavior: smooth; }
-  body { margin: 0; background: var(--paper); color: var(--ink); font-family: 'Geist', ui-sans-serif, system-ui, -apple-system, sans-serif; line-height: 1.55; }
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
+  @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+  /* html carries Tailwind's unguarded .scroll-smooth; override it for reduced motion. */
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto !important; } }
+  body { margin: 0; background: var(--paper); color: var(--ink); font-family: 'Geist', ui-sans-serif, system-ui, -apple-system, sans-serif; line-height: 1.55; overscroll-behavior-x: none; }
   ::selection { background: var(--navy); color: #fff; }
   html[data-theme='dark'] ::selection { background: var(--navy); color: #152335; }
   a { color: inherit; }
-  a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--navy); outline-offset: 2px; }
+  a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--navy); outline-offset: 2px; }
   .shell { width: min(1160px, calc(100% - 40px)); margin-inline: auto; }
   .pixelated { image-rendering: pixelated; }
 
@@ -358,9 +364,10 @@ const finalSchemas = schema
   .lead { font-size: 15px; line-height: 1.65; max-width: 760px; color: var(--ink-2); }
 
   /* bezalel buttons: square, hard 2px shadow, active translate */
-  .button { display: inline-flex; align-items: center; justify-content: center; gap: 10px; padding: 0 18px; height: 36px; border: 1px solid var(--navy); background: var(--navy); color: #fff; text-decoration: none; font-weight: 600; font-family: 'Geist Mono', monospace; font-size: 13px; cursor: pointer; box-shadow: 2px 2px 0 var(--paper-shadow); transition: background 120ms ease, border-color 120ms ease; }
+  .button { display: inline-flex; align-items: center; justify-content: center; gap: 10px; padding: 0 18px; height: 36px; border: 1px solid var(--navy); background: var(--navy); color: #fff; text-decoration: none; font-weight: 600; font-family: 'Geist Mono', monospace; font-size: 13px; cursor: pointer; box-shadow: 2px 2px 0 var(--paper-shadow); transition: background 120ms ease, border-color 120ms ease, transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out); }
   .button:hover { background: var(--navy-2); border-color: var(--navy-2); }
-  .button:active { transform: translateY(1px); }
+  .button:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--paper-shadow); transition-duration: 60ms; }
+  .button:disabled { opacity: .6; cursor: progress; transform: none; }
   .button-outline { background: var(--card); color: var(--navy); border-color: var(--navy); }
   .button-outline:hover { background: var(--panel-2); color: var(--navy); border-color: var(--navy-2); }
   html[data-theme='dark'] .button:not(.button-outline) { color: #152335; }

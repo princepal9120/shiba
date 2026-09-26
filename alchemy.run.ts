@@ -115,6 +115,8 @@ export const ACCESS_BYPASS_PATHS = [
   "/api/slack/events",
   "/api/slack/command",
   "/api/slack/interact",
+  "/api/telegram/webhook",
+  "/api/discord/interactions",
   "/api/github/webhook",
   "/mcp",
   "/mcp/*",

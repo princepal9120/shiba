@@ -34,11 +34,6 @@ export default defineConfig({
 			},
 			sidebar: [
 				{
-					label: 'Landing Page ↗',
-					link: 'https://tryshiba.dev/',
-					attrs: { target: '_blank', rel: 'noopener noreferrer' },
-				},
-				{
 					label: 'Start here',
 					items: [
 						{ label: 'Overview', slug: 'docs/overview' },

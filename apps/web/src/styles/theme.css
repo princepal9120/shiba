@@ -6,6 +6,9 @@
 
 :root {
   color-scheme: light;
+  --dur-fast: 150ms;
+  --dur-med: 300ms;
+  --ease-out: cubic-bezier(.22, 1, .36, 1);
   /* bezalel canonical light tokens */
   --paper: #f6f4ed;
   --card: #fffef8;
@@ -1085,6 +1088,68 @@ a.ai-step-card:hover {
   color: var(--text-muted);
   line-height: 1.5;
   margin: 0;
+}
+
+/* ==========================================================================
+   Mobile & interaction hardening
+   ========================================================================== */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  overscroll-behavior-x: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+.expressive-code pre,
+.sl-markdown-content pre {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+/* Long paths/URLs in inline code must wrap instead of widening the page. */
+.sl-markdown-content code:not(pre code) {
+  overflow-wrap: anywhere;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+.sl-markdown-content :is(button, summary):focus-visible,
+.sidebar-content summary:focus-visible,
+starlight-toc a:focus-visible,
+.right-sidebar-panel a:focus-visible,
+.pagination-links a:focus-visible,
+.header :is(input, select):focus-visible {
+  outline: 2px solid var(--navy);
+  outline-offset: 2px;
+}
+
+.expressive-code .copy button:active,
+.pagination-links a:active {
+  transform: translate(1px, 1px);
+}
+
+@media (max-width: 50rem), (pointer: coarse) {
+  .sidebar-content a,
+  .sidebar-content summary {
+    display: flex !important;
+    align-items: center;
+    min-height: 2.5rem;
+  }
+
+  table {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

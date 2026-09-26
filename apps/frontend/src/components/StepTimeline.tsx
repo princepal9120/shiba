@@ -12,6 +12,7 @@ import {
   getToolPartState,
 } from "@cloudflare/ai-chat/react";
 import { isToolUIPart, type UIMessage } from "ai";
+import type { CSSProperties } from "react";
 import { ApprovalCard } from "./ApprovalCard";
 import { Tooltip } from "./Tooltip";
 import {
@@ -109,7 +110,7 @@ export function StepTimeline({
 }: StepTimelineProps) {
   if (messages.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 border border-dashed border-[#e0ded5] rounded-none bg-[#f1efe6]/40 px-6 text-center">
+      <div className="flex flex-col items-center justify-center py-16 border border-dashed border-[#e0ded5] rounded-none bg-[#f1efe6]/40 px-6 text-center animate-enter">
         <img
           src="/assets/mascot/shiba-sticker-hero.webp"
           alt="Shiba illustration mascot"
@@ -123,12 +124,13 @@ export function StepTimeline({
         </p>
         {starters && starters.length > 0 ? (
           <div className="flex flex-wrap items-center justify-center gap-2 mt-3 max-w-md">
-            {starters.map((starter) => (
+            {starters.map((starter, starterIndex) => (
               <Tooltip key={starter.label} content={starter.task} side="bottom" delayMs={200}>
                 <button
                   type="button"
                   onClick={() => onStarter?.(starter.task)}
-                  className="inline-flex items-center gap-1.5 text-xs text-[#222320] bg-[#fffef8] hover:bg-[#e0ded5] border border-[#e0ded5] rounded-none px-3 py-1.5 transition-colors active:scale-95"
+                  style={{ "--enter-delay": `${150 + starterIndex * 60}ms` } as CSSProperties}
+                  className="inline-flex items-center gap-1.5 text-xs text-[#222320] bg-[#fffef8] hover:bg-[#e0ded5] border border-[#e0ded5] rounded-none px-3 py-1.5 touch:min-h-11 transition-colors active:scale-95 animate-enter"
                 >
                   <span aria-hidden="true">{starter.icon}</span>
                   {starter.label}

@@ -258,6 +258,13 @@ export function App(): React.JSX.Element {
 // Persistent workspace panel removed from tasks view; functionality promoted to standalone views.
   const [mobileSessionsOpen, setMobileSessionsOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const mobileNavTriggerRef = useRef<HTMLButtonElement | null>(null);
+
+  // Return focus to the hamburger after the sheet unmounts, so Esc/backdrop
+  // closes don't strand keyboard users on a removed element.
+  useEffect(() => {
+    if (!mobileNavOpen) mobileNavTriggerRef.current?.focus();
+  }, [mobileNavOpen]);
   const [sessionsCollapsed, setSessionsCollapsed] = useState(() =>
     typeof window !== "undefined"
       ? localStorage.getItem("shiba-ai-coworker:sidebar-collapsed") === "true"
@@ -967,7 +974,7 @@ export function App(): React.JSX.Element {
             className="absolute inset-0 bg-black/60"
             onClick={() => setMobileNavOpen(false)}
           />
-          <div className="absolute inset-y-0 left-0 shadow-[3px_3px_0_var(--paper-shadow)]">
+          <div className="absolute inset-y-0 left-0 shadow-[3px_3px_0_var(--paper-shadow)] animate-enter-x">
             <AppNavRail
               variant="sheet"
               activeView={mainView}
@@ -1000,6 +1007,7 @@ export function App(): React.JSX.Element {
       <header className="h-[calc(2.75rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] shrink-0 bg-[#0000a8] text-white flex items-center gap-2.5 pl-2 pr-3 lg:px-4 z-20">
         <button
           type="button"
+          ref={mobileNavTriggerRef}
           onClick={() => setMobileNavOpen(true)}
           aria-label="Open navigation"
           aria-expanded={mobileNavOpen}
@@ -1116,7 +1124,7 @@ export function App(): React.JSX.Element {
               className="absolute inset-0 bg-black/60"
               onClick={() => setMobileSessionsOpen(false)}
             />
-            <div className="absolute inset-y-0 left-0 shadow-[3px_3px_0_var(--paper-shadow)] bg-[#f6f4ed] pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+            <div className="absolute inset-y-0 left-0 shadow-[3px_3px_0_var(--paper-shadow)] bg-[#f6f4ed] pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] animate-enter-x">
               <SessionsSidebar
                 sessions={sessions}
                 agents={agentPrincipals}

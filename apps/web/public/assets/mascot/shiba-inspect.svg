@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="164" viewBox="0 0 360 164" role="img" aria-labelledby="title desc">
+  <title id="title">Shiba inspects a code diff</title><desc id="desc">A curious Shiba uses a magnifying glass to review added and removed code.</desc>
+  <defs><linearGradient id="bg" x2="0" y2="1"><stop stop-color="#252d42"/><stop offset="1" stop-color="#131520"/></linearGradient><linearGradient id="coat" x2=".8" y2="1"><stop stop-color="#ffb14d"/><stop offset="1" stop-color="#e87927"/></linearGradient></defs>
+  <rect width="360" height="164" fill="url(#bg)"/><path d="M0 137h360" stroke="#39435b"/>
+  <rect x="24" y="24" width="132" height="104" rx="7" fill="#f5f1e6" stroke="#bfc5bc" stroke-width="2"/><path d="M24 39a15 15 0 0 1 15-15h102a15 15 0 0 1 15 15v7H24Z" fill="#dfe4df"/>
+  <circle cx="38" cy="36" r="3" fill="#e87962"/><circle cx="49" cy="36" r="3" fill="#e9b85a"/><circle cx="60" cy="36" r="3" fill="#8ca9c9"/><path d="M37 58h72" stroke="#aeb4ad" stroke-width="4" stroke-linecap="round"/>
+  <path d="M33 68h107v13H33Z" fill="#dcecdf"/><path d="M40 74h5m7 0h37" stroke="#548663" stroke-width="3" stroke-linecap="round"/><path d="M33 84h107v13H33Z" fill="#f1dfdc"/><path d="M40 90h5m7 0h56" stroke="#bd6b65" stroke-width="3" stroke-linecap="round"/><path d="M37 105h55" stroke="#aeb4ad" stroke-width="4" stroke-linecap="round"/>
+  <!-- Curious Shiba leaning in to examine the diff -->
+  <path d="M218 112c-8-11-7-24 2-31 8-7 20-8 29-3 12-6 24-1 26 8 9 1 15 7 14 16l-3 24h-63Z" fill="url(#coat)" stroke="#302b27" stroke-width="3"/>
+  <path d="M273 103c12-8 13-17 7-20-7-4-12 4-20 5" fill="none" stroke="#e87927" stroke-width="10" stroke-linecap="round"/><path d="M273 103c12-8 13-17 7-20" fill="none" stroke="#302b27" stroke-width="3" stroke-linecap="round"/>
+  <path d="m214 70-2-18 17 12 7-19 10 20m24 7 6-18 11 10 9-3-3 21" fill="#e87927" stroke="#302b27" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M214 77c7-10 19-14 31-11 13 3 21 14 18 26-3 12-12 17-25 16-16-1-27-10-29-19-1-5 1-9 5-12Z" fill="url(#coat)" stroke="#302b27" stroke-width="3"/>
+  <path d="M217 92c7-4 12-3 18-1 6 3 12 2 19-2-1 11-10 17-21 16-8-1-13-5-16-13Z" fill="#fff0d7"/><ellipse cx="224" cy="85" rx="2.3" ry="3" fill="#292724"/><ellipse cx="245" cy="85" rx="2.3" ry="3" fill="#292724"/><ellipse cx="235" cy="94" rx="3.4" ry="2.4" fill="#292724"/><path d="M232 97q3 4 7 0" fill="none" stroke="#75432e" stroke-width="1.5" stroke-linecap="round"/>
+  <circle cx="178" cy="84" r="27" fill="#9cbce222" stroke="#9cbce2" stroke-width="5"/><path d="m197 104 20 19" stroke="#9cbce2" stroke-width="8" stroke-linecap="round"/><path d="M163 78h25m-25 12h17" stroke="#f5f1e6" stroke-width="3" stroke-linecap="round" opacity=".9"/>
+  <path d="m319 49 3 7 7 3-7 3-3 7-3-7-7-3 7-3Z" fill="#9cbce2"/><circle cx="313" cy="104" r="3" fill="#e99438"/><circle cx="329" cy="116" r="2" fill="#9cbce2"/>
+</svg>

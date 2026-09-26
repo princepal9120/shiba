@@ -47,7 +47,33 @@ const capabilities = [
       <div class="window-body">
         <div class="window-topline"><span>CODING TASK</span><span>01 / 03</span></div>
         <div class="approval-art" aria-hidden="true">
-          <img src="/assets/mascot/shiba-approval-hero.webp" alt="" width="1536" height="1024" fetchpriority="high" />
+          <img src="/assets/shiba-working.png" alt="" width="1200" height="1200" fetchpriority="high" class="shiba-working-img" />
+          <div class="anim-overlay">
+            <!-- Keyboard RGB glow -->
+            <div class="kb-glow"></div>
+            <!-- Floating code lines (match illustration style) -->
+            <div class="floating-code anim-code-1"><span class="c-kw">def</span> <span class="c-fn">keep_building</span>():<span class="cursor-blink">▌</span></div>
+            <div class="floating-code anim-code-2">&nbsp;&nbsp;<span class="c-kw">while</span> <span class="c-id">True</span>: <span class="c-fn">code</span>(<span class="c-str">idea</span>)</div>
+            <div class="floating-code anim-code-3"><span class="c-ok">✓</span> <span class="c-str">No errors · You got this!</span></div>
+            <!-- Glowing approval badge -->
+            <div class="glow-check">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="11" fill="#1a6bcc44" stroke="#3b9eff" stroke-width="2"/><polyline points="6,12 10,16 18,8" stroke="#7dd3fc" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span>Build · Deploy · <em>Good boy! 🎉</em></span>
+            </div>
+            <!-- Steam from mug (positioned over mug area ~65% from left) -->
+            <div class="steam-particles">
+              <span class="steam s1"></span>
+              <span class="steam s2"></span>
+              <span class="steam s3"></span>
+            </div>
+            <!-- Terminal snippet bottom-right -->
+            <div class="terminal-snip">
+              <span class="t-prompt">›</span> <span class="c-fn">npm run dev</span><br/>
+              <span class="c-ok">✓ Compiled!</span> <span class="t-dots"><span></span><span></span><span></span></span>
+            </div>
+            <!-- Paw-tap ripple on keyboard -->
+            <div class="paw-ripple"></div>
+          </div>
           <span class="art-stamp">A CLEAR PLAN. YOUR CALL.</span>
         </div>
         <div class="task-paper">
@@ -163,12 +189,7 @@ const capabilities = [
     <div class="steps-grid">
       <div class="step-card">
         <div class="step-dither-screen" aria-hidden="true">
-          <div class="dither-media">
-            <img src="/assets/mascot/shiba-sticker-riding.webp" alt="" class="dither-img pixelated" width="180" height="180" loading="lazy" />
-            <div class="dither-matrix-layer"></div>
-            <div class="dither-sweep-beam beam-1"></div>
-            <div class="dither-raster-scan"></div>
-          </div>
+          <div class="step-illustration"><img src="/assets/mascot/shiba-connect.svg" alt="" width="360" height="164" loading="lazy" /></div>
           <div class="dither-terminal-meta">
             <span class="terminal-tag">SYS.01 // REPO_INGEST</span>
             <span class="terminal-status"><i class="status-indicator"></i> READY</span>
@@ -181,13 +202,7 @@ const capabilities = [
 
       <div class="step-card">
         <div class="step-dither-screen" aria-hidden="true">
-          <div class="dither-media">
-            <img src="/assets/mascot/shiba-sticker-hero.webp" alt="" class="dither-img pixelated" width="180" height="180" loading="lazy" />
-            <div class="dither-matrix-layer"></div>
-            <div class="dither-sweep-beam beam-2"></div>
-            <div class="dither-radar-line"></div>
-            <div class="dither-raster-scan"></div>
-          </div>
+          <div class="step-illustration"><img src="/assets/mascot/shiba-approve.svg" alt="" width="360" height="164" loading="lazy" /></div>
           <div class="dither-terminal-meta">
             <span class="terminal-tag">SYS.02 // APPROVAL_GATE</span>
             <span class="terminal-status gate-active"><i class="status-indicator"></i> YOUR CALL</span>
@@ -200,15 +215,10 @@ const capabilities = [
 
       <div class="step-card">
         <div class="step-dither-screen" aria-hidden="true">
-          <div class="dither-media">
-            <img src="/assets/mascot/shiba-sticker-climbing.webp" alt="" class="dither-img pixelated" width="180" height="180" loading="lazy" />
-            <div class="dither-matrix-layer"></div>
-            <div class="dither-sweep-beam beam-3"></div>
-            <div class="dither-raster-scan"></div>
-          </div>
+          <div class="step-illustration"><img src="/assets/mascot/shiba-inspect.svg" alt="" width="360" height="164" loading="lazy" /></div>
           <div class="dither-terminal-meta">
             <span class="terminal-tag">SYS.03 // ISOLATED_DIFF</span>
-            <span class="terminal-status"><i class="status-indicator"></i> SANDBOX</span>
+            <span class="terminal-status sandbox"><i class="status-indicator"></i> SANDBOX</span>
           </div>
         </div>
         <span class="micro">03 / REVIEW</span>
@@ -241,9 +251,52 @@ const capabilities = [
   .window-topline, .window-status, .micro, .step-state, .step-num, .window-caption { font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:.06em; }
   .window-topline { display:flex; justify-content:space-between; color:var(--ink-2); margin-bottom:16px; }
   .approval-art { position:relative; height:190px; overflow:hidden; margin-bottom:18px; border:1px solid var(--line-2); background:#171918; }
-  .approval-art img { display:block; width:100%; height:100%; object-fit:cover; object-position:center 56%; transition:transform 500ms cubic-bezier(.2,.7,.2,1); }
-  .work-window:hover .approval-art img, .work-window:focus-within .approval-art img { transform:scale(1.035); }
+  .approval-art { height:240px; }
+  .approval-art img.shiba-working-img { display:block; width:100%; height:100%; object-fit:cover; object-position:center 22%; transition:transform 700ms cubic-bezier(.2,.7,.2,1); }
+  .work-window:hover .approval-art img, .work-window:focus-within .approval-art img { transform:scale(1.045) translateY(-5px); }
   .art-stamp { position:absolute; left:12px; bottom:12px; padding:6px 8px; border:1px solid #9cbce277; background:#171918d9; color:#b4cde9; font:9px 'Geist Mono',monospace; letter-spacing:.12em; }
+  /* ── Animated illustration overlay ── */
+  .anim-overlay { position:absolute; inset:0; pointer-events:none; }
+  /* Keyboard RGB underglow */
+  .kb-glow { position:absolute; bottom:0; left:50%; translate:-50% 0; width:55%; height:8px; background:linear-gradient(90deg,#00e5ff33,#1e90ff88,#00e5ff33); filter:blur(6px); border-radius:50%; animation:kb-shimmer 2.4s ease-in-out infinite; }
+  /* Floating code chips */
+  .floating-code { position:absolute; padding:4px 9px; background:#0d1117f0; border:1px solid #2a3040; border-radius:4px; font:9.5px/1.4 'Geist Mono',monospace; white-space:nowrap; opacity:0; backdrop-filter:blur(2px); }
+  .c-kw  { color:#c792ea; }
+  .c-id  { color:#82aaff; }
+  .c-fn  { color:#c3e88d; }
+  .c-str { color:#f78c6c; }
+  .c-ok  { color:#3ddfa5; }
+  .anim-code-1 { top:8px;  left:6px; animation:chip-in 0.5s 0.3s cubic-bezier(.2,.8,.2,1) forwards, code-float 5s 0.8s ease-in-out infinite; }
+  .anim-code-2 { top:34px; left:6px; animation:chip-in 0.5s 0.7s cubic-bezier(.2,.8,.2,1) forwards, code-float 5s 1.4s ease-in-out infinite; }
+  .anim-code-3 { top:60px; left:6px; animation:chip-in 0.5s 1.1s cubic-bezier(.2,.8,.2,1) forwards, code-float 5s 2s   ease-in-out infinite; }
+  /* Blinking cursor in code */
+  .cursor-blink { animation:blink 1.1s step-end infinite; color:#8be9fd; }
+  /* Glowing approval badge — top-right, matches illustration's neon card */
+  .glow-check { position:absolute; top:8px; right:6px; display:flex; align-items:center; gap:6px; padding:5px 10px; background:#071525f0; border:1px solid #1e6bcc; border-radius:5px; font:8.5px 'Geist Mono',monospace; color:#7dd3fc; opacity:0; animation:chip-in 0.7s 1.6s cubic-bezier(.2,.8,.2,1) forwards, glow-pulse 3s 2.3s ease-in-out infinite; }
+  .glow-check em { font-style:normal; color:#c3e88d; }
+  /* Steam from mug — positioned ~63% from left, matching mug in illustration */
+  .steam-particles { position:absolute; bottom:12px; left:63%; }
+  .steam { display:block; position:absolute; width:4px; border-radius:3px; background:linear-gradient(to top,#94a3b855,#94a3b800); opacity:0; animation:steam-rise 2.6s ease-in-out infinite; }
+  .s1 { height:18px; left:0;   animation-delay:0s;   animation-duration:2.6s; }
+  .s2 { height:13px; left:7px; animation-delay:0.9s; animation-duration:2.1s; }
+  .s3 { height:20px; left:3px; animation-delay:1.7s; animation-duration:3s;   }
+  /* Terminal snippet — bottom-right */
+  .terminal-snip { position:absolute; bottom:8px; right:6px; padding:5px 9px; background:#0a0e17f2; border:1px solid #2a3040; border-radius:4px; font:8.5px/1.6 'Geist Mono',monospace; color:#6e7681; opacity:0; animation:chip-in 0.5s 2s cubic-bezier(.2,.8,.2,1) forwards; }
+  .t-prompt { color:#3ddfa5; }
+  .t-dots { display:inline-flex; gap:3px; vertical-align:middle; margin-left:4px; }
+  .t-dots span { display:block; width:4px; height:4px; border-radius:50%; background:#3ddfa5; animation:dot-bounce 1.2s ease-in-out infinite; }
+  .t-dots span:nth-child(2) { animation-delay:.2s; }
+  .t-dots span:nth-child(3) { animation-delay:.4s; }
+  /* Paw-tap ripple on keyboard area */
+  .paw-ripple { position:absolute; bottom:18px; left:50%; translate:-50% 0; width:28px; height:14px; border-radius:50%; border:2px solid #1e90ff55; opacity:0; animation:paw-tap 2.4s 1s ease-out infinite; }
+  /* ── Keyframes ── */
+  @keyframes chip-in     { from { opacity:0; transform:translateY(8px) scale(.95); } to { opacity:1; transform:translateY(0) scale(1); } }
+  @keyframes code-float  { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-4px); } }
+  @keyframes glow-pulse  { 0%,100% { box-shadow:0 0 0 #1e90ff00; border-color:#1e6bcc; } 50% { box-shadow:0 0 14px #1e90ff55; border-color:#3b9eff; } }
+  @keyframes steam-rise  { 0% { opacity:0; transform:translateY(0) scaleX(1); } 35% { opacity:.55; } 100% { opacity:0; transform:translateY(-26px) scaleX(1.5) rotate(8deg); } }
+  @keyframes dot-bounce  { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-3px); } }
+  @keyframes kb-shimmer  { 0%,100% { opacity:.5; transform:scaleX(1); } 50% { opacity:1; transform:scaleX(1.12); } }
+  @keyframes paw-tap     { 0% { opacity:0; transform:scale(.4); } 20% { opacity:.7; } 100% { opacity:0; transform:scale(2.2); } }
   .task-paper { display:flex; align-items:center; gap:18px; padding:19px; background:var(--paper); border:1px solid var(--line-2); margin-bottom:20px; }
   .task-icon { display:grid; place-items:center; width:57px; height:57px; flex:none; border:1px solid var(--line-2); background:#fff; }
   .task-paper strong, .task-paper small, .workflow-step strong, .workflow-step small { display:block; }
@@ -266,6 +319,10 @@ const capabilities = [
     .hero-copy, .work-window { animation:none; }
     .work-window, .approval-art img, .workflow-step { transition:none; }
     .workflow-step.current .step-state { animation:none; }
+    .floating-code, .glow-check, .terminal-snip { animation:none; opacity:1; }
+    .cursor-blink, .steam, .t-dots span, .kb-glow, .paw-ripple { animation:none; opacity:0.6; }
+    .step-dither-screen { transition:none; }
+    .step-card:hover .step-dither-screen, .work-window:hover .approval-art img, .work-window:focus-within .approval-art img { transform:none; }
   }
   .compatibility { display:flex; flex-wrap:wrap; align-items:center; gap:16px 28px; padding-block:23px; border-top:1px solid var(--line-2); border-bottom:1px solid var(--line-2); font:11px 'Geist Mono',monospace; color:var(--ink); }
   .compatibility>span:first-child { font-size:9px; letter-spacing:.15em; color:var(--ink-2); margin-right:auto; }
@@ -331,26 +388,25 @@ const capabilities = [
   .capability-card h3, .steps-grid h3 { font-size:27px; margin:30px 0 9px; }
   .capability-card p, .steps-grid p { font-size:13px; line-height:1.7; margin:0; }
   .steps-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:32px; padding-top:30px; }
-  .steps-grid>div { border-top:2px solid var(--navy); padding-top:18px; display:flex; flex-direction:column; }
-  .step-dither-screen { position:relative; overflow:hidden; background:var(--panel-2); border:1px solid var(--line-2); height:190px; margin-bottom:20px; box-shadow:2px 2px 0 var(--paper-shadow); display:flex; flex-direction:column; }
-  .dither-media { position:relative; width:100%; flex:1; display:flex; align-items:center; justify-content:center; overflow:hidden; background:radial-gradient(var(--paper-dot) 1px, transparent 1px); background-size:8px 8px; }
-  .dither-img { width:135px; height:135px; object-fit:contain; position:relative; z-index:1; filter:drop-shadow(0 2px 4px var(--paper-shadow)); transition:transform 0.25s ease; }
-  .step-card:hover .dither-img { transform:scale(1.04); }
-  .dither-matrix-layer { position:absolute; inset:0; pointer-events:none; z-index:2; background-image:radial-gradient(circle at 1px 1px, var(--navy) 1px, transparent 0), radial-gradient(circle at 3px 3px, var(--ink) 0.8px, transparent 0); background-size:4px 4px; opacity:0.28; mix-blend-mode:multiply; }
-  html[data-theme='dark'] .dither-matrix-layer { background-image:radial-gradient(circle at 1px 1px, var(--navy) 1.2px, transparent 0), radial-gradient(circle at 3px 3px, #eae8e1 0.8px, transparent 0); opacity:0.38; mix-blend-mode:screen; }
-  .dither-raster-scan { position:absolute; inset:0; pointer-events:none; z-index:3; background:repeating-linear-gradient(0deg, transparent 0px, transparent 2px, rgba(34,35,32,0.05) 2px, rgba(34,35,32,0.05) 4px); animation:dither-raster 10s linear infinite; }
-  html[data-theme='dark'] .dither-raster-scan { background:repeating-linear-gradient(0deg, transparent 0px, transparent 2px, rgba(234,232,225,0.04) 2px, rgba(234,232,225,0.04) 4px); }
-  .dither-sweep-beam { position:absolute; inset:-150%; pointer-events:none; z-index:4; background:linear-gradient(115deg, transparent 40%, rgba(0,0,168,0.08) 47%, rgba(255,255,255,0.6) 50%, rgba(0,0,168,0.14) 53%, transparent 60%); mix-blend-mode:overlay; }
-  html[data-theme='dark'] .dither-sweep-beam { background:linear-gradient(115deg, transparent 40%, rgba(156,188,226,0.2) 47%, rgba(220,234,250,0.65) 50%, rgba(156,188,226,0.2) 53%, transparent 60%); mix-blend-mode:screen; }
-  .beam-1 { animation:dither-sweep 6.5s cubic-bezier(0.4,0,0.2,1) infinite; animation-delay:0s; }
-  .beam-2 { animation:dither-sweep 6.5s cubic-bezier(0.4,0,0.2,1) infinite; animation-delay:2.1s; }
-  .beam-3 { animation:dither-sweep 6.5s cubic-bezier(0.4,0,0.2,1) infinite; animation-delay:4.2s; }
-  .dither-radar-line { position:absolute; left:0; right:0; height:2px; background:var(--navy); box-shadow:0 0 6px var(--navy); opacity:0.6; z-index:5; animation:dither-radar-scan 3.5s ease-in-out infinite alternate; }
-  .dither-terminal-meta { display:flex; justify-content:space-between; align-items:center; padding:5px 10px; background:var(--card); border-top:1px solid var(--line-2); font-family:'Geist Mono',monospace; font-size:9px; letter-spacing:0.08em; color:var(--ink-2); position:relative; z-index:6; }
-  .terminal-tag { font-weight:500; }
-  .terminal-status { display:inline-flex; align-items:center; gap:5px; color:var(--navy); font-weight:600; }
+  .steps-grid { gap:20px; padding-top:36px; }
+  .step-card { border-top:2px solid var(--navy); padding-top:18px; display:flex; flex-direction:column; }
+  /* Screen card — dark navy matching illustration backgrounds */
+  .step-dither-screen { position:relative; overflow:hidden; background:#131520; border:1px solid #2a3050; margin-bottom:20px; box-shadow:3px 3px 0 #0006; display:flex; flex-direction:column; transition:transform 300ms cubic-bezier(.2,.7,.2,1), box-shadow 300ms ease; }
+  .step-card:hover .step-dither-screen { transform:translateY(-4px); box-shadow:5px 8px 0 #0009; }
+  .step-illustration { position:relative; width:100%; aspect-ratio:360 / 164; flex:none; overflow:hidden; background:#131520; }
+  .step-illustration img { display:block; width:100%; height:100%; object-fit:contain; object-position:center center; transition:transform 400ms cubic-bezier(.2,.7,.2,1); }
+  .step-card:hover .step-illustration img { transform:scale(1.04); }
+  /* Terminal meta bar at bottom of each card screen */
+  .dither-terminal-meta { display:flex; justify-content:space-between; align-items:center; padding:6px 10px; background:#0d1020; border-top:1px solid #2a3050; font-family:'Geist Mono',monospace; font-size:8.5px; letter-spacing:0.1em; color:#6e7a9f; position:relative; z-index:6; }
+  .terminal-tag { font-weight:600; color:#8fa0cc; }
+  .terminal-status { display:inline-flex; align-items:center; gap:5px; font-weight:700; letter-spacing:.12em; }
   .status-indicator { width:5px; height:5px; background:var(--ok); display:inline-block; }
   .terminal-status.gate-active .status-indicator { background:var(--pending); animation:blink 1.2s infinite; }
+  /* Per-card status colours */
+  .terminal-status          { color:#3ddfa5; } /* READY – green  */
+  .terminal-status.gate-active { color:#f4c553; } /* YOUR CALL – amber */
+  .terminal-status.sandbox  { color:#63b3ff; } /* SANDBOX – blue  */
+  .terminal-status.sandbox .status-indicator { background:#63b3ff; }
   .window-dither-monitor { margin-bottom:18px; border:1px solid var(--line-2); background:var(--panel-2); box-shadow:2px 2px 0 var(--paper-shadow); }
   .dither-monitor-screen { position:relative; overflow:hidden; padding:10px 14px; background:var(--panel-2); font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:0.06em; }
   .dither-monitor-mesh { position:absolute; inset:0; pointer-events:none; background-image:radial-gradient(var(--navy) 0.8px, transparent 0.8px); background-size:4px 4px; opacity:0.2; }
@@ -366,13 +422,8 @@ const capabilities = [
   .task-icon.dither-glow-frame { position:relative; overflow:hidden; }
   .hero-dither-sweep { position:absolute; inset:-100%; pointer-events:none; background:linear-gradient(115deg, transparent 40%, rgba(0,0,168,0.15) 50%, transparent 60%); animation:dither-sweep 4s linear infinite; }
   @keyframes dither-sweep { 0% { transform:translate3d(-100%,-100%,0) rotate(20deg); } 35%, 100% { transform:translate3d(200%,200%,0) rotate(20deg); } }
-  @keyframes dither-raster { 0% { background-position:0 0; } 100% { background-position:0 100px; } }
-  @keyframes dither-radar-scan { 0% { top:0%; opacity:0.2; } 50% { opacity:0.7; } 100% { top:100%; opacity:0.2; } }
   @keyframes blink { 0%, 100% { opacity:1; } 50% { opacity:0.2; } }
   @media (prefers-reduced-motion: reduce) {
-    .dither-sweep-beam,
-    .dither-raster-scan,
-    .dither-radar-line,
     .dither-monitor-sweep,
     .dither-monitor-radar,
     .step-pulse,
@@ -382,6 +433,7 @@ const capabilities = [
       transform: none !important;
       opacity: 0.25 !important;
     }
+    .step-illustration img { transition: none; transform: none; }
   }
   .steps-grid h3 { margin:18px 0 10px; }
   .closing { display:flex; justify-content:space-between; align-items:center; gap:30px; margin-top:110px; padding:38px; border:1px solid var(--line-2); background:var(--card); box-shadow:3px 3px 0 var(--paper-shadow); }
@@ -417,7 +469,14 @@ const capabilities = [
     .harness-grid {
       grid-template-columns: repeat(6, minmax(130px, 1fr));
       -webkit-overflow-scrolling: touch;
+      overscroll-behavior-x: contain;
+      scroll-snap-type: x mandatory;
+      scroll-padding-inline: 1px;
+      /* Right-edge fade signals the row scrolls (scrollbar is hidden). */
+      -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent);
+      mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent);
     }
+    .harness-item { scroll-snap-align: start; }
   }
   @media(max-width:980px) { .channels-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
   @media(max-width:500px) { .channels-grid { grid-template-columns:minmax(0,1fr); } }

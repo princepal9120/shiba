@@ -131,7 +131,7 @@ const waitlistSchema = {
             <label for="github" class="block text-[10px] uppercase tracking-[0.12em] font-medium text-[var(--ink)] mb-1.5">
               GitHub Username <span class="text-[var(--ink-2)] font-normal">(optional, for contributor recognition)</span>
             </label>
-            <div class="flex items-center bg-[var(--card)] border border-[var(--line-2)] px-3.5 py-2.5 focus-within:border-[var(--navy)] transition-colors">
+            <div class="field-wrap flex items-center bg-[var(--card)] border border-[var(--line-2)] px-3.5 py-2.5 focus-within:border-[var(--navy)] transition-colors">
               <span class="text-[var(--navy)] mr-1.5">@</span>
               <input
                 id="github"
@@ -153,7 +153,7 @@ const waitlistSchema = {
           </div>
 
           <div class="pt-2">
-            <label class="flex items-start gap-2.5 cursor-pointer text-[11px] text-[var(--ink-2)] leading-relaxed">
+            <label class="consent flex items-start gap-2.5 cursor-pointer text-[11px] text-[var(--ink-2)] leading-relaxed">
               <input
                 type="checkbox"
                 name="consent"
@@ -338,7 +338,7 @@ const waitlistSchema = {
     border: 1px solid var(--line-2);
     color: var(--ink);
     box-shadow: 2px 2px 0 var(--paper-shadow);
-    transition: all 160ms ease;
+    transition: border-color 160ms ease, color 160ms ease, transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
   }
   .watch-link:hover {
     border-color: var(--navy);
@@ -359,7 +359,7 @@ const waitlistSchema = {
     flex-direction: column;
     justify-content: space-between;
     box-shadow: 2px 2px 0 var(--paper-shadow);
-    transition: border-color 200ms ease;
+    transition: border-color 200ms ease, box-shadow 200ms ease;
   }
   .contrib-card:hover {
     border-color: var(--navy);
@@ -392,6 +392,44 @@ const waitlistSchema = {
   }
   .contrib-cta:hover {
     color: var(--navy-2);
+  }
+  /* ≥16px stops iOS Safari zooming on focus; ID selector outranks the Tailwind text-xs on the form. */
+  #waitlist-form :is(input:not([type='checkbox']), select, textarea) {
+    font-size: 16px;
+    min-height: 44px;
+    transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+  }
+  #waitlist-form > div > :is(input, select):focus-visible,
+  #waitlist-form .field-wrap:focus-within {
+    outline: none;
+    border-color: var(--navy);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--navy) 22%, transparent);
+  }
+  #waitlist-form .field-wrap { min-height: 44px; padding-block: 0; }
+  #waitlist-form .field-wrap input { min-height: 42px; }
+  #waitlist-form .field-wrap input:focus-visible { outline: none; }
+  #waitlist-form :is(input, select):user-invalid { border-color: var(--danger); }
+  #waitlist-form .consent {
+    min-height: 44px;
+    padding-block: 4px;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  #waitlist-form .consent input {
+    flex: none;
+    width: 20px;
+    height: 20px;
+    margin-top: 1px;
+    accent-color: var(--navy);
+    cursor: pointer;
+  }
+  #waitlist-form .consent input:focus-visible { outline: 2px solid var(--navy); outline-offset: 2px; }
+  #waitlist-form button[type='submit'] { min-height: 48px; }
+  .watch-link:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 var(--paper-shadow); }
+  .contrib-card:hover { box-shadow: 3px 3px 0 var(--paper-shadow); }
+  @media (prefers-reduced-motion: reduce) {
+    .watch-link, .contrib-card, #waitlist-form :is(input, select) { transition: none; }
+    .watch-link:hover, .watch-link:active { transform: none; }
   }
   @media (max-width: 900px) {
     .hero-grid {

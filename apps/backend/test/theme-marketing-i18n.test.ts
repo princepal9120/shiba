@@ -40,6 +40,6 @@ describe("theme, docs, marketing, and mascot specifications", () => {
     expect(homeContent).toContain("approval");
     expect(homeContent).toContain("Cloudflare Sandbox");
     expect(homeContent).toContain("approval-gated");
-    expect(homeContent).toContain("dither-sweep-beam");
+    expect(homeContent).toContain("step-dither-screen");
   });
 });

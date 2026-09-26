@@ -35,6 +35,8 @@ import { handleSlackInteract } from "./slack-approval.js";
 import { handleSlackEvents } from "./slack-events.js";
 import { handleSlackEvent } from "./slack-mention.js";
 import { ORCHESTRATOR_NAME, handleSlackCommand } from "./slack-routes.js";
+import { handleDiscordInteractions } from "./discord.js";
+import { handleTelegramWebhook } from "./telegram.js";
 import { handleSandboxRoutes } from "./sandbox-routes.js";
 import { readSetupStatus } from "./setup-status.js";
 import { isPublicRequest } from "./public-routes.js";
@@ -58,6 +60,8 @@ export const SIGNATURE_AUTHENTICATED = [
   "/api/slack/events",
   "/api/slack/command",
   "/api/slack/interact",
+  "/api/telegram/webhook",
+  "/api/discord/interactions",
   "/api/github/webhook",
 ];
 
@@ -89,6 +93,19 @@ export function isAuthenticated(request: Request, env: Env): boolean {
 
 function automationsStub(env: Env) {
   return env.Automations.get(env.Automations.idFromName(AUTOMATIONS_DO_NAME));
+}
+
+/** Durable check-and-record for a retried delivery id. True = already seen. */
+async function seenDelivery(env: Env, key: string): Promise<boolean> {
+  const response = await automationsStub(env).fetch(
+    new Request("https://internal/internal/dedupe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key }),
+    }),
+  );
+  const body = (await response.json().catch(() => ({}))) as { seen?: boolean };
+  return response.ok && body.seen === true;
 }
 
 async function handleRuns(request: Request, env: Env): Promise<Response | null> {
@@ -1059,22 +1076,23 @@ export default {
       if (sandboxRouteResponse) {
         return sandboxRouteResponse;
       }
+      const chatCtx = ctx ? { waitUntil: (promise: Promise<unknown>) => ctx.waitUntil(promise) } : undefined;
+      const telegramResponse = await handleTelegramWebhook(request, env, chatCtx, {
+        dedupe: (updateId) => seenDelivery(env, `telegram-update:${updateId}`),
+      });
+      if (telegramResponse) {
+        return telegramResponse;
+      }
+      const discordResponse = await handleDiscordInteractions(request, env, chatCtx);
+      if (discordResponse) {
+        return discordResponse;
+      }
       const slackEventsResponse = await handleSlackEvents(
         request,
         env,
         ctx ?? { waitUntil: () => {} } as unknown as ExecutionContext,
         {
-          dedupe: async (eventId) => {
-            const response = await automationsStub(env).fetch(
-              new Request("https://internal/internal/dedupe", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ key: `slack-event:${eventId}` }),
-              }),
-            );
-            const body = (await response.json().catch(() => ({}))) as { seen?: boolean };
-            return response.ok && body.seen === true;
-          },
+          dedupe: (eventId) => seenDelivery(env, `slack-event:${eventId}`),
           onEvent: async (body, eventEnv) => {
             await handleSlackEvent(body, eventEnv);
             try {

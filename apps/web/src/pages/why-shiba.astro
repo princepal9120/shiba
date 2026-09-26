@@ -428,11 +428,41 @@ const articleSchema = {
     max-width: 800px;
     margin-inline: auto;
   }
+  .prose-body h2, .manifesto-title { text-wrap: balance; }
+  .prose-body > p { max-width: 68ch; text-wrap: pretty; overflow-wrap: break-word; }
+  .prose-body > p a { text-underline-offset: 3px; }
+  .feature-card, .pillar-row {
+    transition: transform var(--dur-med) var(--ease-out), box-shadow var(--dur-med) var(--ease-out), border-color var(--dur-fast) ease;
+  }
+  /* Gate lift on real hover so taps on touch screens don't leave cards stuck raised. */
+  @media (hover: hover) {
+    .feature-card:hover, .pillar-row:hover {
+      transform: translate(-2px, -2px);
+      box-shadow: 4px 4px 0 var(--paper-shadow);
+      border-color: var(--navy);
+    }
+    .pillar-row:hover .pillar-icon:not(.accent) { border-color: var(--navy); }
+  }
+  .pillar-icon { transition: border-color var(--dur-fast) ease; }
+  @media (prefers-reduced-motion: reduce) {
+    .feature-card, .pillar-row { transition: border-color var(--dur-fast) ease; }
+    .feature-card:hover, .pillar-row:hover { transform: none; }
+  }
   @media (max-width: 800px) {
     .story-section {
       grid-template-columns: 1fr;
       gap: 20px;
       padding-block: 54px;
     }
+  }
+  @media (max-width: 480px) {
+    .story-section { gap: 14px; padding-block: 44px 48px; }
+    .prose-body h2 { margin-bottom: 16px; }
+    .prose-body > p { font-size: 16px; line-height: 1.7; margin-bottom: 16px; }
+    .pillar-row { gap: 14px; padding: 18px 16px; }
+    .pillar-icon { width: 32px; height: 32px; font-size: 12px; }
+    .feature-card { padding: 20px 18px; }
+    .hero-actions .button { flex: 1 1 100%; min-height: 44px; }
+    .closing-section { padding-block: 64px; }
   }
 </style>

@@ -116,6 +116,13 @@ export function Tooltip({
         break;
     }
 
+    // Clamp into the viewport: edge-aligned tips can land off-screen on small widths.
+    const margin = 8;
+    const vw = window.innerWidth;
+    if (left < margin) left = margin;
+    else if (left > vw - margin) left = vw - margin;
+    if (transform.includes("-100%") && left - 260 < margin) left = margin;
+
     setCoords({ top, left, transform });
   }, [side, align]);
 
@@ -245,7 +252,7 @@ export function Tooltip({
               transform: coords.transform,
             }}
             className={
-              "z-[9999] pointer-events-none select-none px-2.5 py-1 text-[11px] font-mono font-medium text-white bg-[#222320] border border-black rounded-none shadow-[2px_2px_0_var(--paper-shadow)] flex items-center gap-1.5 tracking-normal transition-opacity duration-150 animate-in fade-in zoom-in-95 " +
+              "z-[9999] pointer-events-none select-none px-2.5 py-1 text-[11px] font-mono font-medium text-white bg-[#222320] border border-black rounded-none shadow-[2px_2px_0_var(--paper-shadow)] flex items-center gap-1.5 tracking-normal transition-opacity duration-150 animate-in fade-in zoom-in-95 max-w-[calc(100vw-16px)] " +
               className
             }
           >
