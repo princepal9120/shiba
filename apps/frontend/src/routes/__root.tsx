@@ -21,7 +21,7 @@ export const Route = createRootRoute({
       { name: "apple-mobile-web-app-title", content: "Shiba" },
       { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
       { name: "description", content: "Review, approve, and observe your self-hosted AI software engineer's coding tasks on your own Cloudflare account." },
-      { property: "og:title", content: "AI Coworker Dashboard" },
+      { property: "og:title", content: "Shiba Dashboard" },
       {
         property: "og:description",
         content: "Review, approve, and observe your self-hosted AI software engineer's coding tasks on your own Cloudflare account.",
@@ -30,7 +30,7 @@ export const Route = createRootRoute({
       { property: "og:image", content: "/assets/mascot/pet-logo.png" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:image", content: "/assets/mascot/pet-logo.png" },
-      { title: "AI Coworker Dashboard · Self-Hosted AI Software Engineer" },
+      { title: "Shiba Dashboard · Self-Hosted AI Software Engineer" },
     ],
     links: [
       { rel: "icon", type: "image/x-icon", href: "/favicon.ico" },

@@ -243,7 +243,7 @@ export function App(): React.JSX.Element {
   const toggleTheme = () => setTheme(theme === "dark" ? "light" : "dark");
 
   useEffect(() => {
-    document.title = "AI Coworker Dashboard · Self-Hosted AI Software Engineer";
+    document.title = "Shiba Dashboard · Self-Hosted AI Software Engineer";
   }, []);
 
   // Surface transient notices through the toast channel (aria-live inside sonner).
@@ -1011,7 +1011,7 @@ export function App(): React.JSX.Element {
         </button>
         <nav aria-label="Breadcrumb" className="flex items-center gap-2 min-w-0">
           <span className="text-[10px] font-mono font-semibold uppercase tracking-[0.14em] text-white/60">
-            AI Coworker
+            Shiba
           </span>
           <span className="text-white/40 text-xs" aria-hidden="true">/</span>
           <span className="text-[13px] font-medium truncate">

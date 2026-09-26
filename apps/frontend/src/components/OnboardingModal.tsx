@@ -111,7 +111,7 @@ SLACK_CHANNEL_REPOS=C04INCIDENTS:myorg/backend-api`,
     required: true,
     summary: "Submit a coding task, review the structured approval card, and watch the isolated container work.",
     detail:
-      "PLAN.md §7 (T10): The core value of AI Coworker is human-in-the-loop security. When a task is submitted, Think plans it and requests approval with exact tool arguments. Once approved, the micro-container clones the repo, streams progress, tests changes, and produces a diff or PR.",
+      "PLAN.md §7 (T10): The core value of Shiba is human-in-the-loop security. When a task is submitted, Think plans it and requests approval with exact tool arguments. Once approved, the micro-container clones the repo, streams progress, tests changes, and produces a diff or PR.",
     codeSnippet: `# Example task to test:
 Repository: https://github.com/cloudflare/ai-chat
 Base branch: main
