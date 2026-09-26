@@ -378,15 +378,16 @@ const capabilities = [
   .channels-intro { padding-top:24px; max-width:720px; font-size:15px; line-height:1.75; color:var(--ink-2); }
   .channels-intro code { font-family:'Geist Mono',monospace; color:var(--navy); background:var(--panel-2); padding:2px 6px; border:1px solid var(--line-2); }
   .channels-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:1px; margin-top:30px; border:1px solid var(--line-2); background:var(--line-2); box-shadow:3px 3px 0 var(--paper-shadow); }
-  .channel-card { padding:24px; background:var(--card); display:flex; flex-direction:column; justify-content:space-between; min-height:260px; }
+  .channel-card { padding:24px; background:var(--card); display:flex; flex-direction:column; justify-content:space-between; min-height:260px; transition:background 150ms ease; }
+  .channel-card:hover { background:var(--panel-2); }
   .channel-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
-  .channel-icon { display:grid; place-items:center; width:40px; height:40px; border:1px solid var(--line-2); background:var(--panel-2); color:var(--ink); }
-  .channel-icon img { filter:drop-shadow(0 1px 2px var(--paper-shadow)); }
-  .channel-badge { font-family:'Geist Mono',monospace; font-size:9px; letter-spacing:0.12em; text-transform:uppercase; padding:3px 8px; border:1px solid var(--line-2); }
-  .channel-badge.live { background:var(--panel-2); color:var(--ok); border-color:var(--ok); }
+  .channel-icon { display:grid; place-items:center; width:38px; height:38px; border:1px solid var(--line-2); background:var(--panel-2); }
+  :global(html[data-theme='dark']) .channel-icon img { filter:invert(1) brightness(1.2); }
+  .channel-badge { font-family:'Geist Mono',monospace; font-size:8.5px; letter-spacing:0.12em; text-transform:uppercase; padding:2px 7px; border:1px solid var(--line-2); color:var(--navy); background:var(--panel-2); }
+  .channel-badge.live { color:var(--navy); border-color:var(--line-2); }
   .channel-badge.soon { background:var(--panel-2); color:var(--ink-2); }
-  .channel-card h3 { font-size:22px; margin:0 0 12px; }
-  .channel-bubble { background:var(--panel-2); border:1px solid var(--line-2); padding:10px 12px; margin-bottom:16px; font-family:'Geist Mono',monospace; font-size:11px; line-height:1.5; display:flex; flex-direction:column; gap:4px; }
+  .channel-card h3 { font-family:var(--sl-font); font-size:18px; font-weight:600; margin:0 0 12px; color:var(--ink); letter-spacing:-0.01em; }
+  .channel-bubble { background:var(--panel-2); border:1px solid var(--line-2); padding:10px 12px; margin-bottom:16px; font-family:'Geist Mono',monospace; font-size:11px; line-height:1.55; display:flex; flex-direction:column; gap:4px; }
   .bubble-prompt { color:var(--ink); }
   .bubble-prompt .highlight { color:var(--navy); font-weight:600; }
   .bubble-reply { color:var(--ink-2); font-size:10px; }
