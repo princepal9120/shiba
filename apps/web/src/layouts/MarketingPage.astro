@@ -10,7 +10,6 @@ interface Props {
   modifiedTime?: string;
   schema?: Record<string, unknown> | Array<Record<string, unknown>>;
   breadcrumbs?: Array<{ name: string; path: string }>;
-  lang?: string;
 }
 const {
   title,
@@ -21,7 +20,6 @@ const {
   modifiedTime,
   schema,
   breadcrumbs = [{ name: 'Home', path: '/' }],
-  lang = 'en',
 } = Astro.props;
 const canonical = new URL(path, 'https://tryshiba.dev').href;
 const ogImage = 'https://tryshiba.dev/assets/mascot/pet-logo.png';
@@ -55,7 +53,7 @@ const finalSchemas = schema
   : defaultSchemas;
 ---
 <!doctype html>
-<html lang={lang} class="scroll-smooth" data-theme="light">
+<html lang="en" class="scroll-smooth" data-theme="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -67,7 +65,7 @@ const finalSchemas = schema
     <meta name="description" content={description} />
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
     <meta name="author" content="Shiba Open Source" />
-    <meta name="theme-color" content="#f6f4ed" />
+    <meta name="theme-color" content="#191a18" />
 
     <!-- Open Graph -->
     <meta property="og:type" content={type} />
@@ -102,8 +100,8 @@ const finalSchemas = schema
     <script is:inline>
       (function() {
         try {
-          var stored = localStorage.getItem('shiba-theme');
-          document.documentElement.setAttribute('data-theme', stored === 'dark' ? 'dark' : 'light');
+          var stored = localStorage.getItem('shiba-theme') || 'dark';
+          document.documentElement.setAttribute('data-theme', stored === 'light' ? 'light' : 'dark');
         } catch (_) {}
       })();
     </script>
@@ -111,16 +109,22 @@ const finalSchemas = schema
   <body>
     <header class="site-header sticky top-0 z-50">
       <div class="shell header-inner">
-        <a class="wordmark flex items-center gap-2.5" href="/" aria-label="Shiba home">
-          <img src="/assets/mascot/pet-logo.png" alt="Shiba Mascot" class="w-7 h-7 bg-white object-contain border border-[#d3d2c8] p-0.5 pixelated" />
-          <span class="wordmark-name">Shiba</span>
-        </a>
-        <span class="beta-badge">Beta · OSS MIT</span>
-        <nav aria-label="Main navigation" class="flex items-center gap-x-5 font-mono text-[13px] whitespace-nowrap overflow-x-auto">
-          <a href="/why-shiba/" class={path === '/why-shiba/' ? 'nav-link nav-active' : 'nav-link'}>Why Shiba</a>
-          <a href="/docs/overview/" class={path.startsWith('/docs') ? 'nav-link nav-active' : 'nav-link'}>Docs</a>
-          <a href="/docs/architecture/" class="nav-link">Architecture</a>
-          <a href="/docs/security/" class="nav-link">Security</a>
+        <div class="brand-group">
+          <a class="wordmark flex items-center gap-2.5" href="/" aria-label="Shiba home">
+            <img src="/assets/mascot/pet-logo.png" alt="Shiba Mascot" class="w-7 h-7 bg-white object-contain border border-[#d3d2c8] p-0.5 pixelated" />
+            <span class="wordmark-name">Shiba</span>
+          </a>
+          <span class="beta-badge">Beta · AGPL-3.0</span>
+        </div>
+        <nav aria-label="Main navigation" class="font-mono text-[13px]">
+          <div class="nav-links">
+            <a href="/why-shiba/" class={path === '/why-shiba/' ? 'nav-link nav-active' : 'nav-link'}>Why Shiba</a>
+            <a href="/#harnesses" class="nav-link">Agents</a>
+            <a href="/docs/overview/" class={path.startsWith('/docs') ? 'nav-link nav-active' : 'nav-link'}>Docs</a>
+            <a href="/docs/architecture/" class="nav-link">Architecture</a>
+            <a href="/docs/security/" class="nav-link">Security</a>
+          </div>
+          <div class="nav-actions">
           <a href="/app/" class="nav-ghost">Dashboard</a>
           <button
             type="button"
@@ -136,19 +140,11 @@ const finalSchemas = schema
               <path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
             </svg>
           </button>
-          <button
-            type="button"
-            id="locale-toggle-btn"
-            aria-label="Switch language (EN / HI)"
-            title="Switch language between English and Hindi"
-            class="locale-toggle font-mono text-[11px] px-2 py-1 border border-[var(--line-2)] hover:border-[var(--navy)] text-[var(--ink-2)] hover:text-[var(--navy)] transition-colors"
-          >
-            EN
-          </button>
           <a class="nav-cta" href="/waitlist/">
             <span class="w-1.5 h-1.5 nav-cta-dot" aria-hidden="true"></span>
             <span>Join the build</span>
           </a>
+          </div>
         </nav>
       </div>
     </header>
@@ -166,7 +162,7 @@ const finalSchemas = schema
             </p>
             <div class="flex items-center gap-2 text-[10px] font-mono uppercase tracking-[0.12em] text-[var(--ink-2)]">
               <span class="w-1.5 h-1.5 footer-ok-dot"></span>
-              <span>Open source (MIT) · Cloudflare Native</span>
+              <span>Open source (AGPL-3.0-only) · Cloudflare Native</span>
             </div>
           </div>
           <div class="space-y-3 font-mono text-xs">
@@ -190,7 +186,7 @@ const finalSchemas = schema
           </div>
         </div>
         <div class="statusbar">
-          <div class="statuscell">© 2026 SHIBA · MIT LICENSE</div>
+          <div class="statuscell">© 2026 SHIBA · AGPL-3.0 LICENSE</div>
           <div class="statuscell">CLOUDFLARE WORKERS + SANDBOX</div>
           <div class="statuscell status-links">
             <a href="/sitemap.xml">Sitemap</a>
@@ -202,31 +198,23 @@ const finalSchemas = schema
     </footer>
 
     <script>
+      var storedTheme = 'dark';
+      try {
+        storedTheme = localStorage.getItem('shiba-theme') || 'dark';
+      } catch (_) {}
+      document.documentElement.setAttribute('data-theme', storedTheme === 'light' ? 'light' : 'dark');
+
       var btn = document.getElementById('theme-toggle-btn');
+      var themeColorMeta = document.querySelector('meta[name="theme-color"]');
       btn?.addEventListener('click', function() {
         var next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
         document.documentElement.setAttribute('data-theme', next);
+        themeColorMeta?.setAttribute('content', next === 'dark' ? '#191a18' : '#f6f4ed');
         try {
           localStorage.setItem('shiba-theme', next);
         } catch (_) {}
       });
 
-      var locBtn = document.getElementById('locale-toggle-btn');
-      var savedLang = 'en';
-      try {
-        savedLang = localStorage.getItem('shiba-locale') || 'en';
-      } catch (_) {}
-      if (locBtn) {
-        locBtn.textContent = savedLang === 'hi' ? 'HI' : 'EN';
-        document.documentElement.setAttribute('lang', savedLang === 'hi' ? 'hi-IN' : 'en');
-        locBtn.addEventListener('click', function() {
-          var current = document.documentElement.getAttribute('lang') || 'en';
-          var nextLang = current.startsWith('hi') ? 'en' : 'hi-IN';
-          document.documentElement.setAttribute('lang', nextLang);
-          locBtn.textContent = nextLang === 'hi-IN' ? 'HI' : 'EN';
-          try { localStorage.setItem('shiba-locale', nextLang === 'hi-IN' ? 'hi' : 'en'); } catch (_) {}
-        });
-      }
     </script>
   </body>
 </html>
@@ -333,10 +321,14 @@ const finalSchemas = schema
   /* ---------- top nav ---------- */
   .site-header { position: relative; z-index: 2; border-bottom: 1px solid var(--line); background: var(--paper); }
   .header-inner { min-height: 58px; display: flex; align-items: center; gap: 14px; }
+  .brand-group, .nav-links, .nav-actions { display:flex; align-items:center; gap:12px; }
+  .brand-group { flex:none; }
   .wordmark { text-decoration: none; white-space: nowrap; }
   .wordmark-name { font-family: 'Instrument Serif', Georgia, serif; font-size: 24px; letter-spacing: -0.01em; color: var(--ink); }
   .beta-badge { font-family: 'Geist Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--navy); border: 1px solid var(--line-2); background: var(--card); padding: 3px 7px; box-shadow: 2px 2px 0 var(--paper-shadow); }
-  .site-header nav { margin-left: auto; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 20px; font-size: 12px; }
+  .site-header nav { margin-left: auto; display:flex; align-items:center; min-width:0; gap:18px; font-size:12px; }
+  .nav-links { gap:18px; white-space:nowrap; }
+  .nav-actions { flex:none; gap:10px; }
   .nav-link { text-decoration: none; color: var(--ink-2); }
   .nav-link:hover { color: var(--navy); }
   .nav-active { color: var(--navy); font-weight: 600; }
@@ -375,7 +367,10 @@ const finalSchemas = schema
   .button-outline:hover { background: var(--panel-2); color: var(--navy); border-color: var(--navy-2); }
   html[data-theme='dark'] .button:not(.button-outline) { color: #152335; }
   @media (max-width: 768px) {
-    .header-inner { align-items: flex-start; padding-block: 14px; flex-direction: column; gap: 12px; }
-    .site-header nav { margin-left: 0; gap: 8px 14px; width: 100%; }
+    .header-inner { align-items:stretch; padding-block:12px; flex-direction:column; gap:10px; }
+    .brand-group { justify-content:space-between; }
+    .site-header nav { margin-left:0; width:100%; display:grid; gap:10px; }
+    .nav-links { width:100%; overflow-x:auto; padding-bottom:3px; scrollbar-width:thin; }
+    .nav-actions { justify-content:space-between; }
   }
 </style>

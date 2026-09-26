@@ -20,9 +20,9 @@ describe.skipIf(!built)("marketing landing page", () => {
     expect(markup).toContain("Approval before execution");
     expect(markup).toContain("shiba.workspace");
     expect(markup).not.toContain("manga-panel");
-    expect(markup).toContain('data-theme="light"');
+    expect(markup).toContain('data-theme="dark"');
     expect(markup).toContain("theme-toggle-btn");
-    expect(markup).toContain("locale-toggle-btn");
+    expect(markup).toContain("AGPL-3.0");
   });
 
   test("every referenced asset exists in the build output", () => {

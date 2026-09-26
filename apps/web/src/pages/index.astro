@@ -10,7 +10,7 @@ const schema = {
   description,
   applicationCategory: 'DeveloperApplication',
   operatingSystem: 'Web',
-  license: 'https://opensource.org/licenses/MIT',
+  license: 'https://spdx.org/licenses/AGPL-3.0-only.html',
   offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
   sameAs: ['https://github.com/princepal9120/shiba', 'https://x.com/prince_twets'],
 };
@@ -28,7 +28,7 @@ const capabilities = [
 <MarketingPage title="Shiba - The best AI software engineer" description={description} path="/" schema={schema}>
   <section class="shell home-hero" aria-labelledby="home-title">
     <div class="hero-copy">
-      <p class="eyebrow">OPEN SOURCE · SELF-HOSTED · APPROVAL-GATED</p>
+      <p class="eyebrow">OPEN-SOURCE DEVIN CLOUD ALTERNATIVE</p>
       <h1 id="home-title">Your AI software engineer.<br /><em>On your terms.</em></h1>
       <p class="hero-lead">Give Shiba a repository and a task. Review the exact plan before a sandbox starts, then watch the work unfold in your own Cloudflare account.</p>
       <div class="hero-actions">
@@ -47,33 +47,34 @@ const capabilities = [
       <div class="window-body">
         <div class="window-topline"><span>CODING TASK</span><span>01 / 03</span></div>
         <div class="task-paper">
-          <div class="task-icon dither-glow-frame">
-            <img src="/assets/mascot/pet-logo.png" alt="" width="42" height="42" />
-            <div class="hero-dither-sweep" aria-hidden="true"></div>
-          </div>
+          <div class="task-icon"><img src="/assets/mascot/pet-logo.png" alt="" width="42" height="42" /></div>
           <div><span class="micro">YOUR REPOSITORY</span><strong>Make a change. Keep control.</strong><small>Repository and task input are reviewed together.</small></div>
         </div>
-        <div class="window-dither-monitor" aria-label="Live shader simulation of human approval gate">
-          <div class="dither-monitor-screen">
-            <div class="dither-monitor-mesh" aria-hidden="true"></div>
-            <div class="dither-monitor-sweep" aria-hidden="true"></div>
-            <div class="dither-monitor-radar" aria-hidden="true"></div>
-            <div class="dither-monitor-content">
-              <div class="dither-monitor-line"><span class="dither-sym">▶</span> GATE_STATUS: <strong class="gate-hilite">ARMED_WAITING_APPROVAL</strong></div>
-              <div class="dither-monitor-line"><span class="dither-sym">◈</span> SANDBOX: <span class="dim">CONTAINER_LOCKED</span> · KEYS: <span class="dim">HOST_ONLY</span></div>
-            </div>
-          </div>
-        </div>
         <div class="workflow-step"><span class="step-num">01</span><span><strong>Describe the task</strong><small>Repository · branch · instructions</small></span><span class="step-state">READY</span></div>
-        <div class="workflow-step current"><span class="step-num">02</span><span><strong>Approval before execution</strong><small>Review the exact tool input</small></span><span class="step-state"><span class="step-pulse" aria-hidden="true"></span>YOUR CALL</span></div>
+        <div class="workflow-step current"><span class="step-num">02</span><span><strong>Approval before execution</strong><small>Review the exact tool input</small></span><span class="step-state">YOUR CALL</span></div>
         <div class="workflow-step"><span class="step-num">03</span><span><strong>Inspect the work</strong><small>Progress · changed files · diff</small></span><span class="step-state">AFTER APPROVAL</span></div>
         <div class="window-caption">The agent proposes. You decide when it runs.</div>
       </div>
-      <div class="window-status"><span>HUMAN IN THE LOOP</span><span>ISOLATED SANDBOX</span><span>ZERO-TRUST BOUNDARY</span><span>SELF-HOSTED</span></div>
+      <div class="window-status"><span>HUMAN IN THE LOOP</span><span>ISOLATED SANDBOX</span><span>SELF-HOSTED</span></div>
     </div>
   </section>
 
   <div class="shell compatibility" aria-label="Ways to use Shiba"><span>WORKS WITH</span><span>Cloudflare Workers</span><span>Cloudflare Sandbox</span><span>GitHub</span><span>Optional Slack</span><span class="compatibility-end">one dashboard, your account.</span></div>
+
+  <section id="harnesses" class="shell harness-section" aria-labelledby="harness-title">
+    <p class="eyebrow">BRING A SUPPORTED CODING HARNESS</p>
+    <h2 id="harness-title">Your agent. Your cloud workspace.</h2>
+    <p class="harness-lead">Choose a coding harness for each run. Shiba supplies the approval gate, isolated workspace, and review surface—not a bundled model subscription.</p>
+    <div class="harness-grid" role="list" aria-label="Supported coding harnesses">
+      <div class="harness-item" role="listitem"><span class="harness-icon"><img src="/assets/harnesses/opencode.svg" alt="" width="32" height="32" /></span><span>OpenCode</span></div>
+      <div class="harness-item" role="listitem"><span class="harness-icon"><img src="/assets/harnesses/claude.svg" alt="" width="32" height="32" /></span><span>Claude Code</span></div>
+      <div class="harness-item" role="listitem"><span class="harness-icon"><img src="/assets/harnesses/openai.svg" alt="" width="32" height="32" /></span><span>Codex</span></div>
+      <div class="harness-item" role="listitem"><span class="harness-icon"><img src="/assets/harnesses/devin-letter.svg" alt="" width="32" height="32" /></span><span>Devin CLI</span></div>
+      <div class="harness-item" role="listitem"><span class="harness-icon"><img src="/assets/harnesses/cursor.svg" alt="" width="32" height="32" /></span><span>Cursor</span></div>
+      <div class="harness-item" role="listitem"><span class="harness-icon"><img src="/assets/harnesses/grok.svg" alt="" width="32" height="32" /></span><span>Grok</span></div>
+    </div>
+    <p class="harness-note">Harness availability depends on your own provider configuration. No affiliation with these vendors is implied. <a href="/docs/claude-code/">See configuration →</a></p>
+  </section>
 
   <section class="shell home-section" aria-labelledby="why-title">
     <div class="section-head"><h2 id="why-title">The agent does the work.<br /><em>You keep the keys.</em></h2><p class="micro">ONE DEPLOYMENT · ONE CONTROL PLANE</p></div>
@@ -183,6 +184,15 @@ const capabilities = [
   .compatibility { display:flex; flex-wrap:wrap; align-items:center; gap:16px 28px; padding-block:23px; border-top:1px solid var(--line-2); border-bottom:1px solid var(--line-2); font:11px 'Geist Mono',monospace; color:var(--ink); }
   .compatibility>span:first-child { font-size:9px; letter-spacing:.15em; color:var(--ink-2); margin-right:auto; }
   .compatibility-end { margin-left:auto; color:var(--ink-2); font-size:9px; }
+  .harness-section { padding-top:85px; text-align:center; }
+  .harness-section h2 { margin:12px 0 14px; }
+  .harness-lead { max-width:690px; margin:0 auto 30px; font-size:14px; line-height:1.7; }
+  .harness-grid { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); border:1px solid var(--line-2); background:var(--line-2); gap:1px; box-shadow:3px 3px 0 var(--paper-shadow); }
+  .harness-item { display:flex; align-items:center; justify-content:center; gap:13px; min-height:106px; background:var(--card); color:var(--ink); font-size:15px; font-weight:500; }
+  .harness-icon { display:grid; place-items:center; width:44px; height:44px; flex:none; border:1px solid var(--line-2); background:#fff; }
+  .harness-icon img { width:28px; height:28px; object-fit:contain; }
+  .harness-note { margin:18px auto 0; font:10px/1.6 'Geist Mono',monospace; color:var(--ink-2); }
+  .harness-note a { color:var(--navy); text-underline-offset:3px; }
   .home-section { padding-top:105px; }
   .section-head { display:flex; align-items:end; justify-content:space-between; gap:24px; border-bottom:1px solid var(--line-2); padding-bottom:26px; }
   .section-head h2 { margin:0; }
@@ -255,6 +265,6 @@ const capabilities = [
   .closing p:last-child { margin:0; }
   .closing-actions { flex:none; margin:0; }
   @media(max-width:980px) { .home-hero { gap:30px; } .work-window { align-self:start; } .window-body { padding:14px; } .task-paper { padding:12px; } .compatibility-end { margin-left:0; } }
-  @media(max-width:760px) { .home-hero { grid-template-columns:1fr; min-height:0; padding-block:55px; } .hero-copy h1 { font-size:clamp(53px,12vw,76px); } .work-window { width:100%; } .home-section { padding-top:75px; } .section-head { align-items:start; flex-direction:column; gap:10px; } .section-copy { grid-template-columns:1fr; gap:18px; } .capability-grid { grid-template-columns:repeat(2,1fr); } .steps-grid { grid-template-columns:1fr; } .closing { flex-direction:column; align-items:start; margin-top:75px; } }
-  @media(max-width:500px) { .capability-grid { grid-template-columns:1fr; } .capability-card { min-height:0; } .hero-actions .button { width:100%; } .window-status { flex-wrap:wrap; } .closing { padding:22px; } .closing-actions { width:100%; } .closing-actions .button { width:100%; } }
+  @media(max-width:760px) { .home-hero { grid-template-columns:1fr; min-height:0; padding-block:55px; } .hero-copy h1 { font-size:clamp(53px,12vw,76px); } .work-window { width:100%; } .home-section { padding-top:75px; } .section-head { align-items:start; flex-direction:column; gap:10px; } .section-copy { grid-template-columns:1fr; gap:18px; } .capability-grid { grid-template-columns:repeat(2,1fr); } .harness-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } .steps-grid { grid-template-columns:1fr; } .closing { flex-direction:column; align-items:start; margin-top:75px; } }
+  @media(max-width:500px) { .capability-grid { grid-template-columns:1fr; } .harness-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .capability-card { min-height:0; } .hero-actions .button { width:100%; } .window-status { flex-wrap:wrap; } .closing { padding:22px; } .closing-actions { width:100%; } .closing-actions .button { width:100%; } }
 </style>

@@ -153,7 +153,7 @@ Add:
 - Focused unit tests
 - `.dev.vars.example` without secrets
 - Complete README
-- MIT license if none exists
+- AGPL-3.0-only license
 
 ## README contract
 

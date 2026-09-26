@@ -56,6 +56,7 @@ import { classifyExecutorError, classifyRunError, runErrorWire, toTaggedError, t
 import { DEFAULT_ORCHESTRATOR_MODEL, distillSession } from "../session-distill.js";
 import { parseSlackThreadName } from "../slack-thread.js";
 import { evaluateResultQuality } from "../result-quality.js";
+import { evaluateSessionTriage } from "../session-triage.js";
 import { HARNESS_DEFAULT_MODELS, allowedHostsFor, resolveHarness } from "../harness/index.js";
 import { isApprovedRoute, type ApprovedRoute } from "../model-connections.js";
 import { readModelConfig, revalidateCodingRoute, resolveCodingRoute } from "../model-policy.js";
@@ -450,6 +451,32 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         }
       });
       this.postToSlackThread(`Run started for ${fullInput.repoUrl} (${fullInput.baseBranch ?? "main"}).`);
+      const intakeTsKey = this.env.TYPESAFE_API_KEY?.trim() ?? "";
+      if (intakeTsKey) {
+        yield* Effect.forkDetach(
+          tryRunPromise(() => evaluateSessionTriage(intakeTsKey, fullInput.task, fullInput.repoUrl)).pipe(
+            Effect.flatMap((triage) =>
+              Effect.sync(() => {
+                if (!triage) return;
+                const r = this.store.get(runId);
+                if (r && r.status === "running") {
+                  this.store.replace(
+                    runId,
+                    recordReceipt(
+                      r,
+                      makeReceipt(
+                        "triage",
+                        `TypeSafe Jev: ${triage.complexity} complexity (${triage.risk} risk, confidence ${triage.confidence.toFixed(2)}).`,
+                      ),
+                    ),
+                  );
+                }
+              }),
+            ),
+            Effect.catchCause(() => Effect.void),
+          ),
+        );
+      }
       return yield* Effect.acquireUseRelease(
         Effect.sync(() => {
           const controller = new AbortController();

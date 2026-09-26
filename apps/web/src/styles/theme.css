@@ -5,6 +5,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap');
 
 :root {
+  color-scheme: dark;
   /* bezalel canonical light tokens */
   --paper: #f6f4ed;
   --card: #fffef8;
@@ -130,6 +131,10 @@
   --sl-color-bg-sidebar: #191a18;
   --sl-color-hairline: #3b3d36;
   --sl-color-hairline-light: #3b3d36;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
 }
 
 /* Square corners are a hard rule of the system. */
@@ -1091,4 +1096,23 @@ a.ai-step-card:hover {
     transition: none !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* Starlight's theme icon and caret are overlaid on the native select. */
+starlight-theme-select label {
+  position: relative;
+}
+
+starlight-theme-select select {
+  padding-inline: 2rem 1.75rem !important;
+  min-height: 2rem;
+  border: 1px solid var(--line-2);
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: 2px 2px 0 var(--paper-shadow);
+}
+
+starlight-theme-select select:focus-visible {
+  outline: 2px solid var(--navy);
+  outline-offset: 2px;
 }

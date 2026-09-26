@@ -197,7 +197,7 @@ export function AppNavRail({
     >
       <div className="flex items-start gap-2">
       {/* Brand */}
-      <a href="/" className="flex-1 min-w-0 flex items-center gap-2.5 px-1.5 pb-3 mb-1 group focus:outline-none" aria-label="AI Coworker Home">
+      <a href="/" className="flex-1 min-w-0 flex items-center gap-2.5 px-1.5 pb-3 mb-1 group focus:outline-none" aria-label="Shiba Home">
         <img
           src="/assets/mascot/pet-logo.png"
           alt="Shiba"
@@ -205,7 +205,7 @@ export function AppNavRail({
         />
         <span className="min-w-0">
           <span className="flex items-center gap-1.5">
-            <span className="font-display text-lg leading-none text-[#222320]">AI Coworker</span>
+            <span className="font-display text-lg leading-none text-[#222320]">Shiba</span>
             <span className="text-[9px] font-mono font-semibold uppercase tracking-wider text-[#0000a8] border border-[#0000a8]/25 bg-[#0000a8]/10 rounded-none px-1 py-px">
               Beta
             </span>

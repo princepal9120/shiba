@@ -11,13 +11,13 @@ export async function GET() {
 
 	const body = `# Shiba
 
-> Shiba is an open-source, self-hosted AI software engineer. It runs approval-gated coding tasks in isolated Cloudflare Sandbox containers inside your own Cloudflare account, from task intake to merged pull request.
+> Shiba is an open-source, self-hosted AI software engineer — an open-source Devin Cloud alternative. It runs approval-gated coding tasks in isolated Cloudflare Sandbox containers inside your own Cloudflare account, from task intake to merged pull request.
 
 - Website: ${SITE}/
 - Why I am building Shiba: ${SITE}/why-shiba/
 - Join waitlist & contribute: ${SITE}/waitlist/
 - Dashboard: ${SITE}/app/
-- GitHub Source (MIT): https://github.com/princepal9120/shiba
+- GitHub Source (AGPL-3.0-only): https://github.com/princepal9120/shiba
 
 ## Core Architecture & Security
 

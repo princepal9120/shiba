@@ -4,8 +4,8 @@ import MarketingPage from '../layouts/MarketingPage.astro';
 const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'TechArticle',
-  headline: "Why I'm Building Shiba: The Self-Hosted Cloud Software Engineer on Your Own Cloudflare Account",
-  description: "Why Shiba is being built: an open-source, self-hosted AI software engineer that runs inside your own Cloudflare account with human approval gates, isolated sandbox micro-containers, and zero credential leakage.",
+  headline: "Why I'm Building Shiba: An Open-Source Devin Cloud Alternative",
+  description: "The personal reason behind Shiba: cloud coding agents should keep background work inspectable, errors honest, and execution under your control.",
   author: {
     '@type': 'Person',
     name: 'Prince Pal',
@@ -27,8 +27,8 @@ const articleSchema = {
 ---
 
 <MarketingPage
-  title="Why I'm Building Shiba — The Cloud Software Engineer You Own"
-  description="Why Shiba is being built: an open-source, self-hosted AI software engineer that runs in your own Cloudflare account with approval gates, isolated sandboxes, and zero credential leaks."
+  title="Why I'm Building Shiba — An Open-Source Devin Cloud Alternative"
+  description="The personal reason behind Shiba: cloud coding agents should keep background work inspectable, errors honest, and execution under your control."
   path="/why-shiba/"
   type="article"
   publishedTime="2026-09-26T00:00:00Z"
@@ -49,7 +49,7 @@ const articleSchema = {
       Every developer deserves an <span class="text-[var(--navy)]">AI software engineer</span> they actually own.
     </h1>
     <p class="lead text-[var(--ink-2)]">
-      I am building <strong>Shiba</strong> because software engineering shouldn't be trapped inside closed, expensive SaaS black boxes. You should be able to run an autonomous, approval-gated coding coworker inside your <em>own Cloudflare account</em>—with your credentials protected, your code private, and zero idle compute costs.
+      I am building <strong>Shiba</strong> as an open-source alternative to Devin Cloud: an approval-gated coding coworker in <em>your own Cloudflare account</em>, where the work and its failures are visible to you.
     </p>
     <div class="hero-actions">
       <a class="button" href="/waitlist/">
@@ -62,6 +62,17 @@ const articleSchema = {
       <a class="button button-outline" href="https://github.com/princepal9120/shiba" target="_blank" rel="noopener noreferrer">
         <span>GitHub Source ↗</span>
       </a>
+    </div>
+  </section>
+
+  <section class="shell story-section" aria-labelledby="origin-title">
+    <div class="section-label"><span class="micro">00 / Why I Started</span></div>
+    <div class="prose-body">
+      <h2 id="origin-title" class="text-[var(--ink)]">I loved sending work to the cloud. I did not love losing the thread.</h2>
+      <p class="text-[var(--ink-2)]">The useful part of Devin Cloud, for me, was handing off a coding task and letting it continue in the background while I did something else. That is the experience I want to keep.</p>
+      <p class="text-[var(--ink-2)]">But sometimes a task would run into an infrastructure error. When background work stops, I need to know what actually happened: whether the agent changed files, whether tests ran, and what still needs a human decision. A cheerful “done” message is not a substitute for that evidence.</p>
+      <p class="text-[var(--ink-2)]">So I am building Shiba around a narrower promise: review the exact request before a sandbox starts, keep the run in a workspace I control, and show progress, errors, and diffs without pretending an interrupted task succeeded. It is an open-source Devin Cloud alternative, not a claim of affiliation or a promise that infrastructure will never fail.</p>
+      <p class="text-[var(--ink-2)]">I am sharing this work under <a href="https://github.com/princepal9120/shiba/blob/main/LICENSE" class="text-[var(--navy)] underline">AGPL-3.0-only</a> so improvements to a hosted version remain available to its users too.</p>
     </div>
   </section>
 
@@ -258,7 +269,7 @@ const articleSchema = {
         Help us build the software engineer you would actually trust.
       </h2>
       <p class="lead mb-8 text-[var(--ink-2)]">
-        Shiba is completely open-source under the MIT license. Whether you want to test the early access release, contribute code, design, write docs, or follow along—we invite you to join the journey.
+        Shiba is open-source under AGPL-3.0-only. Whether you want to test the early access release, contribute code, design, write docs, or follow along—we invite you to join the journey.
       </p>
       <div class="hero-actions justify-center">
         <a class="button text-sm px-8 py-3.5" href="/waitlist/">

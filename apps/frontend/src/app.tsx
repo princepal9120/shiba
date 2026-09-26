@@ -243,7 +243,7 @@ export function App(): React.JSX.Element {
   const toggleTheme = () => setTheme(theme === "dark" ? "light" : "dark");
 
   useEffect(() => {
-    document.title = "AI Coworker Dashboard · Cloudflare Native Coding Agent";
+    document.title = "AI Coworker Dashboard · Self-Hosted AI Software Engineer";
   }, []);
 
   // Surface transient notices through the toast channel (aria-live inside sonner).
@@ -689,7 +689,6 @@ export function App(): React.JSX.Element {
         setMobileSessionsOpen(false);
         setMobileNavOpen(false);
         setCommandMenuOpen(false);
-        if (window.matchMedia("(max-width: 1023px)").matches) setWorkspaceCollapsed(true);
         return;
       }
       if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
@@ -714,12 +713,6 @@ export function App(): React.JSX.Element {
       } else if (e.key === "[") {
         e.preventDefault();
         toggleSessionsCollapsed();
-      } else if (e.key === "]") {
-        e.preventDefault();
-        setWorkspaceCollapsed((prev) => !prev);
-      } else if ((e.metaKey || e.ctrlKey) && (e.key === "\\" || e.key === "|")) {
-        e.preventDefault();
-        setWorkspaceCollapsed((prev) => !prev);
       } else if (e.key === "?") {
         setShowShortcutsModal((prev) => !prev);
       }
@@ -852,8 +845,7 @@ export function App(): React.JSX.Element {
     setMobileSessionsOpen(false);
     if (id !== "live") {
       setSelectedRunId(id);
-      setWorkspaceCollapsed(false);
-      setWorkspaceTab("vm");
+      setMainView("vm");
     }
   }, []);
 

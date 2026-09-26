@@ -8,10 +8,10 @@ Amend this file when the system needs to grow; do not fork per-page styles.
 
 retro paper-OS ("designed-as-app"): cream paper, navy accents, square
 corners, hard offset shadows, window-chrome panels, mono microcopy,
-serif display type, pixel-crisp details. Light-first; dark is an
-inverted/dark-paper theme, not a separate palette invention.
+serif display type, pixel-crisp details. Dark is the default across the
+dashboard, docs, and marketing site; light remains an accessible opt-in.
 
-## Tokens (canonical — light)
+## Tokens (canonical — dark default; light override)
 
 ```css
 --paper:        #f6f4ed;  /* app background */
@@ -35,7 +35,7 @@ inverted/dark-paper theme, not a separate palette invention.
 --danger-fg:    #fb2c36;  /* loud red only for dots/icons */
 ```
 
-Dark (dashboard via invert-filter fallback; docs may use real tokens):
+Light override (use the same semantic tokens; never invent a separate theme):
 
 ```css
 --paper:#191a18; --card:#222320; --panel-2:#272824; --ink:#eae8e1;
@@ -89,9 +89,12 @@ Dark (dashboard via invert-filter fallback; docs may use real tokens):
 
 ## Layout grammar
 
-- Dashboard keeps the Workbench three-pane arrangement (nav rail,
-  session list, timeline, workspace panel, composer) — same geometry,
-  bezalel surfaces: square, hairline `--line` borders, paper bg.
+- Dashboard uses a full-width primary workspace. Runs, Inbox, Memory, VM,
+  Diff, and Approvals must remain reachable as primary navigation or
+  standalone views; do not restore a persistent right-hand sidebar.
+- Keep the task/session navigation and task composer available where they
+  are part of the current workflow, but let the active surface use the full
+  remaining canvas width.
 - Section headings: left = serif `h2/h3`; right/above = mono 10px
   quiet annotation ("7 capabilities · one token" style).
 - Compatibility-strip idiom: a flex row ruled top/bottom — mono uppercase
@@ -105,7 +108,8 @@ unchanged and unhidden (approval gate is sacred).
 ## What every surface MUST share
 
 - Navy `#0000a8` as the sole accent; ≤5% of any viewport.
-- Cream `#f6f4ed` page field, `#fffef8` cards, hairline `#e0ded5` rules.
+- Dark paper `#191a18` page field, `#222320` cards, hairline `#3b3d36` rules
+  by default; light uses the corresponding cream paper tokens above.
 - Instrument Serif display + Geist body + Geist Mono microcopy.
 - Zero radius, hard offset shadows, square chips, dot-grid canvas.
 

@@ -3,7 +3,7 @@
 # (e.g. shiba-ai-coworker.you.workers.dev) before importing.
 display_information:
   name: shiba-ai-coworker
-  description: Approval-gated coding agent in your own Cloudflare account
+  description: Approval-gated AI software engineer in your own Cloudflare account
   background_color: "#0b0d10"
 features:
   bot_user:

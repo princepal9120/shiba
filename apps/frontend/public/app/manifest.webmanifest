@@ -1,7 +1,7 @@
 {
   "name": "Shiba",
   "short_name": "Shiba",
-  "description": "Review, approve, and observe autonomous coding tasks on your own Cloudflare account.",
+  "description": "Review, approve, and observe your self-hosted AI software engineer's coding tasks on your own Cloudflare account.",
   "id": "/app/",
   "start_url": "/app/",
   "scope": "/app/",

@@ -240,7 +240,7 @@ describe("dashboard components SSR (T14 sweep)", () => {
             task: "Run safe migrations",
             createdAt: Date.now() - 10000,
             threadKey: "main",
-            execution: { status: "executed" },
+            execution: { status: "executed", executedAt: Date.now() },
           },
         ],
         storedApprovalsError: null,

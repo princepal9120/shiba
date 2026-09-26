@@ -1,0 +1,1 @@
+Claude and OpenCode marks are from Simple Icons v16; the OpenAI mark used for Codex is from Simple Icons v15. Simple Icons artwork is CC0, while product names and logos remain trademarks of their respective owners. The D lettermark is an original generic label, not the Devin brand logo. Display indicates supported harness selection, not affiliation or subscription entitlement.

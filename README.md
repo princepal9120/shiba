@@ -2,9 +2,9 @@
 
 [![Site](https://img.shields.io/badge/Site-shiba--ai--coworker.pages.dev-0B9F95?style=flat-square&logo=cloudflarepages&logoColor=white)](https://shiba-ai-coworker.pages.dev/)
 [![Documentation](https://img.shields.io/badge/Docs-shiba--ai--coworker.pages.dev%2Fdocs-teal?style=flat-square)](https://shiba-ai-coworker.pages.dev/docs/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
+[![License: AGPL-3.0-only](https://img.shields.io/badge/License-AGPL--3.0--only-blue.svg?style=flat-square)](LICENSE)
 
-Shiba is an account-owned Cloudflare coding workspace: describe a GitHub task, review the proposed delegation, approve or reject it, and inspect a sandbox-generated diff. The repository is a pnpm monorepo containing a React dashboard, an Astro/Starlight documentation site, and a Cloudflare Worker backend built around Agents and Sandbox containers running OpenCode.
+Shiba is an open-source, self-hosted AI software engineer — an account-owned Cloudflare workspace: describe a GitHub task, review the proposed delegation, approve or reject it, and inspect a sandbox-generated diff. The repository is a pnpm monorepo containing a React dashboard, an Astro/Starlight documentation site, and a Cloudflare Worker backend built around Agents and Sandbox containers running OpenCode.
 
 **Status: local prototype, not production-ready.** No live end-to-end cloud run is claimed. The deployed Cloudflare Pages site contains the static landing page at `/`, dashboard UI at `/app/`, and documentation at `/docs/` — it does not include the Worker backend, so it does not establish a live coding run. `VERIFICATION.md` records passing local typecheck, lint, tests, and build checks; the backend remains a prototype until a dated run meets the P2 acceptance bar in `PLAN.md` §15: submit → approve → clone/code/collect with a diff that matches reality, rejection starting no container, honest failure exit codes, PRs with deletions shown as deleted, and peak memory measured.
 
@@ -248,4 +248,4 @@ Cost surfaces include Workers, Workers AI planning inference, Durable Objects, C
 
 ## License
 
-MIT. See LICENSE.
+AGPL-3.0-only. See [LICENSE](LICENSE).

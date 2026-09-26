@@ -18,7 +18,7 @@ export default defineConfig({
 		starlight({
 			title: 'AI Coworker',
 			description:
-				'Open-source, self-hosted coding workspace for approval-gated tasks in Cloudflare Sandbox.',
+				'Open-source, self-hosted AI software engineer for approval-gated tasks in Cloudflare Sandbox.',
 			logo: {
 				src: './src/assets/logo.png',
 				alt: 'AI Coworker Logo',

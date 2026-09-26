@@ -3,7 +3,7 @@ title: Overview
 description: What AI Coworker runs today, what it returns, and which limits matter.
 ---
 
-AI Coworker is an account-owned coding workspace built around a Cloudflare
+AI Coworker is an account-owned AI software engineer built around a Cloudflare
 Worker, durable agents, and a Sandbox container running OpenCode.
 The deployed resources are declared in `apps/backend/wrangler.jsonc`; the runtime flow is
 implemented in `apps/backend/src/agents/orchestrator.ts` and `apps/backend/src/runtime.ts`.
