@@ -16,7 +16,7 @@ export default defineConfig({
 	integrations: [
 		tailwind({ applyBaseStyles: false }),
 		starlight({
-			title: 'AI Coworker',
+			title: 'Shiba',
 			description:
 				'Open-source, self-hosted AI software engineer for approval-gated tasks in Cloudflare Sandbox.',
 			logo: {

@@ -20,6 +20,7 @@ export const PROVIDER_HOSTS: Record<string, string> = {
   google: "generativelanguage.googleapis.com",
   anthropic: "api.anthropic.com",
   openai: "api.openai.com",
+  xai: "api.x.ai",
   // Devin is a service harness, not a raw LLM provider: the CLI authenticates
   // to Cognition's control plane, which also fronts the model traffic for
   // Pro accounts (server.codeium.com is added by the adapter's egressHosts).
@@ -36,6 +37,7 @@ export const PROVIDER_KEY_ENV: Record<string, string> = {
   google: "GOOGLE_GENERATIVE_AI_API_KEY",
   anthropic: "ANTHROPIC_API_KEY",
   openai: "OPENAI_API_KEY",
+  xai: "XAI_API_KEY",
   // The Devin CLI reads its key from credentials.toml, not the environment;
   // the dummy still rides along so a future env-auth path stays covered.
   devin: "DEVIN_API_KEY",

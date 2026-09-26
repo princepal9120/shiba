@@ -5,7 +5,7 @@ const articleSchema = {
   '@context': 'https://schema.org',
   '@type': 'TechArticle',
   headline: "Why I'm Building Shiba: An Open-Source Devin Cloud Alternative",
-  description: "The personal reason behind Shiba: cloud coding agents should keep background work inspectable, errors honest, and execution under your control.",
+  description: "The personal reason behind Shiba: bring your own harness and models, route each task to the right model, run it on your own Cloudflare account, and keep errors honest.",
   author: {
     '@type': 'Person',
     name: 'Prince Pal',
@@ -28,7 +28,7 @@ const articleSchema = {
 
 <MarketingPage
   title="Why I'm Building Shiba — An Open-Source Devin Cloud Alternative"
-  description="The personal reason behind Shiba: cloud coding agents should keep background work inspectable, errors honest, and execution under your control."
+  description="The personal reason behind Shiba: bring your own harness and models, route each task to the right model, run it on your own Cloudflare account, and keep errors honest."
   path="/why-shiba/"
   type="article"
   publishedTime="2026-09-26T00:00:00Z"
@@ -49,7 +49,7 @@ const articleSchema = {
       Every developer deserves an <span class="text-[var(--navy)]">AI software engineer</span> they actually own.
     </h1>
     <p class="lead text-[var(--ink-2)]">
-      I am building <strong>Shiba</strong> as an open-source alternative to Devin Cloud: an approval-gated coding coworker in <em>your own Cloudflare account</em>, where the work and its failures are visible to you.
+      I am building <strong>Shiba</strong> as an open-source alternative to Devin Cloud: an approval-gated coding coworker in <em>your own Cloudflare account</em>, where you bring the harness and the models, route each task to the right one, and can see the work — and its failures — for yourself.
     </p>
     <div class="hero-actions">
       <a class="button" href="/waitlist/">
@@ -70,8 +70,11 @@ const articleSchema = {
     <div class="prose-body">
       <h2 id="origin-title" class="text-[var(--ink)]">I loved sending work to the cloud. I did not love losing the thread.</h2>
       <p class="text-[var(--ink-2)]">The useful part of Devin Cloud, for me, was handing off a coding task and letting it continue in the background while I did something else. That is the experience I want to keep.</p>
-      <p class="text-[var(--ink-2)]">But sometimes a task would run into an infrastructure error. When background work stops, I need to know what actually happened: whether the agent changed files, whether tests ran, and what still needs a human decision. A cheerful “done” message is not a substitute for that evidence.</p>
-      <p class="text-[var(--ink-2)]">So I am building Shiba around a narrower promise: review the exact request before a sandbox starts, keep the run in a workspace I control, and show progress, errors, and diffs without pretending an interrupted task succeeded. It is an open-source Devin Cloud alternative, not a claim of affiliation or a promise that infrastructure will never fail.</p>
+      <p class="text-[var(--ink-2)]">But three things kept bothering me. First, the agent was locked to one model for every kind of task. A slow, heavyweight model is fine for a big refactor, but it's overkill — and wasteful — for a small frontend tweak. I wanted to send small tasks to a fast, cheap model and route the heavy ones to something stronger: Opus for the hard work, a lighter model when speed matters more. <strong>Task-aware model routing, with one shared brain across harnesses and modes</strong> — that was missing, so I decided to build it.</p>
+      <p class="text-[var(--ink-2)]">Second, real work needs real access. When an agent needs to run the Wrangler CLI or touch my Cloudflare account, I don't want it holding my personal credentials — I want to give it its own dedicated agent account with least-privilege access. None of the tools I was paying for gave me that, so I created that account myself and started building around it.</p>
+      <p class="text-[var(--ink-2)]">And third: sometimes a task would run into an infrastructure error. When background work stops, I need to know what actually happened — whether the agent changed files, whether tests ran, and what still needs a human decision. A cheerful "done" message is not a substitute for that evidence.</p>
+      <p class="text-[var(--ink-2)]">So I am building Shiba around a narrower promise: review the exact request before a sandbox starts, pick the harness and model that fit the task, keep the run in a workspace I control on a plan I already pay for, and show progress, errors, and diffs without pretending an interrupted task succeeded. It is an open-source Devin Cloud alternative, not a claim of affiliation or a promise that infrastructure will never fail.</p>
+      <p class="text-[var(--ink-2)]">The name? A Shiba Inu is a famously loyal Japanese dog — small, independent, and stubbornly its own. That felt right: a software engineer that lives like a pet inside <em>your</em> Cloudflare account, on the free or paid plan you already have, instead of another $20–100/seat subscription on someone else's servers.</p>
       <p class="text-[var(--ink-2)]">I am sharing this work under <a href="https://github.com/princepal9120/shiba/blob/main/LICENSE" class="text-[var(--navy)] underline">AGPL-3.0-only</a> so improvements to a hosted version remain available to its users too.</p>
     </div>
   </section>

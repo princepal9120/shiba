@@ -302,7 +302,6 @@ a.site-title :is(img, svg) {
 }
 
 .site-title::after {
-  content: 'Self-hosted';
   font-family: var(--sl-font-mono);
   font-size: 9px;
   font-weight: 500;
