@@ -145,7 +145,7 @@ export function DashboardView({
 
           <button
             type="button"
-            onClick={() => onNavigate("tasks")}
+            onClick={() => onNavigate("approvals")}
             className="relative text-left bg-[#fffef8] border border-[#d3d2c8] rounded-none p-4 hover:border-[#f99c00]/40 hover:shadow-[2px_2px_0_var(--paper-shadow)] transition-all"
           >
             <span className="absolute top-2 right-2 text-[10px] font-mono text-[#6a6f63]/60">03</span>
@@ -314,10 +314,10 @@ export function DashboardView({
                 <div className="px-4 py-3 border-t border-[#e0ded5]">
                   <button
                     type="button"
-                    onClick={() => onNavigate("tasks")}
+                    onClick={() => onNavigate("approvals")}
                     className="w-full min-h-9 rounded-none border border-[#b45309]/40 bg-[#b45309]/10 hover:bg-[#b45309]/15 text-[#b45309] text-xs font-semibold transition-colors"
                   >
-                    Review in Tasks
+                    Review Approvals
                   </button>
                 </div>
               ) : null}

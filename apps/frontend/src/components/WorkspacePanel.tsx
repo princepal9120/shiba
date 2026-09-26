@@ -95,7 +95,7 @@ const DANGER_BUTTON =
   "text-[11px] bg-transparent hover:bg-[#fb2c36]/10 border border-[#fb2c36]/50 text-[#fb2c36] font-medium py-1 px-2.5 touch:min-h-11 touch:px-3.5 rounded-none transition-colors";
 
 /** Kind-aware label for a stored approval pointer; unknown kinds render raw. */
-function storedApprovalKind(approval: StoredApproval): string {
+export function storedApprovalKind(approval: StoredApproval): string {
   if (approval.kind === "email_send") return "Email send";
   if (approval.kind === "email_delete") return "Email delete";
   if (approval.kind === undefined || approval.kind === "run") return "Run task";
@@ -108,7 +108,7 @@ function storedApprovalKind(approval: StoredApproval): string {
  * mailbox address); run kinds name the queueing thread (user identity,
  * slack:… channel, or the shared orchestrator default).
  */
-function storedApprovalAgent(approval: StoredApproval): string {
+export function storedApprovalAgent(approval: StoredApproval): string {
   const payload = approval.payload;
   if (typeof payload === "object" && payload !== null && !Array.isArray(payload)) {
     const mailbox = (payload as Record<string, unknown>).mailbox;
@@ -126,7 +126,7 @@ function storedApprovalAgent(approval: StoredApproval): string {
  * chat-part ApprovalCard. Rejecting an email_send releases its queued
  * draft back to editing.
  */
-function StoredApprovalCard({
+export function StoredApprovalCard({
   approval,
   decided,
   onDecide,
@@ -190,7 +190,7 @@ function StoredApprovalCard({
  * approval's execution stamp lands here, so a failed send shows its
  * error instead of vanishing.
  */
-function DecidedApprovalRow({ approval }: { approval: StoredApproval }): JSX.Element {
+export function DecidedApprovalRow({ approval }: { approval: StoredApproval }): JSX.Element {
   const chip =
     approval.status === "rejected"
       ? { label: "Rejected", cls: statusChipClass("rejected") }
