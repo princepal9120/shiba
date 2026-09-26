@@ -55,6 +55,7 @@ import { runWorkerEffect, toRunFailure, tryRunPromise } from "../effect/runtime.
 import { classifyExecutorError, classifyRunError, runErrorWire, toTaggedError, type RunErrorCode, type RunErrorWire } from "../run-errors.js";
 import { DEFAULT_ORCHESTRATOR_MODEL, distillSession } from "../session-distill.js";
 import { parseSlackThreadName } from "../slack-thread.js";
+import { postToChatThread } from "../chat-lane.js";
 import {
   slackRunCancelled,
   slackRunCompleted,
@@ -416,7 +417,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         const updated = this.store.transition(runId, status, patch, generation);
         if (updated === null) return null;
         if (slackText) {
-          this.postToSlackThread(slackText);
+          this.postToThread(slackText);
         }
         // Megaplan T10: a retained run landing completed/error distills its
         // transcript into long-term memory — best-effort under waitUntil.
@@ -438,7 +439,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
           console.warn(`Run ${runId} reclaim schedule failed`, redactSecrets(String(error)));
         }
       });
-      this.postToSlackThread(
+      this.postToThread(
         slackRunStarted({ repoUrl: fullInput.repoUrl, baseBranch: fullInput.baseBranch, harness: fullInput.harness }),
       );
       return yield* Effect.acquireUseRelease(
@@ -876,7 +877,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
           if (updated !== null) {
             // A pre-start failure never reaches `finish`'s slackText seam —
             // post here or the thread sees ack + card + approved, then silence.
-            this.postToSlackThread(slackRunFailed({
+            this.postToThread(slackRunFailed({
               repoUrl: run.repoUrl,
               userMessage: runErrorWire(failure.code).userMessage,
               detail: redactSecrets(failure.message).slice(0, 1000),
@@ -996,17 +997,24 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     // Cancellation is deliberately unfenced: it is allowed to win races.
     const updated = this.store.transition(runId, "cancelled", { errorCode: "cancelled" });
     this.runControllers.get(runId)?.abort();
-    this.postToSlackThread(slackRunCancelled({ repoUrl: run.repoUrl }));
+    this.postToThread(slackRunCancelled({ repoUrl: run.repoUrl }));
     await this.destroySandbox(run.sandboxId);
     return updated;
   }
 
   /**
-   * Slack post-back: thread-keyed orchestrators (`slack:{team}:{channel}:{ts}`)
+   * Chat post-back: thread-keyed orchestrators (`slack:{team}:{channel}:{ts}`, `telegram:{chat}`)
    * relay run start + terminal outcome into the thread they came from.
    * Best-effort — the ack already went out and failure must not touch the run.
    */
-  private postToSlackThread(text: string): void {
+  private postToThread(text: string): void {
+    const chat = postToChatThread(this.env, this.name, text);
+    if (chat) {
+      this.ctx.waitUntil(chat.catch((error: unknown) => {
+        console.error("Chat post-back failed", redactSecrets(String(error)));
+      }));
+      return;
+    }
     const ids = parseSlackThreadName(this.name);
     const token = this.env.SLACK_BOT_TOKEN?.trim();
     if (!ids || !token) return;
@@ -1020,7 +1028,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
 
   /** Terminal "unknown" notice for runs that end outside `finish` (restart, reclaim). */
   private postOutcomeUnknown(run: DelegatedRun): void {
-    this.postToSlackThread(slackRunFailed({
+    this.postToThread(slackRunFailed({
       repoUrl: run.repoUrl,
       userMessage: runErrorWire(run.errorCode ?? "outcome_unknown").userMessage,
       detail: run.error?.slice(0, 1000),

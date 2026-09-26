@@ -92,6 +92,8 @@ export interface Env {
   MEMORY_ENABLED?: string;
   /** Agent harness: "opencode" (default), "claude-code", or "codex". */
   AGENT_HARNESS?: string;
+  /** Optional harness override for Telegram-originated runs. */
+  TELEGRAM_AGENT_HARNESS?: string;
   /** Optional. Harness for Slack-originated runs; defaults to AGENT_HARNESS, then "claude-code". */
   SLACK_AGENT_HARNESS?: string;
   /** "sandbox" (default) or "computer" (preview-only refusal). */
@@ -116,6 +118,14 @@ export interface Env {
   SLACK_APPROVALS_CHANNEL?: string;
   /** Optional. JSON map `{channelId: "https://github.com/owner/repo"}` for bare mentions. */
   SLACK_CHANNEL_REPOS?: string;
+  /** Optional Telegram bot token; unset disables the webhook route. */
+  TELEGRAM_BOT_TOKEN?: string;
+  /** Optional setWebhook secret checked only in X-Telegram-Bot-Api-Secret-Token. */
+  TELEGRAM_WEBHOOK_SECRET?: string;
+  /** Optional comma-separated numeric Telegram user ids allowed to approve. */
+  TELEGRAM_APPROVERS?: string;
+  /** Optional JSON map of chat ids to repository URLs. */
+  TELEGRAM_CHAT_REPOS?: string;
   /** Optional. TypeSafe System One key for `run_when`; unset falls back to Workers AI. */
   TYPESAFE_API_KEY?: string;
   /** Optional. Required only to open pull requests. Never sent to containers. */
