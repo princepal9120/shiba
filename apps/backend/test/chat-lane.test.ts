@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
+
+const routingMocks = vi.hoisted(() => ({ getAgentByName: vi.fn() }));
+vi.mock("agents/routing", () => ({ getAgentByName: routingMocks.getAgentByName }));
 import {
   buildChatThreadName,
   buildDecisionData,
@@ -343,6 +346,21 @@ describe("decideChatApproval", () => {
     };
     const result = await decideChatApproval(env(), input, async () => stub);
     expect(result).toEqual({ ok: false, error: "The orchestrator is unreachable — nothing was recorded." });
+  });
+
+  it("uses the default resolver with the already-prefixed thread key", async () => {
+    const { requests, resolve } = fakeOrchestrator({ body: { result: "approved" } });
+    routingMocks.getAgentByName.mockImplementation(async (_namespace: unknown, name: string) => {
+      expect(name).toBe("telegram:-100");
+      return resolve(name);
+    });
+
+    const telegramInput = { ...input, platform: "telegram" as const, threadKey: "telegram:-100" };
+    const result = await decideChatApproval(env({ CodingOrchestrator: {} }), telegramInput);
+
+    expect(result).toEqual({ ok: true });
+    expect(routingMocks.getAgentByName).toHaveBeenCalledWith({}, "telegram:-100");
+    expect(requests[0]!.body.threadKey).toBe("telegram:-100");
   });
 });
 
