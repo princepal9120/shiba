@@ -46,6 +46,10 @@ const capabilities = [
       <div class="window-menu" aria-hidden="true">Task&nbsp;&nbsp; Review&nbsp;&nbsp; Workspace</div>
       <div class="window-body">
         <div class="window-topline"><span>CODING TASK</span><span>01 / 03</span></div>
+        <div class="approval-art" aria-hidden="true">
+          <img src="/assets/mascot/shiba-approval-hero.webp" alt="" width="1536" height="1024" fetchpriority="high" />
+          <span class="art-stamp">A CLEAR PLAN. YOUR CALL.</span>
+        </div>
         <div class="task-paper">
           <div class="task-icon"><img src="/assets/mascot/pet-logo.png" alt="" width="42" height="42" /></div>
           <div><span class="micro">YOUR REPOSITORY</span><strong>Make a change. Keep control.</strong><small>Repository and task input are reviewed together.</small></div>
@@ -220,11 +224,13 @@ const capabilities = [
 <style>
   .home-hero { display:grid; grid-template-columns:1fr 1fr; gap:60px; align-items:center; padding-block:64px 80px; min-height:710px; }
   .hero-copy h1 { max-width:650px; margin:18px 0 28px; font-size:clamp(58px,6.1vw,90px); line-height:1.02; }
+  .hero-copy { animation:hero-arrive 560ms cubic-bezier(.2,.7,.2,1) both; }
   .hero-copy h1 em, .home-section h2 em { color:var(--navy); font-weight:400; }
   .hero-lead { max-width:470px; font-size:15px; line-height:1.8; }
   .hero-actions, .closing-actions { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-top:28px; }
   .hero-note { margin-top:22px; font:10px 'Geist Mono',monospace; letter-spacing:.02em; }
-  .work-window { border:1px solid var(--input-line); background:var(--panel-2); padding:4px; box-shadow:6px 6px 0 var(--paper-shadow); }
+  .work-window { border:1px solid var(--input-line); background:var(--panel-2); padding:4px; box-shadow:6px 6px 0 var(--paper-shadow); transition:transform 220ms ease, box-shadow 220ms ease; animation:hero-arrive 680ms 100ms cubic-bezier(.2,.7,.2,1) both; }
+  .work-window:hover, .work-window:focus-within { transform:translateY(-3px); box-shadow:8px 9px 0 var(--paper-shadow); }
   .window-titlebar { display:flex; justify-content:space-between; align-items:center; min-height:29px; padding:3px 4px 3px 9px; color:var(--paper-title-fg); background:var(--paper-title); font:11px 'Geist Mono',monospace; }
   .window-brand { display:flex; align-items:center; gap:7px; }
   .window-brand img, .task-icon img { image-rendering:pixelated; background:#fff; }
@@ -234,6 +240,10 @@ const capabilities = [
   .window-body { padding:24px; background:var(--card); }
   .window-topline, .window-status, .micro, .step-state, .step-num, .window-caption { font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:.06em; }
   .window-topline { display:flex; justify-content:space-between; color:var(--ink-2); margin-bottom:16px; }
+  .approval-art { position:relative; height:190px; overflow:hidden; margin-bottom:18px; border:1px solid var(--line-2); background:#171918; }
+  .approval-art img { display:block; width:100%; height:100%; object-fit:cover; object-position:center 56%; transition:transform 500ms cubic-bezier(.2,.7,.2,1); }
+  .work-window:hover .approval-art img, .work-window:focus-within .approval-art img { transform:scale(1.035); }
+  .art-stamp { position:absolute; left:12px; bottom:12px; padding:6px 8px; border:1px solid #9cbce277; background:#171918d9; color:#b4cde9; font:9px 'Geist Mono',monospace; letter-spacing:.12em; }
   .task-paper { display:flex; align-items:center; gap:18px; padding:19px; background:var(--paper); border:1px solid var(--line-2); margin-bottom:20px; }
   .task-icon { display:grid; place-items:center; width:57px; height:57px; flex:none; border:1px solid var(--line-2); background:#fff; }
   .task-paper strong, .task-paper small, .workflow-step strong, .workflow-step small { display:block; }
@@ -241,12 +251,22 @@ const capabilities = [
   .task-paper small, .workflow-step small { color:var(--ink-2); font-size:11px; line-height:1.4; }
   .workflow-step { display:grid; grid-template-columns:26px 1fr auto; align-items:center; gap:11px; padding:15px 10px; border-top:1px solid var(--line); }
   .workflow-step.current { background:var(--panel-2); border:1px solid var(--navy); }
+  .workflow-step { transition:background 160ms ease, padding-inline 160ms ease; }
+  .workflow-step:not(.current):hover { padding-inline:14px; background:var(--panel-2); }
+  .workflow-step.current .step-state { animation:approval-pulse 2.6s ease-in-out infinite; }
   .workflow-step strong { color:var(--ink); font-size:13px; font-weight:600; margin-bottom:3px; }
   .step-num, .step-state { color:var(--navy); }
   .step-state { font-size:8px; text-align:right; }
   .window-caption { padding-top:20px; text-align:center; color:var(--ink-2); }
   .window-status { display:flex; background:var(--panel-2); border-top:1px solid var(--input-line); color:var(--ink-2); font-size:8px; }
   .window-status span { padding:6px 7px; border-right:1px solid var(--input-line); }
+  @keyframes approval-pulse { 0%, 100% { opacity:1; } 50% { opacity:.58; } }
+  @keyframes hero-arrive { from { opacity:0; translate:0 14px; } to { opacity:1; translate:0 0; } }
+  @media (prefers-reduced-motion: reduce) {
+    .hero-copy, .work-window { animation:none; }
+    .work-window, .approval-art img, .workflow-step { transition:none; }
+    .workflow-step.current .step-state { animation:none; }
+  }
   .compatibility { display:flex; flex-wrap:wrap; align-items:center; gap:16px 28px; padding-block:23px; border-top:1px solid var(--line-2); border-bottom:1px solid var(--line-2); font:11px 'Geist Mono',monospace; color:var(--ink); }
   .compatibility>span:first-child { font-size:9px; letter-spacing:.15em; color:var(--ink-2); margin-right:auto; }
   .compatibility-end { margin-left:auto; color:var(--ink-2); font-size:9px; }
@@ -369,6 +389,8 @@ const capabilities = [
   .closing p:last-child { margin:0; }
   .closing-actions { flex:none; margin:0; }
   @media(max-width:980px) { .channels-grid { grid-template-columns:repeat(2,1fr); } .home-hero { gap:30px; } .work-window { align-self:start; } .window-body { padding:14px; } .task-paper { padding:12px; } .compatibility-end { margin-left:0; } }
+  @media(max-width:980px) { .approval-art { height:160px; } }
+  @media(max-width:420px) { .approval-art { height:132px; } }
   @media(max-width:760px) { .home-hero { grid-template-columns:1fr; min-height:0; padding-block:55px; } .hero-copy h1 { font-size:clamp(53px,12vw,76px); } .work-window { width:100%; } .home-section { padding-top:75px; } .section-head { align-items:start; flex-direction:column; gap:10px; } .section-copy { grid-template-columns:1fr; gap:18px; } .capability-grid { grid-template-columns:repeat(2,1fr); } .steps-grid { grid-template-columns:1fr; } .closing { flex-direction:column; align-items:start; margin-top:75px; } }
   @media(max-width:500px) { .channels-grid { grid-template-columns:1fr; } .capability-grid { grid-template-columns:1fr; } .capability-card { min-height:0; } .hero-actions .button { width:100%; } .window-status { flex-wrap:wrap; } .closing { padding:22px; } .closing-actions { width:100%; } .closing-actions .button { width:100%; } }
 
