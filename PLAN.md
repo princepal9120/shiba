@@ -52,6 +52,20 @@
 
 ## 2. Corrected Current State
 
+### 2.0 Status as of rev 8 (2026-09-26)
+
+**Rev 8 (PR #17):** unified chat lane — Telegram webhook + Discord interactions share `chat-lane.ts` (one orchestrator conversation per chat/channel, approval cards are pointers, server-side approver allowlists) · GitHub Projects v2 board sync on PR publish (best-effort) · model connections + purpose policy + frozen `ApprovedRoute` (approve exactly this route; revalidated at dispatch) · iPhone `/api/trigger` lane (PR #13) · marketing site overhaul. ce-code-review fixes landed: full task text posts in-thread (no blind approval), route shown on the card, outbound chat APIs timeout-bounded, board sync is non-blocking, legacy `harness` approvals still dispatch correctly, dedupe sweep chunked past the 128-key limit, waitlist returns uniform 200.
+
+Baseline: **1178 tests passing across 74 files**, typecheck and lint clean.
+
+| Task | State |
+|---|---|
+| Telegram lane (`/shiba`, approval inline-keyboard, TELEGRAM_APPROVERS) | **Done.** Header-secret auth, update_id dedupe ring + durable dedupe, full-task chunks in-thread. Live chat unverified — same cloud-deploy blocker as T10. |
+| Discord lane (`/shiba` slash command, button approvals, DISCORD_APPROVERS) | **Done.** Ed25519 + 300s replay window before parsing, deferred replies. Live interaction unverified. |
+| Model connections + frozen routes | **Done.** `model-config-do.ts` persists the catalog (SECRET_SHAPED refs rejected), `model-policy.ts` resolves/revalidates; dashboard composer picks harness; `queue_run` MCP tool accepts `harness`. |
+| GitHub Projects v2 sync | **Done.** `github-project.ts` + `opencode-agent.syncProjectBoard` (ctx.waitUntil — never delays the terminal transition). Requires GITHUB_PROJECT_TOKEN + GITHUB_PROJECT_NUMBER. |
+| Marketing site (theme tokens, why-shiba, tooltip/touch/focus fixes) | **Done.** bezalel-style navy/cream tokens, both light/dark; coarse-pointer tap targets. |
+
 ### 2.0 Status as of rev 7 (2026-09-19)
 
 Baseline: **405 tests passing across 32 files**, typecheck and lint clean, `wrangler deploy --dry-run` green (OrbStack), and a **local `wrangler dev` end-to-end run** that exercised queue → signed Slack approval → DO dispatch → real container → scoped GitHub clone → harness exec → AI Gateway egress (model call blocked at gateway auth — account config, see VERIFICATION.md). Earlier counts ("374/30", "333/28", "269/21", "111/111") are stale everywhere they appear below.
