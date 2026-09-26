@@ -20,7 +20,7 @@ Cancellation updates state before best-effort destruction. Registry clearing doe
 
 ## Submit and approve
 
-There is **no POST /api/runs** endpoint. The dashboard uses useAgent/useAgentChat with coding-orchestrator, name default, and SDK routes under /agents/.
+`POST /api/runs` queues an approval-gated run on the shared orchestrator; it does not start execution before approval. The dashboard also uses the `coding-orchestrator` agent SDK routes under `/agents/`.
 
 The delegate_coding_task tool accepts:
 
@@ -29,11 +29,13 @@ The delegate_coding_task tool accepts:
   "repoUrl": "https://github.com/owner/repository",
   "task": "Describe a bounded coding task",
   "baseBranch": "main",
-  "publishPullRequest": false
+  "publishPullRequest": false,
+  "harness": "opencode",
+  "codingModel": "google/gemini-3.5-flash-lite"
 }
 ~~~
 
-The tool sets needsApproval: true. Decisions use addToolApprovalResponse({ id, approved }); delegated events use useAgentToolEvents. There are no custom approval WebSocket messages.
+The agent tool sets `needsApproval: true`; approval decisions use `addToolApprovalResponse({ id, approved })` and delegated events use `useAgentToolEvents`. On the HTTP queue route, the approval is resolved through the approval endpoints/Slack interaction. Harness/model values are optional and validated before the run is approved. Harness unit tests cover construction and parsing, not successful CLI execution. The dated verification records a local OpenCode run only, which ended at a provider 401; no cloud end-to-end run is recorded.
 
 ## Provider traffic
 
@@ -44,4 +46,3 @@ There is no public `/api/provider` route. The coding model is called from inside
 POST /api/github/webhook requires GITHUB_WEBHOOK_SECRET and valid x-hub-signature-256. Missing configuration returns 503, invalid signatures 401, and invalid JSON 400. Valid payloads return ok, event name, and optional action. This handler acknowledges events only; it does not create coding tasks.
 
 Source: apps/backend/src/index.ts and apps/backend/src/agents/orchestrator.ts.
-

@@ -5,7 +5,7 @@ description: Connect AI Coworker to Slack for chatops, task delegation, and inte
 
 import { Steps } from '@astrojs/starlight/components';
 
-AI Coworker connects directly to your team Slack workspace. Developers can trigger coding tasks, inspect plans, and grant approval directly in thread conversations.
+AI Coworker can receive Slack events/commands and queue coding tasks for human approval. The Slack handlers and their unit tests do not establish that a live Slack workspace-to-cloud-run workflow has been exercised. `VERIFICATION.md` records no live cloud end-to-end run.
 
 ## Architecture
 
@@ -13,8 +13,8 @@ The Slack integration is powered by the Orchestrator Worker and Durable Objects:
 
 1. **Inbound Webhook**: Slack sends event notifications (`app_mention` or direct message) to `POST /api/slack/events`.
 2. **Signature Verification**: The Worker validates the `X-Slack-Signature` and timestamp using your configured `SLACK_SIGNING_SECRET`.
-3. **Task Coordination**: The CodingOrchestrator parses the prompt, identifies referenced GitHub repositories, and formulates a plan.
-4. **Interactive Card**: Slash commands reply with a Block Kit card. Mentions post via `SLACK_BOT_TOKEN` (`chat.postMessage`) on the thread DO named `slack:{team}:{channel}:{thread_ts}`. Empty bot token: no card, no run.
+3. **Task Coordination**: A repository is resolved from the request/thread or configured channel mapping; if none is available, the bot asks in-thread rather than guessing. A valid request is queued as a pending approval.
+4. **Approval card**: Slash-command responses and mentions can present approval/rejection controls. Mentions require `SLACK_BOT_TOKEN`; an empty token means no mention card and no run. An approval queues execution; successful coding or PR creation is not guaranteed.
 5. **Repo resolution**: GitHub URL in the mention/thread, else `SLACK_CHANNEL_REPOS`, else an in-thread ask — never a guessed repo.
 
 ## Setup Instructions
@@ -53,18 +53,18 @@ The Slack integration is powered by the Orchestrator Worker and Durable Objects:
 
 </Steps>
 
-## Example Interaction
+## Example Interaction (illustrative, not a verification result)
 
 In any public or private channel where the bot is invited:
 
 > **Developer**: `@AI Coworker fix the typo in README.md and add pnpm instructions`
 >
 > **AI Coworker**:
-> 📋 **Delegation Plan Prepared**
+> 📋 **Approval requested**
 > - Target: `princepal9120/shiba` (`main` branch)
 > - Action: Update `README.md`
 > - Test Command: `pnpm test`
 >
 > [ **Approve Run** ]   [ **Reject** ]
 
-Once approved, AI Coworker spins up an isolated sandbox container, runs the changes, and posts the resulting GitHub PR link directly in the thread.
+After approval, the Worker attempts the run and posts its outcome to the Slack thread. A PR link is posted only when publishing was requested and succeeds. The recorded local OpenCode run stopped at a provider 401; no cloud end-to-end run is recorded (see [Verification status](/docs/claude-code/)).

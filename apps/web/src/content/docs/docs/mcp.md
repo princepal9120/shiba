@@ -48,7 +48,7 @@ Run `claude mcp list` to confirm that `shiba` connects. A 401 means the token is
 | `memory_recall`, `memory_sessions` | `memory:read` | Read shared memory. |
 | `memory_bank`, `memory_forget` | `memory:write` | Write shared memory. |
 
-The gateway has no approve tool. Runs queued this way execute with the deployment's default harness and model (`AGENT_HARNESS`, `CODING_MODEL`) once approved.
+The gateway has no approve tool. This MCP tool accepts only repository/task/branch/publish inputs, not a per-run harness or model; queued runs use the deployment's configured defaults (`AGENT_HARNESS`, `CODING_MODEL`, and the selected harness's model default) when approved. Harness implementation and verification status are documented in [Coding Harnesses](/docs/claude-code/). No cloud end-to-end run is recorded; the dated local OpenCode exercise did not reach successful model inference.
 
 Run visibility is per-principal: `run_status`, `list_runs`, and `list_approvals` only return records the calling token's principal queued (`queuedBy` is stamped at intake). Operator surfaces — dashboard, Slack, `/api/runs` with an Access identity — still see everything. Pair `sandbox:exec` with `runs:read` on tokens that queue and poll runs.
 
