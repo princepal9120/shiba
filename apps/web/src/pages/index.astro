@@ -333,80 +333,90 @@ const capabilities = [
      the 9px mono caption the label idiom uses for words. */
   .hero-proof-label { font-family:'Instrument Serif',Georgia,serif; font-size:44px; line-height:.9; color:var(--navy); }
   .hero-proof-detail { font-size:12px; line-height:1.45; color:var(--ink-2); }
-  .work-window { border:1px solid var(--input-line); background:var(--panel-2); padding:4px; box-shadow:6px 6px 0 var(--paper-shadow); transition:transform 220ms ease, box-shadow 220ms ease; animation:hero-arrive 680ms 100ms cubic-bezier(.2,.7,.2,1) both; }
-  .work-window:focus-within { transform:translateY(-3px); box-shadow:8px 9px 0 var(--paper-shadow); }
+  .work-window { border:1px solid var(--line-2); background:var(--panel-2); padding:3px; box-shadow:5px 5px 0 var(--paper-shadow); transition:transform 220ms ease, box-shadow 220ms ease; animation:hero-arrive 680ms 100ms cubic-bezier(.2,.7,.2,1) both; }
+  .work-window:focus-within { transform:translateY(-2px); box-shadow:7px 7px 0 var(--paper-shadow); }
   @media (hover: hover) and (pointer: fine) {
-    .work-window:hover { transform:translateY(-3px); box-shadow:8px 9px 0 var(--paper-shadow); }
+    .work-window:hover { transform:translateY(-2px); box-shadow:7px 7px 0 var(--paper-shadow); }
   }
-  .window-titlebar { display:flex; justify-content:space-between; align-items:center; min-height:29px; padding:3px 4px 3px 9px; color:var(--paper-title-fg); background:var(--paper-title); font:11px 'Geist Mono',monospace; }
-  .window-brand { display:flex; align-items:center; gap:7px; }
-  .window-brand img, .task-icon img { image-rendering:pixelated; background:#fff; }
-  .window-controls { display:flex; gap:2px; }
-  .window-controls i { display:grid; place-items:center; width:16px; height:15px; background:#bdbdbd; border:1px solid #444; border-top-color:#f5f5f5; border-left-color:#f5f5f5; color:#111; font:normal 11px Arial,sans-serif; }
-  .window-menu { padding:6px 10px; border-bottom:1px solid var(--input-line); color:var(--ink); font:10px 'Geist Mono',monospace; }
-  .window-body { padding:20px; background:var(--card); }
-  .window-topline, .window-status, .micro, .step-state, .step-num, .window-caption { font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:.06em; }
-  .window-topline { display:flex; justify-content:space-between; color:var(--ink-2); margin-bottom:16px; }
-  .approval-art { position:relative; height:240px; overflow:hidden; margin-bottom:18px; border:1px solid var(--line-2); background:#171918; }
-  /* Dim + desaturate so the card reads as subject and the art as context. */
-  .approval-art img.shiba-working-img { display:block; width:100%; height:100%; object-fit:cover; object-position:center 22%; filter:brightness(.48) saturate(.8); transition:transform 700ms cubic-bezier(.2,.7,.2,1); }
-  .work-window:focus-within .approval-art img { transform:scale(1.045) translateY(-5px); }
+  .window-titlebar { display:flex; justify-content:space-between; align-items:center; gap:10px; min-height:32px; padding:4px 9px; color:var(--paper-title-fg); background:var(--paper-title); font:11px/1 'Geist Mono',monospace; }
+  .window-brand { display:flex; align-items:center; gap:7px; font-weight:600; letter-spacing:.04em; }
+  .window-brand img { image-rendering:pixelated; background:#fff; border:1px solid var(--line-2); padding:1px; }
+  .brand-title { color:var(--paper-title-fg); }
+  .status-indicator { display:inline-flex; align-items:center; gap:5px; padding:2px 6px; background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.22); font-size:8.5px; letter-spacing:.08em; font-weight:500; }
+  .status-dot { width:5px; height:5px; background:var(--ok); box-shadow:0 0 5px var(--ok); animation:approval-pulse 2s ease-in-out infinite; }
+  .window-tabs { display:flex; align-items:center; gap:2px; font-size:10px; }
+  .win-tab { padding:3px 8px; color:var(--ink-2); cursor:default; border:1px solid transparent; }
+  .win-tab.active { color:var(--ink); background:var(--card); border-color:var(--line-2); font-weight:500; }
+  .window-controls { display:flex; gap:3px; }
+  .win-btn { display:grid; place-items:center; width:18px; height:18px; background:var(--panel-2); border:1px solid var(--line-2); color:var(--ink-2); font:10px monospace; cursor:default; transition:background 120ms ease, color 120ms ease; }
+  .win-btn:hover { background:var(--line); color:var(--ink); }
+  .window-subbar { display:flex; align-items:center; justify-content:space-between; padding:6px 12px; background:var(--card); border-bottom:1px solid var(--line-2); font:10px 'Geist Mono',monospace; color:var(--ink-2); }
+  .repo-chip { display:flex; align-items:center; gap:7px; }
+  .repo-icon { color:var(--navy); font-size:11px; }
+  .repo-name { color:var(--ink); font-weight:500; }
+  .repo-branch { color:var(--ink-2); font-size:9px; opacity:.85; }
+  .runtime-badge { padding:2px 6px; background:var(--panel-2); border:1px solid var(--line); font-size:8.5px; letter-spacing:.05em; color:var(--navy); }
+  .window-body { padding:16px; background:var(--card); display:flex; flex-direction:column; gap:12px; }
+  .approval-art { position:relative; height:150px; overflow:hidden; border:1px solid var(--line-2); background:#121312; }
+  .approval-art img.shiba-working-img { display:block; width:100%; height:100%; object-fit:cover; object-position:center 28%; transition:transform 600ms cubic-bezier(.2,.7,.2,1); }
+  .work-window:focus-within .approval-art img { transform:scale(1.03) translateY(-2px); }
   @media (hover: hover) and (pointer: fine) {
-    .work-window:hover .approval-art img { transform:scale(1.045) translateY(-5px); }
+    .work-window:hover .approval-art img { transform:scale(1.03) translateY(-2px); }
   }
-
-  /* ── Animated illustration overlay ── */
-  .anim-overlay { position:absolute; inset:0; pointer-events:none; }
-  /* The card is centred over the illustration: it is the subject, not a
-     decoration on top of one. */
-  .anim-overlay { display:flex; align-items:center; justify-content:center; padding:16px; }
-  /* Opaque, not translucent: the illustration behind it is busy, and the
-     payload has to be readable at a glance. */
-  /* Bigger than the overlay artwork set: the payload must be legible at a
-     glance from across the split — the card is the product. */
-  .ask-card { width:100%; max-width:352px; background:#0e0f0e; border:1px solid var(--navy); box-shadow:4px 4px 0 #000a; animation:chip-in 0.5s 0.25s cubic-bezier(.2,.8,.2,1) both; }
-  /* #0000a8 is fixed in both themes, so the header text stays white — the
-     theme-aware navy is a light tint in dark mode and would vanish here. */
-  .ask-head { display:flex; align-items:center; gap:7px; padding:8px 12px; background:#0000a8; color:#fff; font:9.5px 'Geist Mono',monospace; letter-spacing:.14em; }
-  .ask-pulse { width:5px; height:5px; background:currentColor; animation:blink 1.1s steps(2,start) infinite; }
-  .ask-cmd { margin:0; padding:12px 14px; font:11px/1.7 'Geist Mono',monospace; color:#eae8e1; white-space:pre; overflow-x:auto; }
-  /* Card surface is dark in both themes, so verb/str use fixed light tones —
-     the theme-aware navy is unreadable navy-on-black in light mode. */
-  .ask-verb { color:#9cbce2; font-weight:600; }
-  .ask-str { color:#aaa99f; }
-  .ask-actions { display:flex; border-top:1px solid #3b3d36; }
-  /* Approve is the only filled control — one filled action per screen. */
-  .ask-actions span { flex:1; padding:9px 10px; text-align:center; font:9.5px 'Geist Mono',monospace; letter-spacing:.12em; }
-  .ask-yes { background:var(--navy); color:#fff; }
-  html[data-theme='dark'] .ask-yes { color:#152335; }
-  .ask-no { border-left:1px solid #3b3d36; color:#aaa99f; }
-  /* ── Keyframes ── */
-  @keyframes chip-in     { from { opacity:0; transform:translateY(8px) scale(.95); } to { opacity:1; transform:translateY(0) scale(1); } }
-  .task-paper { display:flex; align-items:center; gap:14px; padding:14px 16px; background:var(--paper); border:1px solid var(--line-2); margin-bottom:18px; }
-  .task-icon { display:grid; place-items:center; width:44px; height:44px; flex:none; border:1px solid var(--line-2); background:#fff; }
-  .task-paper strong, .task-paper small, .workflow-step strong, .workflow-step small { display:block; }
-  .task-paper strong { color:var(--ink); font:19px 'Instrument Serif',Georgia,serif; line-height:1.1; margin:3px 0; }
-  .task-paper small, .workflow-step small { color:var(--ink-2); font-size:11px; line-height:1.4; }
-  .workflow-step { display:grid; grid-template-columns:22px 1fr auto; align-items:center; gap:10px; padding:12px 10px; border-top:1px solid var(--line); }
-  .workflow-step.current { background:var(--panel-2); border:1px solid var(--navy); border-top-width:1px; }
-  .workflow-step { transition:background 160ms ease, padding-inline 160ms ease; }
-  @media (hover: hover) and (pointer: fine) {
-    .workflow-step:not(.current):hover { padding-inline:14px; background:var(--panel-2); }
+  .art-scrim { position:absolute; inset:0; background:linear-gradient(180deg,rgba(18,19,18,0.1) 0%,rgba(18,19,18,0.85) 100%); pointer-events:none; }
+  .art-meta-tag { position:absolute; top:8px; right:8px; display:flex; flex-direction:column; align-items:flex-end; gap:2px; padding:4px 7px; background:rgba(18,19,18,0.88); border:1px solid var(--line-2); font:9px 'Geist Mono',monospace; }
+  .art-meta-tag .micro { color:var(--navy); font-size:8px; letter-spacing:.1em; }
+  .art-status { color:var(--ink); font-size:8.5px; font-weight:500; }
+  .art-stamp { position:absolute; left:8px; bottom:8px; padding:4px 8px; border:1px solid rgba(156,188,226,0.35); background:rgba(18,19,18,0.92); color:var(--navy); font:9px 'Geist Mono',monospace; letter-spacing:.12em; }
+  .approval-card { background:var(--panel-2); border:1px solid var(--line-2); padding:12px; display:flex; flex-direction:column; gap:9px; box-shadow:2px 2px 0 var(--paper-shadow); }
+  .card-header { display:flex; align-items:center; justify-content:space-between; font:10px 'Geist Mono',monospace; border-bottom:1px solid var(--line); padding-bottom:7px; }
+  .header-left { display:flex; align-items:center; gap:6px; }
+  .pulse-marker { width:6px; height:6px; background:var(--navy); box-shadow:0 0 6px var(--navy); animation:approval-pulse 2.2s infinite; }
+  .tool-name { color:var(--ink); font-weight:600; letter-spacing:.02em; }
+  .badge-frozen { font-size:8px; padding:1px 5px; background:var(--card); border:1px solid var(--line); color:var(--ink-2); }
+  .harness-badge { color:var(--navy); font-size:9px; }
+  .code-preview { background:var(--card); border:1px solid var(--line); padding:9px 11px; font:11px/1.6 'Geist Mono',monospace; overflow-x:auto; }
+  .code-preview pre { margin:0; }
+  .code-line { display:block; }
+  .c-k { color:var(--navy); font-weight:500; }
+  .c-s { color:var(--ink); }
+  .c-cmt { color:var(--ink-2); font-style:italic; opacity:.7; }
+  .card-actions { display:grid; grid-template-columns:2fr 1fr; gap:8px; margin-top:2px; }
+  .btn-approve { display:flex; align-items:center; justify-content:center; gap:7px; height:34px; padding:0 12px; background:var(--paper-title); color:var(--paper-title-fg); border:1px solid var(--navy); box-shadow:2px 2px 0 var(--paper-shadow); font:11px 'Geist Mono',monospace; font-weight:600; cursor:pointer; transition:transform 120ms ease, background 120ms ease; }
+  .btn-approve:hover { background:var(--navy-2); transform:translateY(-1px); box-shadow:3px 3px 0 var(--paper-shadow); }
+  .btn-approve:active { transform:translateY(1px); box-shadow:1px 1px 0 var(--paper-shadow); }
+  .btn-reject { display:flex; align-items:center; justify-content:center; gap:6px; height:34px; padding:0 12px; background:var(--card); color:var(--ink-2); border:1px solid var(--line-2); box-shadow:2px 2px 0 var(--paper-shadow); font:11px 'Geist Mono',monospace; cursor:pointer; transition:transform 120ms ease, color 120ms ease, border-color 120ms ease; }
+  .btn-reject:hover { color:var(--danger); border-color:var(--danger); transform:translateY(-1px); }
+  .btn-reject:active { transform:translateY(1px); }
+  .action-icon { font-size:10px; font-weight:bold; }
+  .approval-guarantee { display:flex; align-items:center; gap:6px; color:var(--ink-2); font:9px 'Geist Mono',monospace; padding-top:2px; }
+  .lock-icon { color:var(--navy); }
+  .workflow-rail { display:flex; flex-direction:column; gap:1px; background:var(--line); border:1px solid var(--line-2); }
+  .rail-step { display:grid; grid-template-columns:24px 1fr auto; align-items:center; gap:10px; padding:9px 11px; background:var(--card); font-family:'Geist Mono',monospace; transition:background 150ms ease; }
+  .rail-step:hover { background:var(--panel-2); }
+  .rail-step.active { background:var(--panel-2); border-left:2px solid var(--navy); padding-left:9px; }
+  .rail-num { color:var(--navy); font-size:10px; font-weight:600; }
+  .rail-info strong { display:block; color:var(--ink); font-size:11.5px; font-family:var(--sl-font); font-weight:600; line-height:1.2; }
+  .rail-info small { display:block; color:var(--ink-2); font-size:9.5px; margin-top:1px; }
+  .rail-badge { font-size:8.5px; padding:2px 6px; border:1px solid var(--line-2); color:var(--ink-2); background:var(--card); }
+  .rail-badge.ok { color:var(--ok); border-color:var(--ok); }
+  .rail-badge.action { color:var(--navy); border-color:var(--navy); font-weight:600; animation:approval-pulse 2.2s infinite; }
+  .window-caption { text-align:center; color:var(--ink-2); font:10px 'Geist Mono',monospace; letter-spacing:.04em; padding-top:2px; }
+  .window-status { display:flex; align-items:center; justify-content:space-between; padding:6px 12px; background:var(--panel-2); border-top:1px solid var(--line-2); color:var(--ink-2); font:8.5px 'Geist Mono',monospace; letter-spacing:.06em; }
+  .status-left { display:flex; gap:14px; }
+  .status-left span { position:relative; }
+  .status-left span:not(:last-child)::after { content:'·'; position:absolute; right:-9px; color:var(--line-2); }
+  .status-right { color:var(--navy); font-size:8px; }
+  @media (max-width:540px) {
+    .window-tabs { display:none; }
+    .card-actions { grid-template-columns:1fr; }
+    .window-status { flex-direction:column; gap:4px; align-items:flex-start; }
   }
-  .workflow-step.current .step-state { animation:approval-pulse 2.6s ease-in-out infinite; }
-  .workflow-step strong { color:var(--ink); font-size:12.5px; font-weight:600; margin-bottom:2px; }
-  .step-num, .step-state { color:var(--navy); }
-  .step-state { font-size:8px; text-align:right; }
-  .window-caption { padding-top:16px; text-align:center; color:var(--ink-2); }
-  .window-status { display:flex; background:var(--panel-2); border-top:1px solid var(--input-line); color:var(--ink-2); font-size:8px; }
-  .window-status span { padding:6px 7px; border-right:1px solid var(--input-line); }
   @keyframes approval-pulse { 0%, 100% { opacity:1; } 50% { opacity:.58; } }
   @keyframes hero-arrive { from { opacity:0; translate:0 14px; } to { opacity:1; translate:0 0; } }
   @media (prefers-reduced-motion: reduce) {
-    .hero-copy, .work-window { animation:none; }
-    .work-window, .approval-art img, .workflow-step { transition:none; }
-    .workflow-step.current .step-state { animation:none; }
-    .ask-card, .ask-pulse { animation:none; opacity:1; }
+    .hero-copy, .work-window, .rail-badge.action, .status-dot, .pulse-marker { animation:none; }
+    .work-window, .approval-art img, .rail-step, .btn-approve, .btn-reject { transition:none; }
     .step-dither-screen { transition:none; }
     .step-card:hover .step-dither-screen, .work-window:hover .approval-art img, .work-window:focus-within .approval-art img { transform:none; }
   }
