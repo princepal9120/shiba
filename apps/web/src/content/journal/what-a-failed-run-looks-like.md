@@ -15,6 +15,13 @@ Sources: `spec/GOAL.md`, `PLAN.md`, `VERIFICATION.md`, and
 prototype, and this post describes required and unit-tested behaviour rather
 than a verified live cloud run.
 
+<div class="callout">
+  <span class="callout-label">Prototype status</span>
+  <p>The rules below are code requirements with unit coverage. A live cloud run
+  is recorded as not attempted, and the verification record is dated, so treat
+  it as an honest account rather than a live demonstration.</p>
+</div>
+
 ## The requirement
 
 `spec/GOAL.md` gives the sandbox a numbered list, and item six is the one this

@@ -16,6 +16,13 @@ Everything here traces to files in this repository: `spec/GOAL.md`,
 `apps/web/src/content/docs/docs/approval-gates.mdx`, and `CLAUDE.md`. Shiba is a
 local prototype. Nothing in this post describes a verified live cloud run.
 
+<div class="callout">
+  <span class="callout-label">Prototype status</span>
+  <p>The gate is covered by unit tests. <code>VERIFICATION.md</code> lists a live
+  cloud run as not attempted, so treat the behaviour below as locally verified
+  code, not as a deployment claim.</p>
+</div>
+
 ## The agent that never edits
 
 `CodingOrchestrator` is described in `spec/GOAL.md` as a planning and
