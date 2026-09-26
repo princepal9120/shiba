@@ -1,0 +1,88 @@
+---
+title: Telegram Integration
+description: Queue and approve coding runs from Telegram — free, self-hosted, no vendor.
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+Shiba can be operated from Telegram DMs and group chats — same approval-gated flow as Slack: a `/shiba` command queues a run, an inline-keyboard card gates it, an approver's tap launches it, and the outcome posts back into the same chat. It costs nothing beyond the Worker you already run: Telegram bots are free, and the webhook is the same Worker — no polling process, no relay, no SDK.
+
+**Before you start**
+
+- [Approval Gates](/docs/approval-gates) — how the pending-approval model works
+- [Slack Integration](/docs/slack) — the lane Telegram mirrors
+
+## The model
+
+```
+Telegram chat (DM or group)
+└── POST /api/telegram/webhook  (X-Telegram-Bot-Api-Secret-Token auth)
+    └── Orchestrator DO named telegram:{chat_id}
+        ├── Pending approval  ← /shiba <repo> <task>
+        ├── Approve / Reject  ← inline keyboard, TELEGRAM_APPROVERS only
+        └── Run → Sandbox → PR → post-back to the same chat
+```
+
+- A **chat** (DM or group id) owns one orchestrator conversation.
+- A **pending approval** is a pointer (`approve:{uuid}`); the button press decides it.
+- A **run** executes in the Cloudflare Sandbox and posts progress back in-chat.
+
+## How It Works
+
+- **Inbound webhook**: Telegram delivers updates to `POST /api/telegram/webhook`, authenticated by a shared secret in the `X-Telegram-Bot-Api-Secret-Token` header (Telegram has no request signing — `setWebhook`'s `secret_token` is the whole auth story). Redeliveries are deduped on `update_id`.
+- **Conversation-per-orchestrator**: the Durable Object is named `telegram:{chat_id}`, so each chat gets its own run registry and approval queue — the same pattern as `slack:{team}:{channel}:{ts}`.
+- **Commands**: `/shiba <repo-url> <task>` queues a run in DMs and groups alike (`/shiba@YourBot` works in groups). `/start` and `/help` print usage.
+- **Approval card**: the run posts a message with inline-keyboard **Approve / Reject** buttons. Only Telegram user ids in `TELEGRAM_APPROVERS` can decide — unset means nobody can.
+- **Post-back**: run start, completion (with PR link), failure, and cancellation post back into the chat via `sendMessage`.
+
+## Setup
+
+<Steps>
+
+1. **Create the bot** with [@BotFather](https://t.me/BotFather): `/newbot` → pick a name and username. Copy the token (`123456:ABC-...`).
+
+2. **Store secrets and vars** in your Cloudflare environment:
+   ```bash
+   pnpm wrangler secret put TELEGRAM_BOT_TOKEN --config apps/backend/wrangler.jsonc
+   pnpm wrangler secret put TELEGRAM_WEBHOOK_SECRET --config apps/backend/wrangler.jsonc
+   # comma-separated Telegram user ids allowed to click Approve:
+   pnpm wrangler secret put TELEGRAM_APPROVERS --config apps/backend/wrangler.jsonc
+   ```
+   `TELEGRAM_WEBHOOK_SECRET` is any random string you invent (`openssl rand -hex 32`); it must match the `secret_token` you register below. Your numeric Telegram id is in [@userinfobot](https://t.me/userinfobot).
+
+3. **Register the webhook** (replace the host and secrets):
+   ```bash
+   curl "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook" \
+     -d "url=https://your-worker.workers.dev/api/telegram/webhook" \
+     -d "secret_token=<TELEGRAM_WEBHOOK_SECRET>" \
+     -d 'allowed_updates=["message","callback_query"]'
+   ```
+
+4. **Optional**: `TELEGRAM_AGENT_HARNESS` picks the coding agent for Telegram runs (falling back to `AGENT_HARNESS`), and `TELEGRAM_CHAT_REPOS` maps a chat id to a default repo so `/shiba <task>` works without a URL:
+   ```json
+   {"-1001234567890": "https://github.com/owner/repo"}
+   ```
+
+</Steps>
+
+## Example Interaction
+
+In a DM with the bot — or `/shiba` in a group:
+
+> **You**: `/shiba https://github.com/owner/repo fix the flaky login test`
+>
+> **Shiba**: Approval requested — Repo: owner/repo · Task: fix the flaky login test
+>
+> [ **Approve** ]   [ **Reject** ]
+
+The tap only counts if your Telegram id is in `TELEGRAM_APPROVERS`; everyone else gets a refusal toast. Once approved, the run starts, and Shiba posts the outcome — changed files and the PR link — back into the same chat.
+
+<Aside type="caution">
+Approvals decide on `telegram:{chat_id}` orchestrators, reached through the button callback or the chat. The dashboard Approvals surface only lists the `default` and per-user orchestrators, so Telegram cards resolve in-chat, not on the dashboard.
+</Aside>
+
+## Related documentation
+
+- [Discord Interactions](/docs/discord) — the other chat lane, same plumbing
+- [Slack Integration](/docs/slack) — the original approval lane
+- [Configuration & Secrets](/docs/configuration) — every `TELEGRAM_*` variable

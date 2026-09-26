@@ -1,0 +1,95 @@
+---
+title: Discord Interactions
+description: Queue and approve coding runs from Discord — same approval gate, no bot hosting.
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+Shiba can be operated from Discord servers and DMs — same approval-gated flow as Slack and Telegram: a `/shiba` slash command queues a run, a message with **Approve / Reject** buttons gates it, an approver's click launches it, and the outcome posts back into the channel. No bot process to host: Discord delivers interactions over HTTP to the Worker you already run.
+
+**Before you start**
+
+- [Approval Gates](/docs/approval-gates) — how the pending-approval model works
+- [Telegram Integration](/docs/telegram) — the sibling lane sharing the plumbing
+
+## The model
+
+```
+Discord channel
+└── POST /api/discord/interactions  (Ed25519 signature auth, 300s window)
+    └── Orchestrator DO named discord:{channel_id}
+        ├── Pending approval  ← /shiba task:<task> repo:<url>
+        ├── Approve / Reject  ← message buttons, DISCORD_APPROVERS only
+        └── Run → Sandbox → PR → post-back to the same channel
+```
+
+- A **channel** (numeric snowflake id) owns one orchestrator conversation.
+- A **pending approval** is a pointer (`approve:{uuid}`); the button click decides it.
+- A **run** executes in the Cloudflare Sandbox and posts progress back in-channel.
+
+## How It Works
+
+- **Inbound interactions**: Discord posts to `POST /api/discord/interactions`, signed with Ed25519 — the Worker verifies `X-Signature-Ed25519` over `timestamp + body` using `DISCORD_PUBLIC_KEY` and rejects requests older than 300 seconds.
+- **Conversation-per-orchestrator**: the Durable Object is named `discord:{channel_id}`, so each channel gets its own run registry and approval queue — the same pattern as `telegram:{chat_id}`.
+- **Slash command**: `/shiba task:<task> repo:<github-repo-url>` defers inside Discord's 3-second window (`type:5`), queues the run, then edits the original reply into an approval card. `repo:` can be omitted when the channel is mapped in `DISCORD_CHANNEL_REPOS`.
+- **Approval buttons**: the card carries `approve:{uuid}` / `reject:{uuid}` `custom_id`s — pointers, not capabilities. Only Discord user ids in `DISCORD_APPROVERS` can decide, and the orchestrator honors a button only while the approval is still pending.
+- **Post-back**: run start, completion (with PR link), and failure post back into the channel via `DISCORD_BOT_TOKEN`.
+
+## Setup
+
+<Steps>
+
+1. **Create an application** in the [Discord Developer Portal](https://discord.com/developers/applications) → New Application. Copy the **Public Key** from General Information.
+
+2. **Store secrets and vars** in your Cloudflare environment:
+   ```bash
+   pnpm wrangler secret put DISCORD_PUBLIC_KEY --config apps/backend/wrangler.jsonc
+   pnpm wrangler secret put DISCORD_BOT_TOKEN --config apps/backend/wrangler.jsonc
+   # comma-separated Discord user ids allowed to click Approve:
+   pnpm wrangler secret put DISCORD_APPROVERS --config apps/backend/wrangler.jsonc
+   ```
+   `DISCORD_BOT_TOKEN` comes from the app's Bot tab (Reset Token). Your user id needs Developer Mode on → right-click your name → Copy User ID.
+
+3. **Point Discord at the Worker**: General Information → Interactions Endpoint URL → `https://your-worker.workers.dev/api/discord/interactions`. Discord sends a signed ping; the Worker answers `type:1` only after the signature verifies.
+
+4. **Register the slash command** against your app (and optionally one guild for instant propagation — global commands take up to an hour):
+   ```bash
+   curl -X PUT "https://discord.com/api/v10/applications/<APP_ID>/commands" \
+     -H "Authorization: Bot <DISCORD_BOT_TOKEN>" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "name": "shiba",
+       "description": "Queue a coding run",
+       "options": [
+         {"name": "task", "description": "What to build or fix", "type": 3, "required": true},
+         {"name": "repo", "description": "https://github.com/owner/repo", "type": 3, "required": false}
+       ]
+     }'
+   ```
+
+5. **Optional**: `DISCORD_AGENT_HARNESS` picks the coding agent for Discord runs (falling back to `AGENT_HARNESS`), and `DISCORD_CHANNEL_REPOS` maps a channel id to a default repo so `repo:` can be skipped:
+   ```json
+   {"1234567890123456789": "https://github.com/owner/repo"}
+   ```
+
+</Steps>
+
+## Example Interaction
+
+> **You**: `/shiba task: fix the flaky login test repo: https://github.com/owner/repo`
+>
+> **Shiba**: Approval requested — Repo: owner/repo · Task: fix the flaky login test
+>
+> [ **Approve** ]   [ **Reject** ]
+
+The click only counts if your Discord id is in `DISCORD_APPROVERS`; everyone else gets an ephemeral refusal. Once approved, the run starts, and Shiba posts the outcome — changed files and the PR link — back into the same channel.
+
+<Aside type="caution">
+Approvals decide on `discord:{channel_id}` orchestrators, reached through the button interaction. The dashboard Approvals surface only lists the `default` and per-user orchestrators, so Discord cards resolve in-channel, not on the dashboard.
+</Aside>
+
+## Related documentation
+
+- [Telegram Integration](/docs/telegram) — the sibling lane, same plumbing
+- [Slack Integration](/docs/slack) — the original approval lane
+- [Configuration & Secrets](/docs/configuration) — every `DISCORD_*` variable

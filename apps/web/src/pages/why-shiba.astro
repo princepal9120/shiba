@@ -190,36 +190,33 @@ const articleSchema = {
       </div>
     </section>
 
-    <!-- 03: CLOUDROOM CORE COMPARISON -->
-    <section class="story-section" aria-labelledby="section-cloudroom">
+    <!-- 03: DEVIN CLOUD COMPARISON -->
+    <section class="story-section" aria-labelledby="section-devin">
       <div class="section-label">
-        <span class="micro">03 / Alternative Runtimes</span>
+        <span class="micro">03 / Devin Cloud Comparison</span>
       </div>
       <div class="prose-body">
-        <h2 id="section-cloudroom" class="text-[var(--ink)]">How Shiba Compares to Cloudroom Core</h2>
+        <h2 id="section-devin" class="text-[var(--ink)]">How Shiba Compares to Devin Cloud</h2>
         <p class="text-[var(--ink-2)]">
-          There are other thoughtful open-source efforts tackling remote agent execution. For instance, <a href="https://github.com/davidondrej/cloudroom-core" target="_blank" rel="noopener noreferrer" class="text-[var(--navy)] underline font-bold">Cloudroom Core</a> is a pre-release Rust service that runs on an Ubuntu Linux VM backed by PostgreSQL.
-        </p>
-        <p class="text-[var(--ink-2)]">
-          While Cloudroom Core focuses on long-lived session continuity, journal replay, and local process management on a persistent server, <strong>Shiba</strong> is designed around an entirely different philosophy:
+          <a href="https://devin.ai" target="_blank" rel="noopener noreferrer" class="text-[var(--navy)] underline font-bold">Devin Cloud</a> is the product this whole page is an answer to. Where Devin is a closed, per-seat SaaS running on Cognition's infrastructure, <strong>Shiba</strong> is software you run in your own Cloudflare account:
         </p>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 my-6 font-mono text-xs">
           <div class="p-4 bg-[var(--card)] border border-[var(--line-2)] shadow-[2px_2px_0_var(--paper-shadow)]">
-            <h4 class="font-bold text-[var(--ink)] mb-2">Cloudroom Core</h4>
+            <h4 class="font-bold text-[var(--ink)] mb-2">Devin Cloud</h4>
             <ul class="text-[var(--ink-2)] space-y-1.5 list-disc pl-4">
-              <li>Rust service deployed on a dedicated Linux VM with systemd.</li>
-              <li>Requires a separate dedicated PostgreSQL database.</li>
-              <li>Focuses on durable multi-turn session journals and conversation replay.</li>
-              <li>Harness inference credentials live directly in the agent VM account.</li>
+              <li>Closed-source SaaS — your code, secrets, and run history live on someone else's multi-tenant servers.</li>
+              <li>~$20–100+/engineer/month subscription whether the agent works or idles.</li>
+              <li>One vendor-picked model per task — no routing small jobs to cheaper models.</li>
+              <li>Credentials and environment are provisioned on Devin's side, outside your security perimeter.</li>
             </ul>
           </div>
           <div class="p-4 bg-[var(--card)] border border-[var(--navy)] shadow-[2px_2px_0_var(--paper-shadow)]">
             <h4 class="font-bold text-[var(--navy)] mb-2">Shiba (Cloudflare Native)</h4>
             <ul class="text-[var(--ink)] space-y-1.5 list-disc pl-4">
-              <li>Serverless Cloudflare Worker with instant edge routing.</li>
-              <li>Ephemeral per-task micro-containers (Cloudflare Sandbox SDK).</li>
-              <li>Strict Human Approval Gate before any container boots.</li>
-              <li>Real API keys stay at Cloudflare AI Gateway egress — never in the sandbox.</li>
+              <li>AGPL-3.0 source you deploy into your own Cloudflare account — data never leaves your perimeter.</li>
+              <li>Free/paid Cloudflare plan pricing; costs ~$0 when no task is running.</li>
+              <li>Bring-your-own harness &amp; model routing — Opus for refactors, a light model for tweaks.</li>
+              <li>Human Approval Gate before any container boots; API keys never enter the sandbox.</li>
             </ul>
           </div>
         </div>

@@ -40,7 +40,7 @@ export default defineConfig({
 					items: [
 						{ label: 'Overview', slug: 'docs/overview' },
 						{ label: 'Quickstart', slug: 'docs/getting-started' },
-						{ label: 'End-to-End Onboarding Setup', slug: 'docs/onboarding' },
+						{ label: 'End-to-end setup', slug: 'docs/onboarding' },
 					],
 				},
 				{
@@ -57,6 +57,8 @@ export default defineConfig({
 					label: 'Connect',
 					items: [
 						{ label: 'Slack Integration', slug: 'docs/slack' },
+						{ label: 'Telegram Integration', slug: 'docs/telegram' },
+						{ label: 'Discord Interactions', slug: 'docs/discord' },
 						{ label: 'GitHub Pull Requests', slug: 'docs/github' },
 						{ label: 'Automations & Cron', slug: 'docs/automations' },
 						{ label: 'Use from Claude Code', slug: 'docs/mcp' },

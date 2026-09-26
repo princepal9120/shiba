@@ -736,7 +736,9 @@ starlight-toc a[aria-current] {
 
 .arch-stage-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  /* auto-fit + 240px floor: fills the row width instead of leaving a dead
+     strip beside narrow cards at desktop widths. */
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 0.75rem;
   align-items: stretch;
 }
@@ -831,7 +833,7 @@ starlight-toc a[aria-current] {
   gap: 0.35rem;
 }
 
-@media (max-width: 48rem) {
+@media (max-width: 56rem) {
   .arch-stage {
     grid-template-columns: 1fr;
     gap: 0.75rem;
@@ -841,6 +843,24 @@ starlight-toc a[aria-current] {
     border-bottom: 1px solid var(--border-subtle);
     padding-right: 0;
     padding-bottom: 0.75rem;
+  }
+}
+
+@media (max-width: 30rem) {
+  .arch-container {
+    padding: 0.875rem;
+    margin: 1.5rem 0;
+  }
+  .arch-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.6rem;
+  }
+  .arch-connector-label {
+    font-size: 0.625rem;
+    padding: 0.2rem 0.5rem;
+    max-width: 100%;
+    text-align: center;
   }
 }
 
