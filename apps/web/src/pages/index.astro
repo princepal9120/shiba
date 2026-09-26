@@ -1,7 +1,7 @@
 ---
 import MarketingPage from '../layouts/MarketingPage.astro';
 
-const description = 'A self-hosted AI engineer that asks before it writes code. Runs in your Cloudflare account, on Claude Code, Codex, OpenCode, or Devin.';
+const description = 'A self-hosted AI engineer that asks before it writes code. Runs in your Cloudflare account, on Claude Code, Codex, OpenCode, Grok, Cursor or Devin.';
 const schema = {
   '@context': 'https://schema.org',
   '@type': 'SoftwareApplication',
@@ -18,7 +18,7 @@ const schema = {
 // absent — each row names a concrete thing the buyer either gets or does not.
 const comparisons = [
   { point: 'Runs in infrastructure you own', shiba: 'Your Cloudflare account', them: "The provider's account" },
-  { point: 'Model and harness per run', shiba: 'Claude Code, Codex, OpenCode, Devin', them: 'Chosen by the provider' },
+  { point: 'Model and harness per run', shiba: 'Claude Code, Codex, OpenCode, Devin, Cursor, Grok', them: 'Chosen by the provider' },
   { point: 'Approval before code runs', shiba: 'Required by default', them: 'Varies by product' },
   { point: 'Who holds the credentials', shiba: 'You do, at egress', them: 'Held by the provider' },
   { point: 'License', shiba: 'AGPL-3.0, source readable', them: 'Proprietary' },
@@ -52,7 +52,7 @@ const capabilities = [
         id="hero-showcase-img"
         class="hero-showcase-img"
         src="/assets/shiba-hero-window-dark.png"
-        alt="Retro desktop window of the shiba.workspace: harness chips, a pixel workstation, capability icons, and a status bar reading your Cloudflare account, one approval, four harnesses"
+        alt="Retro desktop window of the shiba.workspace: harness chips, a pixel workstation, capability icons, and a status bar reading your Cloudflare account, one approval, six harnesses"
         width="1266"
         height="878"
         loading="eager"
@@ -79,14 +79,14 @@ const capabilities = [
   <section id="harnesses" class="shell harness-section" aria-labelledby="harness-title">
     <p class="eyebrow">TOOLS &amp; MODEL PROVIDERS</p>
     <h2 id="harness-title">Bring your tools. Keep control.</h2>
-    <p class="harness-lead">All four harnesses are supported — pick OpenCode, Claude Code, Codex, or Devin CLI, and run them with your own provider credentials. Other logos are shown for reference—not as claims of a Shiba integration.</p>
+    <p class="harness-lead">All six harnesses are supported — pick OpenCode, Claude Code, Codex, Devin CLI, Cursor, or Grok, and run them with your own provider credentials.</p>
     <div class="harness-grid" role="list" aria-label="Coding tools and model providers">
       <div class="harness-item integrated" role="listitem"><span class="harness-icon"><img src="/assets/harnesses/opencode.svg" alt="" width="32" height="32" /></span><span class="harness-label">OpenCode<small>INTEGRATED</small></span></div>
       <div class="harness-item integrated" role="listitem"><span class="harness-icon"><img src="/assets/harnesses/claude.svg" alt="" width="32" height="32" /></span><span class="harness-label">Claude Code<small>INTEGRATED</small></span></div>
       <div class="harness-item integrated" role="listitem"><span class="harness-icon"><img src="/assets/harnesses/openai.svg" alt="" width="32" height="32" /></span><span class="harness-label">Codex<small>INTEGRATED</small></span></div>
       <div class="harness-item integrated" role="listitem"><span class="harness-icon"><img src="/assets/harnesses/devin.svg" alt="" width="32" height="32" /></span><span class="harness-label">Devin CLI<small>INTEGRATED</small></span></div>
-      <div class="harness-item reference" role="listitem"><span class="harness-icon"><img src="/assets/harnesses/cursor.svg" alt="" width="32" height="32" /></span><span class="harness-label">Cursor<small>NOT INTEGRATED</small></span></div>
-      <div class="harness-item reference" role="listitem"><span class="harness-icon"><img src="/assets/harnesses/grok.svg" alt="" width="32" height="32" /></span><span class="harness-label">Grok<small>MODEL REFERENCE</small></span></div>
+      <div class="harness-item integrated" role="listitem"><span class="harness-icon"><img src="/assets/harnesses/cursor.svg" alt="" width="32" height="32" /></span><span class="harness-label">Cursor<small>INTEGRATED</small></span></div>
+      <div class="harness-item integrated" role="listitem"><span class="harness-icon"><img src="/assets/harnesses/grok.svg" alt="" width="32" height="32" /></span><span class="harness-label">Grok<small>INTEGRATED</small></span></div>
     </div>
     <p class="harness-note">Product names and logos belong to their respective owners. No affiliation is implied. <a href="/docs/claude-code/">See supported configuration →</a></p>
   </section>
@@ -382,7 +382,12 @@ const capabilities = [
   .channel-card:hover { background:var(--panel-2); }
   .channel-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
   .channel-icon { display:grid; place-items:center; width:38px; height:38px; border:1px solid var(--line-2); background:var(--panel-2); }
-  :global(html[data-theme='dark']) .channel-icon img { filter:invert(1) brightness(1.2); }
+  /* Theme-aware channel icons: brand SVGs render at full color on light;
+     on dark, discord/telegram get a subtle brightness lift for contrast.
+     Slack is multicolor and needs no filter. iPhone uses currentColor (--ink). */
+  :global(html[data-theme='dark']) .channel-icon img[src*="discord"],
+  :global(html[data-theme='dark']) .channel-icon img[src*="telegram"] { filter: brightness(1.3) saturate(0.9); }
+  :global(html[data-theme='dark']) .channel-icon img[src*="iphone"] { filter: brightness(10); }
   .channel-badge { font-family:'Geist Mono',monospace; font-size:8.5px; letter-spacing:0.12em; text-transform:uppercase; padding:2px 7px; border:1px solid var(--line-2); color:var(--navy); background:var(--panel-2); box-shadow:2px 2px 0 var(--paper-shadow); }
   .channel-badge.soon { background:var(--panel-2); color:var(--ink-2); }
   .channel-card h3 { font-family:var(--sl-font); font-size:18px; font-weight:600; margin:0 0 12px; color:var(--ink); letter-spacing:-0.01em; }
