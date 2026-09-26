@@ -1,70 +1,132 @@
 ---
-title: The approval gate is the product
-description: Why Shiba stops at a human checkpoint before it clones a repo, runs a shell command, or pushes a branch.
+title: Why the approval gate comes before the container
+description: Shiba stops a planned coding run at a human decision point, and that gate is the safety invariant the rest of the system is built around.
 pubDate: 2026-09-14
 category: guide
 pattern: protagonist-arc
-summary: The gate is not a confirmation dialog bolted on later. It is the reason the rest of the system is allowed to exist.
+summary: A planned run reaches an irreversible step, a human holds it, and the gate decides what happens next.
 ---
 
-Shiba is a coding agent. It clones a repository, runs commands inside a container, and can open a pull request. Every one of those actions is reversible in theory and expensive in practice. The interesting engineering question is not whether the agent can do the work. It is how the system earns the right to try.
+The subject of this post is a pause. A coding agent has a plan, the plan needs
+shell access and a git push, and something in the middle says not yet. That
+something is the approval gate. This is a guide to why it sits where it sits
+and what it protects.
 
-The answer in this codebase is a human gate, and the gate is treated as the central safety invariant rather than a feature.
+Everything here traces to files in this repository: `spec/GOAL.md`,
+`apps/web/src/content/docs/docs/approval-gates.mdx`, and `CLAUDE.md`. Shiba is a
+local prototype. Nothing in this post describes a verified live cloud run.
 
-<div class="callout">
-<span class="callout-label">Prototype status</span>
+## The agent that never edits
 
-Shiba is a local prototype. The gate is implemented and unit-tested. No live end-to-end cloud run is recorded, so nothing here is a claim about deployed behaviour.
-</div>
+`CodingOrchestrator` is described in `spec/GOAL.md` as a planning and
+delegation agent. It never edits repositories itself. It takes structured input
+through a `delegate_coding_task` tool: `repoUrl`, `task`, `baseBranch` with a
+default of `main`, and `publishPullRequest` defaulting to `false`.
 
-## The workflow that keeps walking toward the edge
+The goal file then names the mechanism. The delegation tool must use AI SDK
+`needsApproval: true`. And it states the rule in one line: no sandbox starts
+before the human approves the exact tool input.
 
-Start with a plain request. Someone types a task into the dashboard, or mentions the bot in Slack. From there a documented path runs forward.
+That is the shape of the whole system. The orchestrator produces intent. It does
+not act on it. A human moves intent into action, or does not.
 
-The `CodingOrchestrator` is the planning agent. It does not edit repositories. Its job is to turn prose into a structured `delegate_coding_task` tool call carrying four fields: `repoUrl`, `task`, `baseBranch` (default `main`), and `publishPullRequest` (default `false`).
+## What the gate is protecting
 
-That tool is declared with `needsApproval: true`. This is the point where the run stops. No sandbox is provisioned. No clone happens. The system has a complete, machine-readable intent, and it is sitting on a desk waiting for a person.
+`approval-gates.mdx` calls approval gates the central safety invariant and says
+autonomous agents are never permitted to clone private code, execute terminal
+commands, or push git branches without explicit human verification.
 
-The reason the pause lands here rather than later is ordering. Approving a plan is cheap. Approving a container that has already run `pnpm install` is archaeology. The gate is placed as early as the design allows, so the human decides while the decision is still reversible.
+The document lists four risks the gate is aimed at.
 
-## What the reviewer actually sees
+- **Destructive commands.** Preventing an inadvertent `rm -rf`, a branch
+  force-push, or a schema drop.
+- **Malicious dependency ingestion.** Verifying that new packages come from
+  trusted registries.
+- **Scope creep.** Keeping edits to the requested feature or bugfix.
+- **Cost controls.** Reviewing projected compute and token usage before a heavy
+  task launches.
 
-A gate that shows a spinner is theatre. The approval surfaces show the specific facts a reviewer needs in order to say no.
+Read those together and the gate is not a single feature. It is a review point
+for four different failure modes: the destructive one, the supply-chain one, the
+drift one, and the expensive one.
 
-The self-hosted dashboard at `/app` lists the target repository and branch, the planned shell commands, and an estimated compute duration, with one-click **Approve** and **Reject with Reason** actions. Buttons route through `addToolApprovalResponse`, so the decision is recorded against the tool call rather than inferred from ambient UI state.
+## The moment the run stops
 
-Slack gets the same treatment as a Block Kit card posted into the originating thread: a delegation plan, the target branch, the planned commands, an **Approve Run** button, and the run identifier. Clicking it resolves on the Durable Object named by the card pointer and unblocks the workflow, which is what provisions the Sandbox container.
+Someone submits a task. The orchestrator drafts a delegation plan. Then the run
+halts in a pending state, waiting.
 
-There is a third path for pipelines. `POST /api/runs/run_01a0b4cd/approve` with a bearer token submits a decision programmatically. Same gate, different surface.
+`VERIFICATION.md` describes what the local path does at that point. A local
+approval creates an `approvalId` and persists a pending approval in the
+`default` orchestrator Durable Object. A signed Slack approval resolves exactly
+once. Only then is the child and container dispatched.
 
-Read together, these surfaces answer the same four questions: which repository, which branch, which commands, and how much compute. A reviewer who cannot answer those cannot meaningfully approve.
+Three synchronous channels can carry the decision, per `approval-gates.mdx`.
 
-## What rejection actually does
+Slack sends a Block Kit card to the originating thread, showing the delegation
+plan, the target branch, the planned commands, and an `Approve Run` button. The
+dashboard at `/app` shows the target repository and branch, the planned shell
+commands, an estimated compute duration, and `Approve` or `Reject with Reason`.
+For pipelines, `POST /api/runs/{run_id}/approve` takes a bearer
+`${ADMIN_API_KEY}` and a JSON body with `approved` and `reviewer`.
 
-The unhappy path is the one that gets designed carefully. On rejection, the reason is recorded in `CodingOrchestrator`, container provisioning is aborted, the team is notified, no container is launched, and no git change is made. Not "the agent is told to stop" — no container, no branch, no diff.
+Whichever channel is used, the person approving sees the plan rather than a
+summary of it afterwards.
 
-That property is also why the Slack approval list is deny-by-default. `SLACK_APPROVERS` unset means nobody can approve from Slack. A valid Slack signature authenticates that the request came from Slack; it does not authenticate which human clicked the button. In a public channel, every member can click. Failing closed is the only honest default there.
+## The resolution
 
-Automations follow the same rule. Scheduled and webhook-triggered runs queue an approval like any other. Unattended mode exists but is refused unless opening a pull request is the only mutation and the repository is on an explicit allowlist, and it still carries a daily run budget.
+Approve, and the Durable Object workflow unblocks and provisions the container.
+Reject, and the orchestrator records the reason, aborts provisioning, and
+notifies the team. No container launches. No git changes are made.
 
-## The four things it is protecting
+That asymmetry is the point. The reject path is not a soft failure. It is a
+complete stop, and it is a supported, normal outcome rather than an error.
 
-The docs name the failure modes the gate exists to catch, and they are ordinary engineering failures rather than exotic attacks.
+`spec/GOAL.md` also constrains who may approve. Only `SLACK_APPROVERS` can
+approve from Slack, and an empty approver list means nobody can. `README.md`
+explains the reasoning: a valid signature authenticates Slack, not the human
+who clicked, and a button in a public channel is clickable by everyone in it.
 
-**Destructive commands.** An agent that decides to run something irreversible should have to explain itself first. Inadvertent `rm -rf`, branch force-pushes, and schema drops are all in scope for this review.
+There is an unattended mode, and it is narrow by design. Automated runs require
+approval by default. Unattended execution is limited to pull-request-only
+mutations on an explicit repository allowlist. `README.md` lists three
+conditions that must hold together: approval by default, unattended mode
+refused unless opening a PR is the only mutation and the repo is allowlisted,
+and a daily run budget per automation. It also notes this path is not verified
+live.
 
-**Dependency provenance.** Adding a package is adding code. The reviewer is the point where "did this come from a trusted registry" gets asked out loud.
+## The parts that cannot skip it
 
-**Scope creep.** A request to fix input sanitisation in one file should not quietly become a refactor. The gate shows the target branch and the planned commands, which is exactly the evidence needed to notice drift.
+Automations do not get a private door. `VERIFICATION.md` states that
+quality-gate cards queue through the same `POST /api/runs` approval path, with no
+bypass, because a human still approves before a container starts.
 
-**Cost.** Containers and inference are billed. A review point before a heavy task launches is a real cost control, and the dashboard shows estimated compute duration at the moment of decision.
+Configuration problems surface at the same point. `VERIFICATION.md` records
+that harness and model mismatches fail on the approval card, never inside a
+container the human already approved. Approval preflights the concurrency cap,
+the token, and the URL before it consumes the run pointer, so a rejected
+preflight stays retryable with a `409`.
 
-None of this eliminates risk. A human can approve a bad plan, and a good plan can still fail. The claim is narrower and more useful: the system refuses to act unilaterally on anything irreversible, and it makes the reviewer responsible for a specific, checkable set of facts.
+## Limits of this account
 
-## Why it comes first in the design
+These are code-level and unit-tested behaviours, not deployment proof.
+`VERIFICATION.md` lists a live cloud run as not attempted, and `claude-code.mdx`
+is explicit that its harness tests do not prove the CLIs can complete a task end
+to end. Security requirements in `spec/GOAL.md` are written as things the system
+must do, including no claim of full multi-tenant isolation.
 
-Retrofitting a gate is unpleasant. You end up auditing an agent that already had shell access, and every finding becomes an argument about how much to restrict. Building the gate first means the destructive capability was never available on its own terms.
+What is verified locally is the gate itself: approval required by default,
+refusal of unattended non-allowlisted or non-PR mutations, kill switches, and
+approver allowlisting.
 
-The same ordering shows up in the credential boundary: provider keys never enter the container, and `GITHUB_TOKEN` is attached by the Worker at egress rather than handed to the process. The gate and the credential boundary are the same idea applied to two different risks — keep irreversible authority outside the thing you are gating.
+## Why it is the centre
 
-If you take one thing from the Shiba codebase, take this: the interesting part of an autonomous agent is not its autonomy. It is the list of things it is structurally not allowed to do on its own, and the fact that a person is standing at exactly that boundary.
+An agent that can run shell commands and push branches can do real damage before
+anyone notices. A gate placed after execution documents a failure. A gate placed
+before it prevents one.
+
+The rest of Shiba is built around that ordering: credentials stay outside the
+container, failures report real exit codes, and the dashboard shows no invented
+activity. The approval gate is the piece that makes those boundaries mean
+something, because it is the last point where a person is still in control.
+
+Read next: [credentials that never enter the container](/blog/credentials-that-never-enter-the-container/).

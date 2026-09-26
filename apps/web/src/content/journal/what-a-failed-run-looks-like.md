@@ -1,88 +1,120 @@
 ---
 title: What a failed run looks like
-description: Shiba reports the real exit status, a bounded stderr tail, and a structured error envelope. It never reports a failure as a success.
+description: Shiba reports failures with a real exit code, a bounded stderr tail, and an error envelope, and never dresses a failure up as a success.
 pubDate: 2026-09-17
 category: journal
 pattern: protagonist-arc
-summary: A build log entry. The recorded local end-to-end run failed with a 401, and the system reported exactly that instead of dressing it up.
+summary: A run is stopped mid-flight, and the record it leaves behind is an error with evidence rather than a success badge.
 ---
 
-The most useful thing in this repository is not a passing test. It is a recorded failure.
+This is a build log entry, told as a story. A coding run is queued, it starts,
+and it does not finish. What matters is what the record looks like afterwards.
 
-On 2026-09-19 the team ran a local end-to-end exercise of the full Slack approval chain. The approval worked. The container started. The harness ran. The model call failed. And the system said so.
+Sources: `spec/GOAL.md`, `PLAN.md`, `VERIFICATION.md`, and
+`apps/web/src/content/docs/docs/troubleshooting.md`. Shiba is a local
+prototype, and this post describes required and unit-tested behaviour rather
+than a verified live cloud run.
 
-This post is about that run and the rules that made reporting it honestly the path of least resistance.
+## The requirement
 
-<div class="callout">
-<span class="callout-label">Prototype status</span>
+`spec/GOAL.md` gives the sandbox a numbered list, and item six is the one this
+post is about: report failures honestly, including process exit code and a
+bounded stderr tail.
 
-Shiba is a local prototype. The run described here was a local exercise, not a cloud deployment. The later 2026-09-24 verification summary reports local checks passing with deployment still pending.
-</div>
+Item five, capturing changed files and a unified diff including new files, sits
+directly above it. A run that produced a diff and then failed still has a diff,
+and the report has to say so without dressing the partial work up as a finished
+task.
 
-## The run
+`spec/GOAL.md` closes the same section with a rule about the assistant's own
+output: no generated placeholder implementation, no fake successful output, no
+external deployment, no push. If a dry run cannot complete because no compatible
+local container engine is running, the exact limitation gets recorded, while
+the TypeScript build and unit tests still have to pass.
 
-The exercise ran `wrangler dev` on port 8788 with OrbStack Docker and a `.dev.vars` file carrying test-only Slack values — a signing secret and `SLACK_APPROVERS=U_E2E`.
+## The envelope
 
-The chain that got exercised, over real HTTP, was the approval path. A locally HMAC-signed `block_actions` payload was posted to the Slack interact endpoint with a `v0` signature, action `approve`, and a value carrying the thread key and approval id. The endpoint returned a `200` acknowledgment. The approver allowlist admitted `U_E2E`, and the Durable Object resolved the pointer exactly once.
+`PLAN.md` describes the structured result a run returns. Error envelopes must
+report `error`. A malformed result, or an absent one, is `error` too. The plan's
+word for the failure mode is never silent success.
 
-Then the container ran `opencode run --format json --model google/gemini-3.5-flash-lite`.
+`troubleshooting.md` turns that into a symptom you can actually see. If a
+completed badge conflicts with the output, inspect the structured result
+envelope, because failed runs should report error rather than successful
+completion.
 
-The provider egress was rewritten to AI Gateway at `…/default/google-ai-studio`. The response was **401, code 2009, Unauthorized**. There was no `AI_GATEWAY_TOKEN` in `.dev.vars` and no bring-your-own key visible.
+That conflict is the bug this rule exists to prevent. A UI that shows a green
+completion for a run whose envelope says `error` is lying about the run, and the
+envelope is the source of truth.
 
-The run was a failure. Three real bugs surfaced along the way, and one of them was a footgun worth naming: `interact` resolves the orchestrator Durable Object by `threadKey`, and that name has to match the queue target — `default` in this case — not an arbitrary thread key.
+## What the failure message carries
 
-## What the system did with the failure
+`PLAN.md` requires failure messages to include the real error and the real exit
+code, passed through `safeText` and `redactSecrets` before they leave the
+runtime. Redaction is not optional formatting; it is what allows a real error to
+be reported at all.
 
-Three things, and all three matter.
+The tail is bounded. `costs.md` lists the stderr tail at 8,000 characters, with
+the collected diff at 120,000, the transcript diff display at 20,000, captured
+files at 50, per-file captured contents at 100,000 characters, and total captured
+contents at 500,000. These are application settings, not guaranteed in-memory
+read bounds, and capture truncation can make a publication incomplete.
 
-**The error propagated as a structured envelope.** It did not get flattened into a log line and lost. The result carried the provider's own status, including the 401 and the code.
+So a failure report is deliberately partial. It is partial by design, and the
+limit is documented rather than discovered.
 
-**The run was marked `error`.** Not `completed`, not partial, not "finished with warnings." The state is the state.
+## The record-keeping rule
 
-**The sandbox was destroyed.** A failed run does not leave a container sitting there accruing resources.
+`PLAN.md` also sets the standard for the build log itself. Record the date, the
+versions, and every failure. A failing task reports its real exit code.
 
-The mapping is explicit and simple. An `error` result envelope maps to `error`. A `completed` envelope maps to `completed`. A malformed or absent envelope maps to `error`. There is no path where an unrecognized outcome becomes a success, and that last rule is the one that matters most.
+`VERIFICATION.md` is written to that standard, which is why it contains awkward
+lines. A live cloud run is listed as not attempted. The one local end-to-end
+exercise with OpenCode on 2026-09-19 returned a 401, so model inference was not
+verified. Claude Code and Codex have not run live. `troubleshooting.md` adds
+that the verification file is dated, that unit tests use fakes, and that none of
+it establishes successful cloud deployment or model inference.
 
-## The rule that shapes everything else
+An unflattering 401 in the record is the system working. A green run nobody can
+reproduce is the failure mode.
 
-Never silent success.
+`VERIFICATION.md` also lists what the tests themselves cover, so you can read the
+boundary without guessing. Tests cover approval required by default, refusal of
+unattended non-allowlisted or non-PR mutations, kill switches, and approver
+allowlisting. Those are the parts of the run lifecycle with a green suite behind
+them today.
 
-The failure mode this guards against is specific and tempting: the harness prints something to stdout, the orchestrator sees a non-empty string, and the run gets recorded as completed. The docs call accepting any string output as `completed` explicitly incorrect.
+## How to report one yourself
 
-The guard is structural rather than aspirational. The default for an unparseable outcome is failure, not success. A bug in the parser can only make the system look worse, never better. That is the correct direction for a default.
+`troubleshooting.md` gives the format for a bug report: the command, the
+versions, bounded redacted output, the expected and actual behavior, and whether
+the evidence is a unit test, a local exercise, or a cloud run. Never send secrets
+or private run transcripts.
 
-The dashboard reflects the same discipline. The troubleshooting guide lists "Completed badge conflicts with output" as a symptom, and the response is to inspect the structured result envelope: failed runs should report error rather than successful completion. When the badge and the output disagree, the envelope is the source of truth.
+Label the evidence type and the claim follows it. A 401 means the provider call
+was not successful, and egress routing alone is not inference. If the container
+engine is missing, say the container engine is missing, because static build
+success does not validate container startup.
 
-## Bounded output, and why bounded
+## Why the honesty costs something
 
-A failing process can produce a lot of text. Shiba captures an 8,000-character stderr tail. That bound is a limit, not a formatting preference.
+Bounded tails mean you cannot always see why a run failed. Redaction means the
+exact secret-adjacent line is gone. Truncation means a publication can be
+incomplete. A refused config check means a run you wanted did not start.
 
-The other bounds sit alongside it: a 15-minute OpenCode timeout, a 5-minute git command timeout, a 120,000-character collected diff, 20,000 characters of transcript diff display, 50 captured files, 100,000 characters per file, and 500,000 characters of total captured content.
+Each of those is a worse experience than a confident success message. The
+project takes them anyway, because the alternative is a dashboard that reports
+activity it cannot back up, and `spec/GOAL.md` rules out fake metrics,
+testimonials, and fabricated activity outright.
 
-These are application settings defined in `apps/backend/src/runs.ts`, `runtime.ts`, and `transcript.ts`. They are not Cloudflare plan quotas, and they are not guaranteed in-memory read bounds. They are the point at which the system decides it has seen enough, and capture truncation can make publication incomplete — which is a real limitation of a bounded design, not a bug to be papered over.
+The same rule reaches the build tooling. If the final dry run cannot complete
+because no compatible local container engine is running, the plan asks for that
+exact limitation to be recorded, while still requiring the TypeScript build and
+the unit tests to pass. A blocked environment is reported as blocked, not
+skipped quietly.
 
-## What a good failure report contains
+The rule is simple enough to state and hard enough to keep. A run that fails is
+reported as failed, with the exit code it actually had, the stderr it actually
+produced, up to a documented limit, with secrets removed.
 
-The repository's own convention for reporting a failure is written down, and it is stricter than a chat message. A failure report should carry the command, the versions, bounded redacted output, the expected behaviour, the actual behaviour, and — critically — whether the evidence came from a unit test, a local exercise, or a cloud run.
-
-That last item is the one that keeps the record honest. Unit tests use fakes, so a passing unit test is not a deployment. A local exercise is a local exercise. Shiba's own verification file carries this distinction carefully, and the docs repeat it: none of these results establishes successful cloud deployment or model inference.
-
-Two things never go in a report: secrets, and private run transcripts.
-
-## Where the evidence actually stands
-
-Being precise about this is the point of the post, so here it is in one place.
-
-The 2026-09-19 local OpenCode end-to-end run reached the provider and received a 401. The dated verification records no successful cloud run. The later 2026-09-24 summary reports local typecheck, lint, tests, and build passing, with deployment pending.
-
-For the other three harnesses — Claude Code, Codex, and Devin — configuration and egress paths have unit coverage, but the dated verification records no successful live API run. Their event parsers are asserted from their documented stream formats. Unit coverage of a parser is not a live run.
-
-`VERIFICATION.md` is dated, and its two most recent summaries say different things about different things: the 2026-09-19 entry describes a local run that failed at the provider, and the 2026-09-24 entry reports local checks green and deployment pending. Neither one claims a working end-to-end cloud deployment, because neither one has one to claim.
-
-## Why the 401 is the most useful line in the file
-
-A system that has only ever succeeded is a system nobody has learned anything from. The 401 told the team something specific and actionable: egress routing worked, the request reached AI Gateway, and the credential was missing or rejected. That is three facts you cannot get from a green test suite.
-
-It also ruled out a whole class of confusion. Routing alone is not inference. A request can be correctly rewritten, correctly forwarded, and still fail, and the only way to know which stage broke is to report the real status from the real stage.
-
-An agent system that reports its failures precisely is a system you can operate. One that reports a 401 as a completed run is a system you have to manually verify every time, which is worse than having no agent at all.
+Read next: [why the approval gate comes before the container](/blog/approval-gate/).
