@@ -16,11 +16,12 @@ describe.skipIf(!built)("marketing landing page", () => {
   test("renders the custom landing page, not the Starlight splash", () => {
     const markup = html();
     expect(markup).toContain("Shiba - The best AI software engineer");
-    expect(markup).toContain("AI software engineer");
-    expect(markup).toContain("grid-bg");
-    expect(markup).toContain("Approval-Gated");
+    expect(markup).toContain("Your AI software engineer.");
+    expect(markup).toContain("Approval before execution");
+    expect(markup).toContain("shiba.workspace");
+    expect(markup).not.toContain("manga-panel");
     expect(markup).toContain('data-theme="light"');
-    expect(markup).toContain("Toggle theme");
+    expect(markup).toContain("theme-toggle-btn");
   });
 
   test("every referenced asset exists in the build output", () => {
