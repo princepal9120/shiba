@@ -23,5 +23,5 @@ No prices or free-use guarantees are stated here. Check [Workers pricing](https:
 
 Sources: `apps/backend/src/runs.ts` (`MAX_CONCURRENT_RUNS = 5`), `apps/backend/src/runtime.ts`, and `apps/backend/src/transcript.ts`. These are application settings, not Cloudflare plan quotas or guaranteed in-memory read bounds. Capture truncation can make publication incomplete.
 
-No measured price or end-to-end cloud usage is available in the dated [`VERIFICATION.md`](/docs/verification/); the earlier cost-ratio language is intentionally omitted because it is not evidenced here. Set account budgets and alerts where supported. Clearing history does not stop resource billing, and cancellation requests best-effort cleanup. Verify resource lifecycle and actual charges in your account.
+No measured price or end-to-end cloud usage is available in the dated [`VERIFICATION.md`](/docs/readiness/#evidence-status-2026-09-24); the earlier cost-ratio language is intentionally omitted because it is not evidenced here. Set account budgets and alerts where supported. Clearing history does not stop resource billing, and cancellation requests best-effort cleanup. Verify resource lifecycle and actual charges in your account.
 

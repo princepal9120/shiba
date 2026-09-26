@@ -3,7 +3,7 @@ title: Automations
 description: Configure approval-gated scheduled, webhook, Slack, GitHub, and manual automation triggers.
 ---
 
-Automations evaluate configured triggers and queue approval-gated runs. They do not establish that an unattended task is cloud-live; the dated [`VERIFICATION.md`](/docs/verification/) reports no cloud end-to-end run.
+Automations evaluate configured triggers and queue approval-gated runs. They do not establish that an unattended task is cloud-live; the dated [`VERIFICATION.md`](/docs/readiness/#evidence-status-2026-09-24) reports no cloud end-to-end run.
 
 ---
 

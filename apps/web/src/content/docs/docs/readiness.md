@@ -5,7 +5,7 @@ description: Known gaps and evidence required before production use.
 
 ## Evidence status (2026-09-24)
 
-**Implemented** describes code present; **unit-tested** describes mocked/component tests; **locally exercised** describes the dated `wrangler dev` run below. None of these means cloud-live. The latest recorded checks in [`VERIFICATION.md`](/docs/verification/) report typecheck, lint, 995 tests, build, and frontend smoke passing. The Worker/container dry run was blocked because Docker was unavailable; the Worker/assets-only dry run passed with container rollout disabled. Alchemy planning reached the expected missing-Cloudflare-OAuth error. No cloud deployment or cloud end-to-end run is recorded.
+**Implemented** describes code present; **unit-tested** describes mocked/component tests; **locally exercised** describes the dated `wrangler dev` run below. None of these means cloud-live. The latest recorded checks in [`VERIFICATION.md`](/docs/readiness/#evidence-status-2026-09-24) report typecheck, lint, 995 tests, build, and frontend smoke passing. The Worker/container dry run was blocked because Docker was unavailable; the Worker/assets-only dry run passed with container rollout disabled. Alchemy planning reached the expected missing-Cloudflare-OAuth error. No cloud deployment or cloud end-to-end run is recorded.
 
 ### Implemented and unit-tested
 
