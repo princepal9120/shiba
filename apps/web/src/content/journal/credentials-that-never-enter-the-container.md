@@ -43,6 +43,10 @@ seven: never pass real model-provider credentials into the container process.
 It also says the real provider key or Unified Billing credential must stay in AI
 Gateway, outside the container.
 
+Item one of that same list is URL validation: the repository must be an HTTPS
+GitHub URL. The credential rules sit inside a broader boundary, so a run that
+tries to reach somewhere unlisted does not get a key to do it with.
+
 ## Actor two: egress
 
 The dummy key has to work well enough that a harness does not notice the swap.
@@ -55,7 +59,9 @@ provider-native request through the account owner's AI Gateway binding.
 
 `security.md` adds two constraints worth naming. Egress is narrowed to the
 selected harness's provider host plus git, never the union across harnesses.
-There is no provider callback route. Inference is outbound only.
+And the forwarding path is one-way: the container calls out, the Worker forwards
+through the gateway, and nothing calls back into the container to deliver a
+result.
 
 ## Actor three: AI Gateway
 
@@ -122,5 +128,11 @@ Two things are deliberately absent from this post. There is no measured price or
 end-to-end cloud usage to report, and there is no latency comparison between
 configurations. The costs document omits earlier cost-ratio language on purpose,
 because it is not evidenced.
+
+One more boundary belongs here even though it is not a credential. Terminal
+runs are immutable, and sandboxes are destroyed on cancel, reclaim, or finish.
+A destroyed sandbox is the reason a leaked dummy key would matter far less than a
+leaked real one, and the reason a leftover container is treated as a bug rather
+than as a cache.
 
 Read next: [harness and model choices](/blog/harness-and-model-choices/).
