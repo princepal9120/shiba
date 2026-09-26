@@ -9,7 +9,7 @@ Non-secret defaults are in `apps/backend/wrangler.jsonc` and `alchemy.run.ts`. F
 | --- | --- | --- |
 | `GATEWAY_ID` | `default` | Account-owned AI Gateway selected through the Workers AI binding |
 | `ORCHESTRATOR_MODEL` | `@cf/meta/llama-3.1-8b-instruct` | Parent planning via Workers AI |
-| `CODING_MODEL` | `google/gemini-3.5-flash-lite` | OpenCode default coding model |
+| `CODING_MODEL` | `google/gemini-3.5-flash-lite` | OpenCode default coding model; also accepts `xai/<model>` for Grok |
 | `CLAUDE_CODE_MODEL` | `anthropic/claude-sonnet-4-6` | Claude Code default model |
 | `CODEX_MODEL` | `openai/gpt-5.3-codex` | Codex default model |
 | `DEVIN_MODEL` | `devin/swe-2` | Devin default model |
@@ -22,7 +22,7 @@ Model identifiers are defaults, not availability guarantees. Choose a currently 
 
 ## Harnesses and credentials
 
-The current source registry and Dockerfile include four harnesses: `opencode`, `claude-code`, `codex`, and `devin`. Their selection/configuration/egress paths are unit-tested. The dated `VERIFICATION.md` records OpenCode as the only harness exercised in the local end-to-end container run; that run's provider request returned 401. It records no cloud end-to-end run and no successful inference. Do not present unit tests or image binary checks as live harness acceptance.
+The current source registry and Dockerfile include four harnesses: `opencode`, `claude-code`, `codex`, and `devin`. OpenCode supports Google, Anthropic, OpenAI, and xAI/Grok model providers (for xAI use `xai/<model>`); the provider selection, dummy key, and `api.x.ai` gateway egress are implemented and unit-tested. Cursor CLI is not yet an installed/selectable harness: its separate Cursor API-key path has not been wired through the approval-bound egress proxy. The dated `VERIFICATION.md` records OpenCode as the only harness exercised in the local end-to-end container run; that run's provider request returned 401. It records no cloud end-to-end run and no successful inference. Do not present unit tests or image binary checks as live harness acceptance.
 
 OpenCode, Claude Code, and Codex provider traffic uses the account-owned AI Gateway path; configure provider credentials there. `AI_GATEWAY_TOKEN` is an optional Worker secret for gateway authentication. Devin is different: its API key is a Worker-side `DEVIN_API_KEY` secret, injected by the egress proxy for Devin hosts and not stored in the container. The dummy container key is not a real credential. Keep keys out of repository files, logs, and task text.
 

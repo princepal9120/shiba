@@ -1,6 +1,6 @@
 ---
 title: Coding Harnesses
-description: OpenCode, Claude Code, Codex, and Devin harness selection, implementation, and verification status.
+description: Coding harnesses, Grok model access, and current implementation and verification status.
 ---
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
@@ -9,11 +9,11 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
 
 **Verification status:** `VERIFICATION.md` records one local `wrangler dev` end-to-end exercise with OpenCode on 2026-09-19. The provider call returned 401, so model inference and successful task completion were not verified. The 2026-09-24 verification says no live cloud end-to-end run has been performed. Claude Code, Codex, and Devin have unit coverage only; no local or cloud harness end-to-end run is recorded for them.
 
-**Credential boundary:** Claude Code and Codex use API-key provider traffic through AI Gateway; subscription credentials are not proxied. Devin uses its own `DEVIN_API_KEY` service credential. OpenCode, Claude Code, and Codex use AI Gateway BYOK.
+**Credential boundary:** OpenCode, Claude Code, and Codex use API-key provider traffic through AI Gateway; subscription credentials are not proxied. OpenCode now supports xAI/Grok (`xai/<model>`) through the same BYOK egress path. Devin uses its own `DEVIN_API_KEY` service credential.
 
 <CardGrid>
   <Card title="OpenCode" icon="setting">
-    Default. Multi-provider (google / anthropic / openai). Dummy key in the container; Sandbox egress swaps in the AI Gateway credential.
+    Default. Multi-provider (google / anthropic / openai / xAI). Use a model such as `xai/grok-4`; dummy key in the container; Sandbox egress swaps in the AI Gateway BYOK credential.
   </Card>
   <Card title="Claude Code" icon="puzzle">
     `anthropic/*` models, e.g. `anthropic/claude-sonnet-4-6`. Stream format: `--print --output-format stream-json`.
@@ -23,6 +23,9 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
   </Card>
   <Card title="Devin CLI" icon="puzzle">
     `devin/*` models (default `devin/swe-2`); uses Devin's CLI and service API key.
+  </Card>
+  <Card title="Cursor CLI" icon="puzzle">
+    Not currently an installed or selectable harness. Cursor CLI requires its own Cursor API-key/authentication path, which is not wired into the approved-run credential egress boundary; the Cursor logo on the marketing page is not an integration claim.
   </Card>
 </CardGrid>
 

@@ -23,13 +23,38 @@ npx wrangler deploy --dry-run --config apps/backend/wrangler.jsonc
 
 The dry run packages/validates configuration; it does not deploy. `VERIFICATION.md` records a prior dry run as blocked by Docker availability (with a no-container rollout variant passing), so rerun it in your environment and report the actual result.
 
-## Account configuration and deployment
+## First Alchemy deployment
 
-The supported bootstrap is `pnpm run bootstrap`, not a sequence of Wrangler secret commands. `scripts/setup.mjs` checks Docker, connects Alchemy through Cloudflare OAuth (or `.env` API credentials), collects `ACCESS_EMAILS` and `WORKERS_SUBDOMAIN`, prompts for optional secrets, writes `.env`, builds, and runs `alchemy deploy`. Review `.env` and `alchemy.run.ts`; Alchemy treats the values present in `.env` as its deployment secret/config source. This command changes your Cloudflare account.
+The supported first-deploy path is the interactive bootstrap. It provisions Cloudflare resources and changes your account—this is not a local preview:
 
-For a manual deployment, first configure Alchemy credentials and required account resources as defined by `alchemy.run.ts`; then `pnpm build` and `npx alchemy deploy` (or run the bootstrap). Do not substitute `wrangler deploy` for this deployment path without validating that it provisions the Alchemy-managed resources. The checked-in Wrangler config remains useful for local `wrangler dev` and dry-run checks.
+1. Install dependencies and start a compatible Docker engine (Docker Desktop or OrbStack). The configured Sandbox image needs Docker to build.
+2. From the repository root, run:
 
-Configure `ACCESS_EMAILS` and `WORKERS_SUBDOMAIN` for the managed hostname-scoped Access apps. A live stage sets `REQUIRE_ACCESS=1`; if managed Access is absent, requests fail closed unless another Access application fronts the Worker. Machine callback paths bypass Access only where configured, and are authenticated by Worker-side signatures/tokens/secrets. Verify every reachable hostname (including `workers.dev`) and callback path after deployment. See [Security](/docs/security/).
+   ```sh
+   pnpm install
+   pnpm run bootstrap
+   ```
+
+3. If Alchemy is not already authenticated, the bootstrap opens Cloudflare OAuth. Alternatively, set `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in the ignored root `.env` file before rerunning it. Use an API token with the Cloudflare permissions needed for the resources in `alchemy.run.ts`; do not paste credentials into source files or commit `.env`.
+4. Enter the email addresses allowed to sign in (`ACCESS_EMAILS`) and your account’s `workers.dev` subdomain (`WORKERS_SUBDOMAIN`). The script prompts for optional integration secrets; leave unused ones blank. It saves the answers in `.env` with owner-only permissions, builds the app, and runs `npx alchemy deploy`.
+5. Open `https://shiba-ai-coworker.<your-subdomain>.workers.dev/app/`, sign in with an allowed email, then check `/api/setup/status` and complete the dashboard’s setup checks.
+
+`ACCESS_EMAILS` and `WORKERS_SUBDOMAIN` are important for a live deployment: they let Alchemy create hostname-scoped Cloudflare Access applications. Live stages set `REQUIRE_ACCESS=1`; if managed Access is not created, the dashboard/API will return 401 unless another Access application already protects the Worker. Do not publish or share the `workers.dev` URL until you have verified the Access policy and machine-callback exceptions. See [Security](/docs/security/).
+
+### Manual Alchemy commands
+
+If you have already configured Cloudflare/Alchemy authentication and `.env`, the equivalent manual flow is:
+
+```sh
+pnpm build
+npx alchemy deploy
+```
+
+`pnpm deploy` combines those two commands. `alchemy.run.ts` reads the root `.env`, defines the Worker, Sandbox container, Durable Objects, KV/R2/D1/Vectorize, email, and optional Access resources, and binds only the explicitly supported secrets. The default Alchemy state is local filesystem state. The optional Cloudflare State Store requires a separate one-time provider bootstrap; see the comments in `alchemy.run.ts` before changing `ALCHEMY_STATE_BACKEND`.
+
+The live stage uses the stable production resource names. For an isolated test deployment, set `ALCHEMY_STAGE` (for example, `ALCHEMY_STAGE=test-preview npx alchemy deploy`); the Worker/container/storage names are suffixed. Select the stage through `ALCHEMY_STAGE` only—do not pass a conflicting `--stage` flag. Test stages do not create the managed Access apps, so use only disposable data and do not expose a test Worker publicly.
+
+Do not substitute `wrangler deploy` for this deployment path: it may not provision the Alchemy-managed resources. The checked-in Wrangler config remains useful for local `wrangler dev` and dry-run checks. The Worker uses its AI binding and `GATEWAY_ID`; add model-provider keys to your own AI Gateway BYOK configuration. Provider keys must never be placed in the container or committed to the repository.
 
 Configure the account-owned AI Gateway and its provider credentials separately. The Worker uses its AI binding and `GATEWAY_ID`; `AI_GATEWAY_TOKEN` is an optional Worker secret for authenticated gateway access. The container receives dummy provider credentials. Valid provider access is required to establish inference; a successful build, setup-status response, or local egress rewrite is not inference evidence. Do not place real provider credentials in the container or repository.
 
