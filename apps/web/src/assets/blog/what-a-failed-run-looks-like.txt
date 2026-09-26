@@ -1,0 +1,7 @@
+   RESULT_MARKER envelope
+   ---------------------
+   { status: "error", exitCode: 1, stderrTail: "..." }
+                        |
+                        v
+     the dashboard reads the envelope, not the transport
+     an error envelope never renders as completed

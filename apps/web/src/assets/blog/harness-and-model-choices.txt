@@ -1,0 +1,8 @@
+   the New Coding Task form
+   ------------------------
+   harness  ....  opencode | claude-code | codex | devin
+   model    ....  <provider>/<model>
+                    |
+                    v
+   unsupported pairing  ->  refused, naming what is supported
+   supported pairing    ->  allowedHosts = that one host + git

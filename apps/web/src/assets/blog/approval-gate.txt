@@ -1,0 +1,16 @@
++------------------------------------------------------------+
+|                                                            |
+|        [ PROPOSAL ]  delegate_coding_task                   |
+|                                                            |
+|        repoUrl   .......  https://github.com/o/r          |
+|        task      .......  fix input sanitization          |
+|        baseBranch .......  main                            |
+|        publishPR .......  false                           |
+|                                                            |
+|   +--------------------+   +----------------------------+  |
+|   |   no container     |   |      a human decides       |  |
+|   |   starts until     |   |      before anything       |  |
+|   |   approval         |   |      runs                 |  |
+|   +--------------------+   +----------------------------+  |
+|                                                            |
++------------------------------------------------------------+
