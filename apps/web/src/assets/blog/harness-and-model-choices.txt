@@ -4,11 +4,11 @@
   |  _  |/ _ \ '_ \ / _ \/ __| '_ \ / _ \/ __| __/ _` | '__| _ ` |
   |_| |_\___/_.__/_\___/\___|_|_.__/_\___/\___|\__\__,_|_.__\__,_|
 
-   harness x model, validated before anything runs:
-     opencode    -> google/*  anthropic/*  openai/*
-     claude-code -> anthropic/*
-     codex       -> openai/*
-     devin       -> devin/*  (not an AI Gateway provider)
-   an unsupported pairing is refused at config time, not at runtime.
-
-   no measured latency. no measured dollars. no guesses.
+     harness   x   model        validated before anything runs
+   ----------------------------------------------------------
+     opencode      google/*  anthropic/*  openai/*
+     claude-code   anthropic/*
+     codex         openai/*
+     devin         devin/*    (not an AI Gateway provider)
+   ----------------------------------------------------------
+     no measured latency.  no measured dollars.  no guesses.
