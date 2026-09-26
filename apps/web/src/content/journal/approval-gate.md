@@ -81,7 +81,7 @@ The same caution applies to the gate itself. The unit tests prove the approval r
 
 ## Why this is the spine
 
-The completion plan lists what to keep, what to cut, and what to unlock. The approval gate is in the first list, above the fixes, above the features, above the differentiator.
+The completion plan lists what to keep, what to cut, and what comes last. The approval gate is in the first list, above the fixes, above the features, above the differentiator.
 
 That ordering is the argument. The gate is what makes it reasonable to hand an agent a repository at all. Everything else — four harnesses, Slack, automations, pull requests — is a way of reaching the gate more often. Remove the gate and none of it is a product; it is an unattended shell with a nice dashboard.
 
