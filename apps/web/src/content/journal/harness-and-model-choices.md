@@ -1,67 +1,81 @@
 ---
-title: Choosing a harness and a model for a run
-description: How Shiba lets you pick the coding CLI and the model per run, and what it refuses to do with that choice.
+title: Choosing a harness and a model per run
+description: Shiba ships four coding agent CLIs in one image and makes the harness and model an explicit, validated decision on every run.
 pubDate: 2026-09-16
 category: guide
 pattern: situation-complication-resolution
-summary: Four coding CLIs ship in one image. The choice is yours per run, and the wrong pairing is refused before anything starts.
+summary: A run is not just a task. It is a task plus a harness plus a model, and the combination is validated before anything executes.
 ---
 
+The naive version of a coding agent has one engine. You pick a model, you wire it to a prompt, and every request goes through the same path.
+
+Real engineering work does not look like that. Sometimes a task needs a model with a long context. Sometimes the cheapest capable model is fine. Sometimes you want to try a different agent CLI entirely, without redeploying anything. Shiba treats the harness and the model as part of the run's definition rather than as deployment constants.
+
 <div class="callout">
-  <span class="callout-label">Prototype status</span>
-  <p>Shiba is a local prototype. No live end-to-end cloud run is claimed. This post makes no claim about latency, cost, or savings from any model or harness choice; use your own account's current pricing and limits.</p>
+<span class="callout-label">Prototype status</span>
+
+Shiba is a local prototype. Harness configuration and egress paths are unit-tested. No measured latency, throughput, or dollar figure is claimed here, and no live cloud run is recorded.
 </div>
 
-Coding agents are not interchangeable, and pretending otherwise is how a system ends up with four half-wired integrations. Shiba takes a narrower, more honest position: ship four real CLIs in one image, let the person filing the task pick per run, and be explicit about which of them have actually been exercised.
+## The situation: four CLIs, one image
 
-## The situation: one container, four tools
+The backend image ships four coding harnesses, all pinned:
 
-The container image installs four coding harnesses: OpenCode, Claude Code, Codex, and the Devin CLI. They are not adapters around one engine — they are four separate command-line programs with four different argv conventions, four config-file formats, and four different streaming event formats. The image build fails unless every installed binary reports its version.
+- `opencode` — the default, invoked as `opencode run --format json`
+- `claude-code` — invoked as `claude --print --output-format stream-json`
+- `codex` — invoked as `codex exec --json`
+- `devin` — Cognition's Devin CLI, invoked as `devin -p`
 
-Choosing to support them in one image rather than one image per harness is a real trade. It means a single pinned base image carries more weight, and the version matrix is coupled: a harness CLI upgrade is a breaking change, because the event parser is written against that CLI's specific stream shape.
+Aider is not implemented. Shipping them in one image is a deliberate trade: a bigger image in exchange for being able to choose per run without a deploy.
 
-The upside is that switching harnesses is a dropdown, not a redeploy.
+Each harness has its own output format, and each has a parser coupled to that format. OpenCode's parser, for instance, is coupled to the JSON event shape of `opencode-ai@1.18.31`. A stream-format change upstream would make a run look like it hung rather than fail, which is why the versions are pinned and why a harness CLI bump is treated as breaking.
 
-## The complication: a model id is not a free choice
+## The complication: not every pairing works
 
-Each harness supports a different set of providers, and the model is named as `provider/model`. OpenCode spans `google/*`, `anthropic/*`, and `openai/*`. Claude Code is `anthropic/*`. Codex is `openai/*`. Devin is `devin/*` and is not an AI Gateway provider at all — its CLI authenticates to Cognition's own backends with a service key.
+The four harnesses do not accept the same model identifiers.
 
-So "pick any model" is not quite the offer. The offer is: pick a model the *selected* harness actually supports, or the run is refused.
+`CODING_MODEL` takes a `provider/model` value, and the value has to be one the selected harness supports. OpenCode accepts `google/*`, `anthropic/*`, and `openai/*`. Claude Code accepts `anthropic/*`. Codex accepts `openai/*`. Devin accepts `devin/*`, and it is not an AI Gateway provider at all — its CLI authenticates to Cognition's own backends with a Worker secret.
 
-That refusal happens at configuration time, and the error message names what the harness does support. It is not a late failure inside a container that has already spun up and already consumed minutes of your account.
+The defaults in `wrangler.jsonc` are `GATEWAY_ID: default`, `ORCHESTRATOR_MODEL: @cf/meta/llama-3.1-8b-instruct`, and `CODING_MODEL: google/gemini-3.5-flash-lite`, with `RUNTIME: sandbox`.
 
-## The resolution: a per-run selector, validated before approval
+If you ask for a pairing the harness does not support, it is refused at config time with a message naming what the harness does support. Nothing starts, no container is provisioned, and the failure happens before approval rather than after it.
 
-The dashboard's New Coding Task form carries the harness and model choice. The approval record freezes them alongside the repository, task, and branch, so the human sees exactly what was selected before approving.
+There is a related trap here. The checked-in model name is not a service guarantee. Provider model ids retire — the previous default was retired, which is why the default moved. You verify current availability in your own account; the value in the config file is a starting point, not a promise.
 
-The validation lands at a specific point in the lifecycle: while the approval is being prepared. An unknown harness, or a harness/model mismatch, fails there. By the time a container could exist, the pairing is already known-good. You never approve a plan and then discover it was incoherent.
+## The resolution: three layers of choice
 
-Per-run selection overrides the deployment default. `AGENT_HARNESS` is only the fallback for runs where nobody chose otherwise.
+The harness can be set at three different levels, and the layering is what makes this usable.
 
-## What each harness actually is
+**Deployment default.** `AGENT_HARNESS` sets the fallback for the whole installation. It defaults to `opencode`. It is a default, not a lock.
 
-**OpenCode** is the default. Multi-provider, invoked with a JSON output format, and the only harness that has completed a dated local end-to-end exercise — though that run reached the provider and returned a 401 at the model call, so inference itself was not verified.
+**Per-surface default.** Surface-specific variables let one entry point differ from another without changing the global default. `SLACK_AGENT_HARNESS` falls back to `AGENT_HARNESS` and then to `claude-code`; `TELEGRAM_AGENT_HARNESS` and `DISCORD_AGENT_HARNESS` follow the same pattern. So Slack-originated runs can default to a different harness than dashboard runs.
 
-**Claude Code** runs with a print/stream-JSON output format and takes `anthropic/*` models. **Codex** uses its own JSON exec format and `openai/*` models. **Devin** uses the Cognition CLI with a `devin/*` model alias and its own service credential.
+**Per-run selection.** The dashboard's New Coding Task form picks the harness for an individual run. A per-run choice overrides the deployment default. When you set a per-run harness, an unsupported harness/model pair is rejected while preparing the approval — before execution, and before a container exists.
 
-The important qualifier, stated in the docs: only OpenCode has been run live. The other three CLIs ship in the image, their configuration, argv, environment, and event parsers are unit-tested against their documented stream formats, and the Dockerfile verifies each binary reports a version at build time — but that is a build check, not an end-to-end test. A stream-format drift in an unexercised harness would surface at its first real run.
+The model rides along the same way. `CODING_MODEL` can also be overridden per run, and the pairing is validated against the selected harness and the providers the gateway supports.
 
-## The model id is a moving target
+One boundary is worth naming. The MCP gateway tool does not accept a per-run harness or model; queued runs there use the deployment's configured defaults — `AGENT_HARNESS`, `CODING_MODEL`, and the selected harness's model default. This is a deliberate narrowing, not an oversight.
 
-The default coding model is a fast, cheap-tier model, and the repository pins it. The pin exists for a reason: model ids retire without warning. An earlier default was shut down on a fixed date, which is why the default moved, and why a retired model id is now actively refused at startup rather than failing later inside a run.
+## What the choice actually costs
 
-The checked-in model name is a convenience, not a service guarantee. Current availability depends on your account, and you should verify it there. The completion plan is explicit that re-running the full acceptance pass is required before claiming a bumped pin works.
+The honest answer is: we do not have a measured number, so we do not give you one.
 
-## Cost, honestly
+The docs state no prices and make no free-use guarantees for the harnesses themselves. They point you at the platform pricing pages for Workers, Durable Objects, Containers, Workers AI, and AI Gateway, and tell you to set account budgets and alerts where supported.
 
-The costs documentation names its surfaces — Workers requests, planning inference, Durable Objects, Containers, provider inference through your gateway arrangement, and GitHub quotas — and then declines to quote numbers, because a quoted number ages badly and a wrong one is worse than none.
+What is documented is the shape of the bill. Tokens dominate inference cost by a wide margin relative to container compute, which means provider and model choice is a bigger lever than container tuning. The application also imposes its own limits — five concurrent coding runs, a fifteen-minute OpenCode timeout, a five-minute git timeout, and bounded captures for diffs and transcripts. Those are application settings, not Cloudflare plan quotas.
 
-It also declines the earlier cost-ratio claim that has circulated in this repository's own history, on the grounds that the ratio was not evidenced in the dated verification record. What it says instead: set budgets and alerts in your own account, and read your provider's current pricing. The one durable point is that token usage, not container tuning, is what tends to dominate a coding run's bill — so provider and model choice is the lever worth thinking about, and the size of that lever is something you should measure against your own usage rather than take from a blog post.
+Two harnesses carry an extra constraint. Claude Code and Codex are API-key harnesses only. Subscription credentials are deliberately not proxied, because Anthropic's terms forbid routing requests through Free, Pro, or Max plan credentials on behalf of users. So "use my Claude subscription" is not an option, by design rather than by oversight.
 
-## The platform ceiling, stated once
+The Devin harness has its own account model. It is not an AI Gateway provider; the CLI authenticates to Cognition's backends with `DEVIN_API_KEY` set as a Worker secret, and its models are `devin/<alias>` — `devin/swe-2` is the default. `DEVIN_MODEL` sets the deployment default.
 
-Whichever harness you pick, it runs on Cloudflare Containers, which top out at a fixed instance size. Heavy builds and large monorepo test suites are out of reach on this platform by design, and the documentation says so rather than leaving you to discover it. If your task is "run the full test suite," no harness choice will save it.
+## How to decide, then
 
-## What this comes down to
+If you are choosing a harness for a run, three questions are enough.
 
-Picking a harness and a model in Shiba is a form field with a validator behind it, and that is the honest version of the feature. It does not pretend four CLIs are interchangeable, it refuses incoherent pairings before you approve them, and it tells you which one has been proven and which three have only been wired. The next time a model id retires or a CLI changes its stream format, you will find out from a clear error, not from a container that appears to hang.
+Which provider can reach the model you need through the gateway, and does the selected harness accept that provider? This is the constraint that actually blocks a run.
+
+What is the credential situation? A harness that needs an API key needs that key configured as a Worker secret; a harness that authenticates to its own service needs its own account key. The Agents view in the dashboard lists each CLI in the image with its pinned version and credential status, which is the fastest way to see what is actually available.
+
+What is the blast radius of the egress this harness needs? The allowlist is narrowed to the selected harness's provider host plus git, so picking a different harness changes which hosts a run can reach.
+
+If those three line up, the run is validated and ready for approval. If they do not, the system tells you which part failed before it starts anything — which is the point of making the choice explicit in the first place.

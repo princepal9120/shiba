@@ -1,84 +1,88 @@
 ---
 title: What a failed run looks like
-description: Exit codes, bounded stderr, and the rule that a failed run may never render as a successful one.
+description: Shiba reports the real exit status, a bounded stderr tail, and a structured error envelope. It never reports a failure as a success.
 pubDate: 2026-09-17
 category: journal
 pattern: protagonist-arc
-summary: The most important property of a coding agent is not that it succeeds. It is that its failures are legible.
+summary: A build log entry. The recorded local end-to-end run failed with a 401, and the system reported exactly that instead of dressing it up.
 ---
 
+The most useful thing in this repository is not a passing test. It is a recorded failure.
+
+On 2026-09-19 the team ran a local end-to-end exercise of the full Slack approval chain. The approval worked. The container started. The harness ran. The model call failed. And the system said so.
+
+This post is about that run and the rules that made reporting it honestly the path of least resistance.
+
 <div class="callout">
-  <span class="callout-label">Prototype status</span>
-  <p>Shiba is a local prototype. The failure shapes described here are enforced in code and recorded in the repository's dated verification file. No live end-to-end cloud run is claimed.</p>
+<span class="callout-label">Prototype status</span>
+
+Shiba is a local prototype. The run described here was a local exercise, not a cloud deployment. The later 2026-09-24 verification summary reports local checks passing with deployment still pending.
 </div>
 
-An agent that fails obviously is a tool. An agent that fails quietly is a liability.
+## The run
 
-This is the least glamorous thing in the repository and the thing I would defend hardest in review, because the pressure to make failure look like success is constant and it is almost always locally rational. A run that reports an error is an unpleasant screen. A run that reports success is a relieved user. Everything that makes the second option tempting is a short-term improvement and a long-term betrayal.
+The exercise ran `wrangler dev` on port 8788 with OrbStack Docker and a `.dev.vars` file carrying test-only Slack values — a signing secret and `SLACK_APPROVERS=U_E2E`.
 
-## The requirement, written down before anything existed
+The chain that got exercised, over real HTTP, was the approval path. A locally HMAC-signed `block_actions` payload was posted to the Slack interact endpoint with a `v0` signature, action `approve`, and a value carrying the thread key and approval id. The endpoint returned a `200` acknowledgment. The approver allowlist admitted `U_E2E`, and the Durable Object resolved the pointer exactly once.
 
-The specification's list of what the sandbox must do includes one item that is not a feature: *report failures honestly, including process exit code and a bounded stderr tail.*
+Then the container ran `opencode run --format json --model google/gemini-3.5-flash-lite`.
 
-The same document's closing rules are blunter still — no fake successful output, no generated placeholder implementation. Those are constraints on the build, not features, and they were written before the run pipeline existed. That ordering matters. When the failure path is specified in the same breath as the happy path, the happy path cannot quietly absorb it.
+The provider egress was rewritten to AI Gateway at `…/default/google-ai-studio`. The response was **401, code 2009, Unauthorized**. There was no `AI_GATEWAY_TOKEN` in `.dev.vars` and no bring-your-own key visible.
 
-## The envelope, and why the transport is not enough
+The run was a failure. Three real bugs surfaced along the way, and one of them was a footgun worth naming: `interact` resolves the orchestrator Durable Object by `threadKey`, and that name has to match the queue target — `default` in this case — not an arbitrary thread key.
 
-The implementation answer is a structured result envelope. When a run finishes, the parent receives a marker-wrapped structure carrying a status, and that structure — not the transport, not the exit of some intermediate process, not the presence of a completion badge — is the source of truth for whether the run worked.
+## What the system did with the failure
 
-The design note is worth quoting because it is the kind of line that only gets written after it has been learned the hard way: trust the parsed envelope, not the transport type. A stream can end cleanly while the work failed. A tool can report progress while the process is dying. Only a parsed, structured, terminal status answers the question.
+Three things, and all three matter.
 
-The invariant is testable and tested: an error envelope never reads as completed. If the status is an error, the UI shows an error, no matter what else happened along the way.
+**The error propagated as a structured envelope.** It did not get flattened into a log line and lost. The result carried the provider's own status, including the 401 and the code.
 
-## What a failure actually carries
+**The run was marked `error`.** Not `completed`, not partial, not "finished with warnings." The state is the state.
 
-The parts of a failure report that matter are the ones that let you act without re-running the job:
+**The sandbox was destroyed.** A failed run does not leave a container sitting there accruing resources.
 
-- **The real exit code.** Not a generic 1. If the harness exited non-zero, that number is what you get.
-- **A bounded stderr tail.** Enough of the actual error text to diagnose, and explicitly bounded so a runaway process cannot fill a Durable Object with megabytes of log. The current bound is 8,000 characters.
-- **The phase.** Whether the run died cloning, launching the harness, or collecting the diff changes what you investigate first.
-- **Redaction.** Known credential patterns are stripped from output paths before anything is stored or displayed.
+The mapping is explicit and simple. An `error` result envelope maps to `error`. A `completed` envelope maps to `completed`. A malformed or absent envelope maps to `error`. There is no path where an unrecognized outcome becomes a success, and that last rule is the one that matters most.
 
-Redaction is described in the documentation as a bound and a known-pattern filter, explicitly *not* a guarantee against arbitrary secrets or binary data. The instruction that follows is the operative one: never put secrets in tasks or repositories. A redaction filter is a safety net, not a licence to be careless.
+## The rule that shapes everything else
 
-## A real failure, from the dated record
+Never silent success.
 
-The 2026-09-19 local end-to-end exercise is the most useful failure in the repository, precisely because it did not succeed.
+The failure mode this guards against is specific and tempting: the harness prints something to stdout, the orchestrator sees a non-empty string, and the run gets recorded as completed. The docs call accepting any string output as `completed` explicitly incorrect.
 
-The chain worked: a task was queued, a locally signed Slack approval was accepted, the Durable Object dispatched, a real container came up, GitHub egress was scoped to the requested repository, the clone succeeded, and the harness launched with the expected arguments. Then the provider call was rewritten to the AI Gateway and returned 401. No gateway credential was configured in the local environment.
+The guard is structural rather than aspirational. The default for an unparseable outcome is failure, not success. A bug in the parser can only make the system look worse, never better. That is the correct direction for a default.
 
-And that 401 was reported as a 401. The run was marked as an error, the structured envelope carried it, and the container was destroyed. The verification file does not describe this run as a success with a caveat. It describes the model call as not verified, names the missing account configuration, and separately notes that a 401 means the provider call was not successful — egress routing is not inference.
+The dashboard reflects the same discipline. The troubleshooting guide lists "Completed badge conflicts with output" as a symptom, and the response is to inspect the structured result envelope: failed runs should report error rather than successful completion. When the badge and the output disagree, the envelope is the source of truth.
 
-That is the behaviour this whole post is about. The most flattering possible summary of that run would have been "end-to-end pipeline verified." It would even have been mostly true. It is also exactly the kind of sentence that makes a system untrustworthy six months later.
+## Bounded output, and why bounded
 
-## Failure modes that are refused by design
+A failing process can produce a lot of text. Shiba captures an 8,000-character stderr tail. That bound is a limit, not a formatting preference.
 
-Some failures are prevented rather than reported, and those are the interesting ones:
+The other bounds sit alongside it: a 15-minute OpenCode timeout, a 5-minute git command timeout, a 120,000-character collected diff, 20,000 characters of transcript diff display, 50 captured files, 100,000 characters per file, and 500,000 characters of total captured content.
 
-**A retired or unsupported model id** is refused at startup rather than failing on the first provider call. A model that no longer exists should not cost you a container to discover.
+These are application settings defined in `apps/backend/src/runs.ts`, `runtime.ts`, and `transcript.ts`. They are not Cloudflare plan quotas, and they are not guaranteed in-memory read bounds. They are the point at which the system decides it has seen enough, and capture truncation can make publication incomplete — which is a real limitation of a bounded design, not a bug to be papered over.
 
-**A mismatched harness and model pairing** is refused while the approval is prepared, so a plan you are looking at is always a plan that can run.
+## What a good failure report contains
 
-**A pull request requested with no token configured** fails before any coding starts, with a configuration error, rather than doing the work and then failing to publish it.
+The repository's own convention for reporting a failure is written down, and it is stricter than a chat message. A failure report should carry the command, the versions, bounded redacted output, the expected behaviour, the actual behaviour, and — critically — whether the evidence came from a unit test, a local exercise, or a cloud run.
 
-**An oversized file tree** fails the run instead of publishing a partial pull request. A truncated result presented as a complete one is a correctness bug, not a degraded mode.
+That last item is the one that keeps the record honest. Unit tests use fakes, so a passing unit test is not a deployment. A local exercise is a local exercise. Shiba's own verification file carries this distinction carefully, and the docs repeat it: none of these results establishes successful cloud deployment or model inference.
 
-**An automation whose `run_when` gate errors** fails closed — no run — and records why. Here the failure is *not running*, which is the safe direction.
+Two things never go in a report: secrets, and private run transcripts.
 
-## The limits of honest failure
+## Where the evidence actually stands
 
-Honest failure reporting does not make a system reliable. It makes it legible, and legibility is what lets you decide whether to trust it.
+Being precise about this is the point of the post, so here it is in one place.
 
-The repository is careful about the difference. Publication of results is content-based and is not a lossless Git patch transport, so a published pull request can miss deletions or file modes. Capture truncation can make publication incomplete. Cancellation is best-effort — it is not process cancellation and not complete Durable Object erasure. A run appearing to stall may be a concurrency or capacity condition, not a bug.
+The 2026-09-19 local OpenCode end-to-end run reached the provider and received a 401. The dated verification records no successful cloud run. The later 2026-09-24 summary reports local typecheck, lint, tests, and build passing, with deployment pending.
 
-None of those are hidden, and none of them are dressed up as features.
+For the other three harnesses — Claude Code, Codex, and Devin — configuration and egress paths have unit coverage, but the dated verification records no successful live API run. Their event parsers are asserted from their documented stream formats. Unit coverage of a parser is not a live run.
 
-## What still has to be proven
+`VERIFICATION.md` is dated, and its two most recent summaries say different things about different things: the 2026-09-19 entry describes a local run that failed at the provider, and the 2026-09-24 entry reports local checks green and deployment pending. Neither one claims a working end-to-end cloud deployment, because neither one has one to claim.
 
-The completion plan's central acceptance bar includes a failing task reporting its real exit code and a pull request showing a deleted file as deleted. That bar has not been met against a live cloud run, and the verification file says so. The local unit coverage and the local end-to-end exercise are real evidence of what has been tested; they are not evidence of a deployed system behaving the same way.
+## Why the 401 is the most useful line in the file
 
-The gap is stated rather than papered over, which is the same discipline this post is about. A prototype that tells you exactly which of its failure paths are proven, and which are still assertions, is usable. One that claims all of them are proven is not — and you cannot tell the difference until the day it matters.
+A system that has only ever succeeded is a system nobody has learned anything from. The 401 told the team something specific and actionable: egress routing worked, the request reached AI Gateway, and the credential was missing or rejected. That is three facts you cannot get from a green test suite.
 
-## The rule I would keep
+It also ruled out a whole class of confusion. Routing alone is not inference. A request can be correctly rewritten, correctly forwarded, and still fail, and the only way to know which stage broke is to report the real status from the real stage.
 
-If you take one thing from this, make it the ordering. Build the failure path first, or at least specify it first. Make the success path unable to swallow it. Then, when something breaks at two in the morning, the system will hand you an exit code and a stderr tail instead of a reassuring green badge — and you will know exactly how much of the rest to believe.
+An agent system that reports its failures precisely is a system you can operate. One that reports a 401 as a completed run is a system you have to manually verify every time, which is worse than having no agent at all.
