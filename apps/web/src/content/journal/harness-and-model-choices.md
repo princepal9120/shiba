@@ -48,10 +48,11 @@ execution, with a message naming what the harness does support. `VERIFICATION.md
 records where that refusal lands: on the approval card, never inside a container
 the human already approved.
 
-The same document warns about model id churn. Model ids retire, and
-`gemini-2.0-flash` was shut down on 2026-06-01, which is why the default moved.
-The checked-in model name is not a service guarantee. Verify availability in
-your own account.
+The same document warns about model id churn. Model ids retire without warning,
+and one earlier Flash default was shut down in mid-2026, which is why the
+checked-in default moved off it. The model name in this repository is not a
+service guarantee. Verify availability in your own account before you rely on
+it.
 
 ## The complication: the numbers are missing on purpose
 
@@ -113,5 +114,30 @@ The honest procedure is therefore: pick the harness your task shape fits, pick a
 model its namespace allows, let the config check refuse anything invalid before
 you approve, and read your own account's pricing pages. The repository gives you
 the shape of the choice. It does not give you a winner.
+
+## A note on pinning
+
+`README.md` pins three things for a reason, and the stated reason is that silent
+upgrades break the run contract. `opencode-ai` is pinned because
+`parseOpencodeEvent` couples to its JSON event shape, and each harness parser
+couples to its own CLI the same way. The Sandbox package is pinned to match the
+base image tag. `CODING_MODEL` is pinned because provider model ids retire
+without warning.
+
+The coupling is worth understanding rather than memorising. A stream-format
+change does not produce an error. It produces a run that looks like it hangs,
+because the parser stops recognising events. That is why the README treats a
+harness CLI bump as breaking rather than as maintenance.
+
+The same README notes that bumping any of those pins requires re-running the P2
+live acceptance run before claiming it works. That run has not happened here.
+The pins in this repository are the ones that were last checked, not a claim
+about what is currently published upstream.
+
+There is a practical consequence for the approval card. Because parsers are
+asserted from documented stream formats rather than from a recorded live run for
+three of the four harnesses, the version numbers you see in the Agents view are
+the honest boundary of what is known. They tell you what is installed, and they
+do not tell you the harness has completed a task.
 
 Read next: [what a failed run looks like](/blog/what-a-failed-run-looks-like/).

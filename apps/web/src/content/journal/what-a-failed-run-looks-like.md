@@ -78,6 +78,12 @@ it establishes successful cloud deployment or model inference.
 An unflattering 401 in the record is the system working. A green run nobody can
 reproduce is the failure mode.
 
+`VERIFICATION.md` also lists what the tests themselves cover, so you can read the
+boundary without guessing. Tests cover approval required by default, refusal of
+unattended non-allowlisted or non-PR mutations, kill switches, and approver
+allowlisting. Those are the parts of the run lifecycle with a green suite behind
+them today.
+
 ## How to report one yourself
 
 `troubleshooting.md` gives the format for a bug report: the command, the
@@ -100,6 +106,12 @@ Each of those is a worse experience than a confident success message. The
 project takes them anyway, because the alternative is a dashboard that reports
 activity it cannot back up, and `spec/GOAL.md` rules out fake metrics,
 testimonials, and fabricated activity outright.
+
+The same rule reaches the build tooling. If the final dry run cannot complete
+because no compatible local container engine is running, the plan asks for that
+exact limitation to be recorded, while still requiring the TypeScript build and
+the unit tests to pass. A blocked environment is reported as blocked, not
+skipped quietly.
 
 The rule is simple enough to state and hard enough to keep. A run that fails is
 reported as failed, with the exit code it actually had, the stderr it actually
