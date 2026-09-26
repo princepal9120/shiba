@@ -114,7 +114,7 @@ const finalSchemas = schema
             <img src="/assets/mascot/pet-logo.png" alt="Shiba Mascot" class="w-7 h-7 bg-white object-contain border border-[#d3d2c8] p-0.5 pixelated" />
             <span class="wordmark-name">Shiba</span>
           </a>
-          <span class="beta-badge">Beta · AGPL-3.0</span>
+
         </div>
         <nav aria-label="Main navigation" class="font-mono text-[13px]">
           <div class="nav-links">
@@ -327,7 +327,8 @@ const finalSchemas = schema
   .wordmark-name { font-family: 'Instrument Serif', Georgia, serif; font-size: 24px; letter-spacing: -0.01em; color: var(--ink); }
   .beta-badge { font-family: 'Geist Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--navy); border: 1px solid var(--line-2); background: var(--card); padding: 3px 7px; box-shadow: 2px 2px 0 var(--paper-shadow); }
   .site-header nav { flex: 1; margin-left: 0; display:flex; align-items:center; justify-content:flex-end; min-width:0; gap:clamp(12px, 1.5vw, 20px); font-size:12px; }
-  .nav-links { gap:clamp(12px, 1.5vw, 18px); white-space:nowrap; }
+  /* ponytail: absolute centering keeps links optically centered regardless of brand/action widths */
+  .nav-links { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); gap:clamp(12px, 1.5vw, 18px); white-space:nowrap; }
   .nav-actions { flex:none; gap:10px; }
   .nav-link { text-decoration: none; color: var(--ink-2); }
   .nav-link:hover { color: var(--navy); }
@@ -370,7 +371,7 @@ const finalSchemas = schema
     .header-inner { align-items:stretch; padding-block:12px; flex-direction:column; gap:10px; }
     .brand-group { justify-content:space-between; }
     .site-header nav { margin-left:0; width:100%; display:grid; gap:10px; }
-    .nav-links { width:100%; overflow-x:auto; padding-bottom:3px; scrollbar-width:thin; }
+    .nav-links { position:static; transform:none; width:100%; overflow-x:auto; padding-bottom:3px; scrollbar-width:thin; }
     .nav-actions { justify-content:space-between; }
   }
 </style>
