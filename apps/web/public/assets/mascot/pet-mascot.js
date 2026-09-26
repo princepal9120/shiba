@@ -4,6 +4,9 @@
   if (window.__doge_mascot_initialized) return;
   window.__doge_mascot_initialized = true;
 
+  // Check for reduced motion preference
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
   // Sound effects via Web Audio API
   function playSound(type) {
     try {
@@ -446,6 +449,10 @@
 
   // Mount to DOM
   function start() {
+    if (prefersReducedMotion) {
+      return; // Restrained behavior: do not spawn wandering mascot when reduced-motion is requested
+    }
+
     const initPerch = getPerchPosition();
     posX = initPerch.x;
     posY = initPerch.y;
@@ -470,4 +477,3 @@
     start();
   }
 })();
-

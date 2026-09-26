@@ -10,6 +10,7 @@ interface Props {
   modifiedTime?: string;
   schema?: Record<string, unknown> | Array<Record<string, unknown>>;
   breadcrumbs?: Array<{ name: string; path: string }>;
+  lang?: string;
 }
 const {
   title,
@@ -20,6 +21,7 @@ const {
   modifiedTime,
   schema,
   breadcrumbs = [{ name: 'Home', path: '/' }],
+  lang = 'en',
 } = Astro.props;
 const canonical = new URL(path, 'https://tryshiba.dev').href;
 const ogImage = 'https://tryshiba.dev/assets/mascot/pet-logo.png';
@@ -53,7 +55,7 @@ const finalSchemas = schema
   : defaultSchemas;
 ---
 <!doctype html>
-<html lang="en" class="scroll-smooth" data-theme="light">
+<html lang={lang} class="scroll-smooth" data-theme="light">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -134,6 +136,15 @@ const finalSchemas = schema
               <path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
             </svg>
           </button>
+          <button
+            type="button"
+            id="locale-toggle-btn"
+            aria-label="Switch language (EN / HI)"
+            title="Switch language between English and Hindi"
+            class="locale-toggle font-mono text-[11px] px-2 py-1 border border-[var(--line-2)] hover:border-[var(--navy)] text-[var(--ink-2)] hover:text-[var(--navy)] transition-colors"
+          >
+            EN
+          </button>
           <a class="nav-cta" href="/waitlist/">
             <span class="w-1.5 h-1.5 nav-cta-dot" aria-hidden="true"></span>
             <span>Join the build</span>
@@ -199,6 +210,23 @@ const finalSchemas = schema
           localStorage.setItem('shiba-theme', next);
         } catch (_) {}
       });
+
+      var locBtn = document.getElementById('locale-toggle-btn');
+      var savedLang = 'en';
+      try {
+        savedLang = localStorage.getItem('shiba-locale') || 'en';
+      } catch (_) {}
+      if (locBtn) {
+        locBtn.textContent = savedLang === 'hi' ? 'HI' : 'EN';
+        document.documentElement.setAttribute('lang', savedLang === 'hi' ? 'hi-IN' : 'en');
+        locBtn.addEventListener('click', function() {
+          var current = document.documentElement.getAttribute('lang') || 'en';
+          var nextLang = current.startsWith('hi') ? 'en' : 'hi-IN';
+          document.documentElement.setAttribute('lang', nextLang);
+          locBtn.textContent = nextLang === 'hi-IN' ? 'HI' : 'EN';
+          try { localStorage.setItem('shiba-locale', nextLang === 'hi-IN' ? 'hi' : 'en'); } catch (_) {}
+        });
+      }
     </script>
   </body>
 </html>

@@ -55,7 +55,7 @@ const capabilities = [
         <div class="workflow-step"><span class="step-num">03</span><span><strong>Inspect the work</strong><small>Progress · changed files · diff</small></span><span class="step-state">AFTER APPROVAL</span></div>
         <div class="window-caption">The agent proposes. You decide when it runs.</div>
       </div>
-      <div class="window-status"><span>HUMAN IN THE LOOP</span><span>ISOLATED SANDBOX</span><span>SELF-HOSTED</span></div>
+      <div class="window-status"><span>HUMAN IN THE LOOP</span><span>ISOLATED SANDBOX</span><span>ZERO-TRUST BOUNDARY</span><span>SELF-HOSTED</span></div>
     </div>
   </section>
 
@@ -75,7 +75,7 @@ const capabilities = [
 
   <section class="shell home-section steps" aria-labelledby="steps-title">
     <div class="section-head"><h2 id="steps-title">From task to inspectable diff</h2><p class="micro">THE APPROVAL GATE IS THE WORKFLOW</p></div>
-    <div class="steps-grid"><div><span class="micro">01 / CONNECT</span><h3>Bring a repository</h3><p>Paste an HTTPS GitHub repository URL and describe the coding task in the dashboard.</p></div><div><span class="micro">02 / DECIDE</span><h3>Approve or reject</h3><p>Inspect the proposed tool input. Shiba cannot start a sandbox until you approve it.</p></div><div><span class="micro">03 / REVIEW</span><h3>See what changed</h3><p>Follow progress and review changed files and the diff. Publishing a pull request is optional.</p></div></div>
+    <div class="steps-grid"><div><span class="micro">01 / CONNECT</span><h3>Bring a repository</h3><p>Paste an HTTPS GitHub repository URL and describe the coding task in the dashboard or Slack.</p></div><div><span class="micro">02 / DECIDE</span><h3>Approve or reject</h3><p>Inspect the proposed tool input. Shiba cannot start a sandbox until you approve it.</p></div><div><span class="micro">03 / REVIEW</span><h3>See what changed</h3><p>Follow progress and review changed files and the unified diff. Zero-Trust Boundary keeps credentials safe.</p></div></div>
   </section>
 
   <section class="shell closing" aria-labelledby="closing-title"><div><p class="eyebrow">BUILD WITH YOUR OWN AGENT</p><h2 id="closing-title">Put an engineer in your corner.</h2><p>Deploy Shiba in your Cloudflare account, or join the open-source build.</p></div><div class="closing-actions"><a class="button" href="/docs/getting-started/">Get started <span aria-hidden="true">↗</span></a><a class="button button-outline" href="/waitlist/">Join the build</a></div></section>
