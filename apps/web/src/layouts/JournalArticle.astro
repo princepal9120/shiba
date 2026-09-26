@@ -61,7 +61,8 @@ const articleSchema = {
 		{ name: title, path },
 	]}
 >
-	<article class="article-shell">
+	<div class="reading-progress" aria-hidden="true"></div>
+	<article class="article-shell" id="top">
 		<div class="shell">
 			<header class="article-head">
 				<div class="article-kicker">
@@ -106,6 +107,9 @@ const articleSchema = {
 							</ol>
 							<p class="article-toc-foot">
 								<a href="/blog/rss.xml">Subscribe via RSS</a>
+							</p>
+							<p class="article-toc-foot article-toc-back-top">
+								<a href="#top">Back to top ↑</a>
 							</p>
 						</nav>
 					</aside>
