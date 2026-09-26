@@ -47,11 +47,25 @@ const capabilities = [
       <div class="window-body">
         <div class="window-topline"><span>CODING TASK</span><span>01 / 03</span></div>
         <div class="task-paper">
-          <div class="task-icon"><img src="/assets/mascot/pet-logo.png" alt="" width="42" height="42" /></div>
+          <div class="task-icon dither-glow-frame">
+            <img src="/assets/mascot/pet-logo.png" alt="" width="42" height="42" />
+            <div class="hero-dither-sweep" aria-hidden="true"></div>
+          </div>
           <div><span class="micro">YOUR REPOSITORY</span><strong>Make a change. Keep control.</strong><small>Repository and task input are reviewed together.</small></div>
         </div>
+        <div class="window-dither-monitor" aria-label="Live shader simulation of human approval gate">
+          <div class="dither-monitor-screen">
+            <div class="dither-monitor-mesh" aria-hidden="true"></div>
+            <div class="dither-monitor-sweep" aria-hidden="true"></div>
+            <div class="dither-monitor-radar" aria-hidden="true"></div>
+            <div class="dither-monitor-content">
+              <div class="dither-monitor-line"><span class="dither-sym">▶</span> GATE_STATUS: <strong class="gate-hilite">ARMED_WAITING_APPROVAL</strong></div>
+              <div class="dither-monitor-line"><span class="dither-sym">◈</span> SANDBOX: <span class="dim">CONTAINER_LOCKED</span> · KEYS: <span class="dim">HOST_ONLY</span></div>
+            </div>
+          </div>
+        </div>
         <div class="workflow-step"><span class="step-num">01</span><span><strong>Describe the task</strong><small>Repository · branch · instructions</small></span><span class="step-state">READY</span></div>
-        <div class="workflow-step current"><span class="step-num">02</span><span><strong>Approval before execution</strong><small>Review the exact tool input</small></span><span class="step-state">YOUR CALL</span></div>
+        <div class="workflow-step current"><span class="step-num">02</span><span><strong>Approval before execution</strong><small>Review the exact tool input</small></span><span class="step-state"><span class="step-pulse" aria-hidden="true"></span>YOUR CALL</span></div>
         <div class="workflow-step"><span class="step-num">03</span><span><strong>Inspect the work</strong><small>Progress · changed files · diff</small></span><span class="step-state">AFTER APPROVAL</span></div>
         <div class="window-caption">The agent proposes. You decide when it runs.</div>
       </div>
@@ -75,7 +89,62 @@ const capabilities = [
 
   <section class="shell home-section steps" aria-labelledby="steps-title">
     <div class="section-head"><h2 id="steps-title">From task to inspectable diff</h2><p class="micro">THE APPROVAL GATE IS THE WORKFLOW</p></div>
-    <div class="steps-grid"><div><span class="micro">01 / CONNECT</span><h3>Bring a repository</h3><p>Paste an HTTPS GitHub repository URL and describe the coding task in the dashboard or Slack.</p></div><div><span class="micro">02 / DECIDE</span><h3>Approve or reject</h3><p>Inspect the proposed tool input. Shiba cannot start a sandbox until you approve it.</p></div><div><span class="micro">03 / REVIEW</span><h3>See what changed</h3><p>Follow progress and review changed files and the unified diff. Zero-Trust Boundary keeps credentials safe.</p></div></div>
+    <div class="steps-grid">
+      <div class="step-card">
+        <div class="step-dither-screen" aria-hidden="true">
+          <div class="dither-media">
+            <img src="/assets/mascot/shiba-sticker-riding.webp" alt="" class="dither-img pixelated" width="180" height="180" loading="lazy" />
+            <div class="dither-matrix-layer"></div>
+            <div class="dither-sweep-beam beam-1"></div>
+            <div class="dither-raster-scan"></div>
+          </div>
+          <div class="dither-terminal-meta">
+            <span class="terminal-tag">SYS.01 // REPO_INGEST</span>
+            <span class="terminal-status"><i class="status-indicator"></i> READY</span>
+          </div>
+        </div>
+        <span class="micro">01 / CONNECT</span>
+        <h3>Bring a repository</h3>
+        <p>Paste an HTTPS GitHub repository URL and describe the coding task in the dashboard.</p>
+      </div>
+
+      <div class="step-card">
+        <div class="step-dither-screen" aria-hidden="true">
+          <div class="dither-media">
+            <img src="/assets/mascot/shiba-sticker-hero.webp" alt="" class="dither-img pixelated" width="180" height="180" loading="lazy" />
+            <div class="dither-matrix-layer"></div>
+            <div class="dither-sweep-beam beam-2"></div>
+            <div class="dither-radar-line"></div>
+            <div class="dither-raster-scan"></div>
+          </div>
+          <div class="dither-terminal-meta">
+            <span class="terminal-tag">SYS.02 // APPROVAL_GATE</span>
+            <span class="terminal-status gate-active"><i class="status-indicator"></i> YOUR CALL</span>
+          </div>
+        </div>
+        <span class="micro">02 / DECIDE</span>
+        <h3>Approve or reject</h3>
+        <p>Inspect the proposed tool input. Shiba cannot start a sandbox until you approve it.</p>
+      </div>
+
+      <div class="step-card">
+        <div class="step-dither-screen" aria-hidden="true">
+          <div class="dither-media">
+            <img src="/assets/mascot/shiba-sticker-climbing.webp" alt="" class="dither-img pixelated" width="180" height="180" loading="lazy" />
+            <div class="dither-matrix-layer"></div>
+            <div class="dither-sweep-beam beam-3"></div>
+            <div class="dither-raster-scan"></div>
+          </div>
+          <div class="dither-terminal-meta">
+            <span class="terminal-tag">SYS.03 // ISOLATED_DIFF</span>
+            <span class="terminal-status"><i class="status-indicator"></i> SANDBOX</span>
+          </div>
+        </div>
+        <span class="micro">03 / REVIEW</span>
+        <h3>See what changed</h3>
+        <p>Follow progress and review changed files and the diff. Publishing a pull request is optional.</p>
+      </div>
+    </div>
   </section>
 
   <section class="shell closing" aria-labelledby="closing-title"><div><p class="eyebrow">BUILD WITH YOUR OWN AGENT</p><h2 id="closing-title">Put an engineer in your corner.</h2><p>Deploy Shiba in your Cloudflare account, or join the open-source build.</p></div><div class="closing-actions"><a class="button" href="/docs/getting-started/">Get started <span aria-hidden="true">↗</span></a><a class="button button-outline" href="/waitlist/">Join the build</a></div></section>
@@ -128,7 +197,58 @@ const capabilities = [
   .capability-card h3, .steps-grid h3 { font-size:27px; margin:30px 0 9px; }
   .capability-card p, .steps-grid p { font-size:13px; line-height:1.7; margin:0; }
   .steps-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:32px; padding-top:30px; }
-  .steps-grid>div { border-top:2px solid var(--navy); padding-top:18px; }
+  .steps-grid>div { border-top:2px solid var(--navy); padding-top:18px; display:flex; flex-direction:column; }
+  .step-dither-screen { position:relative; overflow:hidden; background:var(--panel-2); border:1px solid var(--line-2); height:190px; margin-bottom:20px; box-shadow:2px 2px 0 var(--paper-shadow); display:flex; flex-direction:column; }
+  .dither-media { position:relative; width:100%; flex:1; display:flex; align-items:center; justify-content:center; overflow:hidden; background:radial-gradient(var(--paper-dot) 1px, transparent 1px); background-size:8px 8px; }
+  .dither-img { width:135px; height:135px; object-fit:contain; position:relative; z-index:1; filter:drop-shadow(0 2px 4px var(--paper-shadow)); transition:transform 0.25s ease; }
+  .step-card:hover .dither-img { transform:scale(1.04); }
+  .dither-matrix-layer { position:absolute; inset:0; pointer-events:none; z-index:2; background-image:radial-gradient(circle at 1px 1px, var(--navy) 1px, transparent 0), radial-gradient(circle at 3px 3px, var(--ink) 0.8px, transparent 0); background-size:4px 4px; opacity:0.28; mix-blend-mode:multiply; }
+  html[data-theme='dark'] .dither-matrix-layer { background-image:radial-gradient(circle at 1px 1px, var(--navy) 1.2px, transparent 0), radial-gradient(circle at 3px 3px, #eae8e1 0.8px, transparent 0); opacity:0.38; mix-blend-mode:screen; }
+  .dither-raster-scan { position:absolute; inset:0; pointer-events:none; z-index:3; background:repeating-linear-gradient(0deg, transparent 0px, transparent 2px, rgba(34,35,32,0.05) 2px, rgba(34,35,32,0.05) 4px); animation:dither-raster 10s linear infinite; }
+  html[data-theme='dark'] .dither-raster-scan { background:repeating-linear-gradient(0deg, transparent 0px, transparent 2px, rgba(234,232,225,0.04) 2px, rgba(234,232,225,0.04) 4px); }
+  .dither-sweep-beam { position:absolute; inset:-150%; pointer-events:none; z-index:4; background:linear-gradient(115deg, transparent 40%, rgba(0,0,168,0.08) 47%, rgba(255,255,255,0.6) 50%, rgba(0,0,168,0.14) 53%, transparent 60%); mix-blend-mode:overlay; }
+  html[data-theme='dark'] .dither-sweep-beam { background:linear-gradient(115deg, transparent 40%, rgba(156,188,226,0.2) 47%, rgba(220,234,250,0.65) 50%, rgba(156,188,226,0.2) 53%, transparent 60%); mix-blend-mode:screen; }
+  .beam-1 { animation:dither-sweep 6.5s cubic-bezier(0.4,0,0.2,1) infinite; animation-delay:0s; }
+  .beam-2 { animation:dither-sweep 6.5s cubic-bezier(0.4,0,0.2,1) infinite; animation-delay:2.1s; }
+  .beam-3 { animation:dither-sweep 6.5s cubic-bezier(0.4,0,0.2,1) infinite; animation-delay:4.2s; }
+  .dither-radar-line { position:absolute; left:0; right:0; height:2px; background:var(--navy); box-shadow:0 0 6px var(--navy); opacity:0.6; z-index:5; animation:dither-radar-scan 3.5s ease-in-out infinite alternate; }
+  .dither-terminal-meta { display:flex; justify-content:space-between; align-items:center; padding:5px 10px; background:var(--card); border-top:1px solid var(--line-2); font-family:'Geist Mono',monospace; font-size:9px; letter-spacing:0.08em; color:var(--ink-2); position:relative; z-index:6; }
+  .terminal-tag { font-weight:500; }
+  .terminal-status { display:inline-flex; align-items:center; gap:5px; color:var(--navy); font-weight:600; }
+  .status-indicator { width:5px; height:5px; background:var(--ok); display:inline-block; }
+  .terminal-status.gate-active .status-indicator { background:var(--pending); animation:blink 1.2s infinite; }
+  .window-dither-monitor { margin-bottom:18px; border:1px solid var(--line-2); background:var(--panel-2); box-shadow:2px 2px 0 var(--paper-shadow); }
+  .dither-monitor-screen { position:relative; overflow:hidden; padding:10px 14px; background:var(--panel-2); font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:0.06em; }
+  .dither-monitor-mesh { position:absolute; inset:0; pointer-events:none; background-image:radial-gradient(var(--navy) 0.8px, transparent 0.8px); background-size:4px 4px; opacity:0.2; }
+  html[data-theme='dark'] .dither-monitor-mesh { opacity:0.3; }
+  .dither-monitor-sweep { position:absolute; inset:-150%; pointer-events:none; background:linear-gradient(115deg, transparent 42%, rgba(0,0,168,0.12) 48%, rgba(255,255,255,0.5) 50%, rgba(0,0,168,0.12) 52%, transparent 58%); mix-blend-mode:overlay; animation:dither-sweep 5s cubic-bezier(0.4,0,0.2,1) infinite; }
+  html[data-theme='dark'] .dither-monitor-sweep { background:linear-gradient(115deg, transparent 42%, rgba(156,188,226,0.25) 48%, rgba(220,234,250,0.55) 50%, rgba(156,188,226,0.25) 52%, transparent 58%); mix-blend-mode:screen; }
+  .dither-monitor-radar { position:absolute; left:0; right:0; height:1px; background:var(--navy); opacity:0.5; animation:dither-radar-scan 4s linear infinite; }
+  .dither-monitor-content { position:relative; z-index:2; display:flex; flex-direction:column; gap:4px; color:var(--ink); }
+  .dither-sym { color:var(--navy); margin-right:4px; }
+  .gate-hilite { color:var(--navy); font-weight:600; }
+  .dim { color:var(--ink-2); }
+  .step-pulse { display:inline-block; width:6px; height:6px; background:var(--navy); margin-right:5px; animation:blink 1s steps(2,start) infinite; }
+  .task-icon.dither-glow-frame { position:relative; overflow:hidden; }
+  .hero-dither-sweep { position:absolute; inset:-100%; pointer-events:none; background:linear-gradient(115deg, transparent 40%, rgba(0,0,168,0.15) 50%, transparent 60%); animation:dither-sweep 4s linear infinite; }
+  @keyframes dither-sweep { 0% { transform:translate3d(-100%,-100%,0) rotate(20deg); } 35%, 100% { transform:translate3d(200%,200%,0) rotate(20deg); } }
+  @keyframes dither-raster { 0% { background-position:0 0; } 100% { background-position:0 100px; } }
+  @keyframes dither-radar-scan { 0% { top:0%; opacity:0.2; } 50% { opacity:0.7; } 100% { top:100%; opacity:0.2; } }
+  @keyframes blink { 0%, 100% { opacity:1; } 50% { opacity:0.2; } }
+  @media (prefers-reduced-motion: reduce) {
+    .dither-sweep-beam,
+    .dither-raster-scan,
+    .dither-radar-line,
+    .dither-monitor-sweep,
+    .dither-monitor-radar,
+    .step-pulse,
+    .hero-dither-sweep,
+    .terminal-status.gate-active .status-indicator {
+      animation: none !important;
+      transform: none !important;
+      opacity: 0.25 !important;
+    }
+  }
   .steps-grid h3 { margin:18px 0 10px; }
   .closing { display:flex; justify-content:space-between; align-items:center; gap:30px; margin-top:110px; padding:38px; border:1px solid var(--line-2); background:var(--card); box-shadow:3px 3px 0 var(--paper-shadow); }
   .closing h2 { margin:12px 0 8px; }
