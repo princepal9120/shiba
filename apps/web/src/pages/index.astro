@@ -59,35 +59,8 @@ const capabilities = [
           <span class="brand-title">shiba.workspace</span>
           <span class="status-indicator"><span class="status-dot"></span><span>AWAITING APPROVAL</span></span>
         </div>
-        <div class="window-tabs" aria-hidden="true">
-          <span class="win-tab active">01 Plan Review</span>
-          <span class="win-tab">02 Sandbox</span>
-          <span class="win-tab">03 Diff</span>
-        </div>
-        <div class="window-controls" aria-hidden="true">
-          <span class="win-btn" title="Minimize">─</span>
-          <span class="win-btn" title="Maximize">□</span>
-          <span class="win-btn" title="Close">✕</span>
-        </div>
-      </div>
-      <div class="window-subbar" aria-hidden="true">
-        <div class="repo-chip">
-          <span class="repo-icon">⌥</span>
-          <span class="repo-name">github.com/acme/api</span>
-          <span class="repo-branch">main → fix/auth-race</span>
-        </div>
-        <div class="runtime-badge">CLOUDFLARE SANDBOX · gVisor</div>
       </div>
       <div class="window-body">
-        <div class="approval-art" aria-hidden="true">
-          <img src="/assets/shiba-working.png" alt="" width="1200" height="1200" fetchpriority="high" class="shiba-working-img" />
-          <div class="art-scrim"></div>
-          <div class="art-meta-tag">
-            <span class="micro">STAGE 02 / 03</span>
-            <span class="art-status">HUMAN VERIFICATION REQUIRED</span>
-          </div>
-          <span class="art-stamp">A CLEAR PLAN. YOUR CALL.</span>
-        </div>
         <div class="approval-card">
           <div class="card-header">
             <div class="header-left">
@@ -118,44 +91,13 @@ const capabilities = [
             <span>By default, zero code executes and no container boots until approved.</span>
           </div>
         </div>
-        <div class="workflow-rail" role="list" aria-label="Workflow stages">
-          <div class="rail-step done" role="listitem">
-            <span class="rail-num">01</span>
-            <div class="rail-info">
-              <strong>Describe the task</strong>
-              <small>Repository · branch · instructions</small>
-            </div>
-            <span class="rail-badge ok">READY ✓</span>
-          </div>
-          <div class="rail-step active" role="listitem">
-            <span class="rail-num">02</span>
-            <div class="rail-info">
-              <strong>Approval before execution</strong>
-              <small>Review exact tool input</small>
-            </div>
-            <span class="rail-badge action">YOUR CALL ●</span>
-          </div>
-          <div class="rail-step standby" role="listitem">
-            <span class="rail-num">03</span>
-            <div class="rail-info">
-              <strong>Inspect the work</strong>
-              <small>Progress · changed files · diff</small>
-            </div>
-            <span class="rail-badge">QUEUED</span>
-          </div>
-        </div>
         <div class="window-caption">The agent proposes. You decide when it runs.</div>
       </div>
-      <div class="window-status">
-        <div class="status-left">
-          <span>HUMAN IN THE LOOP</span>
-          <span>ISOLATED SANDBOX</span>
-        </div>
-        <div class="status-right">
-          <span>EGRESS: CREDENTIALS MASKED</span>
-        </div>
-      </div>
     </div>
+    <figure class="hero-showcase" aria-label="Shiba workspace, retro desktop style">
+      <img class="hero-showcase-img hero-showcase-light" src="/assets/shiba-hero-window.png" alt="Retro desktop window of the Shiba workspace: harness chips, a pixel workstation, capability icons, and a status bar reading your Cloudflare account, one approval, four harnesses" width="1672" height="941" loading="lazy" />
+      <img class="hero-showcase-img hero-showcase-dark" src="/assets/shiba-hero-window-dark.png" alt="" width="1672" height="941" loading="lazy" aria-hidden="true" />
+    </figure>
   </section>
 
   <div class="shell compatibility" aria-label="Ways to use Shiba"><span>USE FROM</span><span>Web</span><span>Slack</span><span>Telegram</span><span>Discord</span><span>GitHub</span><span class="compatibility-end">Mobile web is available; native iPhone app is on the roadmap.</span></div>
@@ -334,40 +276,24 @@ const capabilities = [
   .hero-proof-label { font-family:'Instrument Serif',Georgia,serif; font-size:44px; line-height:.9; color:var(--navy); }
   .hero-proof-detail { font-size:12px; line-height:1.45; color:var(--ink-2); }
   .work-window { border:1px solid var(--line-2); background:var(--panel-2); padding:3px; box-shadow:5px 5px 0 var(--paper-shadow); transition:transform 220ms ease, box-shadow 220ms ease; animation:hero-arrive 680ms 100ms cubic-bezier(.2,.7,.2,1) both; }
+  /* The bezalel-style showcase spans both hero columns. Two dithered PNG
+     variants carry the site palette; data-theme picks which one renders. */
+  .hero-showcase { grid-column:1 / -1; margin:8px 0 0; border:1px solid var(--line-2); background:var(--card); padding:3px; box-shadow:5px 5px 0 var(--paper-shadow); }
+  .hero-showcase-img { display:block; width:100%; height:auto; image-rendering:pixelated; }
+  :root[data-theme='dark'] .hero-showcase-light { display:none; }
+  .hero-showcase-dark { display:none; }
+  :root[data-theme='dark'] .hero-showcase-dark { display:block; }
   .work-window:focus-within { transform:translateY(-2px); box-shadow:7px 7px 0 var(--paper-shadow); }
   @media (hover: hover) and (pointer: fine) {
     .work-window:hover { transform:translateY(-2px); box-shadow:7px 7px 0 var(--paper-shadow); }
   }
   .window-titlebar { display:flex; justify-content:space-between; align-items:center; gap:10px; min-height:32px; padding:4px 9px; color:var(--paper-title-fg); background:var(--paper-title); font:11px/1 'Geist Mono',monospace; }
-  .window-brand { display:flex; align-items:center; gap:7px; font-weight:600; letter-spacing:.04em; }
+  .window-brand { display:flex; align-items:center; gap:7px; font-weight:600; letter-spacing:.04em; min-width:0; }
   .window-brand img { image-rendering:pixelated; background:#fff; border:1px solid var(--line-2); padding:1px; }
   .brand-title { color:var(--paper-title-fg); }
   .status-indicator { display:inline-flex; align-items:center; gap:5px; padding:2px 6px; background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.22); font-size:8.5px; letter-spacing:.08em; font-weight:500; }
   .status-dot { width:5px; height:5px; background:var(--ok); box-shadow:0 0 5px var(--ok); animation:approval-pulse 2s ease-in-out infinite; }
-  .window-tabs { display:flex; align-items:center; gap:2px; font-size:10px; }
-  .win-tab { padding:3px 8px; color:var(--ink-2); cursor:default; border:1px solid transparent; }
-  .win-tab.active { color:var(--ink); background:var(--card); border-color:var(--line-2); font-weight:500; }
-  .window-controls { display:flex; gap:3px; }
-  .win-btn { display:grid; place-items:center; width:18px; height:18px; background:var(--panel-2); border:1px solid var(--line-2); color:var(--ink-2); font:10px monospace; cursor:default; transition:background 120ms ease, color 120ms ease; }
-  .win-btn:hover { background:var(--line); color:var(--ink); }
-  .window-subbar { display:flex; align-items:center; justify-content:space-between; padding:6px 12px; background:var(--card); border-bottom:1px solid var(--line-2); font:10px 'Geist Mono',monospace; color:var(--ink-2); }
-  .repo-chip { display:flex; align-items:center; gap:7px; }
-  .repo-icon { color:var(--navy); font-size:11px; }
-  .repo-name { color:var(--ink); font-weight:500; }
-  .repo-branch { color:var(--ink-2); font-size:9px; opacity:.85; }
-  .runtime-badge { padding:2px 6px; background:var(--panel-2); border:1px solid var(--line); font-size:8.5px; letter-spacing:.05em; color:var(--navy); }
   .window-body { padding:16px; background:var(--card); display:flex; flex-direction:column; gap:12px; }
-  .approval-art { position:relative; height:150px; overflow:hidden; border:1px solid var(--line-2); background:#121312; }
-  .approval-art img.shiba-working-img { display:block; width:100%; height:100%; object-fit:cover; object-position:center 28%; transition:transform 600ms cubic-bezier(.2,.7,.2,1); }
-  .work-window:focus-within .approval-art img { transform:scale(1.03) translateY(-2px); }
-  @media (hover: hover) and (pointer: fine) {
-    .work-window:hover .approval-art img { transform:scale(1.03) translateY(-2px); }
-  }
-  .art-scrim { position:absolute; inset:0; background:linear-gradient(180deg,rgba(18,19,18,0.1) 0%,rgba(18,19,18,0.85) 100%); pointer-events:none; }
-  .art-meta-tag { position:absolute; top:8px; right:8px; display:flex; flex-direction:column; align-items:flex-end; gap:2px; padding:4px 7px; background:rgba(18,19,18,0.88); border:1px solid var(--line-2); font:9px 'Geist Mono',monospace; }
-  .art-meta-tag .micro { color:var(--navy); font-size:8px; letter-spacing:.1em; }
-  .art-status { color:var(--ink); font-size:8.5px; font-weight:500; }
-  .art-stamp { position:absolute; left:8px; bottom:8px; padding:4px 8px; border:1px solid rgba(156,188,226,0.35); background:rgba(18,19,18,0.92); color:var(--navy); font:9px 'Geist Mono',monospace; letter-spacing:.12em; }
   .approval-card { background:var(--panel-2); border:1px solid var(--line-2); padding:12px; display:flex; flex-direction:column; gap:9px; box-shadow:2px 2px 0 var(--paper-shadow); }
   .card-header { display:flex; align-items:center; justify-content:space-between; font:10px 'Geist Mono',monospace; border-bottom:1px solid var(--line); padding-bottom:7px; }
   .header-left { display:flex; align-items:center; gap:6px; }
@@ -391,34 +317,17 @@ const capabilities = [
   .action-icon { font-size:10px; font-weight:bold; }
   .approval-guarantee { display:flex; align-items:center; gap:6px; color:var(--ink-2); font:9px 'Geist Mono',monospace; padding-top:2px; }
   .lock-icon { color:var(--navy); }
-  .workflow-rail { display:flex; flex-direction:column; gap:1px; background:var(--line); border:1px solid var(--line-2); }
-  .rail-step { display:grid; grid-template-columns:24px 1fr auto; align-items:center; gap:10px; padding:9px 11px; background:var(--card); font-family:'Geist Mono',monospace; transition:background 150ms ease; }
-  .rail-step:hover { background:var(--panel-2); }
-  .rail-step.active { background:var(--panel-2); border-left:2px solid var(--navy); padding-left:9px; }
-  .rail-num { color:var(--navy); font-size:10px; font-weight:600; }
-  .rail-info strong { display:block; color:var(--ink); font-size:11.5px; font-family:var(--sl-font); font-weight:600; line-height:1.2; }
-  .rail-info small { display:block; color:var(--ink-2); font-size:9.5px; margin-top:1px; }
-  .rail-badge { font-size:8.5px; padding:2px 6px; border:1px solid var(--line-2); color:var(--ink-2); background:var(--card); }
-  .rail-badge.ok { color:var(--ok); border-color:var(--ok); }
-  .rail-badge.action { color:var(--navy); border-color:var(--navy); font-weight:600; animation:approval-pulse 2.2s infinite; }
   .window-caption { text-align:center; color:var(--ink-2); font:10px 'Geist Mono',monospace; letter-spacing:.04em; padding-top:2px; }
-  .window-status { display:flex; align-items:center; justify-content:space-between; padding:6px 12px; background:var(--panel-2); border-top:1px solid var(--line-2); color:var(--ink-2); font:8.5px 'Geist Mono',monospace; letter-spacing:.06em; }
-  .status-left { display:flex; gap:14px; }
-  .status-left span { position:relative; }
-  .status-left span:not(:last-child)::after { content:'·'; position:absolute; right:-9px; color:var(--line-2); }
-  .status-right { color:var(--navy); font-size:8px; }
   @media (max-width:540px) {
-    .window-tabs { display:none; }
     .card-actions { grid-template-columns:1fr; }
-    .window-status { flex-direction:column; gap:4px; align-items:flex-start; }
   }
   @keyframes approval-pulse { 0%, 100% { opacity:1; } 50% { opacity:.58; } }
   @keyframes hero-arrive { from { opacity:0; translate:0 14px; } to { opacity:1; translate:0 0; } }
   @media (prefers-reduced-motion: reduce) {
-    .hero-copy, .work-window, .rail-badge.action, .status-dot, .pulse-marker { animation:none; }
-    .work-window, .approval-art img, .rail-step, .btn-approve, .btn-reject { transition:none; }
+    .hero-copy, .work-window, .status-dot, .pulse-marker { animation:none; }
+    .work-window, .btn-approve, .btn-reject { transition:none; }
     .step-dither-screen { transition:none; }
-    .step-card:hover .step-dither-screen, .work-window:hover .approval-art img, .work-window:focus-within .approval-art img { transform:none; }
+    .step-card:hover .step-dither-screen { transform:none; }
   }
   .compatibility { display:flex; flex-wrap:wrap; align-items:center; gap:16px 28px; padding-block:23px; border-top:1px solid var(--line-2); border-bottom:1px solid var(--line-2); font:11px 'Geist Mono',monospace; color:var(--ink); }
   .compatibility>span:first-child { font-size:9px; letter-spacing:.15em; color:var(--ink-2); margin-right:auto; }
@@ -512,31 +421,7 @@ const capabilities = [
   }
   .step-illustration { position:relative; width:100%; aspect-ratio:1672 / 941; flex:none; overflow:hidden; background:#131520; }
   .step-illustration img { display:block; width:100%; height:100%; object-fit:cover; object-position:center center; transition:transform 400ms cubic-bezier(.2,.7,.2,1); }
-  .window-dither-monitor { margin-bottom:18px; border:1px solid var(--line-2); background:var(--panel-2); box-shadow:2px 2px 0 var(--paper-shadow); }
-  .dither-monitor-screen { position:relative; overflow:hidden; padding:10px 14px; background:var(--panel-2); font-family:'Geist Mono',monospace; font-size:10px; letter-spacing:0.06em; }
-  .dither-monitor-mesh { position:absolute; inset:0; pointer-events:none; background-image:radial-gradient(var(--navy) 0.8px, transparent 0.8px); background-size:4px 4px; opacity:0.2; }
-  html[data-theme='dark'] .dither-monitor-mesh { opacity:0.3; }
-  .dither-monitor-sweep { position:absolute; inset:-150%; pointer-events:none; background:linear-gradient(115deg, transparent 42%, rgba(0,0,168,0.12) 48%, rgba(255,255,255,0.5) 50%, rgba(0,0,168,0.12) 52%, transparent 58%); mix-blend-mode:overlay; animation:dither-sweep 5s cubic-bezier(0.4,0,0.2,1) infinite; }
-  html[data-theme='dark'] .dither-monitor-sweep { background:linear-gradient(115deg, transparent 42%, rgba(156,188,226,0.25) 48%, rgba(220,234,250,0.55) 50%, rgba(156,188,226,0.25) 52%, transparent 58%); mix-blend-mode:screen; }
-  .dither-monitor-radar { position:absolute; left:0; right:0; height:1px; background:var(--navy); opacity:0.5; animation:dither-radar-scan 4s linear infinite; }
-  .dither-monitor-content { position:relative; z-index:2; display:flex; flex-direction:column; gap:4px; color:var(--ink); }
-  .dither-sym { color:var(--navy); margin-right:4px; }
-  .gate-hilite { color:var(--navy); font-weight:600; }
-  .dim { color:var(--ink-2); }
-  .step-pulse { display:inline-block; width:6px; height:6px; background:var(--navy); margin-right:5px; animation:blink 1s steps(2,start) infinite; }
-  .task-icon.dither-glow-frame { position:relative; overflow:hidden; }
-  .hero-dither-sweep { position:absolute; inset:-100%; pointer-events:none; background:linear-gradient(115deg, transparent 40%, rgba(0,0,168,0.15) 50%, transparent 60%); animation:dither-sweep 4s linear infinite; }
-  @keyframes dither-sweep { 0% { transform:translate3d(-100%,-100%,0) rotate(20deg); } 35%, 100% { transform:translate3d(200%,200%,0) rotate(20deg); } }
-  @keyframes blink { 0%, 100% { opacity:1; } 50% { opacity:0.2; } }
   @media (prefers-reduced-motion: reduce) {
-    .dither-monitor-sweep,
-    .dither-monitor-radar,
-    .step-pulse,
-    .hero-dither-sweep {
-      animation: none !important;
-      transform: none !important;
-      opacity: 0.25 !important;
-    }
     .step-illustration img { transition: none; transform: none; }
   }
   .steps-grid h3 { margin:18px 0 10px; }
@@ -545,15 +430,9 @@ const capabilities = [
   .closing p:last-child { margin:0; }
   .closing-actions { flex:none; margin:0; }
   @media(max-width:980px) { .channels-grid { grid-template-columns:repeat(2,1fr); } .home-hero { gap:30px; } .work-window { align-self:start; } .window-body { padding:14px; } .task-paper { padding:12px; } .compatibility-end { margin-left:0; } }
-  @media(max-width:980px) { .approval-art { height:160px; } }
-  @media(max-width:420px) { .approval-art { height:132px; } }
-  @media(max-width:640px) {
-    .approval-art { height:auto; aspect-ratio:1; }
-    .approval-art img.shiba-working-img { object-fit:contain; object-position:center; }
-  }
   @media(max-width:760px) { .home-hero { grid-template-columns:minmax(0,1fr); min-height:0; padding-block:48px 60px; } .work-window { width:100%; } .home-section { padding-top:75px; } .section-head { align-items:start; flex-direction:column; gap:10px; } .section-copy { grid-template-columns:1fr; gap:18px; } .capability-grid { grid-template-columns:repeat(2,1fr); } .steps-grid { grid-template-columns:1fr; } .closing { flex-direction:column; align-items:start; margin-top:75px; } }
   @media(max-width:560px) { .hero-proof { grid-template-columns:minmax(0,1fr); } .hero-proof-item { flex-direction:row; align-items:baseline; gap:12px; padding:10px 0 0; border-left:0; } .hero-proof-item + .hero-proof-item { padding-left:0; border-top:1px solid var(--line); } .hero-proof-label { flex:none; min-width:34px; font-size:34px; } }
-  @media(max-width:500px) { .channels-grid { grid-template-columns:1fr; } .capability-grid { grid-template-columns:1fr; } .capability-card { min-height:0; } .hero-actions .button { width:100%; } .window-status { flex-wrap:wrap; } .closing { padding:22px; } .closing-actions { width:100%; } .closing-actions .button { width:100%; } }
+  @media(max-width:500px) { .channels-grid { grid-template-columns:1fr; } .capability-grid { grid-template-columns:1fr; } .capability-card { min-height:0; } .hero-actions .button { width:100%; } .closing { padding:22px; } .closing-actions { width:100%; } .closing-actions .button { width:100%; } }
   /* Stacked on narrow screens: each comparison point becomes a labelled block
      so no column is squeezed below readability. */
   @media(max-width:640px) {
