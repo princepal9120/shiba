@@ -15,13 +15,23 @@
  * status invocation as the probe; the pinned claude CLI could not be
  * observed on this machine, so the probe exercises the credential on the
  * exact wire a run uses instead — a stored secret is still never proof.
+ *
+ * The package cannot reach `apps/backend/src/egress.js` (workspace
+ * boundary), so the caller injects the Worker-side forwarder — same
+ * function runs use, so the probe exercises the exact wire.
  */
 import type { ProviderAuthController } from "@shiba/shared";
 import {
   createAuthController,
   type AuthProviderHooks,
 } from "./controller.js";
-import { forwardClaudeSubscription, type EgressEnv } from "../egress.js";
+
+/** The Worker-side egress forwarder shape (implemented by apps/backend/src/egress.ts). */
+export type SubscriptionForwarder<Env> = (
+  request: Request,
+  env: Env,
+  ctx?: { params?: unknown },
+) => Promise<Response>;
 
 /** Secret name an account's setup-token lives under. */
 export function claudeSubscriptionSecretName(account: string): string {
@@ -47,6 +57,7 @@ interface AuthControllerEnv {
 async function probeClaudeSubscription<Env extends AuthControllerEnv>(
   env: Env,
   instanceId: string,
+  forward: SubscriptionForwarder<Env>,
 ): Promise<{ ok: boolean; message?: string }> {
   const account = instanceId.slice("claude-sub:".length);
   if (claudeSubscriptionToken(env, account) === undefined) {
@@ -56,7 +67,7 @@ async function probeClaudeSubscription<Env extends AuthControllerEnv>(
   try {
     // The forwarder reads only the named secret off env; pass the same
     // object the admission gate got — the token itself is never touched here.
-    const response = await forwardClaudeSubscription(request, env as unknown as EgressEnv, { params: { account } });
+    const response = await forward(request, env, { params: { account } });
     if (response.status === 200) return { ok: true, message: "setup-token reached the API." };
     if (response.status === 401 || response.status === 403) {
       return { ok: false, message: `credential rejected (${response.status}) — renew it with \`claude setup-token\` and re-store the secret.` };
@@ -71,9 +82,10 @@ async function probeClaudeSubscription<Env extends AuthControllerEnv>(
 export function claudeSubscriptionAuth<Env extends AuthControllerEnv>(
   env: Env,
   instanceId: string,
+  forward: SubscriptionForwarder<Env>,
 ): ProviderAuthController {
   const hooks: AuthProviderHooks<Env> = {
-    probe: probeClaudeSubscription,
+    probe: (e, id) => probeClaudeSubscription(e, id, forward),
     onBegin: async (e, id) => {
       const account = id.slice("claude-sub:".length);
       if (claudeSubscriptionToken(e, account) === undefined) {

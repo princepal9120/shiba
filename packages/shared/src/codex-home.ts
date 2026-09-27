@@ -191,6 +191,7 @@ export function codexUpdateHomePath(layout: CodexHomeLayout): string {
   return layout.sharedHomePath;
 }
 
+
 /**
  * Recover the account name from a `codex-sub:<homeDir>` instanceId — the
  * shadow dir encodes it (`acc-<name>`); the shared home means "default".
@@ -202,3 +203,28 @@ export function codexSubscriptionAccountFromInstanceId(instanceId: string): stri
   const base = path.split("/").pop() ?? "";
   return base.startsWith("acc-") ? base.slice(4) : "default";
 }
+
+/**
+ * The stored secret is the auth.json file contents verbatim:
+ * `{tokens: {access_token, account_id, ...}}`. Only the two fields the
+ * wire needs are read; a malformed file or missing access_token is a
+ * provisioning failure, not a forwarding decision.
+ */
+export function parseCodexAuthJson(raw: string): { accessToken: string; accountId: string | null } | null {
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const tokens = parsed.tokens;
+    if (typeof tokens !== "object" || tokens === null) return null;
+    const record = tokens as Record<string, unknown>;
+    const accessToken = record.access_token;
+    if (typeof accessToken !== "string" || accessToken === "") return null;
+    const accountId = record.account_id;
+    return {
+      accessToken,
+      accountId: typeof accountId === "string" && accountId !== "" ? accountId : null,
+    };
+  } catch {
+    return null;
+  }
+}
+

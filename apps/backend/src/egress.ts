@@ -7,6 +7,7 @@
  */
 import type { Env as WorkerEnv } from "./env.js";
 import { sanitizeContainerHeaders, stripCredentialParams } from "./provider-gateway.js";
+import { parseCodexAuthJson } from "@shiba/shared";
 
 export type EgressEnv = Pick<
   WorkerEnv,
@@ -234,27 +235,11 @@ export async function forwardCodexSubscription(
 }
 
 /**
- * The stored secret is the auth.json file contents verbatim:
- * `{tokens: {access_token, account_id, ...}}`. Only the two fields the
- * wire needs are read; a malformed file or missing access_token is a
- * provisioning failure, not a forwarding decision.
+ * The stored-secret parser moved to @shiba/shared (codex-home.ts) so
+ * packages/auth can validate a provisioned auth.json without reaching
+ * back into the app. Re-exported: callers keep `../egress.js` imports.
  */
-export function parseCodexAuthJson(raw: string): { accessToken: string; accountId: string | null } | null {
-  try {
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    const tokens = parsed.tokens;
-    if (typeof tokens !== "object" || tokens === null) return null;
-    const record = tokens as Record<string, unknown>;
-    const accessToken = record.access_token;
-    if (typeof accessToken !== "string" || accessToken === "") return null;
-    const accountId = record.account_id;
-    return {
-      accessToken,
-      accountId: typeof accountId === "string" && accountId !== "" ? accountId : null,
-    };
-  } catch {
-    return null;
-  }
+export { parseCodexAuthJson } from "@shiba/shared";
 }
 
 /**

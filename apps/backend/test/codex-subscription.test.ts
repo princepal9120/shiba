@@ -55,7 +55,7 @@ import { CodexErrorEvent } from "../src/harness/codex.js";
 import { resolveHarness, SANDBOX_HARNESS_NAMES, sandboxHarnessNames } from "../src/harness/index.js";
 import { forwardCodexSubscription, GATEWAY_PROVIDERS, parseCodexAuthJson, type EgressEnv } from "../src/egress.js";
 import { assertHarnessAuthorized } from "../src/auth/index.js";
-import { codexSubscriptionSecretName } from "../src/auth/codex-subscription.js";
+import { codexSubscriptionSecretName } from "@shiba/auth";
 import { Sandbox } from "../src/sandbox.js";
 import type { CodingTaskInput } from "../src/opencode-input.js";
 
@@ -364,12 +364,14 @@ describe("admission gate (T47 controller, account-keyed)", () => {
     await expect(assertHarnessAuthorized(env, codexSubscriptionHarness, input())).rejects.toThrow(
       /no authenticated account/,
     );
-    const { codexSubscriptionAuth } = await import("../src/auth/codex-subscription.js");
+    const { codexSubscriptionAuth } = await import("@shiba/auth");
     const original = globalThis.fetch;
     globalThis.fetch = (async () => new Response("{}", { status: 200 })) as typeof fetch;
     try {
       const secretEnv = { ...env, CODEX_SUBSCRIPTION_AUTH_JSON: STORED_AUTH_JSON };
-      const controller = codexSubscriptionAuth(secretEnv, codexSubscriptionInstanceId(input()));
+      const controller = codexSubscriptionAuth(secretEnv, codexSubscriptionInstanceId(input()), (r, e, c) =>
+        forwardCodexSubscription(r, e as EgressEnv, c),
+      );
       await controller.begin("owner@example.com");
       await controller.verify("owner@example.com");
     } finally {
@@ -380,7 +382,7 @@ describe("admission gate (T47 controller, account-keyed)", () => {
 
   it("clearing an overlay refuses that account only — the shared account is untouched", async () => {
     const env = kvEnv();
-    const { codexSubscriptionAuth } = await import("../src/auth/codex-subscription.js");
+    const { codexSubscriptionAuth } = await import("@shiba/auth");
     const original = globalThis.fetch;
     globalThis.fetch = (async () => new Response("{}", { status: 200 })) as typeof fetch;
     try {
@@ -389,7 +391,9 @@ describe("admission gate (T47 controller, account-keyed)", () => {
         CODEX_SUBSCRIPTION_AUTH_JSON: STORED_AUTH_JSON,
         CODEX_SUBSCRIPTION_AUTH_JSON_WORK: STORED_AUTH_JSON,
       };
-      const shared = codexSubscriptionAuth(secretEnv, codexSubscriptionInstanceId(input()));
+      const shared = codexSubscriptionAuth(secretEnv, codexSubscriptionInstanceId(input()), (r, e, c) =>
+        forwardCodexSubscription(r, e as EgressEnv, c),
+      );
       const work = codexSubscriptionAuth(secretEnv, codexSubscriptionInstanceId(input({ authAccount: "work" })));
       await shared.begin("owner@example.com");
       await shared.verify("owner@example.com");

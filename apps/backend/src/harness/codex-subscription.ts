@@ -98,7 +98,7 @@ export function codexSubscriptionInstanceId(input: Pick<CodingTaskInput, "authAc
 }
 
 // `codexSubscriptionAccountFromInstanceId` lives in @shiba/shared
-// (codex-home.ts) — src/auth/ must not import from harness/.
+// (codex-home.ts) — re-exported so harness callers keep one import site.
 export { codexSubscriptionAccountFromInstanceId } from "@shiba/shared";
 
 /**
