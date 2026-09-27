@@ -24,6 +24,7 @@ import {
   type AgentHarness,
   type HarnessConfigFile,
   type HarnessCapabilities,
+  type HarnessEvent,
   type VerificationOutcome,
   verifyRunOutcome,
 } from "./types.js";
@@ -58,14 +59,14 @@ const FATAL = /Not logged in|Login failed|Account verification failed|Authentica
  * Banner lines are dropped; auth failures throw so the run reports error
  * instead of pretending success.
  */
-export function parseDevinEvent(line: string): string | null {
+export function parseDevinEvent(line: string): HarnessEvent | null {
   const trimmed = line.trim();
   if (!trimmed) return null;
   if (BANNER.test(trimmed)) return null;
   if (FATAL.test(trimmed)) {
     throw new DevinErrorEvent(boundTail(trimmed, 500));
   }
-  return boundTail(trimmed, 500);
+  return { kind: "text", text: boundTail(trimmed, 500) };
 }
 
 /** "devin/swe-2" → "swe-2" — the CLI takes bare aliases after --model. */
@@ -129,7 +130,7 @@ export class DevinHarness implements AgentHarness {
     ];
   }
 
-  parseEvent(line: string): string | null {
+  parseEvent(line: string): HarnessEvent | null {
     return parseDevinEvent(line);
   }
   /** T43 declared capabilities — the gates read this, not the name. */

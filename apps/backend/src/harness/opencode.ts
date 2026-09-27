@@ -17,6 +17,7 @@ import {
   type AgentHarness,
   type HarnessConfigFile,
   type HarnessCapabilities,
+  type HarnessEvent,
   type VerificationOutcome,
   verifyRunOutcome,
 } from "./types.js";
@@ -42,7 +43,7 @@ export class OpenCodeErrorEvent extends Error {
  * newline-delimited JSON; anything else is surfaced as an honest error.
  * Error events throw OpenCodeErrorEvent so callers can propagate them.
  */
-export function parseOpencodeEvent(line: string): string | null {
+export function parseOpencodeEvent(line: string): HarnessEvent | null {
   const trimmed = line.trim();
   if (!trimmed) return null;
   let event: unknown;
@@ -60,8 +61,10 @@ export function parseOpencodeEvent(line: string): string | null {
     throw new OpenCodeErrorEvent(boundTail(detail, 500));
   }
   const part = record.part ?? record.parts;
-  const text = typeof part === "string" ? part : summarizeUnknown(record);
-  return boundTail(text.trim() || summarizeUnknown(record), 500);
+  if (typeof part === "string" && part.trim()) {
+    return { kind: "text", text: boundTail(part.trim(), 500) };
+  }
+  return { kind: "progress", text: boundTail(summarizeUnknown(record), 500) };
 }
 
 function summarizeUnknown(record: Record<string, unknown>): string {
@@ -145,7 +148,7 @@ export class OpenCodeHarness implements AgentHarness {
     return buildOpencodeArgv(input, workdir);
   }
 
-  parseEvent(line: string): string | null {
+  parseEvent(line: string): HarnessEvent | null {
     return parseOpencodeEvent(line);
   }
   /** T43 declared capabilities — the gates read this, not the name. */

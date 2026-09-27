@@ -17,6 +17,7 @@ import {
   PROVIDER_KEY_ENV,
   type AgentHarness,
   type HarnessCapabilities,
+  type HarnessEvent,
   type VerificationOutcome,
   verifyRunOutcome,
 } from "./types.js";
@@ -40,7 +41,7 @@ export class ClaudeCodeEventError extends Error {}
  * newline-delimited JSON envelopes; `is_error` marks a failed result, which
  * throws so the run fails honestly rather than reporting success.
  */
-export function parseClaudeCodeEvent(line: string): string | null {
+export function parseClaudeCodeEvent(line: string): HarnessEvent | null {
   const trimmed = line.trim();
   if (!trimmed) return null;
   let event: unknown;
@@ -61,31 +62,39 @@ export function parseClaudeCodeEvent(line: string): string | null {
         : JSON.stringify(record);
     throw new ClaudeCodeErrorEvent(boundTail(detail, 500));
   }
-  const text = claudeCodeText(record);
-  return boundTail(text, 500);
+  return claudeCodeEvent(record);
 }
 
-function claudeCodeText(record: Record<string, unknown>): string {
+function claudeCodeEvent(record: Record<string, unknown>): HarnessEvent {
   const message = record.message;
   if (typeof message === "object" && message !== null) {
     const content = (message as { content?: unknown }).content;
     if (Array.isArray(content)) {
-      const parts = content
-        .map((entry) => {
-          if (typeof entry !== "object" || entry === null) return null;
-          const block = entry as Record<string, unknown>;
-          if (typeof block.text === "string") return block.text;
-          if (typeof block.name === "string") return `tool: ${block.name}`;
-          return null;
-        })
-        .filter((value): value is string => value !== null);
-      if (parts.length > 0) return parts.join(" ").trim();
+      const parts: string[] = [];
+      const tools: string[] = [];
+      for (const entry of content) {
+        if (typeof entry !== "object" || entry === null) continue;
+        const block = entry as Record<string, unknown>;
+        if (typeof block.text === "string") parts.push(block.text);
+        else if (typeof block.name === "string") {
+          parts.push(`tool: ${block.name}`);
+          tools.push(block.name);
+        }
+      }
+      if (tools.length > 0) {
+        return { kind: "tool", name: tools.join(", "), text: boundTail(parts.join(" ").trim(), 500) };
+      }
+      if (parts.length > 0) {
+        return { kind: "text", text: boundTail(parts.join(" ").trim(), 500) };
+      }
     }
   }
-  if (typeof record.result === "string" && record.result.trim()) return record.result.trim();
+  if (typeof record.result === "string" && record.result.trim()) {
+    return { kind: "result", text: boundTail(record.result.trim(), 500) };
+  }
   const type = typeof record.type === "string" ? record.type : "event";
   const keys = Object.keys(record).filter((key) => key !== "type").slice(0, 6);
-  return keys.length ? `${type} (${keys.join(", ")})` : type;
+  return { kind: "progress", text: boundTail(keys.length ? `${type} (${keys.join(", ")})` : type, 500) };
 }
 
 export class ClaudeCodeHarness implements AgentHarness {
@@ -131,7 +140,7 @@ export class ClaudeCodeHarness implements AgentHarness {
     ];
   }
 
-  parseEvent(line: string): string | null {
+  parseEvent(line: string): HarnessEvent | null {
     return parseClaudeCodeEvent(line);
   }
   /** T43 declared capabilities — the gates read this, not the name. */
