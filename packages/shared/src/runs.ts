@@ -8,6 +8,7 @@ import type { ApprovalEvidence } from "./approvals.js";
 import type { ApprovedRoute } from "./model.js";
 import type { Receipt } from "./receipts.js";
 import type { RunErrorCode } from "./run-errors.js";
+import type { RunSignal } from "./run-signals.js";
 import type { SteeringNote } from "./steering.js";
 
 /**
@@ -76,6 +77,13 @@ export interface DelegatedRun {
    * without it; absent on records predating the decider.
    */
   approval?: ApprovalEvidence;
+  /**
+   * T42: typed pipeline milestones the child emitted in order
+   * (sandbox.ready → … → pr.opened/screenshot.captured), persisted on the
+   * row so a waiter reads the signal it needs. Partial on a failed run —
+   * the missing signals name the phase that never completed.
+   */
+  signals?: RunSignal[];
 }
 
 export type RunPatch = {
@@ -87,6 +95,7 @@ export type RunPatch = {
   screenshotUrl?: string | null;
   receipts?: Receipt[];
   sandboxId?: string;
+  signals?: RunSignal[];
 };
 
 /** Backfills fields persisted runs predate; never rejects a legacy record. */

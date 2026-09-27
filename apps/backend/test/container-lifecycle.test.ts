@@ -17,10 +17,15 @@ import {
 import type { Env } from "../src/env.js";
 import type { ExecResult, SandboxOps } from "../src/runtime.js";
 
-const tick = () => new Promise((resolve) => setTimeout(resolve, 10));
-
-const waitFor = async (cond: () => boolean) => {
-  for (let i = 0; i < 100 && !cond(); i++) await tick();
+/** T42: deferred latch — the code under test resolves it, never a clock. */
+const latch = <T = void>() => {
+  let resolve!: (value: T) => void;
+  let reject!: (error?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
 };
 
 const mocks = vi.hoisted(() => ({
@@ -325,6 +330,7 @@ describe("interruption-safe release", () => {
     const controller = new AbortController();
     const release = vi.fn(async (_sandboxId: string) => {});
     let container: ManagedContainer | undefined;
+    const taskStarted = latch();
     const run = runWithContainer(
       {
         acquire: async () => fakeOps(),
@@ -334,12 +340,13 @@ describe("interruption-safe release", () => {
       },
       async (managed) => {
         container = managed;
+        taskStarted.resolve();
         // An in-flight operation that ignores the signal entirely — only a
         // real interruption can unwind the task, and release must still run.
         await new Promise<never>(() => {});
       },
     );
-    await waitFor(() => container !== undefined);
+    await taskStarted.promise;
     controller.abort();
     await expect(run).rejects.toMatchObject({ code: "cancelled" });
     expect(release).toHaveBeenCalledOnce();
@@ -352,6 +359,7 @@ describe("interruption-safe release", () => {
     let seenSignal: AbortSignal | undefined;
     ops.exec.mockImplementationOnce((_command, opts) => {
       seenSignal = opts?.signal;
+      signalSeen.resolve();
       return new Promise<never>((_resolve, reject) => {
         opts?.signal?.addEventListener(
           "abort",
@@ -360,6 +368,7 @@ describe("interruption-safe release", () => {
         );
       });
     });
+    const signalSeen = latch();
     const release = vi.fn(async (_sandboxId: string) => {});
     const run = runWithContainer(
       {
@@ -370,9 +379,10 @@ describe("interruption-safe release", () => {
       },
       // The op is called WITHOUT a signal: the scope supplies a fallback
       // that fires when the fiber is interrupted, so ops still abort.
+      // ("sleep 60" is a mock command string — the exec never runs.)
       (container) => container.ops.exec("sleep 60"),
     );
-    await waitFor(() => seenSignal !== undefined);
+    await signalSeen.promise;
     controller.abort();
     await expect(run).rejects.toMatchObject({ code: "cancelled" });
     expect(release).toHaveBeenCalledOnce();
@@ -383,6 +393,7 @@ describe("interruption-safe release", () => {
   it("runs the release finalizer when the fiber is interrupted mid-task", async () => {
     const release = vi.fn(async (_sandboxId: string) => {});
     let container: ManagedContainer | undefined;
+    const acquired = latch<ManagedContainer>();
     const fiber = Effect.runFork(
       Effect.scoped(
         Effect.gen(function* () {
@@ -391,11 +402,12 @@ describe("interruption-safe release", () => {
             release,
             sandboxId: "sbx-fiber",
           });
+          acquired.resolve(container);
           yield* Effect.never;
         }),
       ),
     );
-    await waitFor(() => container !== undefined);
+    await acquired.promise;
     await Effect.runPromise(Fiber.interrupt(fiber));
     expect(release).toHaveBeenCalledOnce();
     expect(release).toHaveBeenCalledWith("sbx-fiber");
@@ -406,13 +418,16 @@ describe("interruption-safe release", () => {
   it("resolves with the task value when the signal aborts while a slow release is running", async () => {
     const controller = new AbortController();
     let abortDuringRelease: (() => void) | undefined;
+    const releaseStarted = latch();
     const release = vi.fn(
       (_sandboxId: string) =>
         new Promise<void>((resolve) => {
+          releaseStarted.resolve();
           abortDuringRelease = () => {
             controller.abort();
-            // The release keeps running past the abort before resolving.
-            setTimeout(resolve, 30);
+            // The release resolves after the abort — deterministically, no
+            // clock: the abort fires while this release is still pending.
+            resolve();
           };
         }),
     );
@@ -425,7 +440,7 @@ describe("interruption-safe release", () => {
       },
       async () => "done",
     );
-    await waitFor(() => abortDuringRelease !== undefined);
+    await releaseStarted.promise;
     abortDuringRelease!();
     await expect(run).resolves.toBe("done");
     expect(release).toHaveBeenCalledOnce();

@@ -34,6 +34,7 @@ import {
   type SandboxOps,
 } from "../runtime.js";
 import { HARNESS_RETRY, withRetry } from "../harness/retry.js";
+import type { RunSignal } from "@shiba/shared";
 import { boundTail, parseGitHubRepoUrl, redactSecrets } from "../security.js";
 import { captureRunPreview } from "../screenshot.js";
 import { postSlackMessage } from "../slack.js";
@@ -173,6 +174,12 @@ export class OpenCodeAgent extends AIChatAgent<Env> {
         let progressChars = 0;
         let progressCount = 0;
         let slackProgress: SlackProgressReporter | null = null;
+        // T42: the adapter and the publish step append milestones here;
+        // the result envelope carries them back to the orchestrator.
+        const runSignals: RunSignal[] = [];
+        const noteSignal = (kind: RunSignal["kind"], detail?: string) => {
+          runSignals.push(detail !== undefined ? { kind, at: Date.now(), detail } : { kind, at: Date.now() });
+        };
         const emit = async (event: ProgressEvent) => {
           checkCancelled();
           if (progressCount >= 100 || progressChars >= 20_000) return;
@@ -204,7 +211,7 @@ export class OpenCodeAgent extends AIChatAgent<Env> {
           const adapter = createRuntimeAdapter(resolveRuntimeName(this.env.RUNTIME), harness);
           const hosts = allowedHostsFor(harness, input.codingModel);
           const ops = createSandboxOps(this.env, input.sandboxId, hosts);
-          const result = await adapter.runCodingTask(ops, input, emit, { signal });
+          const result = await adapter.runCodingTask(ops, input, emit, { signal, signals: runSignals });
           checkCancelled();
           // UNINTERRUPTIBLE: publish + result commit. Once the remote PR write
           // starts, an abort must not lose the outcome — a fake-failed real PR
@@ -216,6 +223,8 @@ export class OpenCodeAgent extends AIChatAgent<Env> {
             const published = await this.publishResult(input, result, signal);
             pullUrl = published.pullUrl;
             screenshotUrl = published.screenshotUrl;
+            if (screenshotUrl) noteSignal("screenshot.captured", screenshotUrl);
+            noteSignal("pr.opened", pullUrl);
           }
           const safeResult = this.uiResult(result);
           // The transcript commit below is part of the same UNINTERRUPTIBLE
@@ -237,6 +246,7 @@ export class OpenCodeAgent extends AIChatAgent<Env> {
             ...safeResult,
             ...(pullUrl ? { pullUrl } : {}),
             ...(screenshotUrl ? { screenshotUrl } : {}),
+            signals: runSignals,
           }));
           writer.write({ type: "text-end", id });
           if (safeResult.status === "error") writer.write({ type: "error", errorText: safeResult.summary });
@@ -246,6 +256,9 @@ export class OpenCodeAgent extends AIChatAgent<Env> {
           const result: CodingTaskResult = {
             status: "error", exitCode: -1, summary,
             stderrTail: "", changedFiles: [], diff: "", files: [],
+            // Partial signals ride the error envelope too — a waiter's
+            // missing milestone names the phase that never completed.
+            signals: runSignals,
           };
           write(`Failed: ${summary}`);
           write(formatAgentResult(result));

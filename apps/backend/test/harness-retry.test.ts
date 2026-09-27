@@ -172,6 +172,10 @@ describe("withRetry", () => {
     );
     // Let the first failure land and the long backoff begin before aborting,
     // so the interrupt hits the wait — not the entry check or the catch path.
+    // [T42 timing exemption — marked per §18.3: the property under test is
+    // that the backoff WAIT itself is interruptible; there is no signal to
+    // await because "the delay has begun" is observable only as elapsed
+    // scheduling. The assertion below pins the abort latency, not a sync.]
     await new Promise((resolve) => setTimeout(resolve, 20));
     const started = Date.now();
     controller.abort();

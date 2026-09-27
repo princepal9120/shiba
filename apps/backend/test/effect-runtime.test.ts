@@ -9,8 +9,6 @@ import {
   tryRunPromise,
 } from "../src/effect/runtime.js";
 
-const tick = () => new Promise((resolve) => setTimeout(resolve, 10));
-
 describe("runWorkerEffect", () => {
   it("passes a successful Effect's value through", async () => {
     await expect(runWorkerEffect(Effect.succeed(42))).resolves.toBe(42);
@@ -123,30 +121,30 @@ describe("tryRunPromise", () => {
 
 describe("signal bridge", () => {
   it("effectWithSignal aborts the controller when the fiber is interrupted", async () => {
-    let seen: AbortSignal | undefined;
+    // T42: the latch resolves when the fiber's work actually starts — no
+    // fixed tick guessing at fiber startup.
+    const started = Promise.withResolvers<AbortSignal>();
     const fiber = Effect.runFork(
       effectWithSignal((signal) => {
-        seen = signal;
+        started.resolve(signal);
         return Effect.never;
       }),
     );
-    await tick();
+    const seen = await started.promise;
     await Effect.runPromise(Fiber.interrupt(fiber));
-    expect(seen).toBeDefined();
-    expect(seen?.aborted).toBe(true);
+    expect(seen.aborted).toBe(true);
   });
 
   it("tryRunPromise propagates interruption to the underlying async work", async () => {
-    let seen: AbortSignal | undefined;
+    const started = Promise.withResolvers<AbortSignal>();
     const fiber = Effect.runFork(
       tryRunPromise((signal) => {
-        seen = signal;
+        started.resolve(signal);
         return new Promise<never>(() => {});
       }),
     );
-    await tick();
+    const seen = await started.promise;
     await Effect.runPromise(Fiber.interrupt(fiber));
-    expect(seen).toBeDefined();
-    expect(seen?.aborted).toBe(true);
+    expect(seen.aborted).toBe(true);
   });
 });

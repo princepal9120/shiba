@@ -692,6 +692,9 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
                     // T33: the stored screenshot link rides the same envelope;
                     // a failed capture arrives as an absent field → null.
                     screenshotUrl: parsed.screenshotUrl ?? null,
+                    // T42: the typed milestones ride the same envelope and
+                    // land on the row — a waiter reads signals, not clocks.
+                    signals: parsed.signals,
                   },
                   slackRunCompleted({
                     repoUrl: fullInput.repoUrl,
@@ -741,6 +744,9 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
                 summary: output.slice(0, 4000),
                 error: redactSecrets(parsed?.summary ?? output.slice(0, 4000)).slice(0, 4000),
                 errorCode: failure.code,
+                // T42: partial signals survive a failed run — the missing
+                // milestones name the phase it never reached.
+                signals: parsed?.signals,
               }, slackRunFailed({
                 repoUrl: fullInput.repoUrl,
                 userMessage: runErrorWire(failure.code).userMessage,
