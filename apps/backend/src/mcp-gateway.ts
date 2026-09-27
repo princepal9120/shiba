@@ -1,38 +1,35 @@
 /**
- * MCP gateway (megaplan task 5): `McpGateway` Durable Object extends
- * `McpAgent` (agents/mcp) and is fronted by the bearer-authed `/mcp` route
- * in index.ts.
+ * MCP gateway (megaplan task 5, T29a): a stateless MCP server built per
+ * request by {@link createShibaMcpHandler} — `createMcpHandler` from
+ * `agents/mcp` over an SDK v2 `McpServer` factory. No Durable Object is
+ * involved; the `McpAgent` DO base class is deprecated since agents@0.23.0.
  *
  * Auth model: index.ts verifies the bearer token once per HTTP request and
  * forwards the verified {@link TokenRecord} inside the `x-shiba-principal`
- * header (client-supplied copies are stripped first). The MCP transports
- * copy request headers into every tool call's `requestInfo`, so each
- * invocation re-reads that worker-injected record — the per-request context
- * the registry scopes and audits against. DO stubs are unreachable from
- * outside the worker, so the header cannot arrive unverified.
+ * header (client-supplied copies are stripped first). The handler's serving
+ * is per-request and stateless, so the server instance a tool call runs on
+ * only ever sees that one request — the callback re-reads the injected
+ * header from `ctx.http?.req` (the request the transport dispatched) with
+ * the factory's own `requestInfo` as fallback. The header can therefore
+ * never arrive unverified: index.ts is the only caller and it always
+ * rewrites the header before handing the request over.
  *
  * Tool calls: `registerTool(name, scope, handler)` stores a handler; every
  * dispatch wraps it in `requireScope` → handler → `audit`. `args_hash` is
  * the SHA-256 of the canonical (sorted-key) JSON args — a hash of the args,
  * never the args themselves, so an audit reader can compare calls without
  * learning what they contained.
- *
- * Note: `McpAgent` is `@deprecated` upstream since agents@0.23.0 (the SDK
- * now recommends `createMcpHandler`); the megaplan Interfaces section
- * mandates it, and the registry seam T6/T9 tools register against is
- * independent of that base class.
  */
-import { McpAgent } from "agents/mcp";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { createMcpHandler } from "agents/mcp";
+import {
+  McpServer,
+  type CallToolResult as CallToolResultV2,
+  type McpRequestContext,
+  type ServerContext,
+} from "@modelcontextprotocol/server";
 import type { ZodRawShapeCompat } from "@modelcontextprotocol/sdk/server/zod-compat.js";
-import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
-import type {
-  CallToolResult,
-  RequestInfo,
-  ServerNotification,
-  ServerRequest,
-  ToolAnnotations,
-} from "@modelcontextprotocol/sdk/types.js";
+import type { CallToolResult, ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
+import type { ZodType } from "zod";
 import {
   requireScope,
   ScopeError,
@@ -180,21 +177,14 @@ function parsePrincipal(raw: string | null): TokenRecord | null {
  * `x-shiba-principal` header. Returns null when absent or malformed so
  * callers deny instead of guessing. Exported for tests.
  */
-export function principalFor(request: Request): TokenRecord | null {
-  return parsePrincipal(request.headers.get(MCP_PRINCIPAL_HEADER));
-}
-
-/** Same lookup against a tool call's `requestInfo` header bag. Exported for tests. */
-export function principalFromInfo(info: RequestInfo | undefined): TokenRecord | null {
-  const raw = info?.headers?.[MCP_PRINCIPAL_HEADER];
-  return parsePrincipal(
-    typeof raw === "string" ? raw : Array.isArray(raw) ? (raw[0] ?? null) : null,
-  );
+export function principalFor(request: Request | null | undefined): TokenRecord | null {
+  return parsePrincipal(request?.headers.get(MCP_PRINCIPAL_HEADER) ?? null);
 }
 
 /**
  * Create the tool registry the gateway serves. Domain modules register
- * their tools here (T6 email, T9 memory, run tools) before the DO publishes them.
+ * their tools here (T6 email, T9 memory, run tools) before the per-request
+ * server publishes them.
  */
 export function createToolRegistry(env: McpGatewayEnv): ToolRegistry {
   const tools = new Map<string, RegisteredTool>();
@@ -279,36 +269,56 @@ export function createToolRegistry(env: McpGatewayEnv): ToolRegistry {
   };
 }
 
-type ToolExtra = RequestHandlerExtra<ServerRequest, ServerNotification>;
+/**
+ * Build the per-request MCP server the stateless handler serves: a fresh
+ * `McpServer` (SDK v2) with every registry tool published. The factory runs
+ * once per HTTP request, so `mcpCtx.requestInfo` IS the request this
+ * instance exists to serve — and each tool callback still re-reads the
+ * injected principal from its own dispatch context (`ctx.http?.req`),
+ * falling back to that same request.
+ */
+function buildMcpServer(env: Env, mcpCtx: McpRequestContext): McpServer {
+  const server = new McpServer({ name: "shiba", version: "0.1.0" });
+  const registry = createToolRegistry(env);
+  registerEmailTools(registry, env);
+  registerMemoryTools(registry, env);
+  registerRunTools(registry, env);
+  for (const tool of registry.tools()) {
+    server.registerTool(
+      tool.name,
+      {
+        description: tool.meta.description ?? tool.name,
+        // SDK v2 types raw shapes as Record<string, z.ZodType>; the
+        // registry carries the SDK v1 compat shape (same zod v4 values).
+        inputSchema: tool.meta.inputSchema as
+          | Record<string, ZodType>
+          | undefined,
+        annotations: tool.meta.annotations,
+      },
+      async (args: Record<string, unknown>, ctx: ServerContext) =>
+        (await registry.invoke(
+          tool.name,
+          args,
+          principalFor(ctx.http?.req ?? mcpCtx.requestInfo),
+        )) as CallToolResultV2,
+    );
+  }
+  return server;
+}
 
 /**
- * The MCP Durable Object. Thin wiring: `init` publishes every registry
- * tool on the SDK server; each callback resolves the injected principal
- * and delegates to the registry's scope/audit wrapper.
+ * The `/mcp` route handler. `createMcpHandler` (agents/mcp) wraps the SDK
+ * v2 stateless entry: the factory builds a fresh server per request, the
+ * legacy (2025-era) lane is served statelessly by the same definition, and
+ * CORS/host/origin validation ride along. `route` is an exact-pathname
+ * match inside the wrapper, so the caller passes the request's own
+ * pathname to keep `/mcp/*` subpaths reachable (index.ts gates them all
+ * behind bearer auth first). `env` is closed over per request — stateless
+ * serving makes per-request construction the supported shape.
  */
-export class McpGateway extends McpAgent<Env> {
-  server = new McpServer({ name: "shiba-ai-coworker", version: "0.1.0" });
-
-  async init(): Promise<void> {
-    const registry = createToolRegistry(this.env);
-    registerEmailTools(registry, this.env);
-    registerMemoryTools(registry, this.env);
-    registerRunTools(registry, this.env);
-    for (const tool of registry.tools()) {
-      this.server.registerTool(
-        tool.name,
-        {
-          description: tool.meta.description ?? tool.name,
-          inputSchema: tool.meta.inputSchema,
-          annotations: tool.meta.annotations,
-        },
-        async (args: Record<string, unknown>, extra: ToolExtra) =>
-          registry.invoke(
-            tool.name,
-            args,
-            principalFromInfo(extra.requestInfo),
-          ),
-      );
-    }
-  }
+export function createShibaMcpHandler(env: Env, route: string) {
+  return createMcpHandler(
+    (mcpCtx: McpRequestContext) => buildMcpServer(env, mcpCtx),
+    { route },
+  );
 }

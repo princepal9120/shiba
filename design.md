@@ -113,6 +113,39 @@ unchanged and unhidden (approval gate is sacred).
 - Instrument Serif display + Geist body + Geist Mono microcopy.
 - Zero radius, hard offset shadows, square chips, dot-grid canvas.
 
+### Token names — one vocabulary (revised 2026-09-27)
+
+The names above are **canonical**. `apps/web` already uses them verbatim.
+`apps/frontend` declares them as the source of truth and exposes a small set of
+local aliases for its existing utility classes:
+
+| Canonical (`design.md`) | Frontend alias | Light value |
+|---|---|---|
+| `--paper` | `--bg` | `#f6f4ed` |
+| `--card` | `--panel` | `#fffef8` |
+| `--ink` | `--text` | `#222320` |
+| `--ink-2` | `--muted` | `#6a6f63` |
+| `--navy` | `--accent`, `--brand`, `--running` | `#0000a8` |
+| `--navy-2` | `--accent-light`, `--brand-light` | `#1c1cc8` |
+
+Rules:
+
+- **Declare canonical tokens with literal colors; declare aliases as
+  `var(--canonical)`.** Then a dark-theme override of `--paper` re-points
+  `--bg` automatically, and there is exactly one place to edit a color.
+- **New code uses the canonical names.** Aliases exist for existing utility
+  classes, not as an alternative vocabulary.
+- **Never introduce a third name for a color that already has one.** If a value
+  is not in this table, it is not a token — it belongs in `styles.css` only if
+  it is genuinely new, and it must be added here in the same change.
+
+**Known fragility (do not extend):** the dashboard's Tailwind call sites use
+hardcoded arbitrary values (`bg-[#f6f4ed]`), so dark mode works by remapping
+those exact class tokens under `html.dark` rather than by swapping variables.
+That remap is a stopgap for an unfinished migration, not a pattern. A new
+surface should use canonical variables — which works in both themes with no
+remap entry.
+
 ## What surfaces MAY differ on
 
 - Which panels carry full window chrome (titlebar/marks/statusbar).

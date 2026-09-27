@@ -30,8 +30,20 @@ import {
 const DIMS = 768;
 const REGISTRY_BASE = "https://internal/internal/memory";
 
+/**
+ * Deterministic pseudo-embedding: a text-seeded stream centered at 0, so
+ * identical texts score ~1.0 and unrelated texts near 0 — the dedupe
+ * threshold (0.92) needs real separation, not the length-only collapse.
+ */
 function fakeEmbed(text: string): number[] {
-  return Array.from({ length: DIMS }, (_, i) => ((text.length * (i + 1)) % 7) / 7);
+  let seed = 2166136261;
+  for (let i = 0; i < text.length; i++) {
+    seed = Math.imul(seed ^ text.charCodeAt(i), 16777619);
+  }
+  return Array.from({ length: DIMS }, () => {
+    seed = Math.imul(seed ^ (seed >>> 13), 1274126177);
+    return ((seed >>> 0) / 0xffffffff) * 2 - 1;
+  });
 }
 
 type FakeStub = { fetch: (r: Request) => Promise<Response> };
@@ -69,6 +81,8 @@ function makeEnv(opts: {
                   toArray: () => db.prepare(sql).all(...(params as any[])) as SqlRow[],
                 }),
               },
+              getAlarm: async () => 1,
+              setAlarm: async () => {},
             },
             blockConcurrencyWhile: async (fn: () => Promise<unknown>) => fn(),
             waitUntil: () => {},

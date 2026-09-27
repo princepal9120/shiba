@@ -46,6 +46,7 @@ describe("dashboard unknown status", () => {
       task: "Ambiguous run",
       baseBranch: "main",
       publishPullRequest: false,
+      generation: 0,
       status: "unknown",
       createdAt: Date.now() - 1000,
       updatedAt: Date.now(),

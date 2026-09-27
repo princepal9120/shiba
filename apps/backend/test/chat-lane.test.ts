@@ -2,6 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import {
   buildChatThreadName,
   buildDecisionData,
+  parseChatThreadName,
+  parseDecisionData,
+} from "@shiba/shared";
+import {
   chatApprovalText,
   chatTaskChunks,
   createSeenRing,
@@ -10,8 +14,6 @@ import {
   discordApi,
   NO_MENTIONS,
   parseChatTaskRequest,
-  parseChatThreadName,
-  parseDecisionData,
   postToChatThread,
   queueChatRun,
   telegramApi,

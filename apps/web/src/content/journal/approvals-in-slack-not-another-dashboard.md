@@ -29,10 +29,10 @@ cloud run.
 
 There are two Slack entry points, and they behave the same way once inside.
 
-The first is a mention. Type `@shiba-ai-coworker` in a thread and describe
+The first is a mention. Type `@shiba` in a thread and describe
 the task. The Worker receives it at `POST /api/slack/events`.
 
-The second is a slash command. `/shiba-ai-coworker <repo> <task>` arrives at
+The second is a slash command. `/shiba <repo> <task>` arrives at
 `POST /api/slack/command` when you want to start a task without an existing
 thread.
 

@@ -2,10 +2,14 @@
 // same orchestrator routes /api/runs and /api/approvals use. Deliberately no approve tool.
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { getAgentByName } from "agents/routing";
-import { z } from "zod";
+import {
+  AGENT_PRINCIPAL_HEADER,
+  listRunsInputSchema,
+  queueRunInputSchema,
+  runStatusInputSchema,
+} from "@shiba/shared";
 import type { Env } from "./env.js";
 import type { ToolRegistry } from "./mcp-gateway.js";
-import { AGENT_PRINCIPAL_HEADER } from "./runs.js";
 
 const ORCHESTRATOR_NAME = "default";
 const DEFAULT_LIST_LIMIT = 20;
@@ -62,19 +66,7 @@ export function registerRunTools(registry: ToolRegistry, env: Env): void {
       description:
         "Queue a coding task on a GitHub repo as a pending approval. Never starts a run: a human " +
         "approves it in the dashboard or Slack, then it runs with the requested or default harness and model.",
-      inputSchema: {
-        repoUrl: z.string().describe("HTTPS GitHub repository URL, e.g. https://github.com/owner/repo."),
-        task: z.string().describe("The coding task to perform in the repository."),
-        baseBranch: z.string().optional().describe("Base branch to clone. Defaults to main."),
-        publishPullRequest: z
-          .boolean()
-          .optional()
-          .describe("Open a pull request with the result. Requires GITHUB_TOKEN on the deployment."),
-        harness: z
-          .enum(["opencode", "claude-code", "codex", "devin"])
-          .optional()
-          .describe("Coding agent harness. Defaults to the deployment's AGENT_HARNESS."),
-      },
+      inputSchema: queueRunInputSchema.shape,
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
   );
@@ -86,7 +78,7 @@ export function registerRunTools(registry: ToolRegistry, env: Env): void {
       jsonResult(await orchestratorJson(env, `/api/runs/${encodeURIComponent(String(args.runId))}`, undefined, ctx.principal.principal)),
     {
       description: "Fetch one run record (status, result, pull request) by runId.",
-      inputSchema: { runId: z.string().min(1).describe("Run id, e.g. agent-tool:<approvalId>.") },
+      inputSchema: runStatusInputSchema.shape,
       annotations: { readOnlyHint: true },
     },
   );
@@ -102,7 +94,7 @@ export function registerRunTools(registry: ToolRegistry, env: Env): void {
     },
     {
       description: `List run records, newest first (default ${DEFAULT_LIST_LIMIT}).`,
-      inputSchema: { limit: z.number().int().min(1).max(200).optional() },
+      inputSchema: listRunsInputSchema.shape,
       annotations: { readOnlyHint: true },
     },
   );

@@ -76,7 +76,7 @@ export function slackAck(input: { repoUrl: string; harness?: string }): string {
 
 /** Queueing itself failed before any run existed. */
 export function slackQueueFailed(): string {
-  return "couldn't queue that one — try again in a sec, or hit me with /shiba-ai-coworker.";
+  return "couldn't queue that one — try again in a sec, or hit me with /shiba.";
 }
 
 /** Run admitted and the container is starting. */

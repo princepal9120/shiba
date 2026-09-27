@@ -32,14 +32,14 @@ function headers(timestamp: string, signature: string): Headers {
 
 describe("verifySlackRequest", () => {
   it("verifies valid Slack signature", async () => {
-    const body = "token=abc&team_id=T123&command=%2Fshiba-ai-coworker&text=fix+this";
+    const body = "token=abc&team_id=T123&command=%2Fshiba&text=fix+this";
     const timestamp = String(Math.floor(Date.now() / 1000));
     const signature = await sign(SECRET, timestamp, body);
     await expect(verifySlackRequest(body, headers(timestamp, signature), SECRET)).resolves.toBe(true);
   });
 
   it("rejects a tampered body", async () => {
-    const body = "command=%2Fshiba-ai-coworker&text=fix+this";
+    const body = "command=%2Fshiba&text=fix+this";
     const timestamp = String(Math.floor(Date.now() / 1000));
     const signature = await sign(SECRET, timestamp, body);
     await expect(
@@ -48,14 +48,14 @@ describe("verifySlackRequest", () => {
   });
 
   it("rejects a 6-minute-old timestamp (replay protection)", async () => {
-    const body = "command=%2Fshiba-ai-coworker&text=fix+this";
+    const body = "command=%2Fshiba&text=fix+this";
     const timestamp = String(Math.floor(Date.now() / 1000) - 360);
     const signature = await sign(SECRET, timestamp, body);
     await expect(verifySlackRequest(body, headers(timestamp, signature), SECRET)).resolves.toBe(false);
   });
 
   it("rejects missing headers and missing secret", async () => {
-    const body = "command=%2Fshiba-ai-coworker&text=fix+this";
+    const body = "command=%2Fshiba&text=fix+this";
     const timestamp = String(Math.floor(Date.now() / 1000));
     const signature = await sign(SECRET, timestamp, body);
     await expect(verifySlackRequest(body, new Headers(), SECRET)).resolves.toBe(false);
@@ -89,7 +89,7 @@ describe("slack slash command", () => {
 
   it("routes slash command to orchestrator and returns Task queued", async () => {
     const request = await signedCommandRequest({
-      command: "/shiba-ai-coworker",
+      command: "/shiba",
       text: "https://github.com/owner/repo Fix the login bug",
       user_id: "U123",
       channel_id: "C456",
@@ -116,7 +116,7 @@ describe("slack slash command", () => {
 
   it("rejects an invalid Slack signature with 401 and queues nothing", async () => {
     const request = await signedCommandRequest(
-      { command: "/shiba-ai-coworker", text: "https://github.com/owner/repo Fix it" },
+      { command: "/shiba", text: "https://github.com/owner/repo Fix it" },
       "wrong-secret",
     );
     const fetchMock = vi.fn(
@@ -131,7 +131,7 @@ describe("slack slash command", () => {
 
   it("returns 200 with an ephemeral usage message when no GitHub URL is present", async () => {
     const request = await signedCommandRequest({
-      command: "/shiba-ai-coworker",
+      command: "/shiba",
       text: "fix it please",
     });
     const fetchMock = vi.fn(
@@ -151,7 +151,7 @@ describe("slack slash command", () => {
   it("acks fast and delivers the card via response_url when ctx is provided", async () => {
     const responseUrl = "https://hooks.slack.com/commands/T1/123/token";
     const request = await signedCommandRequest({
-      command: "/shiba-ai-coworker",
+      command: "/shiba",
       text: "https://github.com/owner/repo Fix the login bug",
       user_id: "U123",
       channel_id: "C456",
@@ -187,7 +187,7 @@ describe("slack slash command", () => {
 
   it("queues with mention-lane parity: publishPullRequest on, channel/user carried", async () => {
     const request = await signedCommandRequest({
-      command: "/shiba-ai-coworker",
+      command: "/shiba",
       text: "https://github.com/owner/repo Fix it",
       user_id: "U123",
       channel_id: "C456",
@@ -207,7 +207,7 @@ describe("slack slash command", () => {
   it("reports a queue failure via response_url instead of a 502", async () => {
     const responseUrl = "https://hooks.slack.com/commands/T1/123/token";
     const request = await signedCommandRequest({
-      command: "/shiba-ai-coworker",
+      command: "/shiba",
       text: "https://github.com/owner/repo Fix it",
       response_url: responseUrl,
     });
@@ -231,7 +231,7 @@ describe("slack slash command", () => {
 
   it("without ctx, awaits the queue and returns the card inline even with a response_url", async () => {
     const request = await signedCommandRequest({
-      command: "/shiba-ai-coworker",
+      command: "/shiba",
       text: "https://github.com/owner/repo Fix it",
       response_url: "https://hooks.slack.com/commands/T1/123/token",
     });

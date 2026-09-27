@@ -16,6 +16,7 @@ export interface SessionItem {
   status: string; // pending|running|completed|error|aborted|cancelled|waiting-approval|live
   updatedAt: number;
   live?: boolean;
+  webSession?: boolean;
 }
 
 export interface SessionsSidebarProps {

@@ -27,7 +27,16 @@ shiba-ai-coworker-docs/
 .reticle/
 .alchemy/
 .superdesign/tmp/
-.agents/
+# Registry-downloaded skills are scratch (restored by autoskills). Only the
+# repo-authored skills below are tracked, matching the force-add precedent set
+# by 0475da3. Add a new repo-authored skill here as you author it.
+# (`!` cannot re-include inside an excluded dir, so exclude each level.)
+.agents/*
+!.agents/skills/
+.agents/skills/*
+!.agents/skills/shiba-monorepo/
+!.agents/skills/testing-dashboard-e2e/
+!.agents/skills/testing-shiba-dashboard/
 .claude/
 .tgrep/ 
 audit/
