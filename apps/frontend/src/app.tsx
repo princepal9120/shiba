@@ -11,7 +11,6 @@ import { AutomationsView } from "./components/AutomationsView";
 import { AgentsView } from "./components/AgentsView";
 import { MissionsView } from "./components/MissionsView";
 import { GatesView } from "./components/GatesView";
-import { ArchitectureView } from "./components/ArchitectureView";
 import { DashboardView } from "./components/DashboardView";
 import { OnboardingModal, detectSetupSteps } from "./components/OnboardingModal";
 import { SessionsSidebar, type SessionItem } from "./components/SessionsSidebar";
@@ -363,8 +362,6 @@ export function App(): React.JSX.Element {
         setMainView("missions");
       } else if (tabParam === "gates" || tabParam === "quality-gates") {
         setMainView("gates");
-      } else if (tabParam === "architecture") {
-        setMainView("architecture");
       }
     }
   }, []);
@@ -425,8 +422,16 @@ export function App(): React.JSX.Element {
   const chat = useAgentChat({
     agent,
     // Skip the /get-messages prefetch while the DO name is the pending
-    // placeholder — it 403s by design; the hook refetches when name resolves.
-    getInitialMessages: orchestratorName === null ? async () => [] : undefined,
+    // placeholder — it 403s by design. The socket object lags one render
+    // behind orchestratorName (it swaps in an effect), so gate on the name
+    // the hook actually resolves rather than on orchestratorName alone.
+    getInitialMessages: async ({ name, url }) => {
+      if (!url || name !== orchestratorName) return [];
+      const res = await fetch(`${url}/get-messages`, { credentials: "include" });
+      if (!res.ok) return [];
+      const text = await res.text();
+      return text.trim() ? JSON.parse(text) : [];
+    },
     onError: () => {
       submitFailed.current = true;
     },
@@ -1596,7 +1601,7 @@ export function App(): React.JSX.Element {
       ) : mainView === "gates" ? (
         <GatesView />
       ) : (
-        <ArchitectureView />
+        null
       )}
 
       {/* CLEAR HISTORY CONFIRMATION MODAL */}
@@ -1631,6 +1636,7 @@ export function App(): React.JSX.Element {
       <OnboardingModal
         isOpen={showOnboardingModal}
         onClose={() => setShowOnboardingModal(false)}
+        onOpenInbox={() => setMainView("inbox")}
         onSelectStarterTask={(repo, t, h) => {
           setRepoUrl(repo);
           setTask(t);

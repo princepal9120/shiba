@@ -129,6 +129,8 @@ Tools: `queue_run` (`sandbox:exec`) plus `run_status`, `list_runs`, `list_approv
 
 The built-in email backend has a documented OpenAPI contract at `GET /api/email/openapi.json` ([email API guide](apps/web/src/content/docs/docs/api.md#email-api)). The Inbox downloads stored attachments through an Access-gated route; sending a draft still requires human approval. This is Shiba's own API, not a Goshen Email `/v1` clone.
 
+To connect a cloud agent to mail, assign its exact `/mcp` token principal in Inbox settings. Email tools then see only that agent's assigned mailboxes; unassigned mailboxes stay dashboard-only. [Pairing guide](apps/web/src/content/docs/docs/mcp.md#pair-a-cloud-agent-with-its-mailbox).
+
 ## Documentation
 
 The documentation site at `/docs/` includes setup, configuration, local development, dashboard usage, deployment, GitHub integration, security, architecture, API reference, troubleshooting, cost surfaces, contributing, and an end-to-end acceptance checklist.
@@ -251,4 +253,4 @@ Cost surfaces include Workers, Workers AI planning inference, Durable Objects, C
 
 ## License
 
-AGPL-3.0-only. See [LICENSE](LICENSE). Earlier MIT-licensed material retains its notice in [LICENSE-MIT-PRIOR](LICENSE-MIT-PRIOR).
+AGPL-3.0-only. See [LICENSE](LICENSE).
