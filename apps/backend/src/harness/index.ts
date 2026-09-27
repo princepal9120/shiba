@@ -6,7 +6,7 @@ import { cursorHarness } from "./cursor.js";
 import { devinHarness } from "./devin.js";
 import { grokHarness } from "./grok.js";
 import { opencodeHarness } from "./opencode.js";
-import { GIT_EGRESS_HOSTS, type AgentHarness, type AgentHarnessName } from "./types.js";
+import { GIT_EGRESS_HOSTS, SANDBOX_HARNESS_NAMES, type AgentHarness, type AgentHarnessName } from "./types.js";
 
 export const HARNESSES: Record<string, AgentHarness> = {
   opencode: opencodeHarness,
@@ -24,6 +24,14 @@ export function resolveHarness(name: string | undefined): AgentHarness {
   if (!harness) {
     throw new Error(
       `Unknown agent harness ${JSON.stringify(name)}: expected one of ${Object.keys(HARNESSES).join(", ")}.`,
+    );
+  }
+  // Registered is not runnable: cursor/antigravity have no CLI in the sandbox
+  // image (their auth can't hold the dummy-key invariant), so refuse them at
+  // selection — before the approval card — rather than failing in-container.
+  if (!SANDBOX_HARNESS_NAMES.includes(harness.name)) {
+    throw new Error(
+      `Agent harness ${JSON.stringify(harness.name)} is not runnable in a sandbox: expected one of ${SANDBOX_HARNESS_NAMES.join(", ")}.`,
     );
   }
   return harness;

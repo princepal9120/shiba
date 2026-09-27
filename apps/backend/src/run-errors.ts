@@ -60,6 +60,8 @@ const HARNESS_ERROR_NAMES = new Set([
   "CodexErrorEvent",
   "DevinErrorEvent",
   "GrokErrorEvent",
+  "CursorErrorEvent",
+  "AntigravityErrorEvent",
 ]);
 
 function isAbortError(error: unknown): boolean {

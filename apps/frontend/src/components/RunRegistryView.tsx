@@ -278,6 +278,12 @@ export function RunRegistryView({
                         {run.task}
                       </pre>
 
+                      {run.screenshotUrl ? (
+                        <a href={run.screenshotUrl} target="_blank" rel="noreferrer" className="text-xs font-mono text-[#0000a8] underline underline-offset-2">
+                          View preview screenshot
+                        </a>
+                      ) : null}
+
                       {/* Summary */}
                       {run.summary ? (
                         <div className="border border-[#e0ded5] rounded-none p-3 bg-[#f1efe6]">
