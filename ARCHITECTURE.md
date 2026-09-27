@@ -111,6 +111,11 @@ append-only **v8** migration deletes the now-unused class and namespace.
 **KV** `AGENT_TOKENS` (bearer tokens, keyed `tok_<sha256(raw)>`) · **D1**
 `AGENT_AUDIT` (MCP call audit) · **Vectorize** `MEMORY_VECTORS` (768-dim recall).
 
+**Throughput ceiling:** `max_instances: 5` (`wrangler.jsonc`, mirrored as
+`maxInstances` in `alchemy.run.ts`) is a hard cap of five concurrent sandbox
+runs. It is product-visible — "how many tasks at once" is answered here, not
+in marketing copy.
+
 ---
 
 ## 5. The security model — the part that must not drift
@@ -133,6 +138,15 @@ existing enforcement point:
    and GitHub, header-secret Telegram/Discord/email, bearer-token `/mcp`, and a
    narrow explicit bypass list. A new ingress surface must add its own
    mechanism, never inherit one.
+
+Two stated properties, not accidents:
+
+- **Token revocation has no in-flight propagation.** `revokeToken` writes a KV
+  tombstone; a request verified microseconds earlier still completes. For an
+  approval-gated system that trade is acceptable, but it is a trade.
+- **Audit stores arg hashes, never args.** A reader can prove two calls were
+  identical but cannot see what was asked — the right trade for customer
+  repos, and a weaker claim than "we logged it".
 
 **Why this is architecture and not a feature:** every parity feature in
 `PLAN.md` §17 that touches ingress — OAuth on `/mcp`, Teams, more repo
@@ -249,6 +263,12 @@ Not bugs — deliberate or inherited, recorded so they are not rediscovered:
 - **The spec contradicts the tree.** `spec/GOAL.md` forbids a monorepo; the
   repo is `apps/*` + turbo + alchemy. First thing to fix (§17.2, T27) —
   documentation debt with real cost.
+- **`WORKER_HOSTNAME` empty disables PR screenshots.** Capture fails safe and
+  never fails the run — correct failure mode, but T33 is silently dark on any
+  deploy that has not set it.
+- **`wrangler deploy --dry-run` needs a Docker daemon.** The `CLAUDE.md` gate
+  is two-tier: typecheck/lint/test/build runs anywhere; the dry-run tier only
+  where Docker is up.
 - **No dated live acceptance.** Every capability above is verified by unit
   tests and a dry run, not a recorded cloud run. Until T10's acceptance — and
   the GitHub-specific T37–T39 — are in `VERIFICATION.md`, the honest status

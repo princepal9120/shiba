@@ -5,7 +5,7 @@
   "description": "Self-hosted Cloudflare Workers app: approval-gated coding tasks delegated to isolated Sandbox containers running OpenCode.",
   "type": "module",
   "scripts": {
-    "build": "turbo run build && node scripts/copy-docs.mjs && pnpm run docs:verify",
+    "build": "turbo run build && node scripts/assemble-public.mjs && pnpm run docs:verify",
     "build:dashboard": "turbo run build --filter=@shiba/frontend",
     "deploy": "pnpm build && alchemy deploy",
     "deploy:preview": "alchemy plan",
@@ -19,6 +19,7 @@
     "docs:verify": "node scripts/check-docs.mjs",
     "env:load": "varlock load",
     "env:scan": "varlock scan",
+    "knip": "knip",
     "lint": "turbo run lint",
     "bootstrap": "node scripts/setup.mjs",
     "test": "turbo run test",
@@ -30,16 +31,17 @@
     "@effect/platform-bun": "4.0.0-rc.117",
     "@effect/platform-node": "4.0.0-rc.117",
     "@eslint/js": "^9.39.5",
-    "@types/react": "19.2.18",
     "alchemy": "2.0.0-beta.79",
     "effect": "4.0.0-rc.117",
     "eslint": "^9.39.5",
+    "knip": "6.37.0",
     "turbo": "2.10.13",
     "typescript": "5.9.3",
     "typescript-eslint": "^8.70.0",
     "varlock": "1.20.0",
     "vite": "8.3.0",
-    "wrangler": "4.118.0"
+    "wrangler": "4.118.0",
+    "@types/react": "19.2.18"
   },
   "license": "AGPL-3.0-only",
   "engines": {

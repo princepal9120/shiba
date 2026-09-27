@@ -3,7 +3,7 @@ import { defineConfig, passthroughImageService } from 'astro/config';
 import tailwind from "@astrojs/tailwind";
 import starlight from '@astrojs/starlight';
 
-// Static site built to public/ by Astro (see scripts/copy-docs.mjs).
+// Static site built to dist/ then merged into public/ (see scripts/assemble-public.mjs).
 // Static output is Astro's default; no adapter, no SSR.
 export default defineConfig({
 	site: 'https://tryshiba.dev',

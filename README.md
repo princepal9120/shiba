@@ -47,7 +47,7 @@ Provider traffic is intercepted at the Sandbox egress boundary and forwarded thr
 `pnpm build` produces one aggregate `public/` directory:
 
 1. Vite builds the dashboard — TanStack Start (SPA mode) generates the shell as `public/app/index.html` and chunks land in `public/assets/`; `apps/web/public/` is copied in (favicons, `_redirects`, mascot assets).
-2. Astro builds the landing page (`public/index.html`), the docs (`public/docs/`), `404.html`, and the Pagefind search index; `scripts/copy-docs.mjs` merges `apps/web/dist` into `public/`.
+2. Astro builds the landing page (`public/index.html`), the docs (`public/docs/`), `404.html`, and the Pagefind search index into `apps/web/dist`; `scripts/assemble-public.mjs` merges `apps/frontend/dist/client` then `apps/web/dist` into `public/`.
 
 At runtime a single Worker serves that directory via `assets.directory` (`apps/backend/wrangler.jsonc`: `../../public`; `alchemy.run.ts`: `./public`) with `not_found_handling: "404-page"`. The dashboard reaches the backend through same-origin `/api/*` calls — no cross-stack wiring.
 

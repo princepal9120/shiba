@@ -31,7 +31,6 @@ export type {
   JsonObject,
   JsonValue,
   PendingApproval,
-  ResolveApprovalInput,
   ResolveResult,
   RunInputFields,
 } from "@shiba/shared";

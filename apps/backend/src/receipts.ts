@@ -7,7 +7,6 @@ import { MAX_RECEIPT_MESSAGE, MAX_RECEIPTS } from "@shiba/shared";
 import type { Receipt, ReceiptKind } from "@shiba/shared";
 import { boundTail, redactSecrets } from "./security.js";
 
-export { MAX_RECEIPTS, MAX_RECEIPT_MESSAGE, RECEIPT_KINDS } from "@shiba/shared";
 export type { Receipt, ReceiptKind } from "@shiba/shared";
 
 export function makeReceipt(kind: ReceiptKind, message: string, at: number = Date.now()): Receipt {

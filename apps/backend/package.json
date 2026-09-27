@@ -25,14 +25,12 @@
     "effect": "4.0.0-rc.117",
     "jose": "6.2.12",
     "postal-mime": "2.7.6",
-    "workers-ai-provider": "4.0.0",
     "zod": "4.3.2"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260916.1",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.5",
-    "cookie": "^2.0.1",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "vitest": "5.0.1",

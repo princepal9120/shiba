@@ -1,0 +1,27 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreExportsUsedInFile": true,
+  "workspaces": {
+    ".": {
+      "entry": ["alchemy.run.ts", "scripts/**/*.mjs"],
+      "project": ["scripts/**/*.mjs"],
+      "ignoreBinaries": ["check", "preview"],
+      "ignoreDependencies": ["@types/react"]
+    },
+    "apps/backend": {
+      "entry": ["test/**/*.test.ts", "test/cloudflare-stub.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"]
+    },
+    "apps/frontend": {
+      "entry": ["src/lib/utils.ts"],
+      "project": ["src/**/*.{ts,tsx}"]
+    },
+    "apps/web": {
+      "entry": ["src/content/**/*.{md,mdx}"],
+      "project": ["src/**/*.{ts,tsx,astro,mjs}"]
+    },
+    "packages/shared": {
+      "project": ["src/**/*.ts"]
+    }
+  }
+}

@@ -92,10 +92,6 @@ export function statusChipClass(status: string): string {
   return STATUS_CHIP_CLASSES[status] ?? "text-[#6a6f63] border-[#e0ded5] bg-[#fffef8]";
 }
 
-export function emptyDiffText(): string {
-  return "No file changes produced";
-}
-
 // Diff output for completed live runs. The orchestrator surfaces the unified
 // diff on the run record when present; anything else is not diff output.
 export function extractCompletedDiff(run: unknown): string | null {

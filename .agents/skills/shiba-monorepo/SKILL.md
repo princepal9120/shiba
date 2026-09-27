@@ -52,11 +52,11 @@ deliberately **no `build`**. It ships TypeScript source to the edge. Adding a
 build step would break the deploy. The root `build` runs turbo across the two
 frontends only.
 
-### 3. Turbo does not cache `test` or `lint`
+### 3. Turbo caches `typecheck` and `lint` — never `test`
 
-`turbo.json` sets `cache: false` for both, and only `build` declares real
-`outputs`. This is intentional — a stale green test result is worse than a slow
-one. Do not "optimize" it.
+`typecheck` and `lint` emit no artifacts and depend only on inputs, so they
+cache. `test` keeps `cache: false` by decision: a stale green test result is
+worse than a slow one. `pnpm knip` reports dead files, deps, and exports.
 
 ### 4. Two deploy files, one stack
 
