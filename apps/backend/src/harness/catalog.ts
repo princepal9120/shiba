@@ -10,7 +10,7 @@
  * DEVIN_API_KEY Worker secret, whose presence IS observable (never the value).
  */
 import type { Env } from "../env.js";
-import { HARNESS_DEFAULT_MODELS, HARNESS_NAMES, SANDBOX_HARNESS_NAMES } from "./index.js";
+import { HARNESS_DEFAULT_MODELS, HARNESS_NAMES, sandboxHarnessNames } from "./index.js";
 
 export interface AgentCliCredential {
   /** ai-gateway-byok = AI Gateway holds the provider key; worker-secret = a Wrangler secret on this deployment. */
@@ -45,6 +45,7 @@ const CATALOG_META: Record<
 > = {
   opencode: { label: "OpenCode", binary: "opencode", version: "1.18.31", docsUrl: "https://opencode.ai/docs/" },
   "claude-code": { label: "Claude Code", binary: "claude", version: "2.1.277", docsUrl: "https://docs.anthropic.com/en/docs/claude-code" },
+  "claude-subscription": { label: "Claude Code (subscription)", binary: "claude", version: "2.1.277", docsUrl: "https://docs.anthropic.com/en/docs/claude-code" },
   codex: { label: "Codex", binary: "codex", version: "0.155.0", docsUrl: "https://github.com/openai/codex" },
   devin: { label: "Devin", binary: "devin", version: "3000.10.31", docsUrl: "https://cli.devin.ai/docs" },
   grok: { label: "Grok", binary: "grok", version: "1.0.41", docsUrl: "https://docs.x.ai" },
@@ -65,8 +66,10 @@ const GATEWAY_PROVIDER: Record<string, string> = {
  * The catalog for this deployment. `env` is read for secret *presence* only —
  * values never leave the Worker.
  */
-export function agentCliCatalog(env: Pick<Env, "DEVIN_API_KEY">): AgentCliInfo[] {
-  return SANDBOX_HARNESS_NAMES.map((id) => {
+export function agentCliCatalog(
+  env: Pick<Env, "DEVIN_API_KEY" | "SHIBA_CLAUDE_SUBSCRIPTION" | "CLAUDE_SUBSCRIPTION_TOKEN">,
+): AgentCliInfo[] {
+  return sandboxHarnessNames(env).map((id) => {
     const meta = CATALOG_META[id];
     const credential: AgentCliCredential =
       id === "devin"
@@ -76,12 +79,19 @@ export function agentCliCatalog(env: Pick<Env, "DEVIN_API_KEY">): AgentCliInfo[]
             configured: Boolean(env.DEVIN_API_KEY),
             setupHint: "npx wrangler secret put DEVIN_API_KEY",
           }
-        : {
-            kind: "ai-gateway-byok",
-            label: `AI Gateway BYOK (${GATEWAY_PROVIDER[id]})`,
-            configured: null,
-            setupHint: null,
-          };
+        : id === "claude-subscription"
+          ? {
+              kind: "worker-secret",
+              label: "CLAUDE_SUBSCRIPTION_TOKEN",
+              configured: Boolean(env.CLAUDE_SUBSCRIPTION_TOKEN),
+              setupHint: "claude setup-token, then npx wrangler secret put CLAUDE_SUBSCRIPTION_TOKEN",
+            }
+          : {
+              kind: "ai-gateway-byok",
+              label: `AI Gateway BYOK (${GATEWAY_PROVIDER[id]})`,
+              configured: null,
+              setupHint: null,
+            };
     return {
       id,
       label: meta.label,

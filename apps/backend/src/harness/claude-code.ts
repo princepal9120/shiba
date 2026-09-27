@@ -1,10 +1,12 @@
 /**
  * Claude Code harness (PLAN.md T22).
  *
- * API-key only. Subscription credentials are deliberately not supported:
- * Anthropic's terms forbid third parties routing requests through Free/Pro/
- * Max plan credentials on behalf of users (PLAN.md §3). The container gets
- * the dummy key; the real one is injected at the egress boundary.
+ * API-key only — this harness is scoped to the gateway/BYOK path (PLAN.md
+ * §3). Subscription credentials (`claude setup-token`) are a *separate*
+ * harness — claude-subscription.ts (T48/§18.10) — carrying their own
+ * egress branch, opt-in gate, and terms note, never a mode flag here.
+ * The container gets the dummy key; the real one is injected at the
+ * egress boundary.
  */
 import type { CodingTaskInput, CodingTaskResult } from "../opencode-input.js";
 import { DUMMY_PROVIDER_KEY } from "../provider-gateway.js";

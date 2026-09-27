@@ -7,7 +7,7 @@
  * now via the capability rather than a name list.
  */
 import { describe, expect, it } from "vitest";
-import { resolveHarness, harnessRunsOn, HARNESSES, SANDBOX_HARNESS_NAMES } from "../src/harness/index.js";
+import { resolveHarness, harnessRunsOn, harnessIsGated, HARNESSES, SANDBOX_HARNESS_NAMES } from "../src/harness/index.js";
 import type { CodingTaskInput, CodingTaskResult } from "../src/opencode-input.js";
 import type { AgentHarnessName, HarnessCapabilities } from "../src/harness/types.js";
 
@@ -63,9 +63,12 @@ describe("declared capabilities", () => {
   });
 
   it("derives the sandbox set from capabilities, not a parallel list", () => {
+    // T48: opt-in-gated harnesses (claude-subscription) declare the sandbox
+    // runtime but are only selectable through sandboxHarnessNames(env) — the
+    // static list is the always-on set.
     expect([...SANDBOX_HARNESS_NAMES].sort()).toEqual(
       Object.values(HARNESSES)
-        .filter((h) => h.capabilities().supportedRuntimes.includes("sandbox"))
+        .filter((h) => h.capabilities().supportedRuntimes.includes("sandbox") && !harnessIsGated(h))
         .map((h) => h.name)
         .sort(),
     );

@@ -10,7 +10,7 @@ import { sanitizeContainerHeaders, stripCredentialParams } from "./provider-gate
 
 export type EgressEnv = Pick<
   WorkerEnv,
-  "AI" | "GATEWAY_ID" | "AI_GATEWAY_TOKEN" | "GITHUB_TOKEN" | "DEVIN_API_KEY"
+  "AI" | "GATEWAY_ID" | "AI_GATEWAY_TOKEN" | "GITHUB_TOKEN" | "DEVIN_API_KEY" | "CLAUDE_SUBSCRIPTION_TOKEN"
 >;
 
 /**
@@ -113,6 +113,62 @@ export function forwardXAI(request: Request, env: EgressEnv): Promise<Response> 
  */
 export function forwardOpenCodeGo(request: Request, env: EgressEnv): Promise<Response> {
   return forwardProvider(request, env, "opencode.ai");
+}
+
+/**
+ * T48 — the claude-subscription egress branch. The container holds only a
+ * placeholder credentials.json; the real `claude setup-token` bearer is
+ * attached here — `Authorization: Bearer <token>` plus the oauth beta
+ * header the subscription surface requires. Deliberately NOT a
+ * GATEWAY_PROVIDERS entry: subscription hosts ride this branch, never the
+ * gateway's BYOK path. Deny-by-default: wrong host/protocol → 403, no
+ * secret → 503 (fail closed, never silently forward).
+ */
+export async function forwardClaudeSubscription(
+  request: Request,
+  env: EgressEnv,
+  ctx?: OutboundHandlerCtx,
+): Promise<Response> {
+  const params = (ctx?.params ?? {}) as Record<string, unknown>;
+  const account = typeof params.account === "string" && params.account !== "" ? params.account : "default";
+  const secretName =
+    account === "default"
+      ? "CLAUDE_SUBSCRIPTION_TOKEN"
+      : `CLAUDE_SUBSCRIPTION_TOKEN_${account.toUpperCase().replace(/-/g, "_")}`;
+  const token = (env as Record<string, unknown>)[secretName];
+  const target = new URL(request.url);
+  if (
+    target.protocol !== "https:" ||
+    (target.hostname !== "api.anthropic.com" && target.hostname !== "claude.ai") ||
+    target.username !== "" ||
+    target.password !== ""
+  ) {
+    return new Response("Invalid subscription destination.", { status: 403 });
+  }
+  if (request.method !== "GET" && request.method !== "POST") {
+    return new Response("Method not allowed.", { status: 405 });
+  }
+  if (typeof token !== "string" || token.trim() === "") {
+    return new Response(`${secretName} is not configured on this deployment.`, { status: 503 });
+  }
+  target.search = stripCredentialParams(target.search);
+  const headers = outboundHeaders(request);
+  headers.set("Authorization", `Bearer ${token}`);
+  // The subscription surface requires the oauth beta; container-supplied
+  // copies are already stripped by outboundHeaders, so set it here.
+  headers.set("anthropic-beta", "oauth-2025-04-20");
+  headers.set("anthropic-version", "2023-06-01");
+  try {
+    return await fetch(target, {
+      method: request.method,
+      headers,
+      body: request.method === "POST" ? request.body : undefined,
+      redirect: "manual",
+    });
+  } catch {
+    // Fetch errors can embed authenticated request details; never surface them.
+    return new Response("Subscription request failed.", { status: 502 });
+  }
 }
 
 /**

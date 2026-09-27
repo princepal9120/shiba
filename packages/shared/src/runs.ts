@@ -84,6 +84,19 @@ export interface DelegatedRun {
    * the missing signals name the phase that never completed.
    */
   signals?: RunSignal[];
+  /**
+   * T48: the harness's continuation identity — e.g. `claude:home:<dir>` —
+   * naming which conversation home this run belongs to. A run claiming to
+   * continue a conversation is refused at queue when its key differs from
+   * the conversation's key (decider-enforced, not UI). Absent for harnesses
+   * without account-scoped homes.
+   */
+  continuationKey?: string;
+  /**
+   * T48: the subscription account this run ran under — an account NAME,
+   * never a credential. Dispatch rebuilds the child input from it.
+   */
+  authAccount?: string;
 }
 
 export type RunPatch = {
@@ -96,6 +109,7 @@ export type RunPatch = {
   receipts?: Receipt[];
   sandboxId?: string;
   signals?: RunSignal[];
+  continuationKey?: string;
 };
 
 /** Backfills fields persisted runs predate; never rejects a legacy record. */

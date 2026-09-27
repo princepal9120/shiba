@@ -165,6 +165,22 @@ export interface Env {
   /** Optional. Server-side credential for AI Gateway. Never sent to containers. */
   AI_GATEWAY_TOKEN?: string;
   /**
+   * T48 opt-in flag (§18.10): "1" registers the claude-subscription harness.
+   * Absent it is unregistered, uncataloged, and unselectable — the
+   * subscription path is dark unless the deployment owner enables it.
+   */
+  SHIBA_CLAUDE_SUBSCRIPTION?: string;
+  /**
+   * T48 credential: the operator's `claude setup-token` output, stored as a
+   * Wrangler secret and read only by the subscription egress branch —
+   * the container holds a placeholder credentials.json, never the token.
+   * Named accounts: CLAUDE_SUBSCRIPTION_TOKEN_<ACCOUNT> (resolved by name,
+   * not declared here). Unset means no subscription account is provisioned.
+   */
+  CLAUDE_SUBSCRIPTION_TOKEN?: string;
+  /** T48: per-deploy model override for the claude-subscription harness. */
+  CLAUDE_SUBSCRIPTION_MODEL?: string;
+  /**
    * Optional. Devin account API key for the devin harness — injected as a
    * Bearer header by the egress forwarders on api.devin.ai and
    * server.codeium.com. Never sent to containers; the sandboxed CLI holds a

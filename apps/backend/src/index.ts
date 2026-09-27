@@ -9,6 +9,8 @@ import { listTokens, verifyToken } from "./agent-tokens.js";
 import { OpenCodeAgent } from "./agents/opencode-agent.js";
 import { CodingOrchestrator } from "./agents/orchestrator.js";
 import { AUDIT_RETENTION_MS, listAuditEntries, pruneAuditLog } from "./audit.js";
+import { claudeSubscriptionAuth } from "./auth/claude-subscription.js";
+import { AuthFlowError } from "./auth/controller.js";
 import { AUTOMATIONS_DO_NAME } from "./automation-runner.js";
 import { Automations } from "./automations-do.js";
 import { parseAutomationWebhookPath } from "./automations.js";
@@ -139,6 +141,51 @@ async function seenDelivery(env: Env, key: string): Promise<boolean> {
   );
   const body = (await response.json().catch(() => ({}))) as { seen?: boolean };
   return response.ok && body.seen === true;
+}
+
+/**
+ * T48: operator surface for the claude-subscription auth flow (T47
+ * controller). Routes:
+ *   GET  /api/auth/claude-subscription?account=<name>  → snapshot
+ *   POST /api/auth/claude-subscription/begin           → {account} → begin()
+ *   POST /api/auth/claude-subscription/verify          → {account} → verify()
+ *   POST /api/auth/claude-subscription/clear           → {account} → clear()
+ * The caller's Access identity becomes the ownerSessionId — only the
+ * operator who began a flow may verify or clear it (T47 rule).
+ */
+async function handleClaudeSubscriptionAuth(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  const sub = url.pathname.slice("/api/auth/claude-subscription".length).replace(/^\/+|\/+$/g, "");
+  const ownerSessionId = getUserId(request) ?? "default";
+  const body =
+    request.method === "POST"
+      ? ((await request.json().catch(() => ({}))) as { account?: unknown })
+      : {};
+  const accountRaw = request.method === "GET" ? url.searchParams.get("account") : body.account;
+  const account = typeof accountRaw === "string" && accountRaw.trim() !== "" ? accountRaw.trim() : "default";
+  const controller = claudeSubscriptionAuth(env, `claude-sub:${account}`);
+  const authError = (reason: unknown) =>
+    Response.json(
+      { error: reason instanceof AuthFlowError ? reason.message : "Auth flow error." },
+      { status: 400 },
+    );
+  try {
+    if (request.method === "GET" && sub === "") {
+      return Response.json({ snapshot: await controller.snapshot() });
+    }
+    if (request.method === "POST" && sub === "begin") {
+      return Response.json({ snapshot: await controller.begin(ownerSessionId) });
+    }
+    if (request.method === "POST" && sub === "verify") {
+      return Response.json({ snapshot: await controller.verify(ownerSessionId) });
+    }
+    if (request.method === "POST" && sub === "clear") {
+      return Response.json({ snapshot: await controller.clear(ownerSessionId) });
+    }
+  } catch (error) {
+    return authError(error);
+  }
+  return Response.json({ error: "Not found." }, { status: 404 });
 }
 
 async function handleRuns(request: Request, env: Env): Promise<Response | null> {
@@ -1537,6 +1584,16 @@ export default {
           { agents: agentCliCatalog(env), principals: await agentPrincipals(env) },
           { headers: { "Cache-Control": "no-store" } },
         );
+      }
+      // T48: subscription-auth lifecycle surface — the operator drives
+      // begin/verify/clear per account; the credential itself is only ever
+      // provisioned via `wrangler secret put`, never through this API.
+      // Dark unless SHIBA_CLAUDE_SUBSCRIPTION=1 (§18.10).
+      if (url.pathname === "/api/auth/claude-subscription" || url.pathname.startsWith("/api/auth/claude-subscription/")) {
+        if (env.SHIBA_CLAUDE_SUBSCRIPTION !== "1") {
+          return Response.json({ error: "Not found." }, { status: 404 });
+        }
+        return handleClaudeSubscriptionAuth(request, env);
       }
       const mcpResponse = await handleMcp(
         request,

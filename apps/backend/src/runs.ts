@@ -55,6 +55,12 @@ export function createRun(args: {
   publishPullRequest: boolean;
   queuedBy?: string;
   route?: ApprovedRoute;
+  /** T48: account-scoped continuation identity from the selected harness. */
+  continuationKey?: string;
+  /** T48: the continuation key a resumed conversation was started under. */
+  continuesKey?: string;
+  /** T48: subscription account selector — hashed into the approved input. */
+  authAccount?: string;
   /** T40: approval evidence stamped at queue time (the resolve path). */
   approval?: ApprovalEvidence;
   now?: number;
@@ -74,6 +80,9 @@ export function createRun(args: {
         publishPullRequest: args.publishPullRequest,
         ...(args.queuedBy !== undefined ? { queuedBy: args.queuedBy } : {}),
         ...(args.route !== undefined ? { route: args.route } : {}),
+        ...(args.continuationKey !== undefined ? { continuationKey: args.continuationKey } : {}),
+        ...(args.continuesKey !== undefined ? { continuesKey: args.continuesKey } : {}),
+        ...(args.authAccount !== undefined ? { authAccount: args.authAccount } : {}),
       },
       ...(args.approval !== undefined ? { approval: args.approval } : {}),
       at: now,

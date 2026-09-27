@@ -23,6 +23,12 @@
     // mint sandbox preview URLs and absolute screenshot links for PRs.
     // Empty = PR screenshot capture disabled (capture fails safe, never fails the run).
     "WORKER_HOSTNAME": "",
+    // T48 opt-ins, set per-deploy via `wrangler secret put`/var overrides or
+    // the alchemy configVars list (deliberately absent here = feature dark):
+    //   SHIBA_CLAUDE_SUBSCRIPTION=1  registers the claude-subscription harness
+    //   CLAUDE_SUBSCRIPTION_MODEL    per-deploy model override
+    //   CLAUDE_SUBSCRIPTION_TOKEN[_<ACCOUNT>]  the operator's `claude
+    //   setup-token` output — a Wrangler secret, read only at egress.
   },
   "ai": {
     "binding": "AI",

@@ -131,11 +131,21 @@ const delegateInputSchema = z.object({
     .default(false)
     .describe("Open a pull request with the result. Requires GITHUB_TOKEN."),
   harness: z
-    .enum(["opencode", "claude-code", "codex", "devin", "grok"])
+    .enum(["opencode", "claude-code", "claude-subscription", "codex", "devin", "grok"])
     .optional()
     .describe(
       "Coding agent harness. Defaults to the deployment's AGENT_HARNESS, else opencode. " +
-        "claude-code needs an anthropic/* model; codex needs an openai/* model; devin needs a devin/* model; grok needs an xai/* model.",
+        "claude-code needs an anthropic/* model; claude-subscription needs an anthropic-subscription/* model and is only " +
+        "registered on deployments with SHIBA_CLAUDE_SUBSCRIPTION=1; codex needs an openai/* model; " +
+        "devin needs a devin/* model; grok needs an xai/* model.",
+    ),
+  authAccount: z
+    .string()
+    .regex(/^[a-z0-9][a-z0-9-]{0,31}$/)
+    .optional()
+    .describe(
+      "Subscription account name for subscription-authed harnesses (e.g. claude-subscription). " +
+        "Maps to a named Worker secret; 'default' when absent. Never a credential.",
     ),
   codingModel: z
     .string()
@@ -478,17 +488,19 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
 
   private resolveHarnessAndModel(input: DelegateInput): { harness: string; codingModel: string } {
     const harnessName = input.harness ?? this.env.AGENT_HARNESS?.trim() ?? "opencode";
-    const harness = resolveHarness(harnessName);
+    const harness = resolveHarness(harnessName, this.env);
     const perHarnessVar =
       harness.name === "opencode"
         ? this.env.CODING_MODEL?.trim()
         : harness.name === "claude-code"
           ? this.env.CLAUDE_CODE_MODEL?.trim()
-          : harness.name === "codex"
-            ? this.env.CODEX_MODEL?.trim()
-            : harness.name === "grok"
-              ? this.env.GROK_MODEL?.trim()
-              : this.env.DEVIN_MODEL?.trim();
+          : harness.name === "claude-subscription"
+            ? this.env.CLAUDE_SUBSCRIPTION_MODEL?.trim()
+            : harness.name === "codex"
+              ? this.env.CODEX_MODEL?.trim()
+              : harness.name === "grok"
+                ? this.env.GROK_MODEL?.trim()
+                : this.env.DEVIN_MODEL?.trim();
     const codingModel =
       input.codingModel?.trim() ||
       perHarnessVar ||
@@ -598,6 +610,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         route,
         ...(slackIds ? { slackThread: { channelId: slackIds.channelId, threadTs: slackIds.threadTs } } : {}),
         ...(input.testCommand ? { testCommand: input.testCommand } : {}),
+        ...(input.authAccount ? { authAccount: input.authAccount } : {}),
       };
       // Chat-originated runs get the outcome back in the thread in the
       // coworker voice; the summary carries the PR link when one was published.
@@ -816,7 +829,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
    * the pointer via POST /api/approvals. Email-kind approvals freeze a
    * mailbox payload instead of a run input.
    */
-  private async queueSlackRun(input: { repoUrl?: unknown; task?: unknown; baseBranch?: unknown; publishPullRequest?: unknown; harness?: unknown; codingModel?: unknown; connectionId?: unknown; threadKey?: unknown; kind?: unknown; mailbox?: unknown; payload?: unknown; queuedBy?: unknown; commandId?: unknown }): Promise<Response> {
+  private async queueSlackRun(input: { repoUrl?: unknown; task?: unknown; baseBranch?: unknown; publishPullRequest?: unknown; harness?: unknown; codingModel?: unknown; connectionId?: unknown; authAccount?: unknown; threadKey?: unknown; kind?: unknown; mailbox?: unknown; payload?: unknown; queuedBy?: unknown; commandId?: unknown }): Promise<Response> {
     const kind = typeof input.kind === "string" && input.kind.trim() ? input.kind.trim() : "run";
     if (kind === "email_send" || kind === "email_delete") {
       return this.queueEmailApprovalRecord(kind, input);
@@ -850,7 +863,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     const harness = typeof input.harness === "string" && input.harness.trim() ? input.harness.trim() : undefined;
     if (harness !== undefined) {
       try {
-        resolveHarness(harness);
+        resolveHarness(harness, this.env);
       } catch (error) {
         return Response.json({ error: error instanceof Error ? error.message : "Unknown agent harness." }, { status: 400 });
       }
@@ -897,6 +910,10 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
           baseBranch: typeof input.baseBranch === "string" && input.baseBranch.trim() ? input.baseBranch.slice(0, 200) : "main",
           publishPullRequest,
           route,
+          // T48: the approved subscription account name, frozen with the input.
+          ...(typeof input.authAccount === "string" && input.authAccount.trim()
+            ? { authAccount: input.authAccount.trim().slice(0, 32) }
+            : {}),
           // Worker-vouched principal (X-Agent-Principal) — never the raw body,
           // so an operator-queued record can't be claimed by an agent token.
           ...(typeof input.queuedBy === "string" && input.queuedBy.trim()
@@ -1173,6 +1190,14 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
    * record (run id, sandbox id, frozen route, and T40 evidence).
    */
   private mintApprovedRun(record: PendingApproval): DelegatedRun {
+    // T48: a subscription-authed harness stamps its continuation key on the
+    // record — the decider then refuses resumes under a different account.
+    // resolveHarness throws for a disabled gated harness, which is the
+    // correct refusal: the run must not mint under an unregistered auth path.
+    const harnessName = record.route?.harness ?? record.harness;
+    const continuationKey = harnessName !== undefined
+      ? resolveHarness(harnessName, this.env).continuationKey?.({ authAccount: record.authAccount })
+      : undefined;
     return createRun({
       runId: `agent-tool:${record.approvalId}`,
       sandboxId: makeSandboxId(record.repoUrl, record.task, record.approvalId),
@@ -1182,6 +1207,8 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       publishPullRequest: record.publishPullRequest ?? false,
       queuedBy: record.queuedBy,
       ...(record.route ? { route: record.route } : {}),
+      ...(record.authAccount ? { authAccount: record.authAccount } : {}),
+      ...(continuationKey !== undefined ? { continuationKey } : {}),
       // T40: the run carries its approval evidence from birth — who decided,
       // when, and the hash of the exact frozen input they approved.
       approval: approvalEvidenceFor(record, {
@@ -1190,6 +1217,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         baseBranch: record.baseBranch ?? "main",
         publishPullRequest: record.publishPullRequest ?? false,
         ...(record.route ? { route: record.route } : {}),
+        ...(record.authAccount ? { authAccount: record.authAccount } : {}),
       }),
     });
   }
@@ -1229,6 +1257,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
             : record?.harness
               ? { harness: record.harness as DelegateInput["harness"] }
               : {}),
+          ...(run.authAccount ? { authAccount: run.authAccount } : {}),
         }, { toolCallId: approvalId });
       } catch (error) {
         // delegate.execute can throw before its inner `finish` seam ran;
