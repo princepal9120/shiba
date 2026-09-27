@@ -9,16 +9,22 @@ import {
   transitionRun,
   type DelegatedRun,
 } from "../src/runs.js";
+import { evidenceFor } from "./seeding.js";
+
+const INPUT = {
+  repoUrl: "https://github.com/o/r",
+  task: "fix",
+  baseBranch: "main",
+  publishPullRequest: false,
+};
 
 function makeRun(overrides: Partial<DelegatedRun> = {}): DelegatedRun {
   return {
     ...createRun({
       runId: "r1",
       sandboxId: "s1",
-      repoUrl: "https://github.com/o/r",
-      task: "fix",
-      baseBranch: "main",
-      publishPullRequest: false,
+      ...INPUT,
+      approval: evidenceFor(INPUT),
       now: 1000,
     }),
     ...overrides,

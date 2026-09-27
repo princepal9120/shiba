@@ -5,6 +5,7 @@
  */
 export {
   APPROVAL_TTL_MS,
+  approvalEvidenceFor,
   createPendingApproval,
   decidedApprovals,
   DECIDED_APPROVALS_LIMIT,
@@ -14,8 +15,10 @@ export {
   pruneExpiredApprovals,
   recordApprovalExecution,
   resolvePendingApproval,
+  runInputHash,
 } from "@shiba/shared";
 export type {
+  ApprovalEvidence,
   ApprovalExecution,
   ApprovalKind,
   CreateApprovalInput,
@@ -25,4 +28,5 @@ export type {
   PendingApproval,
   ResolveApprovalInput,
   ResolveResult,
+  RunInputFields,
 } from "@shiba/shared";

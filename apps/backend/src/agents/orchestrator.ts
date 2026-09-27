@@ -17,7 +17,6 @@ import {
   type CodingTaskInput,
 } from "../opencode-input.js";
 import {
-  MAX_CONCURRENT_RUNS,
   RUN_DEADLINE_MS,
   RunStore,
   AGENT_PRINCIPAL_HEADER,
@@ -33,6 +32,7 @@ import {
 import { makeReceipt } from "../receipts.js";
 import { createRunCodeTool } from "../codemode.js";
 import {
+  approvalEvidenceFor,
   createPendingApproval,
   decidedApprovals,
   isApprovalExpired,
@@ -469,20 +469,22 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         abortSignal?.throwIfAborted();
         if (this.sessionDeleted) throw new Error("Session deleted.");
       });
-      const runs = this.store.list();
       const callId = toolCallId ?? crypto.randomUUID();
       const runId = `agent-tool:${callId}`;
       const reserved = this.store.get(runId);
-      if (!reserved && this.approvals.some((approval) => approval.approvalId === callId && approval.status === "approved")) {
+      const pointer = this.approvals.find((approval) => approval.approvalId === callId);
+      if (!reserved && pointer?.status === "approved") {
         return "Run was removed before execution.";
       }
       if (reserved && reserved.status !== "pending") {
         return reserved.summary ?? reserved.error ?? `Run is ${reserved.status}.`;
       }
-      if (!reserved && !canStartRun(runs)) {
-        throw new Error(
-          `Already running ${MAX_CONCURRENT_RUNS} coding tasks. Wait for one to finish before starting another.`,
-        );
+      // T40 gate: the only production caller is the /api/approvals resolve
+      // dispatch, which mints the reserved run carrying approval evidence.
+      // An execute with no approved pointer was a latent bypass — refuse it
+      // instead of queueing a run the decider could never legally start.
+      if (!reserved) {
+        return "Run is not approved to execute.";
       }
       parseGitHubRepoUrl(input.repoUrl);
       if (input.publishPullRequest && !this.env.GITHUB_TOKEN) {
@@ -496,7 +498,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       // route frozen on its pointer verbatim; a fresh tool call resolves it
       // now. Either way the route is revalidated just before dispatch — a
       // revoked connection fails the run honestly, never a substitution.
-      const frozen = reserved?.route;
+      const frozen = reserved.route;
       const { harness: resolvedHarness, codingModel, route } = frozen !== undefined && isApprovedRoute(frozen)
         ? { harness: frozen.harness, codingModel: frozen.modelId, route: frozen }
         : yield* Effect.promise(() => this.resolveRoute(input));
@@ -515,17 +517,6 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         route,
         ...(slackIds ? { slackThread: { channelId: slackIds.channelId, threadTs: slackIds.threadTs } } : {}),
       };
-      if (!reserved) this.store.add(
-        createRun({
-          runId,
-          sandboxId,
-          repoUrl: fullInput.repoUrl,
-          task: fullInput.task,
-          baseBranch: fullInput.baseBranch,
-          publishPullRequest: fullInput.publishPullRequest,
-          route,
-        }),
-      );
       // Chat-originated runs get the outcome back in the thread in the
       // coworker voice; the summary carries the PR link when one was published.
       const finish = (status: RunStatus, patch?: RunPatch, threadText?: string): DelegatedRun | null => {
@@ -543,7 +534,12 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         }
         return updated;
       };
-      const running = this.store.transition(runId, "running", undefined, this.store.get(runId)?.generation);
+      // T40: `start` re-asserts the approval that reserved this run —
+      // evidence is re-derived from the pointer when it still reads
+      // approved, otherwise the stored evidence on the record stands.
+      const startEvidence =
+        pointer?.status === "approved" ? approvalEvidenceFor(pointer, reserved) : reserved.approval;
+      const running = this.store.transition(runId, "running", undefined, this.store.get(runId)?.generation, startEvidence);
       if (running === null || running.status !== "running") {
         return `Run ${runId} did not start — it is already ${this.store.get(runId)?.status ?? "missing"}.`;
       }
@@ -1017,6 +1013,15 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       publishPullRequest: record.publishPullRequest ?? false,
       queuedBy: record.queuedBy,
       ...(record.route ? { route: record.route } : {}),
+      // T40: the run carries its approval evidence from birth — who decided,
+      // when, and the hash of the exact frozen input they approved.
+      approval: approvalEvidenceFor(record, {
+        repoUrl: record.repoUrl,
+        task: record.task,
+        baseBranch: record.baseBranch ?? "main",
+        publishPullRequest: record.publishPullRequest ?? false,
+        ...(record.route ? { route: record.route } : {}),
+      }),
     }) : undefined;
     // One state write reserves capacity and records the decision before any await.
     this.setState({

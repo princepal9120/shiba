@@ -10,22 +10,27 @@ import {
   transitionRun,
 } from "../src/runs.js";
 import { makeReceipt } from "../src/receipts.js";
+import { evidenceFor } from "./seeding.js";
+
+const INPUT = {
+  repoUrl: "https://github.com/owner/repo",
+  task: "task",
+  baseBranch: "main",
+  publishPullRequest: false,
+};
 
 function makeRun(runId: string, status: Parameters<typeof transitionRun>[1] = "pending") {
-  return transitionRun(
-    createRun({
-      runId,
-      sandboxId: `sandbox-${runId}`,
-      repoUrl: "https://github.com/owner/repo",
-      task: "task",
-      baseBranch: "main",
-      publishPullRequest: false,
-      now: 1000,
-    }),
-    status,
-    undefined,
-    2000,
-  );
+  const pending = createRun({
+    runId,
+    sandboxId: `sandbox-${runId}`,
+    ...INPUT,
+    approval: evidenceFor(INPUT, `ap-${runId}`),
+    now: 1000,
+  });
+  if (status === "completed") {
+    return transitionRun(transitionRun(pending, "running", undefined, 2000), status, undefined, 2000);
+  }
+  return transitionRun(pending, status, undefined, 2000);
 }
 
 afterEach(() => {
@@ -49,7 +54,7 @@ describe("run registry", () => {
   });
 
   it("transitions runs and records summaries", () => {
-    const run = transitionRun(makeRun("r1"), "completed", { summary: "done" }, 3000);
+    const run = transitionRun(makeRun("r1", "running"), "completed", { summary: "done" }, 3000);
     expect(run.status).toBe("completed");
     expect(run.summary).toBe("done");
     expect(run.updatedAt).toBe(3000);
@@ -76,13 +81,17 @@ describe("run registry", () => {
   it("uses the clock for creation and transitions without changing the original record", () => {
     vi.useFakeTimers();
     vi.setSystemTime(5000);
-    const pending = createRun({
-      runId: "clock",
-      sandboxId: "sandbox-clock",
+    const clockInput = {
       repoUrl: "https://github.com/owner/repo",
       task: "implement the task",
       baseBranch: "develop",
       publishPullRequest: true,
+    };
+    const pending = createRun({
+      runId: "clock",
+      sandboxId: "sandbox-clock",
+      ...clockInput,
+      approval: evidenceFor(clockInput, "ap-clock"),
     });
     expect(pending.createdAt).toBe(5000);
     expect(pending.updatedAt).toBe(5000);
@@ -117,6 +126,9 @@ describe("run registry", () => {
         generation: c.generation + 1,
         summary: "progress",
         error: "diagnostic",
+        // T40: a bare "error" transition classifies as executor_failed;
+        // callers that know better pass errorCode in the patch.
+        ...(status === "error" ? { errorCode: "executor_failed" } : {}),
         updatedAt: 3000,
         receipts:
           status === "cancelled"

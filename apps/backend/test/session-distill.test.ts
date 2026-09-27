@@ -13,6 +13,7 @@ import type { FactRecord, SessionRecord, SqlRow } from "../src/memory-store.js";
 import { formatAgentResult, type CodingTaskResult } from "../src/opencode-input.js";
 import { createPendingApproval } from "../src/pending-approvals.js";
 import { createRun } from "../src/runs.js";
+import { approveDirect } from "./seeding.js";
 import {
   distillSession,
   MAX_DISTILL_FACTS,
@@ -430,6 +431,7 @@ describe("T10 orchestrator wiring", () => {
       },
     });
     const { instance, pending } = makeOrchestrator(env);
+    approveDirect(instance, "call-ok", DELEGATE_INPUT);
     const childExecute = async () => formatAgentResult(completedResult());
     const out = await instance.executeDelegatedTask(DELEGATE_INPUT, childExecute, "call-ok");
     expect(typeof out).toBe("string");
@@ -441,6 +443,7 @@ describe("T10 orchestrator wiring", () => {
   it("an error run distills too, and the run is unaffected by distill failures", async () => {
     const { env, aiCalls } = makeEnv({ memoryFails: true });
     const { instance, pending } = makeOrchestrator(env);
+    approveDirect(instance, "call-err", DELEGATE_INPUT);
     const childExecute = async () =>
       formatAgentResult({ ...completedResult(), status: "error", exitCode: 1, summary: "boom" });
     await instance.executeDelegatedTask(DELEGATE_INPUT, childExecute, "call-err");
@@ -453,6 +456,7 @@ describe("T10 orchestrator wiring", () => {
   it("a run landing 'cancelled' does not distill", async () => {
     const { env, aiCalls } = makeEnv({});
     const { instance, pending } = makeOrchestrator(env);
+    approveDirect(instance, "call-abort", DELEGATE_INPUT);
     const abort = new Error("aborted mid-run");
     abort.name = "AbortError";
     const childExecute = async () => {
