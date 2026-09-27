@@ -21,7 +21,7 @@ the worker API + local Durable Objects on :8787:
 
 ```bash
 pnpm build:dashboard        # emits public/ (bundle must contain new CSS classes)
-npx wrangler dev --port 8787 --config backend/wrangler.jsonc
+npx wrangler dev --port 8787 --config apps/backend/wrangler.jsonc
 ```
 
 - `REQUIRE_ACCESS` is unset → all routes are unauthenticated; identity = `"default"`.
@@ -53,7 +53,7 @@ db.prepare("UPDATE cf_agents_state SET state=? WHERE id=\"cf_state_row_id\"").ru
 '
 ```
 
-4. Restart `npx wrangler dev --port 8787 --config backend/wrangler.jsonc`.
+4. Restart `npx wrangler dev --port 8787 --config apps/backend/wrangler.jsonc`.
 
 ### Tricks that hit real code paths
 
