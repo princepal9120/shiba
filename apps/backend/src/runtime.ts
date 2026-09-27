@@ -99,6 +99,13 @@ export interface RuntimeAdapter {
   ): Promise<CodingTaskResult>;
 }
 
+/**
+ * T49: setupCommands run through their own argv-prefix allowlist — home
+ * layout materialization needs mkdir/symlink and nothing else. Disjoint
+ * from the harness/test-command allowlist on purpose.
+ */
+const SETUP_COMMAND_ALLOWLIST: readonly (readonly string[])[] = [["mkdir"], ["ln"]];
+
 export const COMPUTER_PREVIEW_MESSAGE =
   "@cloudflare/computer is preview-only and not production-ready, so it is disabled. " +
   "Set RUNTIME=sandbox (the default) or wait for Computer to graduate from preview. " +
@@ -119,7 +126,11 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
     opts?: { signal?: AbortSignal; signals?: RunSignal[]; exportDiff?: (diff: string) => Promise<string> },
   ): Promise<CodingTaskResult> {
     const workdir = `/workspace/${input.sandboxId}`;
-    const config = this.harness.configFile(input, input.sandboxId);
+    const configValue = this.harness.configFile(input, input.sandboxId);
+    // T49: a harness may write several files (codex-subscription's stub
+    // auth.json + config.toml); normalize to a list.
+    const configFiles = configValue === null ? [] : Array.isArray(configValue) ? configValue : [configValue];
+    const config = configFiles[0] ?? null;
     // T42: one ordered signal list per attempt — the caller's collector
     // and the returned result read the same record.
     const signals = opts?.signals ?? [];
@@ -178,7 +189,24 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
     await emit({ phase: "configure", message: `Writing isolated ${this.harness.name} config.`, fraction: 0.15 });
     throwIfAborted(opts?.signal);
     try {
-      if (config) await ops.writeFile(config.path, config.contents);
+      // T49: directory-shaped harnesses materialize their home layout first
+      // (mkdir/symlink ops only — a dedicated allowlist disjoint from the
+      // harness's test-command one; these commands are harness-declared,
+      // never model-controlled).
+      const setupCommands = this.harness.setupCommands?.(input, workdir) ?? [];
+      for (const argv of setupCommands) {
+        const result = await scopedExec(ops, shellJoin(argv), {
+          allowlist: SETUP_COMMAND_ALLOWLIST,
+          signals,
+          signal: opts?.signal,
+        });
+        if (result.exitCode !== 0) {
+          return failureResult(`Home layout setup failed (${argv.join(" ")}): ${boundTail(result.stderr, 500)}`, 0, "", signals);
+        }
+      }
+      for (const file of configFiles) {
+        await ops.writeFile(file.path, file.contents);
+      }
       milestone("config.written", config?.path ?? "none");
     } catch (error) {
       return failureResult(`Config write failed: ${shortError(error)}`, 0, "", signals);

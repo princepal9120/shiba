@@ -19,6 +19,7 @@ export type AgentHarnessName =
   | "claude-code"
   | "claude-subscription"
   | "codex"
+  | "codex-subscription"
   | "devin"
   | "grok"
   | "cursor"
@@ -53,6 +54,10 @@ export const PROVIDER_HOSTS: Record<string, string> = {
   // not the host. Listed so assertSupportedModel accepts the provider id;
   // the harness's egressOverrides swap the handler to the token branch.
   "anthropic-subscription": "api.anthropic.com",
+  // T49: the codex subscription path talks to ChatGPT's backend, not the
+  // OpenAI platform API — a different host entirely, so the gateway's
+  // api.openai.com BYOK route is never in play and no override needs it.
+  "openai-subscription": "chatgpt.com",
 };
 
 /**
@@ -226,8 +231,8 @@ export interface AgentHarness {
    * are allowed — never the union of every harness's.
    */
   egressHosts(model: string): string[];
-  /** The config file to write, or null when the harness is configured by env alone. */
-  configFile(input: CodingTaskInput, sandboxId: string): HarnessConfigFile | null;
+  /** The config file(s) to write, or null when the harness is configured by env alone. */
+  configFile(input: CodingTaskInput, sandboxId: string): HarnessConfigFile | HarnessConfigFile[] | null;
   /** Container env. Provider keys here are always the dummy key. */
   env(input: CodingTaskInput, configPath: string | null): Record<string, string>;
   buildArgv(input: CodingTaskInput, workdir: string): string[];
@@ -256,6 +261,13 @@ export interface AgentHarness {
    * decider refuses a resume whose key differs.
    */
   continuationKey?(input: { authAccount?: string }): string;
+  /**
+   * T49: argv sequences the adapter executes through scoped exec during the
+   * configure phase, before config files land — used by directory-shaped
+   * harnesses to materialize a home layout (mkdir/ln only; these are
+   * harness-declared, never model-controlled, and ride their own allowlist).
+   */
+  setupCommands?(input: CodingTaskInput, workdir: string): readonly (readonly string[])[];
   /** Declared capabilities — the runnability gate and UI read these, not the name. */
   capabilities(model?: string): HarnessCapabilities;
   /**

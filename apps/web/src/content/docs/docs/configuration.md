@@ -18,6 +18,8 @@ Non-secret defaults are in `apps/backend/wrangler.jsonc` and `alchemy.run.ts`. F
 | `SLACK_AGENT_HARNESS` | `AGENT_HARNESS`, then `claude-code` | Harness for Slack-originated runs (mentions, DMs, /shiba) |
 | `SHIBA_CLAUDE_SUBSCRIPTION` | unset | Set `1` to enable the opt-in `claude-subscription` harness (below) |
 | `CLAUDE_SUBSCRIPTION_MODEL` | `anthropic-subscription/claude-sonnet-4-6` | `claude-subscription` default model |
+| `SHIBA_CODEX_SUBSCRIPTION` | unset | Set `1` to enable the opt-in `codex-subscription` harness (below) |
+| `CODEX_SUBSCRIPTION_MODEL` | `openai-subscription/gpt-5.3-codex` | `codex-subscription` default model |
 | `RUNTIME` | `sandbox` | Runtime adapter; current default is Cloudflare Sandbox |
 | `INSTANCE_TYPE` | `standard-1` | Configured Cloudflare container size |
 | `REQUIRE_ACCESS` | Wrangler default unset; live Alchemy stages set `1` | Require Access identity at the Worker boundary |
@@ -33,6 +35,10 @@ OpenCode, Claude Code, and Codex provider traffic uses the account-owned AI Gate
 ### Claude subscription (opt-in)
 
 Setting `SHIBA_CLAUDE_SUBSCRIPTION=1` registers a second Claude harness, `claude-subscription`, that drives the same `claude` binary against the operator's own subscription credential instead of AI Gateway. To connect an account, run `claude setup-token` on your own machine and store the printed token as a Worker secret — `CLAUDE_SUBSCRIPTION_TOKEN`, or `CLAUDE_SUBSCRIPTION_TOKEN_<ACCOUNT>` for a named account — then drive the lifecycle under `/api/auth/claude-subscription` (begin, verify, clear). Your own Anthropic plan terms apply; this deployment makes no use of anyone else's credential. The token is a deployment secret: it stays outside the sandbox, is attached only at the egress boundary, and appears in no log, command line, or UI response. Signing out (or revoking the token) stops in-flight subscription runs and refuses new ones.
+
+### Codex subscription (opt-in)
+
+Setting `SHIBA_CODEX_SUBSCRIPTION=1` registers `codex-subscription`, which drives the same `codex` binary against the operator's own ChatGPT subscription instead of AI Gateway. Codex's credential is directory-shaped: run `codex login` on your own machine and store the resulting `~/.codex/auth.json` contents verbatim as a Worker secret — `CODEX_SUBSCRIPTION_AUTH_JSON`, or `CODEX_SUBSCRIPTION_AUTH_JSON_<ACCOUNT>` for a named account — then drive the lifecycle under `/api/auth/codex-subscription` (begin, verify, clear). In the sandbox the run's `CODEX_HOME` is a per-account shadow holding a stub `auth.json` as a real file plus symlinks into the shared home (sessions, caches, the install) — a conversation thread survives an account switch while each account revokes independently. The real tokens never enter the container: the dedicated `chatgpt.com` egress branch attaches `Bearer` + `chatgpt-account-id` at the boundary, token refresh hosts are not admitted (an expired token fails the run honestly — re-store the secret), and the credential appears in no sandbox file, argv, log, or UI response. Your own plan terms apply.
 
 Subscription credentials are not the default provider-key path — API credentials via AI Gateway are. The `claude-subscription` opt-in above is the deliberate exception: it exists for the single-tenant operator driving their own credential, and stays dark unless they set the flag. Check the provider's current terms before enabling it. The assistant/model used to edit this repository is independent of these application settings.
 

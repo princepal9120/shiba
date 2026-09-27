@@ -181,6 +181,22 @@ export interface Env {
   /** T48: per-deploy model override for the claude-subscription harness. */
   CLAUDE_SUBSCRIPTION_MODEL?: string;
   /**
+   * T49 opt-in flag (§18.11): "1" registers the codex-subscription harness.
+   * A distinct var so an operator can enable one subscription provider
+   * without the other; absent it is unregistered and unselectable.
+   */
+  SHIBA_CODEX_SUBSCRIPTION?: string;
+  /**
+   * T49 credential: the auth.json file contents produced by `codex login`,
+   * stored verbatim as a Wrangler secret and read only by the subscription
+   * egress branch — the container's CODEX_HOME holds a stub auth.json,
+   * never the real tokens. Named accounts:
+   * CODEX_SUBSCRIPTION_AUTH_JSON_<ACCOUNT> (resolved by name).
+   */
+  CODEX_SUBSCRIPTION_AUTH_JSON?: string;
+  /** T49: per-deploy model override for the codex-subscription harness. */
+  CODEX_SUBSCRIPTION_MODEL?: string;
+  /**
    * Optional. Devin account API key for the devin harness — injected as a
    * Bearer header by the egress forwarders on api.devin.ai and
    * server.codeium.com. Never sent to containers; the sandboxed CLI holds a
