@@ -17,8 +17,11 @@ import {
   type LocalRunResult,
 } from "@shiba/shared";
 import { AntigravityErrorEvent } from "./harness/antigravity.js";
+import { AntigravityUsageLimitError } from "./harness/antigravity-subscription.js";
 import { ClaudeCodeErrorEvent } from "./harness/claude-code.js";
+import { ClaudeUsageLimitError } from "./harness/claude-subscription.js";
 import { CodexErrorEvent } from "./harness/codex.js";
+import { CodexUsageLimitError } from "./harness/codex-subscription.js";
 import { CursorErrorEvent } from "./harness/cursor.js";
 import { DevinErrorEvent } from "./harness/devin.js";
 import { GrokErrorEvent } from "./harness/grok.js";
@@ -262,6 +265,9 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
         error instanceof GrokErrorEvent ||
         error instanceof CursorErrorEvent ||
         error instanceof DevinErrorEvent ||
+        error instanceof ClaudeUsageLimitError ||
+        error instanceof CodexUsageLimitError ||
+        error instanceof AntigravityUsageLimitError ||
         error instanceof AntigravityErrorEvent
       ) {
         return failureResult(error.message, 0, "", signals);
@@ -653,6 +659,9 @@ function streamProgress(harness: AgentHarness, emit: ProgressEmitter, _signal?: 
             error instanceof GrokErrorEvent ||
             error instanceof CursorErrorEvent ||
             error instanceof DevinErrorEvent ||
+            error instanceof ClaudeUsageLimitError ||
+            error instanceof CodexUsageLimitError ||
+            error instanceof AntigravityUsageLimitError ||
             error instanceof AntigravityErrorEvent
           ) {
             throw error;

@@ -40,6 +40,7 @@ import {
   type AgentHarness,
   type HarnessCapabilities,
   type HarnessConfigFile,
+  type HarnessEvent,
   type VerificationOutcome,
   verifyRunOutcome,
 } from "./types.js";
@@ -225,7 +226,7 @@ export class CodexSubscriptionHarness implements AgentHarness {
     ];
   }
 
-  parseEvent(line: string): string | null {
+  parseEvent(line: string): HarnessEvent | null {
     try {
       return parseCodexEvent(line);
     } catch (error) {

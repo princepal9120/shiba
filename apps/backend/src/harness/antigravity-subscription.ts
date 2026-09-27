@@ -39,6 +39,7 @@ import {
   type AgentHarness,
   type HarnessCapabilities,
   type HarnessConfigFile,
+  type HarnessEvent,
   type VerificationOutcome,
   verifyRunOutcome,
 } from "./types.js";
@@ -147,7 +148,7 @@ export class AntigravitySubscriptionHarness implements AgentHarness {
     ];
   }
 
-  parseEvent(line: string): string | null {
+  parseEvent(line: string): HarnessEvent | null {
     try {
       return parseAntigravityEvent(line);
     } catch (error) {

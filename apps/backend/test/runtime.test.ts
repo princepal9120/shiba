@@ -3,7 +3,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ExecutionContext } from "@cloudflare/workers-types";
 import { Sandbox } from "../src/sandbox.js";
 import { claudeCodeHarness } from "../src/harness/claude-code.js";
+import { ClaudeUsageLimitError } from "../src/harness/claude-subscription.js";
+import { CodexUsageLimitError } from "../src/harness/codex-subscription.js";
 import { devinHarness } from "../src/harness/devin.js";
+import { AntigravityUsageLimitError } from "../src/harness/antigravity-subscription.js";
+import type { AgentHarness } from "../src/harness/types.js";
 
 vi.mock("@cloudflare/sandbox", () => ({
   Sandbox: class {},
@@ -435,6 +439,29 @@ describe("streamed opencode progress", () => {
     expect(result.status).toBe("error");
     expect(result.summary).toContain("Not logged in");
     expect(result.summary).not.toContain("malformed event line");
+  });
+
+  it.each([
+    new ClaudeUsageLimitError("quota exhausted"),
+    new CodexUsageLimitError("quota exhausted"),
+    new AntigravityUsageLimitError("quota exhausted"),
+  ])("fails a run on %s instead of masking the usage limit", async (usageError) => {
+    const harness = Object.create(devinHarness) as AgentHarness;
+    harness.parseEvent = () => { throw usageError; };
+    const ops = makeFakeOps();
+    const baseExec = ops.exec;
+    ops.exec = async (command, opts) => {
+      if (!command.startsWith("'devin'")) return baseExec(command, opts);
+      opts?.onOutput?.("stdout", "usage limit\n");
+      return { stdout: "", stderr: "", exitCode: 0 };
+    };
+    const result = await new SandboxRuntimeAdapter(harness).runCodingTask(
+      ops,
+      { ...INPUT, codingModel: "devin/swe-2" },
+      () => {},
+    );
+    expect(result.status).toBe("error");
+    expect(result.summary).toBe(usageError.message);
   });
 
   it("emits bounded progress from streamed stdout JSON events", async () => {
