@@ -154,6 +154,28 @@ describe("captureRunPreview", () => {
     expect(inline.abort).not.toHaveBeenCalled();
   });
 
+  it("aborts non-http network schemes — ws/wss/file cannot exfiltrate", async () => {
+    const env = makeEnv();
+    const deps = makeDeps();
+    await captureRunPreview(env, { sandboxId: "sandbox-abc123" }, deps);
+
+    for (const url of [
+      "ws://evil.example.net/socket",
+      "wss://evil.example.net/socket",
+      "file:///etc/passwd",
+      "javascript:alert(1)",
+    ]) {
+      const request = deps.fireRequest(url);
+      expect(request.abort).toHaveBeenCalled();
+      expect(request.continue).not.toHaveBeenCalled();
+    }
+    for (const url of ["data:image/png;base64,AAA", "blob:https://x.example/1", "about:blank"]) {
+      const request = deps.fireRequest(url);
+      expect(request.continue).toHaveBeenCalled();
+      expect(request.abort).not.toHaveBeenCalled();
+    }
+  });
+
   it("still unexposes the preview port when navigation fails", async () => {
     const env = makeEnv();
     const deps = makeDeps();

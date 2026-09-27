@@ -5,6 +5,7 @@
  * @shiba/frontend, and @shiba/web.
  */
 import { z } from "zod";
+import { HARNESS_IDS } from "./mcp.js";
 import type { ApprovedRoute } from "./model.js";
 import type { DelegatedRun } from "./runs.js";
 
@@ -92,6 +93,17 @@ export function parseSteeringInput(body: unknown): SteeringParseResult {
   if (!baseBranch.ok) return baseBranch;
   const harness = stringField("harness");
   if (!harness.ok) return harness;
+  // Only installed sandbox harnesses can ever run: the registry also carries
+  // names whose CLIs are not installed, so a free-form harness must be a
+  // member or the steer would cancel live work for an approval that can
+  // never dispatch (same enum the queue schema uses).
+  if (harness.value !== undefined && !(HARNESS_IDS as readonly string[]).includes(harness.value)) {
+    return {
+      ok: false,
+      status: 400,
+      error: `harness must be one of ${HARNESS_IDS.join(", ")}.`,
+    };
+  }
   const codingModel = stringField("codingModel");
   if (!codingModel.ok) return codingModel;
   const connectionId = stringField("connectionId");
@@ -183,7 +195,7 @@ export const steerRunInputSchema = z.object({
   repoUrl: z.string().optional().describe("Optional repoUrl override."),
   baseBranch: z.string().optional().describe("Optional baseBranch override."),
   publishPullRequest: z.boolean().optional().describe("Optional publishPullRequest override."),
-  harness: z.string().optional().describe("Optional harness override."),
+  harness: z.enum(HARNESS_IDS).optional().describe("Optional harness override."),
   codingModel: z.string().optional().describe("Optional codingModel override."),
   connectionId: z.string().optional().describe("Optional connectionId override."),
   changesScope: z.boolean().optional().describe("Declare scope change."),

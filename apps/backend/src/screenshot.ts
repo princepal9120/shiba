@@ -45,8 +45,10 @@ export function screenshotUrlFor(env: Env, sandboxId: string): string | null {
  * Request-interception policy for the render page: continue same-origin
  * requests (the page's own HTML, CSS, JS, images on the preview server) and
  * abort everything else so untrusted workdir content cannot issue
- * cross-origin network requests. Non-URL schemes (data:, blob:, about:)
- * carry no network traffic and are allowed through.
+ * cross-origin network requests. Schemes that never reach the network
+ * (data:, blob:, about:) are allowed through; ws:/wss:/file: are not —
+ * a WebSocket handshake is cross-origin traffic the same-origin check
+ * cannot see, and file: reads must not leave the renderer.
  */
 async function allowSameOriginOnly(request: InterceptedRequest, previewUrl: string): Promise<void> {
   if (request.isInterceptResolutionHandled()) return;
@@ -54,7 +56,8 @@ async function allowSameOriginOnly(request: InterceptedRequest, previewUrl: stri
     const target = new URL(request.url());
     const isHttp = target.protocol === "http:" || target.protocol === "https:";
     // Non-network schemes (data:, blob:, about:) never leave the renderer.
-    const allowed = !isHttp || target.origin === new URL(previewUrl).origin;
+    const isNonNetwork = target.protocol === "data:" || target.protocol === "blob:" || target.protocol === "about:";
+    const allowed = isNonNetwork || (isHttp && target.origin === new URL(previewUrl).origin);
     if (allowed) {
       await request.continue();
     } else {

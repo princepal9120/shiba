@@ -210,6 +210,18 @@ describe("steering admission", () => {
     expect(host.runs[0]!.steering).toBeUndefined();
   });
 
+  it("rejects a steer to a harness outside the installed set — before any cancellation", async () => {
+    const host = makeHost([makeRun()]);
+    const res = await handleSteeringRequest(host, "agent-tool:run-1", {
+      message: "switch to cursor",
+      harness: "cursor",
+    });
+    expect(res.status).toBe(400);
+    expect(host.cancelledRuns).toHaveLength(0);
+    expect(host.approvals).toHaveLength(0);
+    expect(host.runs[0]!.status).toBe("pending");
+  });
+
   it("404s unknown runs and runs owned by another principal", async () => {
     const host = makeHost([makeRun()]);
     expect((await handleSteeringRequest(host, "agent-tool:nope", { message: "hi" })).status).toBe(404);
