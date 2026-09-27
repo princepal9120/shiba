@@ -23,7 +23,7 @@
       "ignoreDependencies": ["@types/react"]
     },
     "apps/backend": {
-      "entry": ["src/index.ts", "test/**/*.test.ts", "test/cloudflare-stub.ts", "vitest.config.ts", "alchemy.run.ts"],
+      "entry": ["src/index.ts", "test/**/*.test.ts", "test/cloudflare-stub.ts", "vitest.config.ts"],
       "project": ["src/**/*.ts", "test/**/*.ts"]
     },
     "apps/frontend": {

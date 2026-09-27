@@ -4,7 +4,7 @@ Self-hosted, approval-gated coding agent on Cloudflare Workers + Sandbox. Archit
 
 ```bash
 # Gate — always required:
-pnpm typecheck && pnpm lint && pnpm test && pnpm build
+pnpm typecheck && pnpm lint && pnpm lint:imports && pnpm test && pnpm build
 pnpm env:load && pnpm env:scan   # varlock: validate .env against .env.schema; scan for leaked secrets
 # Second tier — only where a Docker daemon is running:
 npx wrangler deploy --dry-run --config apps/backend/wrangler.jsonc

@@ -1,4 +1,5 @@
 import { cp, mkdir, rm } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 
 // Assemble the Worker's ASSETS directory (public/) from package-local build
 // outputs. Runs after `turbo run build`:
@@ -17,12 +18,12 @@ const steps = [
 ];
 
 const dest = new URL('public', root);
-await rm(dest.pathname, { recursive: true, force: true });
-await mkdir(dest.pathname, { recursive: true });
+await rm(fileURLToPath(dest), { recursive: true, force: true });
+await mkdir(fileURLToPath(dest), { recursive: true });
 
 for (const [src, dst] of steps) {
   const srcUrl = new URL(`${src}/`, root);
-  await cp(srcUrl.pathname, new URL(`${dst}/`, root).pathname, {
+  await cp(fileURLToPath(srcUrl), fileURLToPath(new URL(`${dst}/`, root)), {
     recursive: true,
     force: true,
   });

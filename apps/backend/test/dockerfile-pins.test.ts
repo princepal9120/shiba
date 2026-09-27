@@ -18,12 +18,17 @@ const PACKAGE_JSON = JSON.parse(readFileSync(join(BACKEND, "package.json"), "utf
 
 /** `npm i -g pkg@ver ...` line → { package: version }. */
 function npmGlobalPins(dockerfile: string): Record<string, string> {
-  const match = dockerfile.match(/npm i -g\s+((?:\S+\s*)+)/);
-  if (!match) {
+  const lines = dockerfile.split(/\r?\n/);
+  let index = lines.findIndex((line) => line.includes("npm i -g "));
+  if (index < 0) {
     throw new Error("Dockerfile has no `npm i -g` install line for harness CLIs");
   }
+  let command = lines[index]!.split("npm i -g ", 2)[1]!;
+  while (command.trimEnd().endsWith("\\")) {
+    command = `${command.trimEnd().slice(0, -1)} ${lines[++index]?.trim() ?? ""}`;
+  }
   const pins: Record<string, string> = {};
-  for (const spec of match[1]!.trim().split(/\s+/)) {
+  for (const spec of command.split("&&", 1)[0]!.trim().split(/\s+/)) {
     // Scoped packages carry a second @ between name and version: @scope/name@1.2.3.
     const at = spec.lastIndexOf("@");
     if (at <= 0) continue;
@@ -66,6 +71,19 @@ describe("Dockerfile pins", () => {
         `catalog says ${cli.id}@${cli.version} but the Dockerfile pins ${pinned}`,
       ).toBe(pinned);
     }
+  });
+
+  it("does not parse later Dockerfile commands as npm pins", () => {
+    const dockerfile = [
+      "RUN npm i -g tool@1 \\",
+      "  && tool --version",
+      "ARG OTHER=foo@2",
+      "RUN echo extra@3",
+    ].join("\n");
+    expect(npmGlobalPins(dockerfile)).toEqual({ tool: "1" });
+    expect(Object.keys(npmPins).sort()).toEqual(
+      Object.values(PIN_SOURCE).flatMap((source) => source.npm ? [source.npm] : []).sort(),
+    );
   });
 
   it("base image tag matches the @cloudflare/sandbox npm version", () => {

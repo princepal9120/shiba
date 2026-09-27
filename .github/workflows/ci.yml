@@ -31,6 +31,12 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm lint
