@@ -2,9 +2,7 @@
   "compilerOptions": {
     "target": "ES2022",
     "lib": [
-      "ES2022",
-      "DOM",
-      "DOM.Iterable"
+      "ES2022"
     ],
     "module": "ESNext",
     "moduleResolution": "Bundler",
@@ -16,25 +14,10 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noFallthroughCasesInSwitch": true,
-    "types": [
-      "node"
-    ],
-    "composite": true,
-    "emitDeclarationOnly": true,
-    "outDir": "dist"
+    "noEmit": true
   },
   "include": [
-    "alchemy.run.ts"
-  ],
-  "references": [
-    {
-      "path": "packages/shared"
-    },
-    {
-      "path": "apps/backend"
-    },
-    {
-      "path": "packages/auth"
-    }
+    "src",
+    "test"
   ]
 }

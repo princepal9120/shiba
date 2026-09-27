@@ -9,7 +9,7 @@
     "lint": "eslint src",
     "test": "vitest run",
     "test:live": "vitest run test/typesafe-live.test.ts",
-    "typecheck": "tsc --noEmit -p ../../tsconfig.json"
+    "typecheck": "tsc -b && tsc --noEmit -p tsconfig.test.json"
   },
   "dependencies": {
     "@cloudflare/ai-chat": "0.12.0",

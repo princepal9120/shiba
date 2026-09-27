@@ -16,25 +16,21 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noFallthroughCasesInSwitch": true,
-    "types": [
-      "node"
-    ],
     "composite": true,
     "emitDeclarationOnly": true,
     "outDir": "dist"
   },
   "include": [
-    "alchemy.run.ts"
+    "src",
+    "src/email-openapi.json",
+    "vitest.config.ts"
   ],
   "references": [
     {
-      "path": "packages/shared"
+      "path": "../../packages/shared"
     },
     {
-      "path": "apps/backend"
-    },
-    {
-      "path": "packages/auth"
+      "path": "../../packages/auth"
     }
   ]
 }

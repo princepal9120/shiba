@@ -45,4 +45,22 @@ export default tseslint.config(
       ],
     },
   },
+  // packages/* are the leaf layer: they must never reach into apps/.
+  {
+    files: ["packages/*/src/**/*.{ts,tsx}", "packages/*/test/**/*.{ts,tsx}"],
+    languageOptions: { parser: tseslint.parser },
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["../../apps/**", "../../../apps/**", "*/apps/*/**"],
+              message: "Packages must not import apps/ — shared contracts live in @shiba/shared.",
+            },
+          ],
+        },
+      ],
+    },
+  },
 );
