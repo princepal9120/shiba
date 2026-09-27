@@ -123,3 +123,17 @@ export function runErrorWire(code: RunErrorCode): RunErrorWire {
     userMessage: RUN_ERROR_DEFS[code].summary,
   };
 }
+
+/**
+ * A classified error lands as its matching terminal status — the same
+ * mapping the orchestrator applied pre-T40. `cancelled` maps to its own
+ * status; the indeterminate family lands as `unknown` so the wire
+ * projection and the dashboard agree the outcome is unverified.
+ */
+export function terminalStatusForError(code: RunErrorCode): "error" | "cancelled" | "unknown" {
+  return code === "cancelled"
+    ? "cancelled"
+    : code === "outcome_unknown" || code === "container_lost"
+      ? "unknown"
+      : "error";
+}

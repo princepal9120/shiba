@@ -13,6 +13,7 @@ import {
 import { createPendingApproval, type PendingApproval } from "../src/pending-approvals.js";
 import { createRun, transitionRun, type DelegatedRun, isActiveStatus } from "../src/runs.js";
 import type { ApprovedRoute } from "../src/model-connections.js";
+import { evidenceFor } from "./seeding.js";
 
 const ROUTE: ApprovedRoute = {
   purpose: "coding",
@@ -22,16 +23,21 @@ const ROUTE: ApprovedRoute = {
   policyVersion: 1,
 };
 
+const RUN_INPUT = {
+  repoUrl: "https://github.com/acme/widgets",
+  task: "Fix the flaky test",
+  baseBranch: "main",
+  publishPullRequest: false,
+  route: ROUTE,
+};
+
 function makeRun(overrides: Partial<DelegatedRun> = {}): DelegatedRun {
   const base = createRun({
     runId: "agent-tool:run-1",
     sandboxId: "sbx-1",
-    repoUrl: "https://github.com/acme/widgets",
-    task: "Fix the flaky test",
-    baseBranch: "main",
-    publishPullRequest: false,
+    ...RUN_INPUT,
     queuedBy: "operator",
-    route: ROUTE,
+    approval: evidenceFor(RUN_INPUT, "ap-run-1"),
     now: 1_000,
   });
   return { ...base, ...overrides };
@@ -202,7 +208,12 @@ describe("T31 invariant — steering never bypasses the approval gate & cancels 
 
 describe("steering admission", () => {
   it("refuses terminal runs", async () => {
-    const run = transitionRun(makeRun(), "completed", { summary: "done" }, 2_000);
+    const run = transitionRun(
+      transitionRun(makeRun(), "running", undefined, 1_500),
+      "completed",
+      { summary: "done" },
+      2_000,
+    );
     const host = makeHost([run]);
     const res = await handleSteeringRequest(host, run.runId, { message: "one more thing" });
     expect(res.status).toBe(409);
@@ -416,7 +427,12 @@ describe("async recheck and cancellation truth", () => {
       // The run finishes while the steer awaits route resolution.
       host.runs = host.runs.map((candidate) =>
         candidate.runId === run.runId
-          ? transitionRun(candidate, "completed", { summary: "done" }, Date.now())
+          ? transitionRun(
+              transitionRun(candidate, "running", undefined, Date.now()),
+              "completed",
+              { summary: "done" },
+              Date.now(),
+            )
           : candidate,
       );
       return { route: { ...ROUTE, modelId: "google/gemini-2.5-flash" } };

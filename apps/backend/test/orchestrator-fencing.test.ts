@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CodingOrchestrator } from "../src/agents/orchestrator.js";
 import type { OrchestratorState } from "../src/agents/orchestrator.js";
 import { createRun, type DelegatedRun } from "../src/runs.js";
+import { approveDirect } from "./seeding.js";
 import { formatAgentResult } from "../src/opencode-input.js";
 import { OpenCodeErrorEvent } from "../src/harness/opencode.js";
 import { RunFailure } from "../src/effect/runtime.js";
@@ -42,6 +43,7 @@ beforeEach(() => { vi.resetAllMocks(); mocks.destroy.mockResolvedValue(undefined
 describe("orchestrator generation fencing", () => {
   it("drops a late finish after cancelRun: run stays cancelled, no Slack post-back", async () => {
     const instance = agent();
+    approveDirect(instance, "tc-cancel");
     Object.assign(instance, {
       name: "slack:T1:C9:1700.0001",
       ctx: { waitUntil: vi.fn((p: Promise<unknown>) => p) },
@@ -95,6 +97,7 @@ describe("orchestrator generation fencing", () => {
 
   it("stores a classified errorCode when the child fails with an HTTP status", async () => {
     const instance = agent();
+    approveDirect(instance, "tc-429");
     mocks.execute.mockRejectedValueOnce(new OpenCodeErrorEvent("provider returned status 429: rate limited"));
     const execution = delegate(instance).execute(INPUT, { toolCallId: "tc-429" });
     await expect(execution).rejects.toThrow(/status 429/);
@@ -105,6 +108,7 @@ describe("orchestrator generation fencing", () => {
 
   it("lands container_lost as the indeterminate unknown terminal status", async () => {
     const instance = agent();
+    approveDirect(instance, "tc-oom");
     mocks.execute.mockRejectedValueOnce(new Error("container was OOMKilled"));
     const execution = delegate(instance).execute(INPUT, { toolCallId: "tc-oom" });
     await expect(execution).rejects.toThrow(/OOMKilled/);
@@ -115,6 +119,7 @@ describe("orchestrator generation fencing", () => {
 
   it("classifies a structured failure envelope as executor_failed, not internal_error", async () => {
     const instance = agent();
+    approveDirect(instance, "tc-envfail");
     mocks.execute.mockResolvedValueOnce(formatAgentResult({
       status: "error", exitCode: 1, stderrTail: "",
       changedFiles: [], diff: "", files: [], summary: "harness crashed mid-task",
@@ -128,6 +133,7 @@ describe("orchestrator generation fencing", () => {
 
   it("does not evaluate quality on a dropped finish (stale grade on cancelled run)", async () => {
     const instance = agent();
+    approveDirect(instance, "tc-grade");
     Object.assign(instance.env, { TYPESAFE_API_KEY: "ts-test" });
     let resolveChild: (value: string) => void = () => {};
     mocks.execute.mockImplementation(
@@ -151,6 +157,7 @@ describe("orchestrator generation fencing", () => {
 
   it("rejects with a RunFailure carrying the classified code and wire projection", async () => {
     const instance = agent();
+    approveDirect(instance, "tc-failure");
     mocks.execute.mockRejectedValueOnce(new OpenCodeErrorEvent("provider returned status 429: rate limited"));
     const execution = delegate(instance).execute(INPUT, { toolCallId: "tc-failure" });
     const settled = execution.then(
@@ -169,6 +176,7 @@ describe("orchestrator generation fencing", () => {
 
   it("rejects cancelled when the run is cancelled mid-childExecute", async () => {
     const instance = agent();
+    approveDirect(instance, "tc-midabort");
     mocks.execute.mockImplementation(async (_input, options: { abortSignal?: AbortSignal }) => {
       await new Promise((_resolve, reject) => {
         options?.abortSignal?.addEventListener(
@@ -196,6 +204,7 @@ describe("orchestrator generation fencing", () => {
 
   it("returns completed output when an abort lands during sandbox cleanup", async () => {
     const instance = agent();
+    approveDirect(instance, "tc-cleanup-abort");
     const caller = new AbortController();
     let resolveDestroy: () => void = () => {};
     mocks.destroy.mockImplementationOnce(

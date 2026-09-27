@@ -4,6 +4,7 @@
  * is an append-only receipt log: completed/error/cancelled/aborted are
  * terminal, and there is no stop/resume.
  */
+import type { ApprovalEvidence } from "./approvals.js";
 import type { ApprovedRoute } from "./model.js";
 import type { Receipt } from "./receipts.js";
 import type { RunErrorCode } from "./run-errors.js";
@@ -69,6 +70,12 @@ export interface DelegatedRun {
    * cancelling the live run. Absent on runs that predate steering.
    */
   steering?: SteeringNote[];
+  /**
+   * T40: the approval that authorized this run — who approved, when, and
+   * the hash of the frozen input they approved. The decider refuses `start`
+   * without it; absent on records predating the decider.
+   */
+  approval?: ApprovalEvidence;
 }
 
 export type RunPatch = {

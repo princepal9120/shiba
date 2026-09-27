@@ -237,3 +237,67 @@ export function decidedApprovals(approvals: PendingApproval[]): PendingApproval[
 export function isApprovalExpired(record: PendingApproval, now: number): boolean {
   return now - record.createdAt > APPROVAL_TTL_MS;
 }
+
+/**
+ * The proof a run carries into `running` (T40): who approved it, when, and
+ * the hash of the exact frozen input they approved. Stored on the run record
+ * at queue time and re-asserted on the `start` command — a run with no
+ * evidence, mismatched approver, or an input that drifted from the card
+ * cannot start.
+ */
+export interface ApprovalEvidence {
+  approvalId: string;
+  decidedBy: string;
+  decidedAt: number;
+  inputHash: string;
+}
+
+/** The fields the human approves — the input-hash surface. */
+export interface RunInputFields {
+  repoUrl: string;
+  task: string;
+  baseBranch: string;
+  publishPullRequest: boolean;
+  route?: ApprovedRoute;
+}
+
+/** Key-sorted JSON — the canonical form the input hash covers. */
+function stableJson(value: JsonValue): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  const entries = Object.keys(value)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableJson((value as JsonObject)[key]!)}`);
+  return `{${entries.join(",")}}`;
+}
+
+/** FNV-1a over the canonical input — a tamper check, not a credential. */
+export function runInputHash(input: RunInputFields): string {
+  const canonical = stableJson({
+    repoUrl: input.repoUrl,
+    task: input.task,
+    baseBranch: input.baseBranch,
+    publishPullRequest: input.publishPullRequest,
+    ...(input.route !== undefined ? { route: input.route as unknown as JsonValue } : {}),
+  });
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < canonical.length; i++) {
+    hash ^= canonical.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, "0");
+}
+
+/**
+ * Build the evidence a resolved approval record produces for a run. `input`
+ * is the post-default run shape (baseBranch defaults applied) so the hash
+ * matches `runInputHash` on the stored record at `start`.
+ */
+export function approvalEvidenceFor(record: PendingApproval, input: RunInputFields): ApprovalEvidence {
+  return {
+    approvalId: record.approvalId,
+    decidedBy: record.decidedBy ?? "unknown",
+    decidedAt: record.decidedAt ?? record.createdAt,
+    inputHash: runInputHash(input),
+  };
+}
