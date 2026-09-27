@@ -15,6 +15,14 @@ import type { CodingTaskInput } from "../opencode-input.js";
 /** Implemented harnesses. Aider was in the original sketch but has no adapter — add it here with one, not before. */
 export type AgentHarnessName = "opencode" | "claude-code" | "codex" | "devin" | "grok" | "cursor" | "antigravity";
 
+/**
+ * Harnesses the sandbox image can actually drive — their CLIs are baked into
+ * the Dockerfile and hold the dummy-key invariant. Cursor and Antigravity stay
+ * registered for catalog/type surfaces but cannot start a sandbox run, so a
+ * run-selection lookup must refuse them (resolveHarness enforces this).
+ */
+export const SANDBOX_HARNESS_NAMES: readonly AgentHarnessName[] = ["opencode", "claude-code", "codex", "devin", "grok"];
+
 /** Provider id → the single host its API lives on. Feeds allowedHosts (T5). */
 export const PROVIDER_HOSTS: Record<string, string> = {
   google: "generativelanguage.googleapis.com",

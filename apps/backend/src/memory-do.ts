@@ -591,11 +591,18 @@ export class Memory {
     // existing fact answers as itself marked `duplicate_of` — a successful
     // (idempotent) bank that never wrote, not a conflict.
     if (memoryEnabled(this.env.MEMORY_ENABLED)) {
-      const matches = await this.env.MEMORY_VECTORS.query(vector, {
-        topK: 1,
-        filter: { agent: this.agent },
-      });
-      const nearest = matches.matches[0];
+      // Best-effort probe: a deployment missing the `agent` metadata index
+      // still banks the fact — the alarm sweep merges near-duplicates later.
+      let matches: VectorizeMatches | undefined;
+      try {
+        matches = await this.env.MEMORY_VECTORS.query(vector, {
+          topK: 1,
+          filter: { agent: this.agent },
+        });
+      } catch (error) {
+        console.warn("bank dedupe probe failed; banking without dedupe", error);
+      }
+      const nearest = matches?.matches[0];
       if (nearest !== undefined && nearest.score >= DEDUPE_THRESHOLD) {
         await this.collectPurged(this.store.purgeExpiredFacts());
         const existing = this.store.getFact(nearest.id);

@@ -10,8 +10,10 @@
  * are harness-dispatched (default: OpenCode).
  */
 import type { CodingTaskInput, CodingTaskResult } from "./opencode-input.js";
+import { AntigravityErrorEvent } from "./harness/antigravity.js";
 import { ClaudeCodeErrorEvent } from "./harness/claude-code.js";
 import { CodexErrorEvent } from "./harness/codex.js";
+import { CursorErrorEvent } from "./harness/cursor.js";
 import { GrokErrorEvent } from "./harness/grok.js";
 import { OpenCodeErrorEvent as OpenCodeErrorEventImpl, opencodeHarness } from "./harness/opencode.js";
 import { HARNESS_RETRY, withRetry } from "./harness/retry.js";
@@ -137,7 +139,9 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
         error instanceof OpenCodeErrorEventImpl ||
         error instanceof ClaudeCodeErrorEvent ||
         error instanceof CodexErrorEvent ||
-        error instanceof GrokErrorEvent
+        error instanceof GrokErrorEvent ||
+        error instanceof CursorErrorEvent ||
+        error instanceof AntigravityErrorEvent
       ) {
         return failureResult(error.message, 0, "");
       }
@@ -275,7 +279,9 @@ function streamProgress(harness: AgentHarness, emit: ProgressEmitter, _signal?: 
             error instanceof OpenCodeErrorEventImpl ||
             error instanceof ClaudeCodeErrorEvent ||
             error instanceof CodexErrorEvent ||
-            error instanceof GrokErrorEvent
+            error instanceof GrokErrorEvent ||
+            error instanceof CursorErrorEvent ||
+            error instanceof AntigravityErrorEvent
           ) {
             throw error;
           }

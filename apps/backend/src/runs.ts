@@ -8,10 +8,8 @@
  * deliberately cut (PLAN.md §4, "Future work").
  */
 import {
-  countActiveRuns,
   isActiveStatus,
   isTerminalStatus,
-  MAX_CONCURRENT_RUNS,
   normalizeRun,
   RUN_DEADLINE_MS,
 } from "@shiba/shared";
