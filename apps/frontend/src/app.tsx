@@ -1604,7 +1604,7 @@ export function App(): React.JSX.Element {
       ) : mainView === "missions" ? (
         <MissionsView />
       ) : mainView === "gates" ? (
-        <GatesView />
+        <GatesView onNavigate={(view) => setMainView(view)} />
       ) : (
         null
       )}
