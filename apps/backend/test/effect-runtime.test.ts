@@ -9,6 +9,17 @@ import {
   tryRunPromise,
 } from "../src/effect/runtime.js";
 
+/** T42: deferred latch — the fiber under test resolves it, never a clock. */
+const latch = <T = void>() => {
+  let resolve!: (value: T) => void;
+  let reject!: (error?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+};
+
 describe("runWorkerEffect", () => {
   it("passes a successful Effect's value through", async () => {
     await expect(runWorkerEffect(Effect.succeed(42))).resolves.toBe(42);
@@ -123,7 +134,7 @@ describe("signal bridge", () => {
   it("effectWithSignal aborts the controller when the fiber is interrupted", async () => {
     // T42: the latch resolves when the fiber's work actually starts — no
     // fixed tick guessing at fiber startup.
-    const started = Promise.withResolvers<AbortSignal>();
+    const started = latch<AbortSignal>();
     const fiber = Effect.runFork(
       effectWithSignal((signal) => {
         started.resolve(signal);
@@ -136,7 +147,7 @@ describe("signal bridge", () => {
   });
 
   it("tryRunPromise propagates interruption to the underlying async work", async () => {
-    const started = Promise.withResolvers<AbortSignal>();
+    const started = latch<AbortSignal>();
     const fiber = Effect.runFork(
       tryRunPromise((signal) => {
         started.resolve(signal);
