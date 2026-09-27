@@ -5,7 +5,7 @@
  * credentials are proxied. The container gets the dummy key; the real one is
  * injected at the egress boundary.
  */
-import type { CodingTaskInput } from "../opencode-input.js";
+import type { CodingTaskInput, CodingTaskResult } from "../opencode-input.js";
 import { DUMMY_PROVIDER_KEY } from "../provider-gateway.js";
 import { boundTail } from "../security.js";
 import {
@@ -13,6 +13,10 @@ import {
   PROVIDER_HOSTS,
   PROVIDER_KEY_ENV,
   type AgentHarness,
+  type HarnessCapabilities,
+  type HarnessEvent,
+  type VerificationOutcome,
+  verifyRunOutcome,
 } from "./types.js";
 
 export const CODEX_PROVIDERS = ["openai"] as const;
@@ -32,7 +36,7 @@ export class CodexEventError extends Error {}
  * Parse one `codex exec --json` line. Error envelopes throw so a failed run
  * cannot be reported as a successful one.
  */
-export function parseCodexEvent(line: string): string | null {
+export function parseCodexEvent(line: string): HarnessEvent | null {
   const trimmed = line.trim();
   if (!trimmed) return null;
   let event: unknown;
@@ -57,8 +61,9 @@ export function parseCodexEvent(line: string): string | null {
     ? record.text.trim()
     : typeof record.message === "string" && record.message.trim()
       ? record.message.trim()
-      : summarize(record);
-  return boundTail(text, 500);
+      : "";
+  if (text) return { kind: "text", text: boundTail(text, 500) };
+  return { kind: "progress", text: boundTail(summarize(record), 500) };
 }
 
 function summarize(record: Record<string, unknown>): string {
@@ -98,9 +103,20 @@ export class CodexHarness implements AgentHarness {
     ];
   }
 
-  parseEvent(line: string): string | null {
+  parseEvent(line: string): HarnessEvent | null {
     return parseCodexEvent(line);
   }
+  /** T43 declared capabilities — the gates read this, not the name. */
+  capabilities(_model?: string): HarnessCapabilities {
+    return { streamsText: true, emitsToolCalls: true, supportsResume: true, supportsSteering: false, supportsFileAttachments: false, canRunTests: true, supportsConversationRollback: false, execAllowlist: [["pnpm","test"],["npm","test"],["bun","test"],["pnpm","vitest","run"],["npx","vitest","run"]],
+      supportedRuntimes: ["sandbox", "local"] };
+  }
+
+  /** Deterministic outcome check — gates the completed claim (T43/T46 feed). */
+  async verify(input: CodingTaskInput, result: CodingTaskResult): Promise<VerificationOutcome> {
+    return verifyRunOutcome(input, result, this.capabilities(input.codingModel));
+  }
+
 }
 
 /** The CLI takes a bare model id; the `provider/` prefix is ours. */

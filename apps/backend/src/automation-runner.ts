@@ -19,6 +19,7 @@ import {
   type SlackAutomationEvent,
   type TypeSafeNoulFetch,
 } from "./automations.js";
+import { automationCommandId } from "./pending-approvals.js";
 import { clampBurstWindowSeconds, DEFAULT_BURST_WINDOW_SECONDS } from "./slack-context.js";
 
 export const AUTOMATIONS_DO_NAME = "default";
@@ -28,6 +29,8 @@ export interface QueueAutomationRunInput {
   task: string;
   publishPullRequest: boolean;
   threadKey: string;
+  /** T41: deterministic per-(automation, event) id — a retried queue dedupes on it. */
+  commandId?: string;
 }
 
 export interface FireAutomationDeps {
@@ -140,6 +143,9 @@ export function slackEventToAutomation(body: unknown): SlackAutomationEvent {
     channel: typeof event.channel === "string" ? event.channel : undefined,
     author: typeof event.user === "string" ? event.user : undefined,
     text: typeof event.text === "string" ? event.text : undefined,
+    // The envelope's `event_id`, not the inner event's — a Slack retry
+    // carries the same envelope id so the queue command dedupes on it.
+    eventId: typeof record.event_id === "string" ? record.event_id : undefined,
   };
 }
 
@@ -203,11 +209,13 @@ export async function fireAutomation(
 
   const threadKey = automationThreadKey(automation.id);
   try {
+    const commandId = automationCommandId(automation.id, event);
     const queued = await deps.queueRun({
       repoUrl: automation.repoUrl,
       task: automation.prompt,
       publishPullRequest: true,
       threadKey,
+      ...(commandId !== undefined ? { commandId } : {}),
     });
     const next = recordTrigger(automation, nowMs);
     if (!auth.requiresApproval) {
@@ -254,6 +262,3 @@ export async function fireMatchingAutomations(
   return { results, automations: [...next.values()] };
 }
 
-export function envAutomationsEnabled(value: string | undefined): boolean {
-  return automationsEnabled(value);
-}

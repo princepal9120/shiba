@@ -199,11 +199,11 @@ export function SessionsSidebar({
               className="size-7 rounded-none flex items-center justify-center text-[#6a6f63] hover:text-[#222320] hover:bg-black/[0.06] transition-colors"
             >
               {isMobileDrawer ? (
-                <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg aria-hidden="true"  className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               ) : (
-                <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg aria-hidden="true"  className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
                 </svg>
               )}
@@ -220,7 +220,7 @@ export function SessionsSidebar({
             onClick={onNewTask}
             className="primary-action w-full inline-flex min-h-11 items-center justify-center gap-1.5 font-semibold text-[13px] px-3 rounded-none"
           >
-            <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg aria-hidden="true"  className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
             </svg>
             New task
@@ -231,7 +231,7 @@ export function SessionsSidebar({
       {/* Search */}
       <div className="px-3 pb-2">
         <div className="relative">
-          <svg
+          <svg aria-hidden="true" 
             className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-[#6a6f63]/60"
             fill="none"
             viewBox="0 0 24 24"

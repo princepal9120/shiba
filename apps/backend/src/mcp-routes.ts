@@ -6,6 +6,7 @@
  * which the tool registry reads per call. Extracted from index.ts.
  */
 import { verifyToken } from "./agent-tokens.js";
+import { verifyOAuthAccessToken } from "./oauth-mcp.js";
 import type { Env } from "./env.js";
 import { createShibaMcpHandler, encodePrincipal, MCP_PRINCIPAL_HEADER } from "./mcp-gateway.js";
 import { isMcpPath } from "./request-auth.js";
@@ -45,9 +46,21 @@ export async function handleMcp(request: Request, env: Env, _ctx: ExecutionConte
     }
   }
   const token = bearerToken(request);
-  const record = token === null ? null : await verifyToken(env, token);
+  // Static `shb_` agent tokens resolve first (the documented owner path);
+  // OAuth `sho_` access tokens resolve to the same TokenRecord shape so the
+  // requireScope→handler→audit gate is byte-identical.
+  const record = token === null
+    ? null
+    : (await verifyToken(env, token) ?? (token.startsWith("sho_") ? await verifyOAuthAccessToken(env, token) : null));
   if (!record) {
-    return Response.json({ error: "Authentication required." }, { status: 401 });
+    // WWW-Authenticate points MCP clients at the protected-resource doc so
+    // OAuth-capable clients discover the flow instead of just dying on 401.
+    return Response.json(
+      { error: "Authentication required." },
+      { status: 401, headers: {
+        "WWW-Authenticate": `Bearer resource_metadata="${url.origin}/.well-known/oauth-protected-resource"`,
+      } },
+    );
   }
   // Any client-supplied copy must go first — only the worker-verified
   // record may reach the MCP handler under this name.

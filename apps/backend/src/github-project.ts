@@ -51,7 +51,8 @@ async function gql<T>(
 
 function resolve(deps: ProjectDeps): Required<ProjectDeps> {
   return {
-    fetchImpl: deps.fetchImpl ?? fetch,
+    // Global fetch must stay bound to globalThis in workerd.
+    fetchImpl: deps.fetchImpl ?? ((input, init) => fetch(input, init)),
     graphqlUrl: deps.graphqlUrl ?? GRAPHQL_URL,
   };
 }

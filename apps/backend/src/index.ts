@@ -19,12 +19,16 @@ import { Memory } from "./memory-do.js";
 import { Sandbox } from "./sandbox.js";
 import { withVerifiedAccessIdentity } from "./access-jwt.js";
 import { handleApprovals } from "./approvals-routes.js";
+import { handleSubscriptionAuth } from "./auth-routes.js";
 import { handleAudit } from "./audit-routes.js";
 import { handleAutomations } from "./automations-routes.js";
 import { handleGitHubWebhook } from "./github-webhook-routes.js";
 import { handleInbox } from "./inbox-routes.js";
+import { handleLocalAdapter, isLocalRuntimePath } from "./local-routes.js";
+import { LocalDispatch } from "./local-dispatch.js";
 import { handleMcp } from "./mcp-routes.js";
 import { handleMemory } from "./memory-routes.js";
+import { handleOAuth } from "./oauth-mcp.js";
 import { handleMeta } from "./meta-routes.js";
 import { handleRuns } from "./runs-routes.js";
 import { handleScreenshot } from "./screenshots-routes.js";
@@ -50,7 +54,7 @@ import {
   WEB_SESSION_PREFIX,
 } from "./web-sessions.js";
 
-export { Automations, CodingOrchestrator, Mailbox, Memory, ModelConfig, OpenCodeAgent, Sandbox, ContainerProxy, Waitlist };
+export { Automations, CodingOrchestrator, LocalDispatch, Mailbox, Memory, ModelConfig, OpenCodeAgent, Sandbox, ContainerProxy, Waitlist };
 export { assertLiveCodingModel } from "./coding-model.js";
 // Kept public for consumers that import the auth surface from the entry.
 export { getUserId, isAuthenticated, SIGNATURE_AUTHENTICATED } from "./request-auth.js";
@@ -133,6 +137,8 @@ export default {
       if (!isPublicRequest(request) && !isAuthenticated(request, env)) {
         return Response.json({ error: "Authentication required." }, { status: 401 });
       }
+      const oauthResponse = await handleOAuth(request, env, getUserId(request));
+      if (oauthResponse) return oauthResponse;
       const waitlistResponse = await handleWaitlist(request, env);
       if (waitlistResponse) return waitlistResponse;
       if (SIGNATURE_AUTHENTICATED.includes(url.pathname) && request.method !== "POST") {
@@ -142,6 +148,10 @@ export default {
       if (metaResponse) {
         return metaResponse;
       }
+      const subscriptionAuthResponse = await handleSubscriptionAuth(request, env);
+      if (subscriptionAuthResponse) {
+        return subscriptionAuthResponse;
+      }
       const mcpResponse = await handleMcp(
         request,
         env,
@@ -149,6 +159,10 @@ export default {
       );
       if (mcpResponse) {
         return mcpResponse;
+      }
+      // T51: self-authenticated daemon surface — flag + bearer inside.
+      if (isLocalRuntimePath(url.pathname)) {
+        return handleLocalAdapter(request, env);
       }
       // `/internal/*` paths exist only inside DO stub fetches (Automations
       // tick/dedupe, the Mailbox JSON API under `/internal/mailbox/`) — the
@@ -300,6 +314,11 @@ export default {
       });
       if (agentResponse) {
         return agentResponse;
+      }
+      // An `/api/*` URL that survived every handler is an API miss, not a
+      // page route — answer JSON instead of the marketing 404 HTML.
+      if (url.pathname.startsWith("/api/")) {
+        return Response.json({ error: "Not found." }, { status: 404 });
       }
       return env.ASSETS.fetch(request);
     } catch (error) {

@@ -11,7 +11,7 @@
  * in on api2.cursor.sh. Model "auto" is the CLI's own picker value and is
  * never sent to session/set_model.
  */
-import type { CodingTaskInput } from "../opencode-input.js";
+import type { CodingTaskInput, CodingTaskResult } from "../opencode-input.js";
 import { DUMMY_PROVIDER_KEY } from "../provider-gateway.js";
 import { boundTail } from "../security.js";
 import {
@@ -20,6 +20,10 @@ import {
   PROVIDER_KEY_ENV,
   type AgentHarness,
   type HarnessConfigFile,
+  type HarnessCapabilities,
+  type HarnessEvent,
+  type VerificationOutcome,
+  verifyRunOutcome,
 } from "./types.js";
 
 export const CURSOR_PROVIDERS = ["cursor"] as const;
@@ -45,7 +49,7 @@ export function cursorDriverPath(sandboxId: string): string {
 }
 
 /** Parse one NDJSON line the driver printed. `type:"error"` throws so the run fails honestly. */
-export function parseCursorEvent(line: string): string | null {
+export function parseCursorEvent(line: string): HarnessEvent | null {
   const trimmed = line.trim();
   if (!trimmed) return null;
   let event: unknown;
@@ -63,7 +67,7 @@ export function parseCursorEvent(line: string): string | null {
     throw new CursorErrorEvent(boundTail(detail, 500));
   }
   const text = typeof record.text === "string" ? record.text.trim() : "";
-  return text ? boundTail(text, 500) : null;
+  return text ? { kind: "text", text: boundTail(text, 500) } : null;
 }
 
 export class CursorHarness implements AgentHarness {
@@ -95,9 +99,20 @@ export class CursorHarness implements AgentHarness {
     return ["node", cursorDriverPath(input.sandboxId)];
   }
 
-  parseEvent(line: string): string | null {
+  parseEvent(line: string): HarnessEvent | null {
     return parseCursorEvent(line);
   }
+  /** T43 declared capabilities — the gates read this, not the name. */
+  capabilities(_model?: string): HarnessCapabilities {
+    return { streamsText: true, emitsToolCalls: true, supportsResume: false, supportsSteering: false, supportsFileAttachments: false, canRunTests: false, supportsConversationRollback: false, execAllowlist: [],
+      supportedRuntimes: [] };
+  }
+
+  /** Deterministic outcome check — gates the completed claim (T43/T46 feed). */
+  async verify(input: CodingTaskInput, result: CodingTaskResult): Promise<VerificationOutcome> {
+    return verifyRunOutcome(input, result, this.capabilities(input.codingModel));
+  }
+
 }
 
 /** The CLI takes a bare model id; the `provider/` prefix is ours. */

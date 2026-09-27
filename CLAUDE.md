@@ -3,8 +3,11 @@
 Self-hosted, approval-gated coding agent on Cloudflare Workers + Sandbox. Architecture: `ARCHITECTURE.md`. Plan and status: `PLAN.md`. Product contract: `spec/GOAL.md`. Verification evidence: `VERIFICATION.md`; open gaps and how to check them: `VERIFICATION_PLAN.md`.
 
 ```bash
-pnpm typecheck && pnpm lint && pnpm test && pnpm build
-npx wrangler deploy --dry-run --config apps/backend/wrangler.jsonc   # needs Docker daemon running
+# Gate — always required:
+pnpm typecheck && pnpm lint && pnpm lint:imports && pnpm test && pnpm build
+pnpm env:load && pnpm env:scan   # varlock: validate .env against .env.schema; scan for leaked secrets
+# Second tier — only where a Docker daemon is running:
+npx wrangler deploy --dry-run --config apps/backend/wrangler.jsonc
 ```
 
 ## Agent skills

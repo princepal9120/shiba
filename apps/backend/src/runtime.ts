@@ -10,15 +10,28 @@
  * are harness-dispatched (default: OpenCode).
  */
 import type { CodingTaskInput, CodingTaskResult } from "./opencode-input.js";
+import type { RunSignal, RunSignalKind } from "@shiba/shared";
+import {
+  buildLocalRunEnvelope,
+  RUN_SIGNAL_KINDS,
+  type LocalRunResult,
+} from "@shiba/shared";
 import { AntigravityErrorEvent } from "./harness/antigravity.js";
+import { AntigravityUsageLimitError } from "./harness/antigravity-subscription.js";
 import { ClaudeCodeErrorEvent } from "./harness/claude-code.js";
+import { ClaudeUsageLimitError } from "./harness/claude-subscription.js";
 import { CodexErrorEvent } from "./harness/codex.js";
+import { CodexUsageLimitError } from "./harness/codex-subscription.js";
 import { CursorErrorEvent } from "./harness/cursor.js";
+import { DevinErrorEvent } from "./harness/devin.js";
 import { GrokErrorEvent } from "./harness/grok.js";
 import { OpenCodeErrorEvent as OpenCodeErrorEventImpl, opencodeHarness } from "./harness/opencode.js";
 import { HARNESS_RETRY, withRetry } from "./harness/retry.js";
 import type { AgentHarness } from "./harness/types.js";
 import { boundTail, redactSecrets, shellJoin, shellQuote } from "./security.js";
+import { DUMMY_PROVIDER_KEY } from "./provider-gateway.js";
+import { ScopedExecRefusal, scopedExec } from "./exec-allowlist.js";
+import { captureCheckpoint, checkpointRef, diffCheckpoints, pruneCheckpoints } from "./git-checkpoint.js";
 
 export const MAX_DIFF_CHARS = 120_000;
 export const MAX_STDERR_TAIL_CHARS = 8_000;
@@ -28,6 +41,10 @@ export const MAX_FILE_CHARS = 100_000;
 export const MAX_TOTAL_FILE_CHARS = 500_000;
 export const OPENCODE_TIMEOUT_MS = 15 * 60 * 1000;
 export const GIT_TIMEOUT_MS = 5 * 60 * 1000;
+export const TEST_COMMAND_TIMEOUT_MS = 5 * 60 * 1000;
+// T46: the test tail quoted into the PR body is bounded — enough for a
+// reviewer to see the verdict lines, never a whole log.
+export const TEST_EVIDENCE_TAIL_CHARS = 4000;
 export const MAX_PROGRESS_EVENTS = 256;
 
 export interface ExecResult {
@@ -47,6 +64,11 @@ export interface SandboxOps {
       env?: Record<string, string>;
       signal?: AbortSignal;
       onOutput?: (stream: "stdout" | "stderr", data: string) => void;
+      /**
+       * Per-stream output cap override — T45 enforced either way; raise it
+       * for commands whose full output is the payload (e.g. diff export).
+       */
+      maxOutputChars?: number;
     },
   ): Promise<ExecResult>;
   readFile(path: string, opts?: { maxBytes?: number; signal?: AbortSignal }): Promise<
@@ -63,14 +85,38 @@ export interface ProgressEvent {
 export type ProgressEmitter = (event: ProgressEvent) => void | Promise<void>;
 
 export interface RuntimeAdapter {
-  readonly name: "sandbox" | "computer";
+  readonly name: "sandbox" | "computer" | "local";
   runCodingTask(
     ops: SandboxOps,
     input: CodingTaskInput,
     emit: ProgressEmitter,
-    opts?: { signal?: AbortSignal },
+    opts?: {
+      signal?: AbortSignal;
+      /**
+       * T42 run-signal collector: the adapter appends each milestone it
+       * crosses, in order, and the result envelope carries the same list
+       * back to the orchestrator. Callers that pass no collector still get
+       * `result.signals`.
+       */
+      signals?: RunSignal[];
+      /**
+       * T44: durable export for an oversize diff (Worker-side R2 hook).
+       * Called with the full diff before boundTail caps it; the returned
+       * storage key is receipted as `diff.exported`.
+       */
+      exportDiff?: (diff: string) => Promise<string>;
+    },
   ): Promise<CodingTaskResult>;
 }
+
+/**
+ * T49: setupCommands run through their own argv-prefix allowlist — home
+ * layout materialization needs mkdir/symlink and nothing else. Disjoint
+ * from the harness/test-command allowlist on purpose.
+ */
+// Harness-declared setup ops only — never model-controlled. `chmod` is
+// for credential-dir modes (T50 profile dirs must be 0700).
+const SETUP_COMMAND_ALLOWLIST: readonly (readonly string[])[] = [["mkdir"], ["ln"], ["chmod"]];
 
 export const COMPUTER_PREVIEW_MESSAGE =
   "@cloudflare/computer is preview-only and not production-ready, so it is disabled. " +
@@ -89,37 +135,106 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
     ops: SandboxOps,
     input: CodingTaskInput,
     emit: ProgressEmitter,
-    opts?: { signal?: AbortSignal },
+    opts?: { signal?: AbortSignal; signals?: RunSignal[]; exportDiff?: (diff: string) => Promise<string> },
   ): Promise<CodingTaskResult> {
     const workdir = `/workspace/${input.sandboxId}`;
-    const config = this.harness.configFile(input, input.sandboxId);
+    const configValue = this.harness.configFile(input, input.sandboxId);
+    // T49: a harness may write several files (codex-subscription's stub
+    // auth.json + config.toml); normalize to a list.
+    const configFiles = configValue === null ? [] : Array.isArray(configValue) ? configValue : [configValue];
+    const config = configFiles[0] ?? null;
+    // T42: one ordered signal list per attempt — the caller's collector
+    // and the returned result read the same record.
+    const signals = opts?.signals ?? [];
+    const milestone = (kind: RunSignalKind, detail?: string) => {
+      signals.push(detail !== undefined ? { kind, at: Date.now(), detail } : { kind, at: Date.now() });
+    };
+
+    // T45: every exec this run sends to the sandbox goes through the scoped
+    // executor — argv-prefix allowlist (adapter-internal git + the harness's
+    // own argv0 + its declared execAllowlist), timeout, output cap, receipts.
+    const capabilities = this.harness.capabilities(input.codingModel);
+    const harnessArgv = this.harness.buildArgv(input, workdir);
+    const allowlist: readonly (readonly string[])[] = [
+      ["git"],
+      [harnessArgv[0] as string],
+      ...capabilities.execAllowlist,
+    ];
+    const scoped: SandboxOps = {
+      ...ops,
+      exec: (command, execOpts) =>
+        scopedExec(ops, command, {
+          cwd: execOpts?.cwd,
+          env: execOpts?.env,
+          signal: execOpts?.signal,
+          onOutput: execOpts?.onOutput,
+          timeoutMs: execOpts?.timeoutMs,
+          maxOutputChars: execOpts?.maxOutputChars,
+          allowlist,
+          signals,
+        }),
+    };
 
     throwIfAborted(opts?.signal);
     await emit({ phase: "clone", message: `Cloning ${input.repoUrl} (branch ${input.baseBranch}).`, fraction: 0.05 });
+    // The ops handle being bound is the readiness claim; egress pinning
+    // runs inside this first call as one retried unit with the clone.
+    milestone("sandbox.ready", input.sandboxId);
     try {
       await ops.gitCheckout(input.repoUrl, { branch: input.baseBranch, targetDir: workdir });
+      milestone("clone.complete", input.baseBranch);
     } catch (error) {
-      return failureResult(`Clone failed: ${shortError(error)}`, 0, "");
+      return failureResult(`Clone failed: ${shortError(error)}`, 0, "", signals);
+    }
+
+    // T44: baseline checkpoint — the whole worktree at post-clone, before
+    // any harness mutation, under a hidden ref that dies with the sandbox.
+    const baselineRef = checkpointRef(input.sandboxId, 0);
+    const settleRef = checkpointRef(input.sandboxId, 1);
+    try {
+      await captureCheckpoint(scoped, workdir, input.sandboxId, 0, opts?.signal);
+      milestone("checkpoint.captured", baselineRef);
+    } catch (error) {
+      return failureResult(`Baseline checkpoint failed: ${shortError(error)}`, 0, "", signals);
     }
 
     await emit({ phase: "configure", message: `Writing isolated ${this.harness.name} config.`, fraction: 0.15 });
     throwIfAborted(opts?.signal);
     try {
-      if (config) await ops.writeFile(config.path, config.contents);
+      // T49: directory-shaped harnesses materialize their home layout first
+      // (mkdir/symlink ops only — a dedicated allowlist disjoint from the
+      // harness's test-command one; these commands are harness-declared,
+      // never model-controlled).
+      const setupCommands = this.harness.setupCommands?.(input, workdir) ?? [];
+      for (const argv of setupCommands) {
+        const result = await scopedExec(ops, shellJoin(argv), {
+          allowlist: SETUP_COMMAND_ALLOWLIST,
+          signals,
+          signal: opts?.signal,
+        });
+        if (result.exitCode !== 0) {
+          return failureResult(`Home layout setup failed (${argv.join(" ")}): ${boundTail(result.stderr, 500)}`, 0, "", signals);
+        }
+      }
+      for (const file of configFiles) {
+        await ops.writeFile(file.path, file.contents);
+      }
+      milestone("config.written", config?.path ?? "none");
     } catch (error) {
-      return failureResult(`Config write failed: ${shortError(error)}`, 0, "");
+      return failureResult(`Config write failed: ${shortError(error)}`, 0, "", signals);
     }
 
     await emit({ phase: "code", message: `Running ${this.harness.name} headlessly.`, fraction: 0.25 });
     throwIfAborted(opts?.signal);
-    const argv = this.harness.buildArgv(input, workdir);
+    const argv = harnessArgv;
     let run: ExecResult;
     const output = streamProgress(this.harness, emit, opts?.signal);
     try {
+      milestone("harness.started", this.harness.name);
       // Only thrown errors are retry candidates: a returned nonzero
       // exitCode is the harness's verdict, not a transient failure.
       run = await withRetry(HARNESS_RETRY, () =>
-        ops.exec(shellJoin(argv), {
+        scoped.exec(shellJoin(argv), {
           cwd: workdir,
           timeoutMs: OPENCODE_TIMEOUT_MS,
           signal: opts?.signal,
@@ -130,8 +245,16 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
         }),
         opts?.signal,
       );
+      // The harness process resolved — idle covers clean exits and
+      // nonzero verdicts alike; a thrown error means it never went idle.
+      milestone("harness.idle", `exitCode:${run.exitCode}`);
       await output.finish();
       throwIfAborted(opts?.signal);
+      // T44: settle checkpoint — captures the harness's mutations (incl.
+      // untracked files) so the turn diff is baseline→settle commit-diff.
+      await captureCheckpoint(scoped, workdir, input.sandboxId, 1, opts?.signal);
+      milestone("checkpoint.captured", settleRef);
+      await pruneCheckpoints(scoped, workdir, input.sandboxId, 4, opts?.signal);
     } catch (error) {
       await output.finish();
       throwIfAborted(opts?.signal);
@@ -141,18 +264,26 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
         error instanceof CodexErrorEvent ||
         error instanceof GrokErrorEvent ||
         error instanceof CursorErrorEvent ||
+        error instanceof DevinErrorEvent ||
+        error instanceof ClaudeUsageLimitError ||
+        error instanceof CodexUsageLimitError ||
+        error instanceof AntigravityUsageLimitError ||
         error instanceof AntigravityErrorEvent
       ) {
-        return failureResult(error.message, 0, "");
+        return failureResult(error.message, 0, "", signals);
       }
-      return failureResult(`${this.harness.name} execution failed: ${shortError(error)}`, 0, "");
+      return failureResult(`${this.harness.name} execution failed: ${shortError(error)}`, 0, "", signals);
     }
     const stderrTail = redactSecrets(boundTail(run.stderr, MAX_STDERR_TAIL_CHARS));
     if (run.exitCode !== 0) {
+      // stderr is the only diagnostic a harness failure carries; fold the tail
+      // into the summary so the run record shows why the CLI died.
+      const detail = stderrTail.trim();
       return failureResult(
-        `${this.harness.name} exited with code ${run.exitCode}.`,
+        `${this.harness.name} exited with code ${run.exitCode}.${detail ? ` stderr: ${boundTail(detail, 1500)}` : ""}`,
         run.exitCode,
         stderrTail,
+        signals,
       );
     }
 
@@ -163,21 +294,67 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
     try {
       const collection = await withRetry(
         HARNESS_RETRY,
-        () => collectChanges(ops, workdir, opts?.signal),
+        () =>
+          collectChanges(scoped, workdir, {
+            signal: opts?.signal,
+            diffSource: () => diffCheckpoints(scoped, workdir, baselineRef, settleRef, opts?.signal),
+            exportDiff: opts?.exportDiff,
+            onDiffExported: (key) => milestone("diff.exported", key),
+          }),
         opts?.signal,
       );
+      milestone("collect.complete", `${collection.changedFiles.length} files`);
       await emit({ phase: "collect", message: `Done: ${collection.changedFiles.length} changed files.`, fraction: 1 });
-      return {
+      const completed: CodingTaskResult = {
         status: "completed",
         exitCode: 0,
         stderrTail,
         changedFiles: collection.changedFiles,
         diff: collection.diff,
         files: collection.files,
+        signals,
         summary: summarizeRun(this.harness.name, input, collection.changedFiles, boundTail(run.stdout, MAX_STDOUT_TAIL_CHARS)),
       };
+      // T45: a declared test command runs scoped after collection — the
+      // exec.settled receipt is what T43's verify reads. A refusal is caught
+      // here and left for verify to reject; a thrown container error is real.
+      if (input.testCommand !== undefined && input.testCommand.length > 0) {
+        try {
+          throwIfAborted(opts?.signal);
+          await emit({ phase: "collect", message: `Running test command: ${input.testCommand.join(" ")}`, fraction: 0.9 });
+          const testRun = await scoped.exec(shellJoin(input.testCommand), {
+            cwd: workdir,
+            timeoutMs: TEST_COMMAND_TIMEOUT_MS,
+            signal: opts?.signal,
+          });
+          // T46: the PR body quotes this tail — the reviewer sees the real
+          // test output, not the model's claim about it.
+          completed.testEvidence = {
+            command: shellJoin(input.testCommand),
+            exitCode: testRun.exitCode,
+            outputTail: boundTail(`${testRun.stdout}\n${testRun.stderr}`.trim(), TEST_EVIDENCE_TAIL_CHARS),
+          };
+          if (testRun.exitCode !== 0) {
+            await emit({ phase: "collect", message: `Test command exited ${testRun.exitCode}.`, fraction: 0.92 });
+          }
+        } catch (error) {
+          if (!(error instanceof ScopedExecRefusal)) {
+            return failureResult(`Test command failed to execute: ${shortError(error)}`, run.exitCode, stderrTail, signals);
+          }
+          // Refused: receipt recorded; verify below reports the real reason.
+          await emit({ phase: "collect", message: "Test command refused by the exec allowlist.", fraction: 0.92 });
+        }
+      }
+      // T43 verify gate — load-bearing: an exit-0 run with an empty diff is NOT
+      // completed, and a declared test command needs a clean exec.settled
+      // receipt. Deterministic evidence only; this feeds T46's proof gate.
+      const verification = await this.harness.verify(input, completed);
+      if (!verification.ok) {
+        return failureResult(`Verification failed: ${verification.reason}`, run.exitCode, stderrTail, signals);
+      }
+      return completed;
     } catch (error) {
-      return failureResult(`Change collection failed: ${shortError(error)}`, run.exitCode, stderrTail);
+      return failureResult(`Change collection failed: ${shortError(error)}`, run.exitCode, stderrTail, signals);
     }
   }
 }
@@ -189,25 +366,222 @@ export class ComputerPreviewAdapter implements RuntimeAdapter {
   }
 }
 
-export function resolveRuntimeName(raw: string | undefined): "sandbox" | "computer" {
+/**
+ * T51: the LocalDispatch mailbox as the adapter sees it. The production
+ * client wraps the DO stub; tests inject an in-memory one.
+ */
+export interface LocalDispatchClient {
+  dispatch(envelope: import("@shiba/shared").LocalRunEnvelope): Promise<void>;
+  status(sandboxId: string): Promise<{
+    status: "pending" | "claimed" | "settled" | "cancelled";
+    claimedAt?: number;
+    claimedBy?: string;
+    result?: LocalRunResult;
+  }>;
+  cancel(sandboxId: string): Promise<void>;
+}
+
+export const LOCAL_DISPATCH_MESSAGE =
+  "runtime \"local\" requires SHIBA_LOCAL_RUNTIME=1 on the deployment and " +
+  "an operator daemon polling /api/local — see configuration.md.";
+
+/** The adapter's own poll cadence and the total mailbox budget. */
+export const LOCAL_POLL_INTERVAL_MS = 2_500;
+export const LOCAL_MAILBOX_TIMEOUT_MS = OPENCODE_TIMEOUT_MS + 2 * GIT_TIMEOUT_MS;
+
+/**
+ * T51 local runtime: the Worker never touches the operator's machine — it
+ * publishes a fully-computed run envelope (argv, config files, env minus
+ * dummy keys) to LocalDispatch and waits. The operator's daemon executes
+ * it and posts back the same result shape a sandbox run produces, which
+ * then passes the same T43 verify gate before it can claim completed.
+ */
+export class LocalRuntimeAdapter implements RuntimeAdapter {
+  readonly name = "local" as const;
+  private readonly harness: AgentHarness;
+  private readonly client: LocalDispatchClient;
+  private readonly pollIntervalMs: number;
+
+  constructor(
+    harness: AgentHarness,
+    deps: { client: LocalDispatchClient; pollIntervalMs?: number },
+  ) {
+    this.harness = harness;
+    this.client = deps.client;
+    this.pollIntervalMs = deps.pollIntervalMs ?? LOCAL_POLL_INTERVAL_MS;
+  }
+
+  async runCodingTask(
+    _ops: SandboxOps,
+    input: CodingTaskInput,
+    emit: ProgressEmitter,
+    opts?: { signal?: AbortSignal; signals?: RunSignal[] },
+  ): Promise<CodingTaskResult> {
+    const signals = opts?.signals ?? [];
+    const milestone = (kind: RunSignalKind, detail?: string) => {
+      signals.push(detail !== undefined ? { kind, at: Date.now(), detail } : { kind, at: Date.now() });
+    };
+    if (!this.harness.capabilities(input.codingModel).supportedRuntimes.includes("local")) {
+      return failureResult(
+        `Harness ${this.harness.name} does not run on the local runtime.`,
+        0,
+        "",
+        signals,
+      );
+    }
+    const workdir = `/workspace/${input.sandboxId}`;
+    const configValue = this.harness.configFile(input, input.sandboxId);
+    const configFiles = configValue === null ? [] : Array.isArray(configValue) ? configValue : [configValue];
+    const env = this.harness.env(input, configFiles[0]?.path ?? null);
+    const dummyKeys = Object.entries(env)
+      .filter(([, value]) => value === DUMMY_PROVIDER_KEY)
+      .map(([key]) => key);
+    const deadlineAt = Date.now() + LOCAL_MAILBOX_TIMEOUT_MS;
+    const envelope = buildLocalRunEnvelope({
+      input: {
+        sandboxId: input.sandboxId,
+        repoUrl: input.repoUrl,
+        baseBranch: input.baseBranch,
+        task: input.task,
+        ...(input.testCommand !== undefined ? { testCommand: input.testCommand } : {}),
+      },
+      harnessName: this.harness.name,
+      workdir,
+      configFiles,
+      setupCommands: (this.harness.setupCommands?.(input, workdir) ?? []).map((cmd) => [...cmd]),
+      argv: this.harness.buildArgv(input, workdir),
+      env,
+      dummyKey: DUMMY_PROVIDER_KEY,
+      providerKeyEnv: dummyKeys[0],
+      execAllowlist: this.harness
+        .capabilities(input.codingModel)
+        .execAllowlist.map((prefix) => [...prefix]),
+      setupAllowlist: SETUP_COMMAND_ALLOWLIST.map((prefix) => [...prefix]),
+      deadlineAt,
+    });
+
+    throwIfAborted(opts?.signal);
+    await emit({ phase: "clone", message: `Dispatching ${this.harness.name} to the local runtime.`, fraction: 0.05 });
+    try {
+      await this.client.dispatch(envelope);
+    } catch (error) {
+      return failureResult(`Local dispatch failed: ${shortError(error)}`, 0, "", signals);
+    }
+    milestone("local.dispatched", input.sandboxId);
+
+    // The wait IS the runtime semantics — a daemon claims, executes, and
+    // settles on its own clock; the abort path cancels the record so a
+    // late claim can never start a cancelled run.
+    let seenClaimed = false;
+    for (;;) {
+      if (opts?.signal?.aborted) {
+        await this.client.cancel(input.sandboxId).catch(() => undefined);
+        throw new Error("Run cancelled.");
+      }
+      if (Date.now() > deadlineAt) {
+        await this.client.cancel(input.sandboxId).catch(() => undefined);
+        return failureResult(
+          "Local run timed out waiting for the daemon — is `shiba local` running?",
+          0,
+          "",
+          signals,
+        );
+      }
+      let status: Awaited<ReturnType<LocalDispatchClient["status"]>>;
+      try {
+        status = await this.client.status(input.sandboxId);
+      } catch (error) {
+        return failureResult(`Local dispatch status failed: ${shortError(error)}`, 0, "", signals);
+      }
+      if (status.status === "claimed" && !seenClaimed) {
+        seenClaimed = true;
+        milestone("local.claimed", status.claimedBy ?? "operator");
+        await emit({ phase: "code", message: `Daemon${status.claimedBy ? ` ${status.claimedBy}` : ""} claimed the run.`, fraction: 0.25 });
+      }
+      if (status.status === "cancelled") {
+        return failureResult("Local run was cancelled before a daemon settled it.", 0, "", signals);
+      }
+      if (status.status === "settled" && status.result !== undefined) {
+        milestone("local.settled", `exitCode:${status.result.exitCode}`);
+        // Daemon-emitted exec receipts merge ahead of the mailbox
+        // milestones — verify() reads exec.settled from the same list.
+        for (const signal of status.result.signals ?? []) {
+          if ((RUN_SIGNAL_KINDS as readonly string[]).includes(signal.kind)) {
+            signals.push({ kind: signal.kind as RunSignalKind, at: signal.at, ...(signal.detail !== undefined ? { detail: signal.detail } : {}) });
+          }
+        }
+        const result = status.result;
+        const stderrTail = redactSecrets(boundTail(result.stderrTail, MAX_STDERR_TAIL_CHARS));
+        if (result.status === "error" || result.exitCode !== 0) {
+          const detail = stderrTail.trim();
+          return failureResult(
+            `${this.harness.name} (local) ${result.exitCode !== 0 ? `exited with code ${result.exitCode}` : "failed"}.${detail ? ` stderr: ${boundTail(detail, 1500)}` : ""} ${boundTail(result.summary, 1500)}`.trim(),
+            result.exitCode,
+            stderrTail,
+            signals,
+          );
+        }
+        const completed: CodingTaskResult = {
+          status: "completed",
+          exitCode: 0,
+          stderrTail,
+          changedFiles: result.changedFiles,
+          diff: boundTail(result.diff, MAX_DIFF_CHARS),
+          files: result.files.slice(0, MAX_CAPTURED_FILES).map((file) => ({
+            path: file.path,
+            content: file.content === null ? null : boundTail(file.content, MAX_FILE_CHARS),
+            encoding: file.encoding,
+          })),
+          signals,
+          summary: boundTail(result.summary, 8000),
+          ...(result.testEvidence !== undefined ? { testEvidence: result.testEvidence } : {}),
+        };
+        await emit({ phase: "collect", message: `Done: ${result.changedFiles.length} changed files.`, fraction: 1 });
+        // T43 verify gate — identical to the sandbox path: the daemon's
+        // report is evidence, not truth.
+        const verification = await this.harness.verify(input, completed);
+        if (!verification.ok) {
+          return failureResult(`Verification failed: ${verification.reason}`, result.exitCode, stderrTail, signals);
+        }
+        return completed;
+      }
+      await new Promise((resolve) => setTimeout(resolve, this.pollIntervalMs));
+    }
+  }
+}
+
+export function resolveRuntimeName(raw: string | undefined): "sandbox" | "computer" | "local" {
   if (raw === undefined || raw === "") return "sandbox";
-  if (raw === "sandbox" || raw === "computer") return raw;
-  throw new Error(`Unknown RUNTIME ${JSON.stringify(raw)}: expected "sandbox" or "computer".`);
+  if (raw === "sandbox" || raw === "computer" || raw === "local") return raw;
+  throw new Error(`Unknown RUNTIME ${JSON.stringify(raw)}: expected "sandbox", "computer", or "local".`);
 }
 
 /**
  * The harness must reach the adapter that actually runs it: egress is
  * narrowed to the selected harness's host, so running a different one would
- * block its own provider.
+ * block its own provider. `"local"` requires its dispatch client — the
+ * caller that lacks one (flag off) throws instead of silently sandboxing.
  */
 export function createRuntimeAdapter(
-  name: "sandbox" | "computer",
+  name: "sandbox" | "computer" | "local",
   harness: AgentHarness = opencodeHarness,
+  local?: { client: LocalDispatchClient; pollIntervalMs?: number },
 ): RuntimeAdapter {
+  if (name === "local") {
+    if (local === undefined) {
+      throw new Error(LOCAL_DISPATCH_MESSAGE);
+    }
+    return new LocalRuntimeAdapter(harness, local);
+  }
   return name === "computer" ? new ComputerPreviewAdapter() : new SandboxRuntimeAdapter(harness);
 }
 
-function failureResult(summary: string, exitCode: number, stderrTail: string): CodingTaskResult {
+function failureResult(
+  summary: string,
+  exitCode: number,
+  stderrTail: string,
+  signals?: RunSignal[],
+): CodingTaskResult {
   return {
     status: "error",
     exitCode,
@@ -215,6 +589,9 @@ function failureResult(summary: string, exitCode: number, stderrTail: string): C
     changedFiles: [],
     diff: "",
     files: [],
+    // Partial signals survive a failure — the missing ones name the
+    // phase the run never reached.
+    ...(signals && signals.length > 0 ? { signals } : {}),
     summary: redactSecrets(summary),
   };
 }
@@ -231,9 +608,7 @@ function throwIfAborted(signal: AbortSignal | undefined): void {
 }
 
 /** Thrown when a streamed OpenCode event line is malformed. */
-export { OpenCodeEventError } from "./harness/opencode.js";
-export { OpenCodeErrorEvent } from "./harness/opencode.js";
-export { buildOpencodeArgv, buildOpencodeConfig, parseOpencodeEvent } from "./harness/opencode.js";
+export { buildOpencodeArgv, buildOpencodeConfig } from "./harness/opencode.js";
 
 interface OutputStream {
   onData: (stream: "stdout" | "stderr", data: string) => void;
@@ -271,8 +646,8 @@ function streamProgress(harness: AgentHarness, emit: ProgressEmitter, _signal?: 
         const line = buffer.slice(0, newline);
         buffer = buffer.slice(newline + 1);
         try {
-          const text = harness.parseEvent(line);
-          if (text) emitText(`[${harness.name}] ${text}`);
+          const event = harness.parseEvent(line);
+          if (event?.text.trim()) emitText(`[${harness.name}] ${event.text}`);
         } catch (error) {
           // Error events must propagate so the run fails honestly.
           if (
@@ -281,6 +656,10 @@ function streamProgress(harness: AgentHarness, emit: ProgressEmitter, _signal?: 
             error instanceof CodexErrorEvent ||
             error instanceof GrokErrorEvent ||
             error instanceof CursorErrorEvent ||
+            error instanceof DevinErrorEvent ||
+            error instanceof ClaudeUsageLimitError ||
+            error instanceof CodexUsageLimitError ||
+            error instanceof AntigravityUsageLimitError ||
             error instanceof AntigravityErrorEvent
           ) {
             throw error;
@@ -415,7 +794,19 @@ function parsePorcelainDeleted(output: string): Set<string> {
   return deleted;
 }
 
-async function collectChanges(ops: SandboxOps, workdir: string, signal?: AbortSignal): Promise<CollectedChanges> {
+async function collectChanges(
+  ops: SandboxOps,
+  workdir: string,
+  opts: {
+    signal?: AbortSignal;
+    /** T44: commit-to-commit diff producer; falls back to the worktree diff. */
+    diffSource?: () => Promise<string>;
+    /** Durable export for an oversize diff — returns the storage key. */
+    exportDiff?: (diff: string) => Promise<string>;
+    onDiffExported?: (key: string) => void;
+  } = {},
+): Promise<CollectedChanges> {
+  const signal = opts.signal;
   const status = await ops.exec(shellJoin(["git", "status", "--porcelain", "-uall"]), {
     cwd: workdir,
     timeoutMs: GIT_TIMEOUT_MS,
@@ -434,27 +825,41 @@ async function collectChanges(ops: SandboxOps, workdir: string, signal?: AbortSi
   }
   const changedFiles = allChanged;
   const deletedFiles = parsePorcelainDeleted(status.stdout);
-  // Intent-to-add makes new files show up in the worktree diff.
-  // Deleted files are already tracked, so they don't need -N.
-  const filesToAdd = changedFiles.filter((path) => !deletedFiles.has(path));
-  if (filesToAdd.length > 0) {
-    const add = await ops.exec(
-      ["git", "add", "-N", "--", ...filesToAdd].map(shellQuote).join(" "),
-      { cwd: workdir, timeoutMs: GIT_TIMEOUT_MS, signal },
-    );
-    if (add.exitCode !== 0) {
-      throw new Error(`git add failed: ${boundTail(add.stderr, 1000)}`);
+  // T44: the turn diff is baseline→settle commits — untracked files are
+  // already in the settle commit, so no intent-to-add step is needed. The
+  // fallback worktree path (no checkpoints captured) keeps the intent-to-add
+  // dance so new files appear in `git diff`.
+  let rawDiff: string;
+  if (opts.diffSource) {
+    rawDiff = await opts.diffSource();
+  } else {
+    const filesToAdd = changedFiles.filter((path) => !deletedFiles.has(path));
+    if (filesToAdd.length > 0) {
+      const add = await ops.exec(
+        ["git", "add", "-N", "--", ...filesToAdd].map(shellQuote).join(" "),
+        { cwd: workdir, timeoutMs: GIT_TIMEOUT_MS, signal },
+      );
+      if (add.exitCode !== 0) {
+        throw new Error(`git add failed: ${boundTail(add.stderr, 1000)}`);
+      }
     }
+    const diffResult = await ops.exec(shellJoin(["git", "diff", "--", "."]), {
+      cwd: workdir,
+      timeoutMs: GIT_TIMEOUT_MS,
+      signal,
+    });
+    if (diffResult.exitCode !== 0) {
+      throw new Error(`git diff failed: ${boundTail(diffResult.stderr, 1000)}`);
+    }
+    rawDiff = diffResult.stdout;
   }
-  const diffResult = await ops.exec(shellJoin(["git", "diff", "--", "."]), {
-    cwd: workdir,
-    timeoutMs: GIT_TIMEOUT_MS,
-    signal,
-  });
-  if (diffResult.exitCode !== 0) {
-    throw new Error(`git diff failed: ${boundTail(diffResult.stderr, 1000)}`);
+  // An oversize diff exports durably before the tail cap — the receipt
+  // carries the storage key so post-mortem inspection survives the sandbox.
+  if (rawDiff.length > MAX_DIFF_CHARS && opts.exportDiff) {
+    const key = await opts.exportDiff(rawDiff);
+    opts.onDiffExported?.(key);
   }
-  const diff = boundTail(diffResult.stdout, MAX_DIFF_CHARS);
+  const diff = boundTail(rawDiff, MAX_DIFF_CHARS);
 
   const files: CollectedChanges["files"] = [];
   let totalChars = 0;

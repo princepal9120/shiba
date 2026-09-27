@@ -4,6 +4,7 @@
  * Extracted from index.ts; the per-surface Access gate stays here.
  */
 import { getAgentByName } from "agents/routing";
+import { LOCAL_INTAKE_DASHBOARD, LOCAL_INTAKE_HEADER } from "@shiba/shared";
 import type { Env } from "./env.js";
 import { getUserId, isAuthenticated } from "./request-auth.js";
 import { ORCHESTRATOR_NAME } from "./slack-routes.js";
@@ -59,5 +60,12 @@ export async function handleRuns(request: Request, env: Env): Promise<Response |
   }
   const stub = await getAgentByName(env.CodingOrchestrator, targetAgentName);
   const rewritten = new Request(new URL(url.pathname + url.search, request.url), request);
+  // T51: the intake voucher. Any inbound copy is replaced by the only value
+  // this Worker ever stamps — a run carrying `runtime: "local"` is provably
+  // dashboard-originated when queueSlackRun reads this header. Internal
+  // surfaces (Slack, email, MCP, automations) post through
+  // `https://internal` and never carry it.
+  rewritten.headers.delete(LOCAL_INTAKE_HEADER);
+  rewritten.headers.set(LOCAL_INTAKE_HEADER, LOCAL_INTAKE_DASHBOARD);
   return stub.fetch(rewritten);
 }

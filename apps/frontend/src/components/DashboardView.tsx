@@ -102,7 +102,7 @@ export function DashboardView({
             onClick={onNewTask}
             className="primary-action min-h-11 rounded-none text-[13px] font-semibold px-4 flex items-center gap-2"
           >
-            <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg aria-hidden="true"  className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
             </svg>
             New Task
@@ -287,7 +287,7 @@ export function DashboardView({
               </header>
               {approvalCount === 0 ? (
                 <div className="px-4 py-6 flex items-center gap-2.5 text-[13px] text-[#15803d]">
-                  <svg className="size-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <svg aria-hidden="true"  className="size-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                   </svg>
                   Nothing waiting on you.

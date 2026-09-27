@@ -1,0 +1,42 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreExportsUsedInFile": true,
+  "rules": {
+    "files": "warn",
+    "dependencies": "warn",
+    "devDependencies": "warn",
+    "exports": "warn",
+    "types": "warn",
+    "nsExports": "warn",
+    "nsTypes": "warn",
+    "unresolved": "warn",
+    "binaries": "warn",
+    "enumMembers": "warn",
+    "duplicates": "off",
+    "unlisted": "off"
+  },
+  "workspaces": {
+    ".": {
+      "entry": ["alchemy.run.ts", "scripts/**/*.mjs", "eslint.config.mjs"],
+      "project": ["scripts/**/*.mjs", "*.ts", "*.mjs"],
+      "ignoreBinaries": ["check", "preview"],
+      "ignoreDependencies": ["@types/react"]
+    },
+    "apps/backend": {
+      "entry": ["src/index.ts", "test/**/*.test.ts", "test/cloudflare-stub.ts", "vitest.config.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"]
+    },
+    "apps/frontend": {
+      "entry": ["src/app.tsx", "src/router.tsx", "src/routeTree.gen.ts", "vite.config.ts", "tailwind.config.js", "postcss.config.js"],
+      "project": ["src/**/*.{ts,tsx}"]
+    },
+    "apps/web": {
+      "entry": ["astro.config.mjs", "src/content.config.ts", "src/content/**/*.{md,mdx}", "src/pages/**/*", "tailwind.config.js", "postcss.config.js"],
+      "project": ["src/**/*.{ts,tsx,astro,mjs}"]
+    },
+    "packages/shared": {
+      "entry": ["src/index.ts"],
+      "project": ["src/**/*.ts"]
+    }
+  }
+}

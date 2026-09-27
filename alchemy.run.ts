@@ -200,6 +200,11 @@ export const Worker = Cloudflare.Worker("Worker", {
     ModelConfig: Cloudflare.DurableObject<ModelConfig>("ModelConfig", {
       className: "ModelConfig",
     }),
+    // T51: the local-runtime claim mailbox — one singleton DO serializes
+    // dispatch/claim/settle between the Worker and the operator daemon.
+    LocalDispatch: Cloudflare.DurableObject("LocalDispatch", {
+      className: "LocalDispatch",
+    }),
 
     // Megaplan stores — wrangler keeps `__PENDING__` ids until the resources
     // are created; alchemy provisions them on first deploy.
@@ -225,10 +230,14 @@ export const Worker = Cloudflare.Worker("Worker", {
 
     // wrangler durable_objects.bindings Sandbox + containers[0]: the
     // Container decl is the DO namespace binding plus its container app.
+    // SANDBOX_IMAGE swaps in a pre-pushed registry.cloudflare.com ref so
+    // deploys work on machines without a local Docker daemon (the image is
+    // built+ pushed by .github/workflows/build-sandbox-image.yml).
     Sandbox: Cloudflare.Container<Sandbox>("Sandbox", {
       name: containerName,
-      context: "./apps/backend",
-      dockerfile: "./apps/backend/Dockerfile",
+      ...(process.env.SANDBOX_IMAGE
+        ? { image: process.env.SANDBOX_IMAGE }
+        : { context: "./apps/backend", dockerfile: "./apps/backend/Dockerfile" }),
       instanceType: "standard-1",
       maxInstances: 5,
     }),
@@ -243,6 +252,14 @@ export const Worker = Cloudflare.Worker("Worker", {
       "TYPESAFE_API_KEY",
       "AI_GATEWAY_TOKEN",
       "DEVIN_API_KEY",
+      // T48: the operator's `claude setup-token` output; per-account secrets
+      // (CLAUDE_SUBSCRIPTION_TOKEN_<ACCOUNT>) resolve by name at egress.
+      "CLAUDE_SUBSCRIPTION_TOKEN",
+      // T49: the operator's `codex login` auth.json contents; per-account
+      // secrets (CODEX_SUBSCRIPTION_AUTH_JSON_<ACCOUNT>) resolve by name.
+      "CODEX_SUBSCRIPTION_AUTH_JSON",
+      // T51: the bearer the `shiba local` daemon presents on /api/local/*.
+      "LOCAL_ADAPTER_TOKEN",
     ]),
     // Live deploys fail closed: no Access identity = 401 on the dashboard/API.
     ...(isLiveStage ? { REQUIRE_ACCESS: "1" } : {}),
@@ -252,6 +269,18 @@ export const Worker = Cloudflare.Worker("Worker", {
       "AUTOMATIONS_ENABLED",
       "AGENT_HARNESS",
       "CLAUDE_CODE_MODEL",
+      // T48 opt-ins (§18.10): absent = the subscription harness is dark.
+      "SHIBA_CLAUDE_SUBSCRIPTION",
+      "CLAUDE_SUBSCRIPTION_MODEL",
+      // T49 opt-ins (§18.11): absent = the subscription harness is dark.
+      "SHIBA_CODEX_SUBSCRIPTION",
+      "CODEX_SUBSCRIPTION_MODEL",
+      // T50 opt-ins (§18.12): absent = the antigravity flow is dark. No
+      // credential var exists — OAuth tokens live in the container profile.
+      "SHIBA_ANTIGRAVITY_SUBSCRIPTION",
+      "ANTIGRAVITY_SUBSCRIPTION_MODEL",
+      // T51 opt-in (§18.13): absent = the local runtime is dark.
+      "SHIBA_LOCAL_RUNTIME",
       "CODEX_MODEL",
       "DEVIN_MODEL",
       "GROK_MODEL",

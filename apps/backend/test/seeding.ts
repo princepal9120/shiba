@@ -23,6 +23,8 @@ export interface SeedInput {
   baseBranch?: string;
   publishPullRequest?: boolean;
   route?: ApprovedRoute;
+  /** T51: the approved runtime the pointer reserves. */
+  runtime?: "sandbox" | "local";
 }
 
 type SeedableState = { runs: DelegatedRun[]; pendingApprovals?: PendingApproval[] };
@@ -49,8 +51,12 @@ export const SEED_INPUT: SeedInput = {
   publishPullRequest: false,
 };
 
-/** Mint `agent-tool:<callId>` as reserved+approved, like the resolve path. */
-export function approveDirect<S extends SeedableState>(
+/**
+ * The crash window T41 covers: the approved pointer persisted but the
+ * run mint (and its command receipt) never landed. Used to prove the
+ * onStart re-drive closes the "approved with no run" gap exactly once.
+ */
+export function approvePointerOnly<S extends SeedableState>(
   host: SeedHost<S>,
   callId: string,
   input: SeedInput = SEED_INPUT,
@@ -64,6 +70,7 @@ export function approveDirect<S extends SeedableState>(
     ...(input.baseBranch !== undefined ? { baseBranch: input.baseBranch } : {}),
     ...(input.publishPullRequest !== undefined ? { publishPullRequest: input.publishPullRequest } : {}),
     ...(input.route !== undefined ? { route: input.route } : {}),
+    ...(input.runtime !== undefined ? { runtime: input.runtime } : {}),
     createdAt: now - 1_000,
   });
   const { approvals } = resolvePendingApproval(
@@ -71,23 +78,36 @@ export function approveDirect<S extends SeedableState>(
     { threadKey: "default", approvalId: callId, approved: true, decidedBy: "test" },
     now,
   );
-  const record = approvals.find((approval) => approval.approvalId === callId)!;
+  host.setState({ ...host.state, pendingApprovals: approvals });
+}
+
+/** Mint `agent-tool:<callId>` as reserved+approved, like the resolve path. */
+export function approveDirect<S extends SeedableState>(
+  host: SeedHost<S>,
+  callId: string,
+  input: SeedInput = SEED_INPUT,
+): void {
+  approvePointerOnly(host, callId, input);
+  const record = (host.state.pendingApprovals ?? []).find(
+    (approval) => approval.approvalId === callId,
+  )!;
   const frozen: RunInputFields = {
     repoUrl: record.repoUrl,
     task: record.task,
     baseBranch: record.baseBranch ?? "main",
     publishPullRequest: record.publishPullRequest ?? false,
     ...(record.route !== undefined ? { route: record.route } : {}),
+    ...(record.runtime !== undefined ? { runtime: record.runtime } : {}),
   };
   const run = createRun({
     runId: `agent-tool:${callId}`,
     sandboxId: `sbx-${callId}`,
     ...frozen,
+    ...(record.runtime !== undefined ? { runtime: record.runtime } : {}),
     approval: approvalEvidenceFor(record, frozen),
   });
   host.setState({
     ...host.state,
     runs: [...host.state.runs, run],
-    pendingApprovals: approvals,
   });
 }

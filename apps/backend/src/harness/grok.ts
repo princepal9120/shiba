@@ -13,7 +13,7 @@
  * inference host is cli-chat-proxy.grok.com, so GROK_MODELS_BASE_URL pins it
  * to api.x.ai — the host the Worker's forwardXAI already mediates.
  */
-import type { CodingTaskInput } from "../opencode-input.js";
+import type { CodingTaskInput, CodingTaskResult } from "../opencode-input.js";
 import { DUMMY_PROVIDER_KEY } from "../provider-gateway.js";
 import { boundTail } from "../security.js";
 import {
@@ -21,6 +21,10 @@ import {
   PROVIDER_HOSTS,
   PROVIDER_KEY_ENV,
   type AgentHarness,
+  type HarnessCapabilities,
+  type HarnessEvent,
+  type VerificationOutcome,
+  verifyRunOutcome,
 } from "./types.js";
 
 export const GROK_PROVIDERS = ["xai"] as const;
@@ -44,7 +48,7 @@ export class GrokEventError extends Error {}
  * types throw so a rejected model or aborted turn fails the run honestly
  * instead of reporting success.
  */
-export function parseGrokEvent(line: string): string | null {
+export function parseGrokEvent(line: string): HarnessEvent | null {
   const trimmed = line.trim();
   if (!trimmed) return null;
   let event: unknown;
@@ -80,7 +84,7 @@ export function parseGrokEvent(line: string): string | null {
     case "text":
     case "thought": {
       const data = record.data;
-      return typeof data === "string" && data.trim() ? boundTail(data, 500) : null;
+      return typeof data === "string" && data.trim() ? { kind: "text", text: boundTail(data, 500) } : null;
     }
     case "tool_call": {
       const title = typeof record.title === "string" && record.title
@@ -88,7 +92,7 @@ export function parseGrokEvent(line: string): string | null {
         : typeof record.toolName === "string" && record.toolName
           ? record.toolName
           : "tool";
-      return `tool: ${title}`;
+      return { kind: "tool", name: title, text: `tool: ${title}` };
     }
     default:
       // available_commands, tool_call_update, plan, usage, session bootstrap —
@@ -146,9 +150,20 @@ export class GrokHarness implements AgentHarness {
     ];
   }
 
-  parseEvent(line: string): string | null {
+  parseEvent(line: string): HarnessEvent | null {
     return parseGrokEvent(line);
   }
+  /** T43 declared capabilities — the gates read this, not the name. */
+  capabilities(_model?: string): HarnessCapabilities {
+    return { streamsText: true, emitsToolCalls: true, supportsResume: false, supportsSteering: false, supportsFileAttachments: false, canRunTests: true, supportsConversationRollback: false, execAllowlist: [["pnpm","test"],["npm","test"],["bun","test"],["pnpm","vitest","run"],["npx","vitest","run"]],
+      supportedRuntimes: ["sandbox"] };
+  }
+
+  /** Deterministic outcome check — gates the completed claim (T43/T46 feed). */
+  async verify(input: CodingTaskInput, result: CodingTaskResult): Promise<VerificationOutcome> {
+    return verifyRunOutcome(input, result, this.capabilities(input.codingModel));
+  }
+
 }
 
 /** The CLI takes a bare model id; the `provider/` prefix is ours. */

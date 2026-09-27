@@ -49,10 +49,12 @@ describe("the selected harness reaches the adapter that runs it", () => {
       readFile: async () => ({ kind: "utf8" as const, content: "" }),
     };
     await adapter.runCodingTask(ops, input("openai/gpt-5"), async () => {});
-    // The agent invocation is the first exec; anything starting "opencode"
-    // means the selection was dropped and egress would block its provider.
-    expect(execs[0]).toMatch(/^'codex' 'exec'/);
-    expect(execs[0]).not.toMatch(/opencode/);
+    // T44: checkpoint git commands precede the harness exec — find the
+    // harness invocation itself; anything starting "opencode" means the
+    // selection was dropped and egress would block its provider.
+    const harnessExec = execs.find((c) => c.includes("'exec'") || c.includes("'run'"));
+    expect(harnessExec).toMatch(/^'codex' 'exec'/);
+    expect(harnessExec).not.toMatch(/opencode/);
   });
 });
 
@@ -79,8 +81,9 @@ describe("per-run harness selection end to end", () => {
       readFile: async () => ({ kind: "utf8" as const, content: "" }),
     };
     await adapter.runCodingTask(ops, approved, async () => {});
-    expect(execs[0]).toMatch(/^'codex' 'exec'/);
-    expect(execs[0]).toContain("gpt-5.3-codex");
+    const harnessExec = execs.find((c) => c.includes("'exec'"));
+    expect(harnessExec).toMatch(/^'codex' 'exec'/);
+    expect(harnessExec).toContain("gpt-5.3-codex");
   });
 
   it("an unsupported provider for the approved harness fails at approval, not exec", () => {
@@ -203,7 +206,7 @@ describe("claude-code harness (T22)", () => {
       type: "assistant",
       message: { content: [{ type: "text", text: "Editing src/a.ts" }, { type: "tool_use", name: "Edit" }] },
     });
-    expect(parseClaudeCodeEvent(line)).toBe("Editing src/a.ts tool: Edit");
+    expect(parseClaudeCodeEvent(line)).toEqual({ kind: "tool", name: "Edit", text: "Editing src/a.ts tool: Edit" });
     expect(parseClaudeCodeEvent("   ")).toBeNull();
   });
 
@@ -233,7 +236,7 @@ describe("devin harness", () => {
   it("resolves by name and defaults to the free swe-2 model", () => {
     expect(resolveHarness("devin").name).toBe("devin");
     expect(resolveHarness("DEVIN").name).toBe("devin");
-    expect(HARNESS_DEFAULT_MODELS.devin).toBe("devin/swe-2");
+    expect(HARNESS_DEFAULT_MODELS.devin).toBe("devin/swe-2-medium");
   });
 
   it("runs headless with the bare model alias and bypass inside the sandbox", () => {
@@ -277,7 +280,7 @@ describe("devin harness", () => {
   });
 
   it("passes plain-text lines through and drops the login banner", () => {
-    expect(parseDevinEvent("Editing src/a.ts")).toBe("Editing src/a.ts");
+    expect(parseDevinEvent("Editing src/a.ts")).toEqual({ kind: "text", text: "Editing src/a.ts" });
     expect(parseDevinEvent("   ")).toBeNull();
     expect(parseDevinEvent("Welcome to Devin CLI!")).toBeNull();
     expect(parseDevinEvent(" ✓ Logged in as someone@example.com.")).toBeNull();
@@ -317,11 +320,11 @@ describe("grok harness", () => {
     expect(parseGrokEvent(JSON.stringify({ type: "available_commands", tools: ["a"], commands: ["b"] }))).toBeNull();
     expect(parseGrokEvent(JSON.stringify({ type: "tool_call_update", toolCallId: "c1", status: "completed" }))).toBeNull();
     expect(parseGrokEvent(JSON.stringify({ type: "usage", used: 10 }))).toBeNull();
-    expect(parseGrokEvent(JSON.stringify({ type: "text", data: "Editing src/a.ts" }))).toBe("Editing src/a.ts");
-    expect(parseGrokEvent(JSON.stringify({ type: "thought", data: "planning" }))).toBe("planning");
+    expect(parseGrokEvent(JSON.stringify({ type: "text", data: "Editing src/a.ts" }))).toEqual({ kind: "text", text: "Editing src/a.ts" });
+    expect(parseGrokEvent(JSON.stringify({ type: "thought", data: "planning" }))).toEqual({ kind: "text", text: "planning" });
     expect(parseGrokEvent(JSON.stringify({
       type: "tool_call", toolCallId: "c1", title: "write", kind: "write", status: "in_progress",
-    }))).toBe("tool: write");
+    }))).toEqual({ kind: "tool", name: "write", text: "tool: write" });
   });
 
   it("throws on error and non-clean stop reasons rather than reporting success", () => {
@@ -375,7 +378,7 @@ describe("agent cli catalog", () => {
     expect(catalog.find((a) => a.id === "grok")?.version).toBe("1.0.41");
     expect(catalog.find((a) => a.id === "grok")?.defaultModel).toBe("xai/grok-4.6");
     expect(catalog.find((a) => a.id === "devin")?.version).toBe("3000.10.31");
-    expect(catalog.find((a) => a.id === "devin")?.defaultModel).toBe("devin/swe-2");
+    expect(catalog.find((a) => a.id === "devin")?.defaultModel).toBe("devin/swe-2-medium");
   });
 
   it("reports devin's secret presence without exposing the value", () => {

@@ -6,6 +6,7 @@
  */
 import { parseAutomationWebhookPath } from "./automations.js";
 import type { Env } from "./env.js";
+import { isLocalRuntimePath } from "./local-routes.js";
 
 
 export function getUserId(request: Request): string | null {
@@ -35,6 +36,18 @@ export function isMcpPath(pathname: string): boolean {
   return pathname === "/mcp" || pathname.startsWith("/mcp/");
 }
 
+// OAuth discovery/metadata/registration/token endpoints are anonymous by
+// protocol — a client cannot hold an Access identity before these run.
+export function isOAuthPath(pathname: string): boolean {
+  return (
+    pathname === "/.well-known/oauth-authorization-server" ||
+    pathname === "/.well-known/oauth-protected-resource" ||
+    pathname === "/oauth/register" ||
+    pathname === "/oauth/token" ||
+    pathname === "/oauth/revoke"
+  );
+}
+
 export function isAuthenticated(request: Request, env: Env): boolean {
   const { pathname } = new URL(request.url);
   if (SIGNATURE_AUTHENTICATED.includes(pathname)) return true;
@@ -42,6 +55,10 @@ export function isAuthenticated(request: Request, env: Env): boolean {
   // `/mcp` runs on bearer tokens, not Access identity — the handler itself
   // verifies before any MCP traffic is served.
   if (isMcpPath(pathname)) return true;
+  if (isOAuthPath(pathname)) return true;
+  // `/api/local` self-authenticates with a bearer token — same shape as
+  // /mcp, exempt from the Access gate.
+  if (isLocalRuntimePath(pathname)) return true;
   if (!env.REQUIRE_ACCESS && !env.ACCESS_AUD) return true; // opt-out for `wrangler dev`
   return getUserId(request) !== null;
 }

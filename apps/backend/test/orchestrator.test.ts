@@ -137,11 +137,10 @@ describe("orchestrator run routes", () => {
   it("propagates cancellation to the running child execution", async () => {
     const instance = agent();
     mocks.execute.mockImplementation(async (_input, options: { abortSignal?: AbortSignal }) => {
-      // The child hangs like a real container run until its signal aborts.
-      await new Promise((resolve, reject) => {
-        const timer = setTimeout(resolve, 1000);
+      // The child hangs like a real container run until its signal aborts —
+      // T42: no timer fallback; only the abort resolves this promise.
+      await new Promise((_resolve, reject) => {
         options?.abortSignal?.addEventListener("abort", () => {
-          clearTimeout(timer);
           reject(new Error("Run cancelled."));
         });
       });
@@ -301,9 +300,10 @@ describe("orchestrator run routes", () => {
     expect((await rejected.json() as { result: string }).result).toBe("rejected");
     expect(mocks.execute).not.toHaveBeenCalled();
 
-    // Rejected is terminal: an approve replay resolves nothing and runs nothing.
+    // Rejected is terminal: an approve replay reads the receipt's
+    // recorded answer (T41) and runs nothing.
     const replay = await post(true);
-    expect((await replay.json() as { result: string }).result).toBe("unknown");
+    expect((await replay.json() as { result: string }).result).toBe("rejected");
     expect(mocks.execute).not.toHaveBeenCalled();
 
     // A fresh approval runs the exact frozen input through the gated path.
@@ -367,7 +367,9 @@ describe("approval handoff recovery", () => {
     expect(restarted.state.runs[0]?.error).toContain("orchestrator restart");
     expect(restarted.state.pendingApprovals?.[0]?.status).toBe("approved");
     expect(mocks.destroy).toHaveBeenCalledOnce();
-    expect(await (await restarted.onRequest(request())).json()).toEqual({ result: "unknown" });
+    // The replayed resolve answers from the committed command receipt
+    // (T41) — the decision was recorded; it is not re-litigated.
+    expect(await (await restarted.onRequest(request())).json()).toEqual({ result: "approved" });
     expect(restarted.state.runs).toHaveLength(1);
     expect(mocks.execute).not.toHaveBeenCalled();
   });

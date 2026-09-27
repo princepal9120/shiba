@@ -29,6 +29,22 @@ RUN set -eux; \
   rm /tmp/devin.tar.gz; \
   /usr/local/bin/devin --version
 
+# Antigravity ACP binary — version-pinned like the other harnesses (T50).
+# Google's release archive ships `agy_acp_server.par` + its
+# `localharness_external` helper; both must sit in the same directory.
+# Google publishes no checksums for these archives (t3code verifies the
+# byte count only) — the pin is the version+arch encoded in the URL.
+ARG AGY_ACP_VERSION=1.1.1
+RUN set -eux; \
+  command -v unzip >/dev/null || (apt-get update && apt-get install -y unzip && rm -rf /var/lib/apt/lists/*); \
+  case "$(uname -m)" in \
+    x86_64) a=x86_64;; aarch64) a=arm64;; *) exit 1;; esac; \
+  curl -sSfL -o /tmp/agy.zip "https://dl.google.com/agy-extensions/releases/linux/agy-acp-server-agy_acp_server_${AGY_ACP_VERSION}-linux-${a}.zip"; \
+  unzip -o /tmp/agy.zip -d /opt/agy; \
+  rm /tmp/agy.zip; \
+  chmod +x /opt/agy/agy_acp_server.par /opt/agy/localharness_external; \
+  ln -sfn /opt/agy/agy_acp_server.par /usr/local/bin/agy
+
 # Procoder commit gate — checksum-verified, version-pinned like the harnesses.
 # Available to every sandboxed agent so quality-gate runs can execute
 # `procoder check` inside the container. Bump requires the same T10 pass.

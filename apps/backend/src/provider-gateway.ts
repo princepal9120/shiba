@@ -1,9 +1,21 @@
 
 export const DUMMY_PROVIDER_KEY = "shiba-dummy-key";
-export const GOOGLE_API_HOST = "generativelanguage.googleapis.com";
 
 /** Provider API headers that constrain the request shape, not the credential. */
-const PASSTHROUGH_HEADERS = ["content-type", "accept", "anthropic-version", "anthropic-beta"];
+// Transparent-proxy request headers: the gateway claims whatever the client
+// claimed, so body encodings (gzip upload-pack, Connect-RPC compression) and
+// protocol-version headers must reach upstream or the body is unparseable.
+const PASSTHROUGH_HEADERS = [
+  "content-type",
+  "accept",
+  "content-encoding",
+  "grpc-encoding",
+  "connect-protocol-version",
+  "git-protocol",
+  "user-agent",
+  "anthropic-version",
+  "anthropic-beta",
+];
 
 export function sanitizeContainerHeaders(incoming: Headers): Headers {
   const headers = new Headers();

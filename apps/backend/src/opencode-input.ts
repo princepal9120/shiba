@@ -4,6 +4,7 @@
  * parseAgentToolInput. The child never scrapes arbitrary prose.
  */
 import { z } from "zod";
+import { RUN_SIGNAL_KINDS, runtimeSelectionSchema } from "@shiba/shared";
 import { isApprovedRoute, type ApprovedRoute } from "./model-connections.js";
 import { parseGitHubRepoUrl } from "./security.js";
 
@@ -18,7 +19,14 @@ const codingTaskInputSchema = z.object({
   sandboxId: z.string().min(1),
   codingModel: z.string().min(1),
   /** Which coding agent runs the task. Validated at approval time, never in the container. */
-  harness: z.enum(["opencode", "claude-code", "codex", "devin", "grok"]).optional(),
+  harness: z.enum(["opencode", "claude-code", "claude-subscription", "codex", "codex-subscription", "devin", "grok", "antigravity-subscription"]).optional(),
+  /**
+   * T48: which subscription account a subscription-authed harness runs
+   * under — maps to `CLAUDE_SUBSCRIPTION_TOKEN` (default) or
+   * `CLAUDE_SUBSCRIPTION_TOKEN_<ACCOUNT>` Worker secrets. Frozen by the
+   * approval hash like every other input field; never the credential.
+   */
+  authAccount: z.string().regex(/^[a-z0-9][a-z0-9-]{0,31}$/).optional(),
   /**
    * The frozen, approval-gated route (connection/model/harness ids only —
    * spec MODEL-CONNECTIONS-ARCHITECTURE.md §4). Validated with
@@ -36,6 +44,19 @@ const codingTaskInputSchema = z.object({
       threadTs: z.string().min(1),
     })
     .optional(),
+  /**
+   * T45: the project's test command as argv (e.g. ["pnpm","test"]). Runs
+   * inside the sandbox through the scoped executor — it must match the
+   * harness's declared execAllowlist, and verify fails the run when it is
+   * refused or exits nonzero.
+   */
+  testCommand: z.array(z.string().min(1)).max(8).optional(),
+  /**
+   * T51: the approved runtime. `"local"` runs on the operator's machine
+   * via the dispatch mailbox — admissible only from a dashboard intake
+   * under SHIBA_LOCAL_RUNTIME=1; every chat surface refuses it at intake.
+   */
+  runtime: runtimeSelectionSchema.optional(),
 });
 
 const codingTaskInputWithRouteSchema = codingTaskInputSchema.superRefine((input, ctx) => {
@@ -74,6 +95,32 @@ const codingTaskResultSchema = z.object({
    * The sandbox preview URL itself is ephemeral and never leaves the worker.
    */
   screenshotUrl: z.string().optional(),
+  /**
+   * T46: evidence that a declared testCommand actually ran — command (shell-
+   * joined form), exit code, and a bounded output tail. Rides the envelope so
+   * the PR body quotes the real verification output instead of a summary.
+   */
+  testEvidence: z
+    .object({
+      command: z.string(),
+      exitCode: z.number(),
+      outputTail: z.string(),
+    })
+    .optional(),
+  /**
+   * T42 typed run signals, in emission order. The orchestrator persists
+   * them on the run row so a waiter reads the milestone it needs instead
+   * of ordering by convention. Partial on a failed run.
+   */
+  signals: z
+    .array(
+      z.object({
+        kind: z.enum(RUN_SIGNAL_KINDS),
+        at: z.number(),
+        detail: z.string().optional(),
+      }),
+    )
+    .optional(),
 });
 
 export type CodingTaskResult = z.infer<typeof codingTaskResultSchema>;

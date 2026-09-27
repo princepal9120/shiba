@@ -2,6 +2,7 @@
  * Durable pending-approval records: the wire shape `/api/approvals` serves
  * and the pure list transforms the orchestrator applies to DO state.
  */
+import type { RuntimeSelection } from "./local-runtime.js";
 import type { ApprovedRoute } from "./model.js";
 
 export const APPROVAL_TTL_MS = 30 * 60 * 1000;
@@ -86,6 +87,18 @@ export interface PendingApproval {
    * `route`. Dispatch falls back to it so an old approval keeps its agent.
    */
   harness?: string;
+  /**
+   * T48: the subscription account a subscription-authed harness runs under
+   * (an account NAME, never a credential). Frozen at queue time and hashed
+   * like the rest of the approved input.
+   */
+  authAccount?: string;
+  /**
+   * T51: the approved runtime — `"local"` runs on the operator's machine
+   * via the dispatch mailbox; absent = sandbox. Frozen at queue time and
+   * hashed like the rest of the approved input.
+   */
+  runtime?: RuntimeSelection;
   /** Approval kind; absent on records written before email kinds landed — treated as `"run"`. */
   kind?: ApprovalKind;
   /** Frozen email send/delete input for email-kind approvals. */
@@ -125,6 +138,8 @@ export interface CreateApprovalInput {
   publishPullRequest?: boolean;
   route?: ApprovedRoute;
   harness?: string;
+  authAccount?: string;
+  runtime?: RuntimeSelection;
   kind?: ApprovalKind;
   payload?: JsonValue;
   queuedBy?: string;
@@ -149,6 +164,8 @@ export function createPendingApproval(
       ...(input.publishPullRequest !== undefined ? { publishPullRequest: input.publishPullRequest } : {}),
       ...(input.route !== undefined ? { route: input.route } : {}),
       ...(input.harness !== undefined ? { harness: input.harness } : {}),
+      ...(input.authAccount !== undefined ? { authAccount: input.authAccount } : {}),
+      ...(input.runtime !== undefined ? { runtime: input.runtime } : {}),
       ...(input.kind !== undefined ? { kind: input.kind } : {}),
       ...(input.payload !== undefined ? { payload: input.payload } : {}),
       ...(input.queuedBy !== undefined ? { queuedBy: input.queuedBy } : {}),
@@ -259,10 +276,14 @@ export interface RunInputFields {
   baseBranch: string;
   publishPullRequest: boolean;
   route?: ApprovedRoute;
+  /** T48: which subscription account — part of what the human approved. */
+  authAccount?: string;
+  /** T51: which runtime — part of what the human approved. */
+  runtime?: RuntimeSelection;
 }
 
 /** Key-sorted JSON — the canonical form the input hash covers. */
-function stableJson(value: JsonValue): string {
+export function stableJson(value: JsonValue): string {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
   const entries = Object.keys(value)
@@ -271,21 +292,28 @@ function stableJson(value: JsonValue): string {
   return `{${entries.join(",")}}`;
 }
 
-/** FNV-1a over the canonical input — a tamper check, not a credential. */
-export function runInputHash(input: RunInputFields): string {
-  const canonical = stableJson({
-    repoUrl: input.repoUrl,
-    task: input.task,
-    baseBranch: input.baseBranch,
-    publishPullRequest: input.publishPullRequest,
-    ...(input.route !== undefined ? { route: input.route as unknown as JsonValue } : {}),
-  });
+/** FNV-1a over a canonical JSON value — a tamper check, not a credential. */
+export function stableHash(value: JsonValue): string {
+  const canonical = stableJson(value);
   let hash = 0x811c9dc5;
   for (let i = 0; i < canonical.length; i++) {
     hash ^= canonical.charCodeAt(i);
     hash = Math.imul(hash, 0x01000193) >>> 0;
   }
   return hash.toString(16).padStart(8, "0");
+}
+
+/** FNV-1a over the canonical input — a tamper check, not a credential. */
+export function runInputHash(input: RunInputFields): string {
+  return stableHash({
+    repoUrl: input.repoUrl,
+    task: input.task,
+    baseBranch: input.baseBranch,
+    publishPullRequest: input.publishPullRequest,
+    ...(input.route !== undefined ? { route: input.route as unknown as JsonValue } : {}),
+    ...(input.authAccount !== undefined ? { authAccount: input.authAccount } : {}),
+    ...(input.runtime !== undefined ? { runtime: input.runtime } : {}),
+  });
 }
 
 /**

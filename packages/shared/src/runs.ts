@@ -5,9 +5,11 @@
  * terminal, and there is no stop/resume.
  */
 import type { ApprovalEvidence } from "./approvals.js";
+import type { RuntimeSelection } from "./local-runtime.js";
 import type { ApprovedRoute } from "./model.js";
 import type { Receipt } from "./receipts.js";
 import type { RunErrorCode } from "./run-errors.js";
+import type { RunSignal } from "./run-signals.js";
 import type { SteeringNote } from "./steering.js";
 
 /**
@@ -76,6 +78,31 @@ export interface DelegatedRun {
    * without it; absent on records predating the decider.
    */
   approval?: ApprovalEvidence;
+  /**
+   * T42: typed pipeline milestones the child emitted in order
+   * (sandbox.ready → … → pr.opened/screenshot.captured), persisted on the
+   * row so a waiter reads the signal it needs. Partial on a failed run —
+   * the missing signals name the phase that never completed.
+   */
+  signals?: RunSignal[];
+  /**
+   * T48: the harness's continuation identity — e.g. `claude:home:<dir>` —
+   * naming which conversation home this run belongs to. A run claiming to
+   * continue a conversation is refused at queue when its key differs from
+   * the conversation's key (decider-enforced, not UI). Absent for harnesses
+   * without account-scoped homes.
+   */
+  continuationKey?: string;
+  /**
+   * T48: the subscription account this run ran under — an account NAME,
+   * never a credential. Dispatch rebuilds the child input from it.
+   */
+  authAccount?: string;
+  /**
+   * T51: the approved runtime — `"local"` dispatches through the
+   * LocalDispatch mailbox to the operator's daemon; absent = sandbox.
+   */
+  runtime?: RuntimeSelection;
 }
 
 export type RunPatch = {
@@ -87,6 +114,8 @@ export type RunPatch = {
   screenshotUrl?: string | null;
   receipts?: Receipt[];
   sandboxId?: string;
+  signals?: RunSignal[];
+  continuationKey?: string;
 };
 
 /** Backfills fields persisted runs predate; never rejects a legacy record. */

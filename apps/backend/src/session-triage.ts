@@ -16,8 +16,6 @@ export const COMPLEXITY_LEVELS = [
   "massive: large-scale architectural refactor, database migration, or cross-cutting feature",
 ] as const;
 
-export type ComplexityLevel = (typeof COMPLEXITY_LEVELS)[number];
-
 export const RISK_OPTIONS = {
   low: "read-only, documentation, styling, or isolated test changes",
   medium: "business logic changes within existing tests and patterns",

@@ -29,6 +29,7 @@ import type {
   RunCommand,
   RunPatch,
   RunStatus,
+  RuntimeSelection,
 } from "@shiba/shared";
 import { appendReceipt, makeReceipt } from "./receipts.js";
 
@@ -41,7 +42,6 @@ export {
   isActiveStatus,
   isTerminalStatus,
   MAX_CONCURRENT_RUNS,
-  normalizeRun,
   RUN_DEADLINE_MS,
 } from "@shiba/shared";
 export type { DelegatedRun, RunPatch, RunStatus } from "@shiba/shared";
@@ -55,6 +55,14 @@ export function createRun(args: {
   publishPullRequest: boolean;
   queuedBy?: string;
   route?: ApprovedRoute;
+  /** T48: account-scoped continuation identity from the selected harness. */
+  continuationKey?: string;
+  /** T48: the continuation key a resumed conversation was started under. */
+  continuesKey?: string;
+  /** T48: subscription account selector — hashed into the approved input. */
+  authAccount?: string;
+  /** T51: the approved runtime — "local" dispatches to the operator daemon. */
+  runtime?: RuntimeSelection;
   /** T40: approval evidence stamped at queue time (the resolve path). */
   approval?: ApprovalEvidence;
   now?: number;
@@ -74,6 +82,10 @@ export function createRun(args: {
         publishPullRequest: args.publishPullRequest,
         ...(args.queuedBy !== undefined ? { queuedBy: args.queuedBy } : {}),
         ...(args.route !== undefined ? { route: args.route } : {}),
+        ...(args.continuationKey !== undefined ? { continuationKey: args.continuationKey } : {}),
+        ...(args.continuesKey !== undefined ? { continuesKey: args.continuesKey } : {}),
+        ...(args.authAccount !== undefined ? { authAccount: args.authAccount } : {}),
+        ...(args.runtime !== undefined ? { runtime: args.runtime } : {}),
       },
       ...(args.approval !== undefined ? { approval: args.approval } : {}),
       at: now,
@@ -116,6 +128,7 @@ function commandForStatus(
           publishPullRequest: run.publishPullRequest,
           ...(run.queuedBy !== undefined ? { queuedBy: run.queuedBy } : {}),
           ...(run.route !== undefined ? { route: run.route } : {}),
+          ...(run.runtime !== undefined ? { runtime: run.runtime } : {}),
         },
         at,
       };

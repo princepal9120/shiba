@@ -21,6 +21,8 @@ import {
   setItemStatus,
 } from "../github-project.js";
 import { allowedHostsFor, resolveHarness } from "../harness/index.js";
+import type { EgressOverride } from "../harness/types.js";
+import { assertHarnessAuthorized } from "../auth/index.js";
 import {
   formatAgentResult,
   parseAgentToolInput,
@@ -29,11 +31,16 @@ import {
 } from "../opencode-input.js";
 import {
   createRuntimeAdapter,
+  LOCAL_DISPATCH_MESSAGE,
   resolveRuntimeName,
+  type LocalDispatchClient,
   type ProgressEvent,
   type SandboxOps,
 } from "../runtime.js";
+import { LOCAL_RUNTIME_FLAG } from "@shiba/shared";
+import { localDispatchStub } from "../local-dispatch.js";
 import { HARNESS_RETRY, withRetry } from "../harness/retry.js";
+import type { RunSignal } from "@shiba/shared";
 import { boundTail, parseGitHubRepoUrl, redactSecrets } from "../security.js";
 import { captureRunPreview } from "../screenshot.js";
 import { postSlackMessage } from "../slack.js";
@@ -45,10 +52,17 @@ export async function pinSandboxEgress(
   sandboxId: string,
   repoUrl: string,
   egressHosts?: string[],
+  egressOverrides?: EgressOverride[],
 ): Promise<void> {
   const sandbox = getSandbox(env.Sandbox, sandboxId);
   if (egressHosts && egressHosts.length > 0) {
     await sandbox.approveHarnessEgress(egressHosts);
+  }
+  // T48: per-run handler swaps land inside the same pin — a subscription
+  // harness claims its provider host's handler so the token branch serves
+  // it, never the gateway's API-key path.
+  if (egressOverrides && egressOverrides.length > 0) {
+    await sandbox.approveEgressOverrides(egressOverrides);
   }
   const { owner, repo } = parseGitHubRepoUrl(repoUrl);
   await sandbox.approveRepoScope(`/${owner}/${repo}`);
@@ -67,7 +81,7 @@ function createSlackProgress(env: Env, thread?: CodingTaskInput["slackThread"]):
   );
 }
 
-export function createSandboxOps(env: Env, sandboxId: string, egressHosts?: string[]): SandboxOps {
+export function createSandboxOps(env: Env, sandboxId: string, egressHosts?: string[], egressOverrides?: EgressOverride[]): SandboxOps {
   const sandbox = getSandbox(env.Sandbox, sandboxId);
   return {
     async gitCheckout(repoUrl, opts) {
@@ -76,7 +90,7 @@ export function createSandboxOps(env: Env, sandboxId: string, egressHosts?: stri
       // GitHub credential scoped to this one repo (B6). The pin + clone pair
       // is one retried unit — a half-pinned sandbox must not be reused.
       await withRetry(HARNESS_RETRY, async () => {
-        await pinSandboxEgress(env, sandboxId, repoUrl, egressHosts);
+        await pinSandboxEgress(env, sandboxId, repoUrl, egressHosts, egressOverrides);
         await sandbox.gitCheckout(repoUrl, { branch: opts.branch, targetDir: opts.targetDir });
       });
     },
@@ -84,14 +98,31 @@ export function createSandboxOps(env: Env, sandboxId: string, egressHosts?: stri
       await sandbox.writeFile(path, content);
     },
     async exec(command, opts) {
-      const result = await sandbox.exec(command, {
+      opts?.signal?.throwIfAborted();
+      // AbortSignal cannot cross the sandbox RPC boundary; the exec timeout
+      // bounds the remote process, and abort is raced in locally instead.
+      const execPromise = sandbox.exec(command, {
         cwd: opts?.cwd,
         timeout: opts?.timeoutMs,
         env: opts?.env,
-        signal: opts?.signal,
         stream: opts?.onOutput !== undefined,
         onOutput: opts?.onOutput,
       });
+      const result = opts?.signal
+        ? await Promise.race([
+            execPromise,
+            new Promise<never>((_, reject) =>
+              opts.signal!.addEventListener(
+                "abort",
+                () => {
+                  execPromise.catch(() => {});
+                  reject(new Error("Run cancelled."));
+                },
+                { once: true },
+              ),
+            ),
+          ])
+        : await execPromise;
       return {
         stdout: result.stdout ?? "",
         stderr: result.stderr ?? "",
@@ -100,8 +131,18 @@ export function createSandboxOps(env: Env, sandboxId: string, egressHosts?: stri
     },
     async readFile(path, opts) {
       opts?.signal?.throwIfAborted();
-      const stream = await sandbox.readFileStream(path);
-      const bytes = await collectStream(stream, opts?.maxBytes, opts?.signal);
+      let stream;
+      try {
+        stream = await sandbox.readFileStream(path);
+      } catch (error) {
+        throw new Error(`readFileStream RPC failed for ${path}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      let bytes;
+      try {
+        bytes = await collectStream(stream, opts?.maxBytes, opts?.signal);
+      } catch (error) {
+        throw new Error(`collectStream failed for ${path}: ${error instanceof Error ? error.message : String(error)}`);
+      }
       const decoded = tryDecodeUtf8(bytes);
       if (decoded !== null) {
         return { kind: "utf8", content: decoded };
@@ -114,8 +155,9 @@ export function createSandboxOps(env: Env, sandboxId: string, egressHosts?: stri
 async function collectStream(stream: ReadableStream<Uint8Array>, maxBytes = 500_000, signal?: AbortSignal): Promise<Uint8Array> {
   const chunks: Uint8Array[] = [];
   let total = 0;
-  // The pipe interrupts a stalled read as well as cancelling the SDK stream.
-  const source = signal ? stream.pipeThrough(new TransformStream<Uint8Array, Uint8Array>(), { signal }) : stream;
+  // pipeThrough({ signal }) rejects non-native AbortSignals with an illegal
+  // invocation; the for-await's throwIfAborted covers cancellation instead.
+  const source = signal ? stream.pipeThrough(new TransformStream<Uint8Array, Uint8Array>()) : stream;
   // readFileStream is SSE, not raw file bytes. Decode before collecting.
   for await (const chunk of streamFile(source)) {
     signal?.throwIfAborted();
@@ -152,6 +194,37 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
+/**
+ * T51: the production LocalDispatchClient — adapter requests ride the
+ * intra-deployment DO stub; the bearer-token front door is for the
+ * operator daemon only, so these calls carry no credential.
+ */
+function workerLocalDispatchClient(env: Env): LocalDispatchClient {
+  const stub = () => localDispatchStub(env);
+  return {
+    async dispatch(envelope) {
+      const res = await stub().fetch(new Request("https://local-dispatch/dispatch", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ envelope }),
+      }));
+      if (!res.ok) throw new Error(`dispatch: ${res.status} ${await res.text()}`);
+    },
+    async status(sandboxId) {
+      const res = await stub().fetch(new Request(`https://local-dispatch/status?sandboxId=${encodeURIComponent(sandboxId)}`));
+      if (!res.ok) throw new Error(`status: ${res.status} ${await res.text()}`);
+      return res.json();
+    },
+    async cancel(sandboxId) {
+      await stub().fetch(new Request("https://local-dispatch/cancel", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sandboxId }),
+      }));
+    },
+  };
+}
+
 export class OpenCodeAgent extends AIChatAgent<Env> {
   override async onChatMessage(
     _onFinish: GenerateTextOnFinishCallback<ToolSet>,
@@ -173,6 +246,12 @@ export class OpenCodeAgent extends AIChatAgent<Env> {
         let progressChars = 0;
         let progressCount = 0;
         let slackProgress: SlackProgressReporter | null = null;
+        // T42: the adapter and the publish step append milestones here;
+        // the result envelope carries them back to the orchestrator.
+        const runSignals: RunSignal[] = [];
+        const noteSignal = (kind: RunSignal["kind"], detail?: string) => {
+          runSignals.push(detail !== undefined ? { kind, at: Date.now(), detail } : { kind, at: Date.now() });
+        };
         const emit = async (event: ProgressEvent) => {
           checkCancelled();
           if (progressCount >= 100 || progressChars >= 20_000) return;
@@ -200,11 +279,41 @@ export class OpenCodeAgent extends AIChatAgent<Env> {
           // The approval froze the harness (and model) for this run. The
           // deployment default is only the fallback for pre-harness inputs.
           slackProgress = createSlackProgress(this.env, input.slackThread);
-          const harness = resolveHarness(input.harness ?? this.env.AGENT_HARNESS);
-          const adapter = createRuntimeAdapter(resolveRuntimeName(this.env.RUNTIME), harness);
+          const harness = resolveHarness(input.harness ?? this.env.AGENT_HARNESS, this.env);
+          // T48: subscription-authed harnesses must have a succeeded auth
+          // flow before a container spins up — assert at the admission seam,
+          // after the harness is resolved, before any sandbox work starts.
+          await assertHarnessAuthorized(this.env, harness, input);
+          // T51: the approved input's runtime wins over the deployment's
+          // RUNTIME default. "local" needs both the deployment flag and the
+          // dispatch mailbox; every other surface refused it at intake, and
+          // this is the last place a forged envelope could reach.
+          const runtimeName = input.runtime ?? resolveRuntimeName(this.env.RUNTIME);
+          let adapter;
+          if (runtimeName === "local") {
+            if (this.env[LOCAL_RUNTIME_FLAG] !== "1") {
+              throw new Error(LOCAL_DISPATCH_MESSAGE);
+            }
+            adapter = createRuntimeAdapter("local", harness, {
+              client: workerLocalDispatchClient(this.env),
+            });
+          } else {
+            adapter = createRuntimeAdapter(runtimeName, harness);
+          }
           const hosts = allowedHostsFor(harness, input.codingModel);
-          const ops = createSandboxOps(this.env, input.sandboxId, hosts);
-          const result = await adapter.runCodingTask(ops, input, emit, { signal });
+          const overrides = harness.egressOverrides?.(input);
+          const ops = createSandboxOps(this.env, input.sandboxId, hosts, overrides);
+          const result = await adapter.runCodingTask(ops, input, emit, {
+            signal,
+            signals: runSignals,
+            // T44: an oversize diff lands in R2 instead of being truncated
+            // away — the settle receipt carries this key.
+            exportDiff: async (diff) => {
+              const key = `diffs/${input.sandboxId}.patch`;
+              await this.env.ATTACHMENTS.put(key, diff, { httpMetadata: { contentType: "text/plain" } });
+              return key;
+            },
+          });
           checkCancelled();
           // UNINTERRUPTIBLE: publish + result commit. Once the remote PR write
           // starts, an abort must not lose the outcome — a fake-failed real PR
@@ -216,6 +325,8 @@ export class OpenCodeAgent extends AIChatAgent<Env> {
             const published = await this.publishResult(input, result, signal);
             pullUrl = published.pullUrl;
             screenshotUrl = published.screenshotUrl;
+            if (screenshotUrl) noteSignal("screenshot.captured", screenshotUrl);
+            noteSignal("pr.opened", pullUrl);
           }
           const safeResult = this.uiResult(result);
           // The transcript commit below is part of the same UNINTERRUPTIBLE
@@ -237,6 +348,7 @@ export class OpenCodeAgent extends AIChatAgent<Env> {
             ...safeResult,
             ...(pullUrl ? { pullUrl } : {}),
             ...(screenshotUrl ? { screenshotUrl } : {}),
+            signals: runSignals,
           }));
           writer.write({ type: "text-end", id });
           if (safeResult.status === "error") writer.write({ type: "error", errorText: safeResult.summary });
@@ -246,6 +358,9 @@ export class OpenCodeAgent extends AIChatAgent<Env> {
           const result: CodingTaskResult = {
             status: "error", exitCode: -1, summary,
             stderrTail: "", changedFiles: [], diff: "", files: [],
+            // Partial signals ride the error envelope too — a waiter's
+            // missing milestone names the phase that never completed.
+            signals: runSignals,
           };
           write(`Failed: ${summary}`);
           write(formatAgentResult(result));
@@ -273,6 +388,15 @@ export class OpenCodeAgent extends AIChatAgent<Env> {
       changedFiles: result.changedFiles.slice(0, 50).map((path) => this.safeText(path, 1024)),
       diff: this.safeText(result.diff, 20_000),
       files: [],
+      ...(result.testEvidence
+        ? {
+            testEvidence: {
+              command: this.safeText(result.testEvidence.command, 200),
+              exitCode: result.testEvidence.exitCode,
+              outputTail: this.safeText(result.testEvidence.outputTail, 8000),
+            },
+          }
+        : {}),
     };
   }
 
@@ -294,7 +418,22 @@ export class OpenCodeAgent extends AIChatAgent<Env> {
       "",
       `Sandbox: ${input.sandboxId}`,
     ];
+    // T46 proof section: a reviewer verifies from the PR body without reading
+    // the diff line by line. The stored screenshot is the durable proof; the
+    // tokenized exposePort URL is a bearer credential and never leaves the
+    // Worker (T33). When no capture exists (no servable app), the body says
+    // so instead of implying proof that isn't there.
     if (capture?.screenshotUrl) bodyLines.push("", `[Preview screenshot](${capture.screenshotUrl})`);
+    else bodyLines.push("", "No preview captured — this change has no servable app; verify via the diff and test evidence.");
+    if (result.testEvidence) {
+      bodyLines.push(
+        "",
+        `**Test evidence:** \`${this.safeText(result.testEvidence.command, 200)}\` → exit ${result.testEvidence.exitCode}`,
+        "```",
+        this.safeText(result.testEvidence.outputTail, 4000),
+        "```",
+      );
+    }
     // The screenshot link is served by this Worker behind the read-API auth gate.
     const published = await publishFilesAsPullRequest({
       repoUrl: input.repoUrl,

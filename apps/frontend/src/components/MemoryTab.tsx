@@ -220,7 +220,7 @@ export function MemoryTab(props: MemoryTabProps): JSX.Element {
             title="Reload memory facts and sessions"
             aria-label="Reload memory"
           >
-            <svg
+            <svg aria-hidden="true" 
               className={`w-3.5 h-3.5 text-[#6a6f63] ${loading ? "animate-spin" : ""}`}
               fill="none"
               viewBox="0 0 24 24"
@@ -293,7 +293,7 @@ export function MemoryTab(props: MemoryTabProps): JSX.Element {
         <div className="flex items-center gap-2">
           <div className="relative flex-1 min-w-0">
             <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-[#6a6f63]">
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <svg aria-hidden="true"  className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
             </div>
@@ -311,7 +311,7 @@ export function MemoryTab(props: MemoryTabProps): JSX.Element {
                 aria-label="Clear input text"
                 className="absolute inset-y-0 right-0 pr-2 flex items-center text-[#6a6f63] hover:text-[#222320]"
               >
-                <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
+                <svg aria-hidden="true"  className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
                   <path
                     fillRule="evenodd"
                     d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
@@ -411,7 +411,7 @@ export function MemoryTab(props: MemoryTabProps): JSX.Element {
       {searchActive ? (
         <div className="flex items-center justify-between gap-2 bg-[#0000a8]/5 border border-[#0000a8]/15 rounded-none px-3 py-2 text-[11px]">
           <div className="flex items-center gap-1.5 text-[#1c1cc8]">
-            <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg aria-hidden="true"  className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <span>
@@ -458,7 +458,7 @@ export function MemoryTab(props: MemoryTabProps): JSX.Element {
               </p>
             </div>
           ) : (
-            <ol className="flex flex-col gap-2.5" role="list">
+            <ol className="flex flex-col gap-2.5">
               {visibleFacts.map((fact) => {
                 const isConfirming = confirmForget === fact.id;
                 const scoreText = formatRecallScore(fact.score);
@@ -511,7 +511,7 @@ export function MemoryTab(props: MemoryTabProps): JSX.Element {
                           onClick={() => setConfirmForget(fact.id)}
                           aria-label={`Forget fact ${fact.id}`}
                         >
-                          <svg className="w-3 h-3 text-[#6a6f63]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <svg aria-hidden="true"  className="w-3 h-3 text-[#6a6f63]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path
                               strokeLinecap="round"
                               strokeLinejoin="round"
@@ -528,7 +528,7 @@ export function MemoryTab(props: MemoryTabProps): JSX.Element {
                     {isConfirming ? (
                       <div className="mt-1 bg-[#fb2c36]/5 border border-[#fb2c36]/25 rounded-none p-2.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex items-center gap-1.5 text-[11px] text-[#fb2c36]">
-                          <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <svg aria-hidden="true"  className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path
                               strokeLinecap="round"
                               strokeLinejoin="round"
@@ -586,7 +586,7 @@ export function MemoryTab(props: MemoryTabProps): JSX.Element {
               </p>
             </div>
           ) : (
-            <ol className="flex flex-col gap-2" role="list">
+            <ol className="flex flex-col gap-2">
               {visibleSessions.map((session) => {
                 const expanded = expandedSession === session.id;
                 return (
@@ -602,7 +602,7 @@ export function MemoryTab(props: MemoryTabProps): JSX.Element {
                       aria-expanded={expanded}
                       className="w-full text-left p-3 hover:bg-[#f6f4ed]/50 transition-colors flex items-center gap-2 touch:min-h-11"
                     >
-                      <svg
+                      <svg aria-hidden="true" 
                         className={`w-3.5 h-3.5 text-[#6a6f63] transition-transform shrink-0 ${
                           expanded ? "rotate-90" : ""
                         }`}

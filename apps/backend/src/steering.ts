@@ -38,23 +38,15 @@ import { appendReceipt, makeReceipt } from "./receipts.js";
 import { parseGitHubRepoUrl } from "./security.js";
 
 export {
-  MAX_STEER_MESSAGE,
-  MAX_STEERING_NOTES,
   MAX_PENDING_STEERS_PER_RUN,
   MAX_PENDING_APPROVALS,
   parseSteeringInput,
   planSteering,
   runIdFromSteeringThreadKey,
   steeringThreadKey,
-  steerRunInputSchema,
 } from "@shiba/shared";
 export type {
-  SteeringAction,
-  SteeringInput,
   SteeringNote,
-  SteeringParseResult,
-  SteeringPlan,
-  SteerRunInput,
 } from "@shiba/shared";
 
 /** Record a steer note on the run; receipt mirrors it for the audit log. */
