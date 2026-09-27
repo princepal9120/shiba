@@ -1,6 +1,6 @@
 # AI Coworker — End-to-End Completion Plan
 
-**Revision:** 2026-09-27 (rev 10). Adds §17, Phase P7 — Roomote parity (T27–T39). **W4 multi-repo deferred: GitHub-only** (owner decision); T37–T39 added to finish GitHub end to end.
+**Revision:** 2026-09-27 (rev 11). Adds §18, Phase P8 — architecture imports from t3code and Roomote (T40–T51): pure run decider, durable command receipts, typed runtime receipts, harness capabilities + verify, git checkpoints, scoped exec, proof gate, shared auth core, three subscription harnesses, and a `local` runtime adapter. T29 (OAuth MCP) is carried unchanged. **All of §18 is planned, none of it is started — code waits on plan approval.**
 
 **Target:** an open-source, self-hosted [Capy](https://capy.ai)/[Hoplite](https://hoplite.sh)-shaped coding agent that runs entirely on the user's own Cloudflare account. Scope is Capy's **spine plus review and automations** — not its workspace layer. See §4 for what is deliberately not being built.
 
@@ -52,6 +52,26 @@
 ---
 
 ## 2. Corrected Current State
+
+### 2.0 Status as of rev 11 (2026-09-27)
+
+**Rev 11 (this document):** §18 (Phase P8) added — the t3code/Roomote architecture-import plan (T40–T51 plus carried-over T29). **Plan only; no code written.** §18.0 records where the as-built tree disagreed with the brief's file/state map (reality won): `orchestrator.ts`/`opencode-agent.ts` live under `src/agents/`, the run machine is `pending|running|completed|error|aborted|cancelled|unknown` rather than the sketched states, approvals already carry partial idempotency (`resolvePendingApproval` refuses decided records; `agent-tool:<approvalId>` run reservation exists), and W2/T30–T32 + the screenshot half of T33 have already merged (PRs #22/#23). Also noted: no `AGENTS.md` exists in this repo — CLAUDE.md + ARCHITECTURE.md + spec/GOAL.md are authoritative.
+
+| Task | State |
+|---|---|
+| T40 pure run decider | **Planned** — §18.1 |
+| T41 durable command receipts | **Planned** — §18.2 |
+| T42 typed runtime receipts + sleep audit | **Planned** — §18.3 |
+| T43 harness capabilities + verify | **Planned** — §18.4 |
+| T44 git checkpoints | **Planned** — §18.5 |
+| T45 scoped exec allowlist | **Planned** — §18.6 |
+| T29 OAuth MCP | **Planned** — §17.3 carried into §18.7 unchanged |
+| T46 proof attachment gate | **Planned** — §18.8 (remainder of shipped T33) |
+| T47 shared auth core | **Planned** — §18.9 |
+| T48 claude-subscription | **Planned** — §18.10 (dark: `SHIBA_CLAUDE_SUBSCRIPTION=1`) |
+| T49 codex-subscription | **Planned** — §18.11 (dark: `SHIBA_CODEX_SUBSCRIPTION=1`) |
+| T50 antigravity-subscription | **Planned** — §18.12 (dark: `SHIBA_ANTIGRAVITY_SUBSCRIPTION=1`) |
+| T51 local runtime adapter | **Planned** — §18.13 (dark: `SHIBA_LOCAL_RUNTIME=1`) |
 
 ### 2.0 Status as of rev 8 (2026-09-26)
 
@@ -950,7 +970,291 @@ not code.
 
 ---
 
+## 18. Phase P8 — Architecture Imports (rev 11)
+
+**Added:** 2026-09-27. **Sources:** [t3code](https://github.com/pingdotgg/t3code) (internals docs + `apps/server/src/orchestration/`, `apps/server/src/provider/`, `packages/contracts/`) and [Roomote](https://github.com/RooCodeInc/Roomote) (`apps/worker/src/run-task/`, `apps/worker/src/sandbox-server/`), both observed 2026-09-27.
+
+**What this phase is not:** not event sourcing, not a rewrite, not a restructure. Runs are not a financial ledger; the receipt log plus a pure decider plus command receipts get the properties that matter at a fraction of the cost. The five security invariants (ARCHITECTURE.md §5) and the five working rules (CLAUDE.md) are unchanged and binding on every task below. Phases 1–8 are infrastructure and ship regardless; Phases 9–13 are the subscription credential path and are each **dark by default** — inert without a per-provider acknowledgement env var.
+
+**Dependency rule, restated so it cannot be quietly skipped:** a harness may import from `harness/types.ts`, `security.ts`, and `@shiba/shared` only — never `index.ts`, `orchestrator.ts`, or a chat module. The auth core (`src/auth/`) imports nothing from `harness/`. If a new file needs to violate this, the seam is in the wrong place — stop and say so rather than importing anyway.
+
+### 18.0 As-built reconciliation — where the brief's map disagreed with the tree
+
+Measured on `main` @ `fce9b39`. Where the two disagree, the tree wins; the phase text below is already corrected.
+
+| Brief said | Tree says | Consequence for the plan |
+|---|---|---|
+| `orchestrator.ts`, `opencode-agent.ts` at `src/` | Both live at `src/agents/` (orchestrator is 1,793 lines) | File paths corrected throughout §18 |
+| Run machine `queued → awaiting_approval → approved → running → collecting` | `RunStatus = pending \| running \| completed \| error \| aborted \| cancelled \| unknown` (`packages/shared/src/runs.ts`); approvals are a *separate aggregate* (`PendingApproval` on the orchestrator DO), resolved before a run row exists | T40 models the real machine plus the approval lifecycle; "approved" is evidence a `start` command carries, not a run state |
+| Approve path is `POST /api/runs/:id/approve` | `POST /api/approvals` fans out to the caller's DO + session DOs + `"default"` (`index.ts` `handleApprovals`); double-click is already safe — `resolvePendingApproval` returns `"unknown"` for a decided record and `createPendingApproval` throws on a duplicate `approvalId` | T41 rescopes: the real gap is *post-approve dispatch* — an approved run-kind pointer whose dispatch died before `store.add` has no re-drive (the email path got one in `onStart`; the run path did not) |
+| "receipts (cmd): none" | Confirmed. Evidence receipts (`{at, kind, message}`) exist and are untouched | T41 adds a separate command-receipt store keyed by `commandId` |
+| Test suite "polls/sleeps" | Real sleeps are few but present: `container-lifecycle.test.ts` `tick()` (10 ms) and `exec("sleep 60")` + 30 ms, `effect-runtime.test.ts` `tick()`, `harness-retry.test.ts` 20 ms, `orchestrator.test.ts` a 1 s `setTimeout` | T42 audits these; the honest count is ~6 call sites, not a systemic habit |
+| §17.1: web chat + steering "Missing" | Landed: `web-sessions.ts` (335), `steering.ts` (268) + shared `steering.ts` (204), PR #23 | Baseline refreshed; steering's existence makes T51's no-chat-intake rule load-bearing — the web surface already exists and must exclude `local` |
+| §17.1: screenshot "in flight" | Landed: `screenshot.ts` (201) captures to R2 `ATTACHMENTS`, serves `/api/screenshots/:id`, and `opencode-agent.ts:297` already puts the link in the PR body | T46 shrinks to the *gate*: test-output tail + preview URL + "no proof and no diff ⇒ not `completed`" |
+| `RuntimeAdapter.name: "sandbox" \| "computer"` | Confirmed (`runtime.ts:65`); `ComputerPreviewAdapter` (:185) is a guarded refusal | T51 adds `"local"` as the third name |
+| `antigravity` registered, not runnable | Confirmed: `SANDBOX_HARNESS_NAMES` excludes it; `configFile(): null`, env-only | T50 must decide runnability explicitly — no half-enable |
+| Nothing like `verify()` | `result-quality.ts` exists but is *advisory* (TypeSafe Score, fail-open, never a gate) | T43's `verify` is deterministic and *does* gate `completed` — different contract, not a duplicate |
+| `index.ts` is a router to keep thin | Confirmed at 1,677 lines of pure routing + per-surface `handle*` functions | New endpoints land in new handler modules mounted by the router, not more lines in `index.ts` |
+| No `AGENTS.md` referenced for reading | The file does not exist anywhere in the repo | Noted here rather than silently skipped; CLAUDE.md + ARCHITECTURE.md + GOAL.md are the authoritative docs |
+
+**Standing correction to §17.1:** the parity table is stale — W2 (T30–T32) and W3's capture half (T33) have since merged. The open remainder is T29 (OAuth MCP) and T33's proof-*attachment* tail, which §18.8 absorbs.
+
+### 18.1 T40 · Pure decider for the run lifecycle (~4h)
+
+**The property that pays:** transition legality becomes a pure function — no Worker, DO, container, or mock needed to test it.
+
+New module `packages/shared/src/decide.ts` (both sides already import `@shiba/shared`; a new package is more structure than this needs):
+
+```ts
+export type RunCommand =
+  | { type: "queue"; runId: string; input: CodingTaskInput }
+  | { type: "approve"; approvalId: string; decidedBy: string; route: ApprovedRoute }
+  | { type: "start"; runId: string; approvalEvidence: { approvalId: string; decidedBy: string; inputHash: string } }
+  | { type: "finish"; runId: string; summary: string }
+  | { type: "fail"; runId: string; error: string; errorCode?: RunErrorCode }
+  | { type: "abort" | "cancel"; runId: string; reason: string }
+  | { type: "reclaim"; runId: string }; // stale → "unknown" + outcome_unknown
+
+export function decideRunTransition(
+  state: RunMachineState,           // run row + relevant approval pointer
+  command: RunCommand,
+): { events: RunEvent[] } | { error: RunTransitionError }; // typed union, never throws
+```
+
+- Owns the **real** machine: `pending → running → completed | error | aborted | cancelled | unknown`, plus which transitions are legal from which state (today `transitionRun` only refuses exits *from* terminal — there is no legality table). Illegal transitions return a typed `RunTransitionError`, not a thrown string.
+- **Approval-gate legality:** no event moving a run to `running` unless the command carries `approvalEvidence` — the approver identity (`decidedBy`) and the exact approved input hash — matching a resolved `approved` pointer. The frozen `ApprovedRoute` on the run is revalidated the way `orchestrator.ts` already revalidates it at dispatch; a revoked connection fails honestly, never substitutes.
+- **Idempotency at the decision layer:** re-issuing `queue`/`start` for an existing `runId` returns the already-recorded outcome (today's "reserved run returns prior summary" behavior made explicit), so callers get a stable answer instead of a mutation.
+- `runs.ts` calls it; `transitionRun`/`RunStore.transition` stay as thin wrappers so existing call sites do not churn. The `generation` CAS fencing stays where it is — the decider decides legality, the store still fences writers.
+- **Audit step before writing code:** enumerate every path that creates or transitions a run (`orchestrator.ts` dispatch, `onStart` re-drive, `reclaimStaleRuns`, web-session chat turns, steering) and assert each passes through an approval record. If any path today reaches `running` without one, the decider must encode that path's *actual* precondition — and the plan author must be told, because that is a gate finding, not a spec detail.
+
+**Tests** (`apps/backend/test/decide.test.ts` — imports only `@shiba/shared`, no Worker runtime): a table of every (state × command) pair asserting accept-or-reject; approval-evidence missing/mismatched ⇒ rejected; replayed `queue`/`start` ⇒ prior outcome, no new event. **Highest value-per-hour in the phase.**
+
+### 18.2 T41 · Durable command receipts (~4h)
+
+The evidence log stays exactly as it is — it is what the UI reads. This adds a *different* thing: a command receipt keyed by `commandId`, stored in the orchestrator DO's storage, written **in the same `ctx.storage` transaction** as the state change it records (the t3code invariant: event + projection + accepted receipt commit atomically).
+
+- New `CommandReceipt { commandId, kind, result, runId?, at }` in `@shiba/shared`; DO-side `commandReceipts` map.
+- On dispatch: look up the receipt; hit ⇒ return the stored result; miss ⇒ process and write the receipt with the state change. Makes a retried Slack callback, a double-fired webhook, and a redelivered resolve all safe at the *command* level, not just the pointer level.
+- **First scope — the approval dispatch path:** `POST /api/approvals` resolve → `dispatch`. Close the real gap found in §18.0: an approved run-kind pointer whose dispatch died between resolve and `store.add` currently leaves `approved` with no run and no re-drive. `onStart` re-drives *email* approvals only; extend the same pattern to run-kind via the receipt (approved + no `dispatched` receipt ⇒ re-drive once, recorded).
+- Then Slack `block_actions` resolve, webhook/automation fire, and `queue_run` retries — each gets a commandId (deterministic: approvalId / delivery id / automation-event id).
+- Rejected transitions also get receipts (a redelivery must learn the answer, not re-litigate it).
+
+**Tests:** retried approve ⇒ one container (dispatch count via the sandbox factory seam); approve → simulated eviction before `store.add` → `onStart` re-drives once; a redelivered webhook ⇒ single run; evidence-log byte-identical.
+
+### 18.3 T42 · Typed runtime receipts, no sleeps-as-sync (~5h)
+
+Two halves.
+
+**Signals.** Runs emit typed milestones — `sandbox.ready`, `clone.complete`, `config.written`, `harness.started`, `harness.idle`, `collect.complete`, `pr.opened`, `screenshot.captured` — as a `RunSignal` union in `@shiba/shared`, persisted on the run row alongside the evidence receipts (the DO is already the serialization point; `blockConcurrencyWhile`/`waitUntil` give the ordering). Orchestration code that currently proceeds by ordering convention awaits the signal instead; tests get the same handle via the existing DO test seams (`setSandboxOpsFactory`, `setSandboxHandleResolver`).
+
+**Audit.** Convert or justify every real-time wait in the suite. Known list from §18.0: `container-lifecycle.test.ts` `tick()` and the `sleep 60` exec, `effect-runtime.test.ts` `tick()`, `harness-retry.test.ts:175` (20 ms — under test is the backoff schedule, keep only if it asserts timing, else remove), `orchestrator.test.ts:141` (1 s — replace with awaiting the run signal it actually needs). A test that needs a timeout to pass is a broken test hiding a missing signal — this is the t3code rule and it is adopted verbatim.
+
+**Tests:** each new signal has a producer test and a waiter test; `pnpm test` runs with zero real-time sleeps used for synchronization (timing-math tests exempt, marked).
+
+### 18.4 T43 · Harness capabilities + `verify` (~4h)
+
+Extend `AgentHarness` (`harness/types.ts`) — the interface is the seam; no base class, no unification:
+
+```ts
+export interface HarnessCapabilities {
+  streamsText: boolean; emitsToolCalls: boolean; supportsResume: boolean;
+  supportsSteering: boolean; supportsFileAttachments: boolean;
+  canRunTests: boolean;                    // pairs with T45's executor
+  supportsConversationRollback: boolean;   // antigravity: false — T44's revert refuses first
+  maxContextTokens?: number;
+  supportedRuntimes: readonly RuntimeName[]; // "sandbox" today; T51 adds "local"
+}
+capabilities(model?: string): HarnessCapabilities;
+verify(input: CodingTaskInput, result: RunOutcome): Promise<VerificationOutcome>;
+```
+
+- `capabilities` replaces the hardcoded name checks — a new harness declares what it can do and the UI greys what it cannot; `resolveHarness`'s runnability gate becomes a capability check (`supportedRuntimes`) rather than a second list.
+- `verify` is **deterministic and load-bearing** — unlike `result-quality.ts` (advisory, fail-open). Harness-declared evidence: did it edit files (non-empty diff), did it run the project's test command via T45 where declared, exit status. A run that exits 0 with an empty diff is **not** `completed` — this feeds T46's gate.
+- Cursor and antigravity declare capabilities honestly: cursor = remote executor, antigravity = `supportsConversationRollback: false` (t3code's documented trap — the checkpoint boundary rejects revert before touching files).
+
+**Tests:** every harness's declared capabilities round-trip; `verify` rejects exit-0/empty-diff; the runnability gate still refuses non-sandbox harnesses, now via capability rather than name.
+
+### 18.5 T44 · Git checkpointing (~5h)
+
+New `src/git-checkpoint.ts` implementing `capture(ref) / diffBetween(from,to) / restore(ref) / prune(keepLast)` over **hidden git refs** (`refs/shiba/checkpoints/<runId>/<seq>`) — the t3code CheckpointStore pattern.
+
+- **Reality correction, stated in the plan so it is not discovered mid-build:** t3code's refs persist because its workspaces persist; shiba's sandbox is destroyed on settle. So refs serve *intra-run* revert (steering "undo that", restore-before-retry), and the *baseline → settled* diff is exported to R2 before destroy — that is what makes "what did it actually change before it broke" answerable after the fact. `prune(keepLast)` bounds the R2 keys.
+- Capture baseline immediately post-clone (before first mutation); capture at settle. Turn diff = baseline → settled.
+- Rules: ref names derived, never user-supplied; every ref validated before it reaches `git` (`for-each-ref`-safe charset, no `..`, no spaces); a diff over the size cap goes to R2 and the receipt carries the R2 key; **revert restores workspace and harness conversation together or neither** — a harness with `supportsConversationRollback: false` (T43) rejects revert before touching the filesystem.
+- Storage stays inside the existing sandbox session — no new persistence primitive.
+
+**Tests:** baseline+settle produce the diff that matches `git diff` exactly; oversize diff lands in R2 with the receipt key; revert refused on a no-rollback harness; crafted ref names rejected.
+
+### 18.6 T45 · Scoped command execution, not blanket bash (~4h)
+
+New `src/exec-allowlist.ts`: a scoped executor inside the container run path, enforced at the `SandboxOps.exec` boundary (`runtime.ts:39`) — Worker-side, before the command ever reaches the sandbox exec endpoint.
+
+- Per-harness allowlist of command shapes — a harness that declares `canRunTests` gets exactly `["pnpm", "test"]`-style argv-prefix entries, not `bash`. Entries are declared on the harness (T43 `capabilities`), not hardcoded per name in the executor.
+- Per-command timeout and output cap; every invocation recorded as a receipt that reaches the UI (extends the T42 signal set with `exec.invoked`/`exec.settled` carrying command, exit, duration, truncated-output key).
+- This is what makes T43's `verify` honest — verification requires execution, and execution without scoping is how you get a blanket grant wearing a harness's clothes.
+- Non-allowlisted commands from a harness are refused with a typed error, logged as a receipt, and do not fail the run (they fail the *verify*).
+
+**Tests:** allowlisted command executes and produces a receipt; off-list command refused without reaching `exec`; timeout enforced; output cap enforced; a run's receipts show the exec trail in order.
+
+### 18.7 Phase 7 — OAuth 2.1 on `/mcp` — **already scoped as T29**
+
+This is §17.3's T29, the highest-value remaining parity item (~8h). It does not get a new number; it lands as written. Hard requirements restated so this section is self-contained:
+
+- Additive — existing static bearer `agent-tokens` keep working unchanged.
+- The approval gate is provably unchanged for OAuth-issued principals: every `registerTool` dispatch still goes `requireScope → handler → audit` (`mcp-gateway.ts` registry already enforces this shape).
+- A client-supplied `MCP_PRINCIPAL_HEADER` is still stripped — and there is a test proving it (`index.ts:1307-1311` is the current strip point).
+- Code + PKCE (S256), discovery documents served, refresh rotates, revoked token refused; grant issuance rate-limited and audited; secrets never in a URL, log, or UI response.
+
+### 18.8 T46 · Proof attachment — the "no fake success" gate (~4h)
+
+Roomote's differentiator is a reviewer verifies without reading the diff line by line. As-built (§18.0): `screenshot.ts` captures to R2 and `opencode-agent.ts:297` already links it in the PR body; the preview proxy (`index.ts` `proxyToSandbox`) exists. What remains is the *gate* and the tail:
+
+- **PR body gains:** the test-output tail (from T45's exec receipts — the last N lines of the verification command) and a live preview URL where the project serves one (the existing preview route, durable enough to outlive the sandbox window where the platform allows; where it cannot, the screenshot is the proof and the body says so).
+- **The gate:** a run with no proof *and* no diff must not report `completed`. T43's `verify` produces the verdict; T46 applies it at settle — `verify.failed` ⇒ `error` with the real reason, and "exit 0 with empty diff and no proof" is a failure mode, not a success. This is the CLAUDE.md no-fake-success rule applied to the case that currently slips through.
+- Harnesses that cannot produce proof by construction (e.g. a docs-only repo with no servable app and no test command) must still pass `verify` on *diff evidence* — the rule is "verified change or honest failure," not "every run screenshots."
+
+**Tests:** PR body carries screenshot link + test tail; a no-diff/no-proof run settles `error` with the reason; a docs-only-diff run (no app, no tests, real diff) still completes.
+
+### 18.9 T47 · Shared auth core (~6h) — the skeleton three providers share
+
+New `src/auth/` (a Worker concern, never a container concern). One shared state machine, three provider-specific modules — not a framework. Ported from t3code's `ProviderAuthFlow`/`ProviderAuthService`, trimmed to what this system needs:
+
+```ts
+export type AuthPhase =
+  | "idle" | "starting" | "waiting" | "verifying" | "succeeded" | "failed" | "cleared";
+
+export interface ProviderAuthController {
+  readonly instanceId: string;               // stable per account, e.g. "claude-sub:acct1"
+  snapshot(): AuthSnapshot;                  // { phase, ownerSessionId, message, expiresAt }
+  begin(ownerSessionId: string): Promise<void>;
+  verify(): Promise<AuthSnapshot>;           // real capability probe — see rule 2
+  clear(): Promise<void>;                    // idempotent, ordered — see rule 3
+}
+```
+
+Three rules, ported because t3code earns them the hard way:
+
+1. **Ownership.** An auth flow belongs to the session that started it; every snapshot carries `ownerSessionId`. Another session may *read* state but may not advance or cancel it (t3code enforces via `requireFlow(owner, id)`; the port is a plain owner check on every mutating method). Without it, one client polling a dashboard cancels another client's sign-in.
+2. **HTTP success is not auth success.** A 200 on a token exchange or a callback delivery proves bytes moved; only a **capability probe** sets `succeeded`. In this deployment the probe is a dedicated *auth-probe run*: a minimal sandbox invocation (no repo clone, no user run receipt) running the provider CLI's initialization-only status path — never a command that could open a session, start MCP servers, or launch a browser (t3code's "setup must not happen as a health-check side effect"). The exact probe command per provider is verified by observing a real CLI, not guessed. A stored secret is not proof.
+3. **Sign-out order.** `clear()` closes admission to new runs first (controller leaves `succeeded` ⇒ harness unselectable via T43's capability check), then stops in-flight runs (abort via the existing cancel path — lifecycle leases in `sandbox/lifecycle.ts` are honored), then clears stored metadata. Reversed, a queued or resumed run keeps using a credential the operator revoked. Idempotent and safe to call twice, safe mid-flight.
+
+**Reconciliation:** the brief's six phases omitted `waiting` — correct for Claude/Codex (the operator pastes a token; nothing to wait on) but T50's Antigravity flow *does* wait on a pasted redirect URL, so `waiting` is in the shared enum and only T50 enters it. One machine, not two.
+
+**Storage.** The credential lives in a named Worker secret per account — declared in `env.ts`, and in **both** `alchemy.run.ts` and `wrangler.jsonc` (the drift check `scripts/check-alchemy-drift.mjs` must keep passing). Never a DO field, never a KV value, never in a UI response; the credential is only ever *read* at the egress boundary. Account identity is the stable `instanceId`; `queuedBy`-style records carry it, never the secret.
+
+**Boundary:** `src/auth/` imports nothing from `harness/`; harnesses import the controller *type* from `@shiba/shared` (`auth/types.ts` re-exported) so the dependency rule holds.
+
+### 18.10 T48 · `claude-subscription` harness — `setup-token` handoff (~8h)
+
+New `harness/claude-subscription.ts`, registered in `harness/index.ts` — **separate harness, not a mode flag on `claude-code`**. The credential path, egress host list, and trust model all differ; an `authMode` field on `AgentHarness` is the smell to refuse.
+
+**Three load-bearing constraints — all three or it does not ship:**
+
+1. **`claude setup-token` handoff, never `claude auth login`.** No browser-based Claude login in the dashboard, no OAuth authorization server for Anthropic credentials. The operator runs `claude setup-token` on their own machine and pastes the token into a Worker secret. The app never drives, brokers, or relays an Anthropic login.
+2. **Self-hosted, single-tenant, opted-in.** Ships dark: inert unless the deployment is account-owned (already the GOAL.md posture) **and** the operator sets `SHIBA_CLAUDE_SUBSCRIPTION=1`. Absent the var: not registered, not in the catalog, not selectable. No hosted/managed offering. If T35 multi-tenancy ever lands, this feature is *removed, not reworked* — a shared deployment is exactly the "on behalf of their users" case §3 refuses.
+3. **The token never enters the container.** The structural enforcement replaces the dummy-key pattern, which does not apply because there is no gateway swap: the sandbox gets a `CLAUDE_CONFIG_DIR` layout marking subscription mode with a *placeholder* credential entry; the real token lives in the Worker secret and the egress branch attaches `Authorization: Bearer <token>` (plus the subscription headers the CLI sends) on the subscription hosts. `GATEWAY_PROVIDERS`/`forwardProvider` will reject these hosts — **that rejection is correct**; the subscription hosts get their own egress branch that attaches the token and does nothing else, still deny-by-default.
+
+**Mechanics:**
+
+- `egressHosts()`: enumerated by observing a real `claude` run against a setup-token credential (claude.ai, api.anthropic.com, and the consent/refresh hosts the CLI actually needs) — **do not guess the list and do not reuse `PROVIDER_HOSTS.anthropic`**, which is the API-key path and deliberately gateway-routed.
+- `configFile()`: writes a `CLAUDE_CONFIG_DIR` layout (t3code `ClaudeHome.ts`): isolate via `CLAUDE_CONFIG_DIR`, never `HOME` (overriding HOME relocates the macOS keychain lookup → "Not logged in" — matters for T51); an inherited `~` is not shell-expanded — resolve before writing.
+- `env()`: **no `ANTHROPIC_API_KEY` at all.** A cached Anthropic login in the config dir conflicts with a router/subscription token — detect (credentials file carrying an oauth account + refresh entry) and refuse rather than silently using the stale credential.
+- `buildArgv()`: same `--print --output-format stream-json --permission-mode acceptEdits` shape as `claude-code`; **reuse `parseClaudeCodeEvent` verbatim** — do not fork the parser.
+
+**Lifecycle:** uses T47's controller; `begin` records the pasted token into the Worker secret store; `verify` is the capability probe; usage limits are a first-class run signal — a run dying on subscription quota reports *"usage limit reached, resets at X"* parsed from the stream, never a stack trace, never `completed`. An empty authoritative model catalog clears a previously cached list; a cached list does not establish access.
+
+**Multi-account:** separate accounts = separate instances, separate config dirs, isolated conversation state. A run may only resume against the account it started on: continuation key `claude:home:<resolvedConfigDir>` (t3code's derivation) is part of the run record, and the **T40 decider** enforces resume-against-same-key — not the UI. Account identity never appears in argv.
+
+**Documentation is part of the feature:** amend `PLAN.md` §3 — replace the blanket prohibition with the narrowed design + its three constraints, keeping the Hoplite reasoning visible (do not delete it; it is why the design is this narrow); fix the `claude-code.ts` docstring ("deliberately not supported" → scoped to the API-key harness, pointing at the new one); add the harness to the `spec/GOAL.md` and `ARCHITECTURE.md` catalogs noting the AI-Gateway bypass; write a user-facing note stating the operator's own Anthropic terms apply, the token is a deployment secret, and revoking it stops runs mid-flight — in the product's voice, no implementation detail.
+
+**Definition of done (all provable by test):** with the ack var absent the harness is unlisted/unselectable and every existing gate is byte-identical; with it present and a valid token a run completes and opens a PR; with an invalid token `verify` fails with the real reason and no run starts; signing out mid-run stops in-flight runs *before* clearing metadata; the token appears in no log line, UI response, argv, or sandbox file; a resumed run refuses to cross accounts.
+
+### 18.11 T49 · `codex-subscription` harness — `CODEX_HOME` shadow layout (~8h)
+
+Different mechanism — do not copy T48's shape and rename it. Codex is a directory-shaped credential, not a token-in-env provider. Port t3code's `CodexHomeLayout.ts` semantics:
+
+- **Two-level layout:** a *shared* home holding everything non-account-specific (`sessions`, `archived_sessions`, `sqlite`, `shell_snapshots`, `worktrees`, `skills`, `plugins`, `cache`, `logs`, `mcp-oauth-locks` — the known-shared list is ported verbatim) and a per-instance *shadow* home overlaying `auth.json` plus shadow-local entries (`log`, `memories`, `tmp`), materialized as symlinks at run start.
+- **The subtlety:** continuation key ≠ account key. Continuation identity follows the *shared* home (`codex:home:<sharedHomePath>` — a conversation resumes against the same history across account switches). Account identity follows the directory that actually holds `auth.json` — `effectiveHomePath ?? sharedHomePath` — because an overlay instance owns its account under the shadow while a plain instance shares the common one. Keying usage/quota/sign-out on the continuation key double-counts a shared credit pool or fails to revoke an overlay account. Both keys land in `@shiba/shared`; the T40 decider enforces continuation on resume, the T47 controller enforces account on clear.
+- **Credential containment, adapted to the egress model:** `auth.json` never enters the container as a real file and never appears in argv, logs, or UI. The sandbox's shadow home gets a *stub* `auth.json`; the real credential materializes Worker-side and is projected into the subscription egress headers (the private-entry-symlink refusal from `CodexHomeLayout` is ported — the shadow's `auth.json` must be a real file, never a link into the shared home).
+- `egressHosts()`: observed from a real `codex` subscription run (ChatGPT backend hosts) — own egress branch, deny-by-default, `GATEWAY_PROVIDERS` correctly absent.
+- **Update path:** updates run against the *shared* home, not the effective home — the overlay does not contain the installation, and running the updater against it silently no-ops (t3code's comment is copied with the decision).
+- Constraints 1–3 from T48 apply verbatim with `SHIBA_CODEX_SUBSCRIPTION=1` — a distinct var so an operator can enable one provider without the other.
+
+**Definition of done:** two instances sharing a CODEX_HOME swap accounts on the same thread (continuation preserved, account isolated); an overlay revoke does not touch the shared account; the private-entry-symlink refusal holds; the token content of `auth.json` appears in no sandbox file, argv, log, or UI response.
+
+### 18.12 T50 · `antigravity-subscription` harness — loopback callback forwarding (~10h)
+
+The most likely to be got wrong. Reference: t3code `AntigravityAuth.ts`, `antigravityAuthSupport.ts`, `antigravityCallback.ts` — port the checks, don't invent looser ones. Also resolves today's half-state: `antigravity` is registered but excluded from `SANDBOX_HARNESS_NAMES` with `configFile(): null`.
+
+**Mechanism.** The ACP subprocess prints an authorization URL on stdout and listens on a loopback callback. The operator signs in with Google in their own browser; Google redirects to `127.0.0.1` on the subprocess's port — **inside the container**, which the browser cannot reach. Two properties make it correct:
+
+1. **Callback forwarding.** The container exposes the callback on an ingress port; a dedicated Worker route (`/api/antigravity/callback`, new handler module — not index.ts growth) accepts the operator's pasted redirect URL, validates it, and forwards it into the container listener via the existing `proxyToSandbox` machinery. Telling the operator to port-forward into a container is not shippable.
+2. **Owner-scoped pending callback.** The pending record lives on the T47 controller bound to the flow id and the single expected `state`. Validation is the t3code ruleset verbatim: `http:` protocol; hostname exactly `127.0.0.1`; origin and pathname equal to the pending `redirectUri`'s; no username, password, or fragment; exactly one `state` matching; exactly one `code` with no `error`, or exactly one `error` with no `code`; `iss` if present must be `https://accounts.google.com`. Forward with no proxies, no redirects, no response logging, 10 s timeout. **A delivered callback is not authentication** — the ACP process owns token exchange and storage; only the capability probe against the started process sets `succeeded`. This is the one flow that uses T47's `waiting` phase.
+
+**Profile isolation.** Force file-based credential storage (never the OS keychain — a keychain entry is shared across instances). The launch environment strips ambient Google credentials — port `removedEnvironmentKeys` verbatim rather than guessing: `GEMINI_API_KEY`, `GOOGLE_API_KEY`, `GOOGLE_APPLICATION_CREDENTIALS`, `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION`, `GOOGLE_CLOUD_QUOTA_PROJECT`, `GOOGLE_GENAI_USE_VERTEXAI`, and siblings discovered in `antigravityAuthSupport.ts`. A profile resolves its own user-global skill dirs; that boundary links back to the real home, but MCP servers/hooks/rules there stay outside the profile.
+
+**Runnability decision (explicit, required):** the subscription path makes the harness runnable — `antigravity-subscription` enters `SANDBOX_HARNESS_NAMES` with `configFile()` returning a real `HarnessConfigFile` (the profile layout) and the `agy` ACP binary pinned in the image. Plain `antigravity` stays excluded — it has no auth story. This is a deliberate enable, not a half-one: subscription harness runnable, API-key stub unchanged.
+
+**Installer leases** (immutable releases, atomic version pointer, running processes hold leases) bind where installs exist — the sandbox path uses the pinned image binary; the lease machinery is specced under T51's local runtime where live installs actually exist. Do not build it twice.
+
+Constraints 1–3 from T48 apply verbatim with `SHIBA_ANTIGRAVITY_SUBSCRIPTION=1`.
+
+### 18.13 T51 · `local` runtime adapter — where login flows become legal (~12h)
+
+`RuntimeAdapter` (`runtime.ts:65`) gains a third name: `"local"`. Under it the agent process runs on the **operator's own machine** — `claude auth login`, `codex login`, and the Antigravity Google sign-in then happen in the operator's own terminal and browser against their own machine: ordinary use, categorically different from a deployed app brokering a login. No credential transits the Worker, the egress boundary, or any container — the invariant T48–T50 go to such lengths to preserve is satisfied here by there being no remote boundary at all.
+
+**Shape:** a thin operator-run agent (`shiba local` / the local adapter daemon) connects outbound to the Worker (poll/WS on a new `/api/local` surface, new handler module) and executes dispatched runs. The dashboard drives it: start, watch, steer, stop — **but the approval gate does not relax because the work is local.** The run still passes through the T40 decider, still writes T41/T42 receipts, still shows the approval card and honors the approver list. That is the invariant this phase exists to protect, and the test proving the gate is unchanged ships *before* the adapter does.
+
+**Scope, honestly small:**
+
+- macOS and Linux only to begin — say so in the docs.
+- **Operator-initiated only.** No local run starts without `SHIBA_LOCAL_RUNTIME=1` — a first-class security setting, not a preference. Off by default.
+- **No Slack, Telegram, Discord, email, webhook, or MCP intake for local runs.** A chat message must not be able to cause code execution on someone's laptop — web dashboard only, enforced at intake by rejecting `runtime: "local"` on every non-dashboard surface. This is the sharpest edge in the whole plan.
+- `supportedRuntimes` (T43) is the refusal mechanism: a harness that cannot run local is refused by a capability check, not by failing mid-run. `claude-code`, `codex`, `antigravity` declare `["sandbox", "local"]` where true; subscription harnesses declare `["sandbox"]` (cloud) while the local CLIs cover the same accounts directly.
+- Git publish: the local adapter returns the diff/patch and the existing Worker-side publish path opens the PR — token containment and PR-as-bot identity preserved, no repo credential reaches the operator's machine beyond their own existing git auth.
+- Antigravity's installer-lease machinery (immutable releases, atomic pointer, process leases) lands here where live installs exist — T50's sandbox path intentionally did not build it.
+
+**This is the phase that makes §3's gray area tractable rather than ignored**, and the one where the security review matters most: the whole diff for the intake boundary and the runtime-selection path gets a dedicated review pass before merge.
+
+### 18.14 Order, dependencies, prohibitions, success
+
+| Order | Task | Needs | Effort |
+|---|---|---|---|
+| 1 | **T40** decider | — | ~4h |
+| 2 | **T41** command receipts | T40 | ~4h |
+| 3 | **T42** typed receipts + sleep audit | T40 | ~5h |
+| 4 | **T43** capabilities + verify | T40 | ~4h |
+| 5 | **T45** scoped exec | T43 (`canRunTests`) | ~4h |
+| 6 | **T44** git checkpoints | T43 (rollback capability) | ~5h |
+| 7 | **T46** proof gate | T43 + T45 | ~4h |
+| 8 | **T29** OAuth MCP (§17.3, unchanged) | — | ~8h |
+| 9 | **T47** auth core | T40 (decider enforces continuation/account), T43 (capability gating) | ~6h |
+| 10 | **T48** claude-subscription | T47 | ~8h |
+| 11 | **T49** codex-subscription | T47 | ~8h |
+| 12 | **T50** antigravity-subscription | T47 | ~10h |
+| 13 | **T51** local runtime | T40, T41, T42, T43 | ~12h |
+
+T40–T46 + T29 ≈ one session of work; T47–T50 ≈ one; T51 ≈ one. T29 is independent and can land anywhere after T40; T48–T50 are parallel after T47.
+
+**Prohibitions, restated so they cannot be quietly skipped:**
+
+- No wholesale event sourcing; no Postgres, Redis, or queue primitives (Durable Objects are the queue and the state; Queues/Workflows stay forbidden per GOAL.md); no WebSocket RPC layer (`routeAgentRequest` already covers it); no second deploy path (alchemy primary, wrangler rollback, `check-alchemy-drift` must stay green); no harness base-class unification; no restructuring `apps/` or renaming packages.
+- No `claude auth login`, `codex login`, or Google sign-in browser flow in the dashboard; no Anthropic or Google OAuth server; no login UI. Operator handoff only — and in T51, only on the operator's own machine.
+- No managed/hosted offering of any subscription harness; each is dark by default under its own per-deployment opt-in.
+- No `authMode` field on `AgentHarness` — separate harnesses, not a flag.
+- No plan-tier credential in a container, argv, log, UI response, or sandbox disk. No exception for debugging.
+- A delivered callback, a stored secret, or a 200 from a token exchange never sets `succeeded` — only a capability probe against the real CLI does.
+- No T51 local run without the approval gate, and no chat-surface intake for local runs under any circumstance.
+- The Hoplite precedent in §3 is not deleted or softened — T48–T51's narrowness is a direct consequence of it, and the reasoning stays visible next to the code that now exists.
+- No T47–T51 work that delays or destabilizes T40–T46/T29 — they are separate files, separate vars, and land behind the approval gate they must provably leave unchanged.
+
+**Success criteria.** T40: the (state × command) table passes with no Worker runtime imported. T41: retried approve ⇒ one container; approved-but-undispatched is re-driven once on restart. T42: zero real-time sleeps used for synchronization in `pnpm test`. T43: `verify` rejects exit-0/empty-diff; runnability is a capability check. T44: "what did it change before it broke" is answerable from R2 post-destroy. T45: an off-allowlist command never reaches `exec`. T46: no-proof/no-diff settles `error`. T29: per §17.10. T47: ownership blocks cross-session advance/cancel; `succeeded` only via probe; `clear()` ordered and idempotent. T48–T50: each phase's definition-of-done lines above. T51: a local run passes the unchanged approval card, produces receipts and a PR, and a chat-surface attempt at `runtime: "local"` is refused at intake with a test proving it.
+
+---
+
 ## References
+
+**t3code** (observed 2026-09-27) — [pingdotgg/t3code](https://github.com/pingdotgg/t3code) · internals docs `docs/internals/{overview,providers,connection-runtime,environment-auth}.md` · provider guides `docs/user/providers-{claude,codex,antigravity}.md` · `orchestration/decider.ts` + `OrchestrationEventStore.ts` (command/event/receipt atomicity) · `provider/ProviderDriver.ts` (record-per-instance SPI, continuationIdentity) · `provider/ProviderAuthFlow.ts` (owner-scoped auth state machine) · `Drivers/{ClaudeHome,CodexHomeLayout}.ts` (config-dir isolation, shadow-home overlay, continuation-vs-account keys) · `antigravityCallback.ts` + `antigravityAuthSupport.ts` (callback validation, `removedEnvironmentKeys`).
 
 **Roomote** (observed 2026-09-27) — [RooCodeInc/Roomote](https://github.com/RooCodeInc/Roomote) · [docs.roomote.dev](https://docs.roomote.dev) · [MCP integration guide](https://docs.roomote.dev/integrations/roomote-mcp) · [SELF_HOSTING.md](https://github.com/RooCodeInc/Roomote/blob/main/SELF_HOSTING.md). Parity claims above are from the public README; sandboxes/providers/channels are README-advertised, not independently verified against a running deployment. Roomote is FCL-1.0 (free ≤10 users, licensed above) — **read the license before copying any implementation.**
 
