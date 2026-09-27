@@ -28,6 +28,23 @@ Only vite runs in most sessions — the Cloudflare worker (Durable Objects, sand
 - The Agents group in the sessions sidebar only renders when `/api/agents` returns ≥1 principal — with the backend down the whole section is silently absent (silent catch).
 - The Inbox tab stays mounted after its first visit (WorkspacePanel `inboxMounted` flag + `div.hidden` wrapper) — component state (search text, reply draft) survives tab switches by design; verify via a same-node DOM check, not just pixels.
 
+## Layout drift warning (verified Sept 2026 on wrangler dev :8787)
+
+The dashboard was re-restyled AFTER the navy/cream pass below: current build is
+**dark-themed** with a different nav — WORKSPACE = Dashboard/Tasks/Runs/Diff/
+Approvals/Missions/Automations, CAPABILITIES = Agents & MCP/Mailbox/Memory,
+SANDBOX & SAFETY = VM/Gates, SYSTEM = Setup Guide/Documentation/Keyboard
+shortcuts/theme toggle. Approvals is now a top-level view ("Approvals &
+Decision Center" — pending RUN TASK cards with frozen payload JSON +
+Approve/Reject), not just a right-rail tab; a new **Dashboard** overview view
+aggregates runs/approvals stats + recent activity. The six-tab right-rail
+WorkspacePanel and "AI Coworker" branding described below are stale — verify
+labels against the live UI before reusing click coordinates. RunRegistryView
+still renders "Run Registry & Workspaces" on the Runs view with stats cards
+(Total/Active/Completed/Failed+Cancelled/Success Rate/Median Cycle/PRs
+Requested) and all/active/completed/error filter tabs; Success Rate counts
+error-family statuses (error/aborted/cancelled/unknown) as terminal failures.
+
 ## Surfaces testable without the backend
 
 All of these work client-side and were verified in a restyle pass:
