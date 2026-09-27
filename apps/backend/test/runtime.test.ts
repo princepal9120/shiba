@@ -2,6 +2,12 @@ import { execFileSync } from "node:child_process";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ExecutionContext } from "@cloudflare/workers-types";
 import { Sandbox } from "../src/sandbox.js";
+import { claudeCodeHarness } from "../src/harness/claude-code.js";
+import { ClaudeUsageLimitError } from "../src/harness/claude-subscription.js";
+import { CodexUsageLimitError } from "../src/harness/codex-subscription.js";
+import { devinHarness } from "../src/harness/devin.js";
+import { AntigravityUsageLimitError } from "../src/harness/antigravity-subscription.js";
+import type { AgentHarness } from "../src/harness/types.js";
 
 vi.mock("@cloudflare/sandbox", () => ({
   Sandbox: class {},
@@ -397,6 +403,67 @@ describe("sandbox egress allowlist (T5)", () => {
 });
 
 describe("streamed opencode progress", () => {
+  it("skips parsed events with empty text", async () => {
+    const ops = makeFakeOps();
+    const baseExec = ops.exec;
+    ops.exec = async (command, opts) => {
+      if (!command.startsWith("'claude'")) return baseExec(command, opts);
+      opts?.onOutput?.("stdout", `${JSON.stringify({ type: "assistant", message: { content: [{ type: "text", text: "" }] } })}\n`);
+      return { stdout: "", stderr: "", exitCode: 0 };
+    };
+    const events: string[] = [];
+    const adapter = new SandboxRuntimeAdapter(claudeCodeHarness);
+    const result = await adapter.runCodingTask(
+      ops,
+      { ...INPUT, codingModel: "anthropic/claude-sonnet-4-6" },
+      (event) => { if (event.phase === "code") events.push(event.message); },
+    );
+    expect(result.status).toBe("completed");
+    expect(events.filter((message) => message.startsWith("[claude-code]"))).toEqual([]);
+  });
+
+  it("fails a Devin run on an auth error event", async () => {
+    const ops = makeFakeOps();
+    const baseExec = ops.exec;
+    ops.exec = async (command, opts) => {
+      if (!command.startsWith("'devin'")) return baseExec(command, opts);
+      opts?.onOutput?.("stdout", "Not logged in\n");
+      return { stdout: "", stderr: "", exitCode: 0 };
+    };
+    const adapter = new SandboxRuntimeAdapter(devinHarness);
+    const result = await adapter.runCodingTask(
+      ops,
+      { ...INPUT, codingModel: "devin/swe-2" },
+      () => {},
+    );
+    expect(result.status).toBe("error");
+    expect(result.summary).toContain("Not logged in");
+    expect(result.summary).not.toContain("malformed event line");
+  });
+
+  it.each([
+    new ClaudeUsageLimitError("quota exhausted"),
+    new CodexUsageLimitError("quota exhausted"),
+    new AntigravityUsageLimitError("quota exhausted"),
+  ])("fails a run on %s instead of masking the usage limit", async (usageError) => {
+    const harness = Object.create(devinHarness) as AgentHarness;
+    harness.parseEvent = () => { throw usageError; };
+    const ops = makeFakeOps();
+    const baseExec = ops.exec;
+    ops.exec = async (command, opts) => {
+      if (!command.startsWith("'devin'")) return baseExec(command, opts);
+      opts?.onOutput?.("stdout", "usage limit\n");
+      return { stdout: "", stderr: "", exitCode: 0 };
+    };
+    const result = await new SandboxRuntimeAdapter(harness).runCodingTask(
+      ops,
+      { ...INPUT, codingModel: "devin/swe-2" },
+      () => {},
+    );
+    expect(result.status).toBe("error");
+    expect(result.summary).toBe(usageError.message);
+  });
+
   it("emits bounded progress from streamed stdout JSON events", async () => {
     const ops = makeFakeOps();
     const events: string[] = [];

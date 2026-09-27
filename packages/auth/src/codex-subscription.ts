@@ -15,14 +15,16 @@
  * probe — a real `GET /backend-api/wham/usage` through the same egress
  * branch runs use — and only its verdict sets `succeeded`.
  */
-import type { ProviderAuthController } from "@shiba/shared";
-// Pure path math lives in @shiba/shared — this module must not import from harness/.
-import { codexSubscriptionAccountFromInstanceId } from "@shiba/shared";
+import {
+  codexSubscriptionAccountFromInstanceId,
+  parseCodexAuthJson,
+  type ProviderAuthController,
+} from "@shiba/shared";
 import {
   createAuthController,
   type AuthProviderHooks,
 } from "./controller.js";
-import { forwardCodexSubscription, parseCodexAuthJson, type EgressEnv } from "../egress.js";
+import type { SubscriptionForwarder } from "./claude-subscription.js";
 
 /** Secret name an account's auth.json contents live under. */
 export function codexSubscriptionSecretName(account: string): string {
@@ -48,6 +50,7 @@ interface AuthControllerEnv {
 async function probeCodexSubscription<Env extends AuthControllerEnv>(
   env: Env,
   instanceId: string,
+  forward: SubscriptionForwarder,
 ): Promise<{ ok: boolean; message?: string }> {
   const account = codexSubscriptionAccountFromInstanceId(instanceId);
   const raw = codexSubscriptionAuthJson(env, account);
@@ -59,7 +62,7 @@ async function probeCodexSubscription<Env extends AuthControllerEnv>(
   }
   const request = new Request("https://chatgpt.com/backend-api/wham/usage", { method: "GET" });
   try {
-    const response = await forwardCodexSubscription(request, env as unknown as EgressEnv, { params: { account } });
+    const response = await forward(request, env, { params: { account } });
     if (response.status === 200) return { ok: true, message: "auth.json reached the ChatGPT backend." };
     if (response.status === 401 || response.status === 403) {
       return { ok: false, message: `credential rejected (${response.status}) — renew it with \`codex login\` and re-store the secret.` };
@@ -74,9 +77,10 @@ async function probeCodexSubscription<Env extends AuthControllerEnv>(
 export function codexSubscriptionAuth<Env extends AuthControllerEnv>(
   env: Env,
   instanceId: string,
+  forward: SubscriptionForwarder,
 ): ProviderAuthController {
   const hooks: AuthProviderHooks<Env> = {
-    probe: probeCodexSubscription,
+    probe: (e, id) => probeCodexSubscription(e, id, forward),
     onBegin: async (e, id) => {
       const account = codexSubscriptionAccountFromInstanceId(id);
       const raw = codexSubscriptionAuthJson(e, account);

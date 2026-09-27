@@ -17,7 +17,13 @@ vi.mock("agents/routing", () => ({
       fetch: async () => new Response("{}", { status: 404 }),
     };
   },
-  routeAgentRequest: async () => new Response(null, { status: 101 }),
+  // Mirrors the SDK: null for paths outside the /agents/ prefix (so later
+  // fallthrough logic runs), a stubbed 200 for in-prefix paths the tests
+  // assert on as "forwarded to the DO".
+  routeAgentRequest: async (request: Request) =>
+    new URL(request.url).pathname.startsWith("/agents/")
+      ? new Response(null, { status: 200 })
+      : null,
 }));
 vi.mock("@cloudflare/think", () => ({
   Think: class {
@@ -720,6 +726,18 @@ describe("Worker End-to-End: /api/sessions, /api/runs, /api/approvals, and /agen
     const unauthedReq = new Request("https://example.com/api/sessions");
     const res = await worker.fetch(unauthedReq, env);
     expect(res.status).toBe(401);
+  });
+
+  it("returns JSON 404 for unmatched /api/* instead of falling through to assets", async () => {
+    const { env } = makeMockEnv();
+    const req = new Request("https://example.com/api/no-such-route", {
+      headers: { "CF-Access-Authenticated-User-Email": "tester@example.com" },
+    });
+    const res = await worker.fetch(req, env);
+    expect(res.status).toBe(404);
+    expect(res.headers.get("content-type")).toContain("application/json");
+    expect(await res.json()).toEqual({ error: "Not found." });
+    expect(env.ASSETS.fetch).not.toHaveBeenCalled();
   });
 
   it("creates a named session with bounded metadata; rejects invalid metadata", async () => {

@@ -39,6 +39,7 @@ import {
   type AgentHarness,
   type HarnessCapabilities,
   type HarnessConfigFile,
+  type HarnessEvent,
   type VerificationOutcome,
   verifyRunOutcome,
 } from "./types.js";
@@ -65,9 +66,6 @@ export const ANTIGRAVITY_SUBSCRIPTION_HOSTS = [
   "generativelanguage.googleapis.com",
 ] as const;
 
-// Profile-dir + browser-command helpers live in @shiba/shared
-// (antigravity.ts) — src/auth/ resolves them without importing harness/.
-export { antigravityBrowserCommand, antigravitySubscriptionProfileDir } from "@shiba/shared";
 
 /** The T47 instanceId for an account — stable, never the credential. */
 export function antigravitySubscriptionInstanceId(input: { authAccount?: string }): string {
@@ -147,7 +145,7 @@ export class AntigravitySubscriptionHarness implements AgentHarness {
     ];
   }
 
-  parseEvent(line: string): string | null {
+  parseEvent(line: string): HarnessEvent | null {
     try {
       return parseAntigravityEvent(line);
     } catch (error) {

@@ -31,7 +31,7 @@ import {
   validateAntigravityCallbackUrl,
   ANTIGRAVITY_AUTH_STDOUT_PREFIX,
 } from "@shiba/shared";
-import { shellJoin } from "../security.js";
+import { shellJoin } from "@shiba/shared";
 import { createAuthController, type AuthProviderHooks } from "./controller.js";
 
 /** Minimal sandbox surface the flow needs — injected for tests. */

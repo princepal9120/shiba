@@ -40,6 +40,7 @@ import {
   type AgentHarness,
   type HarnessCapabilities,
   type HarnessConfigFile,
+  type HarnessEvent,
   type VerificationOutcome,
   verifyRunOutcome,
 } from "./types.js";
@@ -98,7 +99,7 @@ export function codexSubscriptionInstanceId(input: Pick<CodingTaskInput, "authAc
 }
 
 // `codexSubscriptionAccountFromInstanceId` lives in @shiba/shared
-// (codex-home.ts) — src/auth/ must not import from harness/.
+// (codex-home.ts) — re-exported so harness callers keep one import site.
 export { codexSubscriptionAccountFromInstanceId } from "@shiba/shared";
 
 /**
@@ -225,7 +226,7 @@ export class CodexSubscriptionHarness implements AgentHarness {
     ];
   }
 
-  parseEvent(line: string): string | null {
+  parseEvent(line: string): HarnessEvent | null {
     try {
       return parseCodexEvent(line);
     } catch (error) {

@@ -50,15 +50,6 @@ export function readingTime(body: string | undefined): number {
 	return Math.max(1, Math.round(words / 220));
 }
 
-function slugify(heading: string): string {
-	return heading
-		.toLowerCase()
-		.replace(/`/g, '')
-		.replace(/[^a-z0-9\s-]/g, '')
-		.trim()
-		.replace(/\s+/g, '-');
-}
-
 /**
  * Builds the "On this page" list from the rendered h2/h3 elements. Reading the
  * DOM rather than re-parsing markdown keeps this in step with whatever
@@ -96,4 +87,3 @@ export async function renderPost(post: JournalPost): Promise<RenderedPost> {
 	};
 }
 
-export { slugify };

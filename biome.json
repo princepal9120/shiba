@@ -1,0 +1,108 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "includes": [
+      "**",
+      "!**/node_modules",
+      "!**/dist",
+      "!**/build",
+      "!**/coverage",
+      "!**/*.min.js",
+      "!**/.wrangler",
+      "!**/.astro",
+      "!**/.alchemy",
+      "!**/routeTree.gen.ts",
+      "!.opencode",
+      "!.omc",
+      "!.agents",
+      "!.codex",
+      "!.playwright-mcp",
+      "!**/__probe.test.ts"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "trailingCommas": "all",
+      "semicolons": "always"
+    }
+  },
+  "linter": {
+    "rules": {
+      "preset": "recommended",
+      "correctness": {
+        "noChildrenProp": "warn",
+        "noUndeclaredDependencies": "warn",
+        "noUnusedFunctionParameters": "warn",
+        "noUnusedImports": "warn",
+        "noUnusedVariables": "warn",
+        "noUnsafeOptionalChaining": "warn",
+        "useExhaustiveDependencies": "warn",
+        "useParseIntRadix": "warn"
+      },
+      "suspicious": {
+        "noAssignInExpressions": "warn",
+        "noArrayIndexKey": "warn",
+        "noExplicitAny": "off",
+        "noImplicitAnyLet": "warn",
+        "noShadowRestrictedNames": "warn",
+        "noShorthandPropertyOverrides": "warn",
+        "noUndeclaredEnvVars": "warn",
+        "noUnknownAtRules": "warn",
+        "useIterableCallbackReturn": "warn"
+      },
+      "style": {
+        "noDescendingSpecificity": "warn",
+        "noNonNullAssertion": "warn",
+        "useImportType": "warn",
+        "useTemplate": "warn"
+      },
+      "complexity": {
+        "noImportantStyles": "warn",
+        "useArrowFunction": "warn",
+        "useLiteralKeys": "warn",
+        "useOptionalChain": "warn"
+      },
+      "performance": {
+        "noBarrelFile": "off"
+      },
+      "a11y": {
+        "noLabelWithoutControl": "warn",
+        "noNoninteractiveTabindex": "warn",
+        "noStaticElementInteractions": "warn",
+        "useSemanticElements": "warn"
+      }
+    }
+  },
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["apps/web/**"],
+      "javascript": {
+        "formatter": {
+          "quoteStyle": "single"
+        }
+      },
+      "formatter": {
+        "indentStyle": "tab"
+      }
+    }
+  ]
+}

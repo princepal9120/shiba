@@ -8,7 +8,6 @@
     ],
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "jsx": "react-jsx",
     "strict": true,
     "skipLibCheck": true,
     "noUncheckedIndexedAccess": true,
@@ -16,30 +15,26 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "noEmit": true,
     "noFallthroughCasesInSwitch": true,
     "types": [
-      "vite/client"
+      "node"
     ],
-    "baseUrl": ".",
-    "paths": {
-      "react": [
-        "./apps/frontend/node_modules/@types/react",
-        "./node_modules/@types/react"
-      ],
-      "react/jsx-runtime": [
-        "./apps/frontend/node_modules/@types/react/jsx-runtime",
-        "./node_modules/@types/react/jsx-runtime"
-      ]
-    }
+    "composite": true,
+    "emitDeclarationOnly": true,
+    "outDir": "dist"
   },
   "include": [
-    "packages/shared/src",
-    "apps/backend/src",
-    "apps/backend/test",
-    "apps/frontend/src",
-    "apps/frontend/vite.config.ts",
-    "apps/backend/vitest.config.ts",
     "alchemy.run.ts"
+  ],
+  "references": [
+    {
+      "path": "packages/shared"
+    },
+    {
+      "path": "apps/backend"
+    },
+    {
+      "path": "packages/auth"
+    }
   ]
 }

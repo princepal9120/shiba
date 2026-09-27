@@ -1,5 +1,6 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": ["tsconfig.json"],
   "tasks": {
     "build": {
       "dependsOn": [
@@ -8,14 +9,21 @@
       "outputs": [
         "dist/**",
         "public/**",
-        ".astro/**",
-        "../../public/**"
+        ".astro/**"
       ]
     },
     "typecheck": {
-      "cache": false,
-      "outputs": []
+      "dependsOn": [
+        "^typecheck"
+      ],
+      "outputs": [
+        "dist/**",
+        "tsconfig.tsbuildinfo"
+      ]
+
     },
+    // `test` stays uncached by decision: a stale green result is worse than a
+    // slow one. If a live-suite escape hatch is ever needed, keep it here.
     "test": {
       "cache": false,
       "outputs": [
@@ -23,7 +31,6 @@
       ]
     },
     "lint": {
-      "cache": false,
       "outputs": []
     },
     "dev": {

@@ -11,8 +11,10 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "noEmit": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    "composite": true,
+    "emitDeclarationOnly": true,
+    "outDir": "dist"
   },
   "include": ["src"]
 }

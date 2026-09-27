@@ -12,6 +12,8 @@ description: Run the shiba dashboard end-to-end locally and seed Durable Object 
   have them via homebrew. Check `which node pnpm` first.
 - If `node_modules` looks broken: `CI=true pnpm install --shamefully-hoist`
   (transitive `sharp` must be hoisted or `pnpm build` fails — env quirk, not a bug).
+- Root `pnpm dev` = `turbo run dev` = vite :5173 AND backend `wrangler dev :8788`;
+  the backend leg fails on machines without Docker (see below).
 
 ## Serve the real stack
 
@@ -30,9 +32,14 @@ pnpm -C apps/frontend dev  # vite :5173, in one terminal
 pnpm exec wrangler dev --port 8788 --config apps/backend/wrangler.jsonc --enable-containers=false  # worker, in another terminal
 ```
 
-`--enable-containers=false` is for machines without Docker; approval-queue
-testing works, but sandbox execution does not. To test the built dashboard
-instead of Vite, run `pnpm build:dashboard` and serve the Worker on :8787.
+`--enable-containers=false` is REQUIRED on any machine without Docker:
+wrangler.jsonc declares a `containers` image (`apps/backend/Dockerfile`) and
+wrangler 4.x fails startup with "The Docker CLI is needed to build the
+configured image" — the flag skips image prep; DOs/APIs still work, only
+real sandbox/container execution is unavailable (don't click Inspect VM).
+Approval-queue testing works; sandbox execution does not. To test the built
+dashboard instead of Vite, run `pnpm build:dashboard` and serve the Worker
+on :8787.
 
 - Approval-queue endpoints (`POST /api/runs`, `GET /api/approvals`) work fully
   without containers, secrets, or Cloudflare auth — they only write a pending
@@ -46,6 +53,9 @@ instead of Vite, run `pnpm build:dashboard` and serve the Worker on :8787.
     everything else is fine. AI binding is remote-mode but only touched when a
     run actually executes (post-approval).
 - `REQUIRE_ACCESS` is unset → all routes are unauthenticated; identity = `"default"`.
+- Dashboard URL: `http://localhost:5173/app/` under Vite (or `:8787/app/` for
+  the built dashboard; bare `/` 404s in dev — the tryshiba.dev `_redirects`
+  rules are absolute URLs and get skipped locally).
 - Useful checks: `curl localhost:8788/api/whoami` → `{"agent":"default"}`;
   `curl localhost:8788/api/runs` → `{runs:[...]}` (also triggers `reclaimRuns()`).
 - Killing the listener pid alone leaves a zombie — wrangler's supervisor
@@ -59,10 +69,15 @@ There is no public endpoint to create a run record directly: `POST /api/runs`
 only creates a *pending approval*, and `POST /api/approvals` is 404'd at the
 worker edge. The reliable seam is the agents-SDK state row in the DO sqlite.
 
-1. With wrangler running, hit `POST /api/runs` once (`{"repoUrl":"https://github.com/o/r","task":"x"}`)
-   so the `CodingOrchestrator` DO named `default` is created and its state row written.
+1. With wrangler running, hit `POST /api/runs` once (`{"repoUrl":"https://github.com/o/r","task":"x"}`
+   — returns `{"ok":true,"approvalId":…}`; it mints a *pending approval*, which is
+   what forces the first `setState` write). A bare `GET /api/runs` creates the DO
+   sqlite but NOT the `cf_state_row_id` row — it only exists after a state write.
+   The DO's sqlite filename is a hash — identify the `default`-named DO via
+   `SELECT * FROM __miniflare_do_name` inside each
+   `apps/backend/.wrangler/state/v3/do/shiba-ai-coworker-CodingOrchestrator/*.sqlite`.
 2. Stop wrangler (the DO caches `this._state` in memory — inject while stopped).
-3. Update the JSON state row:
+3. Update the JSON state row (merge — keep `pendingApprovals`, set `runs`):
 
 ```bash
 node -e '

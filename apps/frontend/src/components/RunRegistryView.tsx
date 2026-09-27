@@ -95,7 +95,7 @@ export function RunRegistryView({
             onClick={onRefresh}
             className="text-xs bg-[#fffef8] hover:bg-[#e0ded5] border border-[#e0ded5] text-[#222320] font-medium py-1.5 px-3 rounded-none transition-colors flex items-center gap-1.5"
           >
-            <svg className="w-3.5 h-3.5 text-[#6a6f63]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg aria-hidden="true"  className="w-3.5 h-3.5 text-[#6a6f63]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
             <span>Refresh</span>
@@ -183,7 +183,7 @@ export function RunRegistryView({
               placeholder="Search repository or task..."
               className="w-full bg-[#fffef8] text-xs font-mono text-[#222320] border border-[#e0ded5] rounded-none pl-8 pr-3 py-1.5 focus:outline-none focus:border-[#0000a8] placeholder:text-[#6a6f63]/50"
             />
-            <svg className="w-3.5 h-3.5 text-[#6a6f63] absolute left-2.5 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg aria-hidden="true"  className="w-3.5 h-3.5 text-[#6a6f63] absolute left-2.5 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
           </div>
@@ -217,7 +217,7 @@ export function RunRegistryView({
                     className="w-full text-left p-4 flex items-center justify-between cursor-pointer hover:bg-[#e0ded5]/30 select-none gap-3"
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <svg
+                      <svg aria-hidden="true" 
                         className={`w-4 h-4 text-[#6a6f63] transform transition-transform shrink-0 ${isExpanded ? "rotate-90 text-[#1c1cc8]" : ""}`}
                         fill="none"
                         viewBox="0 0 24 24"
@@ -265,7 +265,7 @@ export function RunRegistryView({
                           onClick={() => onInspectVM(run.runId)}
                           className="bg-[#0000a8] hover:bg-[#1c1cc8] text-white font-semibold text-xs px-3 py-1.5 rounded-none transition-colors flex items-center gap-1.5 shadow-[2px_2px_0_var(--paper-shadow)]"
                         >
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <svg aria-hidden="true"  className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                           </svg>

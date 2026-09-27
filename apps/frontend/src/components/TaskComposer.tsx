@@ -166,7 +166,7 @@ export function TaskComposer({
               className="bg-[#0000a8] hover:bg-[#1c1cc8] text-white font-semibold py-1.5 px-4 touch:min-h-11 touch:px-5 rounded-none transition-all disabled:opacity-40 disabled:cursor-not-allowed text-xs flex items-center gap-1.5 shadow-[2px_2px_0_var(--paper-shadow)] active:translate-y-px"
             >
               {isSubmitting ? "Sending…" : "Send"}
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg aria-hidden="true"  className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 12h14M13 6l6 6-6 6" />
               </svg>
             </button>

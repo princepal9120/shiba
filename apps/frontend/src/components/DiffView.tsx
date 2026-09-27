@@ -97,7 +97,7 @@ export function DiffView({
         {!activeRun ? (
           <div className="flex flex-col items-center justify-center py-16 border border-dashed border-[#e0ded5] rounded-none bg-[#fffef8] max-w-3xl mx-auto p-8 text-center">
             <div className="w-12 h-12 rounded-none bg-[#0000a8]/10 border border-[#0000a8]/20 text-[#0000a8] flex items-center justify-center mb-3">
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg aria-hidden="true"  className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 7v10M8 7a2 2 0 100-4 2 2 0 000 4zm0 10a2 2 0 100 4 2 2 0 000-4zm8-6v6m0-6a2 2 0 100-4 2 2 0 000 4zm0 6a2 2 0 100 4 2 2 0 000-4z" />
               </svg>
             </div>
@@ -145,7 +145,7 @@ export function DiffView({
         ) : (
           <div className="flex flex-col items-center justify-center py-16 border border-dashed border-[#e0ded5] rounded-none bg-[#fffef8] max-w-3xl mx-auto p-8 text-center">
             <div className="w-12 h-12 rounded-none bg-[#f6f4ed] border border-[#e0ded5] text-[#6a6f63] flex items-center justify-center mb-3">
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg aria-hidden="true"  className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
             </div>

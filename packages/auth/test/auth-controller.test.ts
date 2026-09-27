@@ -11,7 +11,7 @@ import {
   AuthFlowError,
   createAuthController,
   type AuthProviderHooks,
-} from "../src/auth/controller.js";
+} from "../src/controller.js";
 
 class FakeKV {
   readonly map = new Map<string, string>();
@@ -166,7 +166,7 @@ describe("storage", () => {
 
   it("type boundary: ProviderAuthController is importable from @shiba/shared", async () => {
     // Compile-time proof the harness-facing type crosses the boundary
-    // without importing src/auth — the interface is the shared export.
+    // without importing packages/auth — the interface is the shared export.
     const controller = createAuthController<TestEnv>(makeEnv().env, ID, hooks().h);
     const typed: import("@shiba/shared").ProviderAuthController = controller;
     const snap: AuthSnapshot = await typed.snapshot();

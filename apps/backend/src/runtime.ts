@@ -17,9 +17,13 @@ import {
   type LocalRunResult,
 } from "@shiba/shared";
 import { AntigravityErrorEvent } from "./harness/antigravity.js";
+import { AntigravityUsageLimitError } from "./harness/antigravity-subscription.js";
 import { ClaudeCodeErrorEvent } from "./harness/claude-code.js";
+import { ClaudeUsageLimitError } from "./harness/claude-subscription.js";
 import { CodexErrorEvent } from "./harness/codex.js";
+import { CodexUsageLimitError } from "./harness/codex-subscription.js";
 import { CursorErrorEvent } from "./harness/cursor.js";
+import { DevinErrorEvent } from "./harness/devin.js";
 import { GrokErrorEvent } from "./harness/grok.js";
 import { OpenCodeErrorEvent as OpenCodeErrorEventImpl, opencodeHarness } from "./harness/opencode.js";
 import { HARNESS_RETRY, withRetry } from "./harness/retry.js";
@@ -260,6 +264,10 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
         error instanceof CodexErrorEvent ||
         error instanceof GrokErrorEvent ||
         error instanceof CursorErrorEvent ||
+        error instanceof DevinErrorEvent ||
+        error instanceof ClaudeUsageLimitError ||
+        error instanceof CodexUsageLimitError ||
+        error instanceof AntigravityUsageLimitError ||
         error instanceof AntigravityErrorEvent
       ) {
         return failureResult(error.message, 0, "", signals);
@@ -600,9 +608,7 @@ function throwIfAborted(signal: AbortSignal | undefined): void {
 }
 
 /** Thrown when a streamed OpenCode event line is malformed. */
-export { OpenCodeEventError } from "./harness/opencode.js";
-export { OpenCodeErrorEvent } from "./harness/opencode.js";
-export { buildOpencodeArgv, buildOpencodeConfig, parseOpencodeEvent } from "./harness/opencode.js";
+export { buildOpencodeArgv, buildOpencodeConfig } from "./harness/opencode.js";
 
 interface OutputStream {
   onData: (stream: "stdout" | "stderr", data: string) => void;
@@ -640,8 +646,8 @@ function streamProgress(harness: AgentHarness, emit: ProgressEmitter, _signal?: 
         const line = buffer.slice(0, newline);
         buffer = buffer.slice(newline + 1);
         try {
-          const text = harness.parseEvent(line);
-          if (text) emitText(`[${harness.name}] ${text}`);
+          const event = harness.parseEvent(line);
+          if (event?.text.trim()) emitText(`[${harness.name}] ${event.text}`);
         } catch (error) {
           // Error events must propagate so the run fails honestly.
           if (
@@ -650,6 +656,10 @@ function streamProgress(harness: AgentHarness, emit: ProgressEmitter, _signal?: 
             error instanceof CodexErrorEvent ||
             error instanceof GrokErrorEvent ||
             error instanceof CursorErrorEvent ||
+            error instanceof DevinErrorEvent ||
+            error instanceof ClaudeUsageLimitError ||
+            error instanceof CodexUsageLimitError ||
+            error instanceof AntigravityUsageLimitError ||
             error instanceof AntigravityErrorEvent
           ) {
             throw error;
