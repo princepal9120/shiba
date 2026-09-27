@@ -17,12 +17,12 @@ this) · `PLAN.md` §17 (parity roadmap).
 ## 1. The one-paragraph version
 
 A single Cloudflare Worker is both the **API** and the **static host** for the
-React dashboard. Eight **Durable Objects** hold all state — the orchestrator
+React dashboard. Nine **Durable Objects** hold all state — the orchestrator
 conversation, the coding sub-agent, per-run sandbox control, automations,
 mailbox, memory, waitlist, and model config. The MCP gateway is stateless
 (`createMcpHandler` per request), not a DO. Work happens in an
 **ephemeral Sandbox container** (one per run, destroyed at the end) that clones
-a GitHub repo and executes one of five agent CLIs. Nothing starts until a human
+a GitHub repo and executes one of six agent binaries. Nothing starts until a human
 approves it, and the container's outbound network is allowlisted per run.
 
 ---
@@ -71,7 +71,7 @@ approves it, and the container's outbound network is allowlisted per run.
 | **Orchestration** | `agents/orchestrator.ts`, `automation-runner.ts` | Plans, exposes `delegate_coding_task`, queues approvals. Never touches a repo. |
 | **Execution** | `agents/opencode-agent.ts`, `harness/*`, `sandbox.ts`, `sandbox/lifecycle.ts` | Clone → exec harness → collect. Exactly one harness per run. |
 | **Egress control** | `egress.ts`, `sandbox.ts` (`allowedHosts`) | Deny-by-default; per-harness host list; TLS interception; scoped GitHub token. |
-| **State** | the eight DO classes | All durable state. No other store is authoritative. |
+| **State** | the nine DO classes | All durable state. No other store is authoritative. |
 | **Presentation** | `apps/frontend` (dashboard), `apps/web` (docs/marketing) | React dashboard; Astro docs. Both served via the Worker's `ASSETS` binding. |
 | **Deploy** | `alchemy.run.ts` (primary), `wrangler.jsonc` (rollback) | Both declare the same stack; wrangler remains a working rollback path. |
 
@@ -100,6 +100,7 @@ approves it, and the container's outbound network is allowlisted per run.
 | `Memory` | banked facts (+ Vectorize embeddings) | v5 |
 | `Waitlist` | signups | v6 |
 | `ModelConfig` | model connections + purpose policy | v7 |
+| `LocalDispatch` | local-runtime dispatch mailbox: pending/claimed/settled run envelopes | v9 |
 
 Migration tag **v4** created `McpGateway`. T29a moved the MCP gateway to a
 stateless `createMcpHandler` server (`mcp-gateway.ts` builds an SDK v2
@@ -159,17 +160,37 @@ Steps **3** and **6** are the load-bearing ones. Everything else is
 replaceable — which is why resumable runs (`PLAN.md` §4) and the parity waves
 can be built without touching them.
 
+**Local lane** (`runtime:"local"`, dark unless `SHIBA_LOCAL_RUNTIME=1`): the
+same intake → gate → approve → dispatch path, but step 5's container is
+replaced by the operator's own machine. `LocalRuntimeAdapter` posts a
+schema-checked envelope (`localRunEnvelopeSchema`) to the `LocalDispatch` DO;
+the operator-run daemon (`scripts/shiba-local-daemon.mjs`) polls
+`POST /api/local/claim` + `POST /api/local/result` behind a `LOCAL_ADAPTER_TOKEN`
+bearer, executes under the same exec/setup allowlists the envelope carries,
+returns receipts + diff, and the Worker runs the identical `harness.verify`
+verdict and PR publish. Chat intake is provably impossible: `queueSlackRun`
+refuses `runtime:"local"` unless the request carries the `X-Shiba-Intake:
+dashboard` voucher that only `handleRuns` stamps (inbound copies are deleted
+first). Capability opt-in: `opencode`, `claude-code`, `codex` declare
+`supportedRuntimes:["sandbox","local"]`; every other harness refuses.
+Provider credentials stay local — the dummy key is dropped from the envelope
+and config bodies reference `${OPENCODE_API_KEY}`-style placeholders resolved
+on the operator side.
+
 ---
 
 ## 7. Harnesses
 
-One image ships five CLIs; a run selects exactly one.
+One image ships six agent binaries; a run selects exactly one.
 
 | Harness | Binary | Default model | Credential |
 |---|---|---|---|
 | `opencode` | `opencode` | `google/gemini-3.5-flash-lite` | AI Gateway BYOK |
 | `claude-code` | `claude` | `anthropic/claude-sonnet-4-6` | AI Gateway BYOK |
+| `claude-subscription` (opt-in: `SHIBA_CLAUDE_SUBSCRIPTION=1`) | `claude` | `anthropic-subscription/claude-sonnet-4-6` | `CLAUDE_SUBSCRIPTION_TOKEN` secret on a dedicated egress branch — bypasses AI Gateway |
 | `codex` | `codex` | `openai/gpt-5.3-codex` | AI Gateway BYOK |
+| `codex-subscription` (opt-in: `SHIBA_CODEX_SUBSCRIPTION=1`) | `codex` | `openai-subscription/gpt-5.3-codex` | `CODEX_SUBSCRIPTION_AUTH_JSON` secret (auth.json contents) on a dedicated chatgpt.com egress branch — bypasses AI Gateway; container CODEX_HOME gets a stub auth.json in a per-account shadow overlay |
+| `antigravity-subscription` (opt-in: `SHIBA_ANTIGRAVITY_SUBSCRIPTION=1`) | `agy` (ACP server, pinned in image) | `google-subscription/gemini-3-pro` | In-container OAuth — no Worker credential. `POST /api/auth/antigravity-subscription/begin` boots an auth sandbox that prints the Google URL; the operator signs in and pastes the dead `127.0.0.1` redirect into `POST /api/antigravity/callback`, which forwards it to the container listener. Tokens live only in the per-account profile under `/root/.shiba/antigravity/` |
 | `devin` | `devin` | `devin/swe-2` | `DEVIN_API_KEY` secret |
 | `grok` | `grok` | `xai/grok-4.6` (medium reasoning) | AI Gateway BYOK |
 

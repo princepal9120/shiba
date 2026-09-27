@@ -15,7 +15,7 @@
  * api.devin.ai accepts `Authorization: Bearer <key>` (verified 200 on
  * /v3/self). `-p` prints a plain-text response, not an event stream.
  */
-import type { CodingTaskInput } from "../opencode-input.js";
+import type { CodingTaskInput, CodingTaskResult } from "../opencode-input.js";
 import { DUMMY_PROVIDER_KEY } from "../provider-gateway.js";
 import { boundTail } from "../security.js";
 import {
@@ -23,6 +23,9 @@ import {
   PROVIDER_KEY_ENV,
   type AgentHarness,
   type HarnessConfigFile,
+  type HarnessCapabilities,
+  type VerificationOutcome,
+  verifyRunOutcome,
 } from "./types.js";
 
 /** Devin is its own provider namespace: codingModel is "devin/<model-alias>". */
@@ -129,6 +132,17 @@ export class DevinHarness implements AgentHarness {
   parseEvent(line: string): string | null {
     return parseDevinEvent(line);
   }
+  /** T43 declared capabilities — the gates read this, not the name. */
+  capabilities(_model?: string): HarnessCapabilities {
+    return { streamsText: true, emitsToolCalls: false, supportsResume: true, supportsSteering: false, supportsFileAttachments: false, canRunTests: true, supportsConversationRollback: false, execAllowlist: [["pnpm","test"],["npm","test"],["bun","test"],["pnpm","vitest","run"],["npx","vitest","run"]],
+      supportedRuntimes: ["sandbox"] };
+  }
+
+  /** Deterministic outcome check — gates the completed claim (T43/T46 feed). */
+  async verify(input: CodingTaskInput, result: CodingTaskResult): Promise<VerificationOutcome> {
+    return verifyRunOutcome(input, result, this.capabilities(input.codingModel));
+  }
+
 }
 
 export const devinHarness = new DevinHarness();

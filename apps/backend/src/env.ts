@@ -31,6 +31,13 @@ export interface Env {
    * across agents (megaplan T8, see `memory-do.ts`).
    */
   Memory: DurableObjectNamespace;
+  /**
+   * T51: the LocalDispatch mailbox DO — the single serialized claim point
+   * between a local runtime dispatch and the operator daemon that runs it.
+   * Optional so a deployment without the local runtime (or a test env
+   * without the binding) never resolves a stub it cannot serve.
+   */
+  LocalDispatch?: DurableObjectNamespace;
   /** Deployment-wide model connection catalog and purpose policy. */
   ModelConfig: DurableObjectNamespace;
   /** Private launch/contributor registrations. */
@@ -110,8 +117,20 @@ export interface Env {
   DISCORD_AGENT_HARNESS?: string;
   /** Optional. Harness for Slack-originated runs; defaults to AGENT_HARNESS, then "claude-code". */
   SLACK_AGENT_HARNESS?: string;
-  /** "sandbox" (default) or "computer" (preview-only refusal). */
+  /** "sandbox" (default), "computer" (preview-only refusal), or "local". */
   RUNTIME?: string;
+  /**
+   * T51 opt-in flag (§18.13): "1" admits `runtime: "local"` at intake and
+   * opens the /api/local daemon surface. Off by default — absent, every
+   * local-runtime request refuses 403 before any approval exists.
+   */
+  SHIBA_LOCAL_RUNTIME?: string;
+  /**
+   * T51 daemon credential: the bearer the operator's `shiba local` daemon
+   * presents on /api/local/claim and /api/local/result. Unset = the
+   * surface refuses every request even when the flag is on.
+   */
+  LOCAL_ADAPTER_TOKEN?: string;
   /**
    * Deploy-time container size. Must match wrangler `containers.instance_type`.
    * lite | basic | standard-1 | standard-2 | standard-3 | standard-4.
@@ -164,6 +183,48 @@ export interface Env {
   GITHUB_PROJECT_NUMBER?: string;
   /** Optional. Server-side credential for AI Gateway. Never sent to containers. */
   AI_GATEWAY_TOKEN?: string;
+  /**
+   * T48 opt-in flag (§18.10): "1" registers the claude-subscription harness.
+   * Absent it is unregistered, uncataloged, and unselectable — the
+   * subscription path is dark unless the deployment owner enables it.
+   */
+  SHIBA_CLAUDE_SUBSCRIPTION?: string;
+  /**
+   * T48 credential: the operator's `claude setup-token` output, stored as a
+   * Wrangler secret and read only by the subscription egress branch —
+   * the container holds a placeholder credentials.json, never the token.
+   * Named accounts: CLAUDE_SUBSCRIPTION_TOKEN_<ACCOUNT> (resolved by name,
+   * not declared here). Unset means no subscription account is provisioned.
+   */
+  CLAUDE_SUBSCRIPTION_TOKEN?: string;
+  /** T48: per-deploy model override for the claude-subscription harness. */
+  CLAUDE_SUBSCRIPTION_MODEL?: string;
+  /**
+   * T49 opt-in flag (§18.11): "1" registers the codex-subscription harness.
+   * A distinct var so an operator can enable one subscription provider
+   * without the other; absent it is unregistered and unselectable.
+   */
+  SHIBA_CODEX_SUBSCRIPTION?: string;
+  /**
+   * T49 credential: the auth.json file contents produced by `codex login`,
+   * stored verbatim as a Wrangler secret and read only by the subscription
+   * egress branch — the container's CODEX_HOME holds a stub auth.json,
+   * never the real tokens. Named accounts:
+   * CODEX_SUBSCRIPTION_AUTH_JSON_<ACCOUNT> (resolved by name).
+   */
+  CODEX_SUBSCRIPTION_AUTH_JSON?: string;
+  /** T49: per-deploy model override for the codex-subscription harness. */
+  CODEX_SUBSCRIPTION_MODEL?: string;
+  /**
+   * T50 opt-in flag (§18.12): "1" registers the antigravity-subscription
+   * harness and opens the /api/auth/antigravity-subscription verbs plus the
+   * /api/antigravity/callback route. No credential var exists — Google
+   * OAuth tokens are written by the ACP process into the container
+   * profile, never stored on the Worker.
+   */
+  SHIBA_ANTIGRAVITY_SUBSCRIPTION?: string;
+  /** T50: per-deploy model override for the antigravity-subscription harness. */
+  ANTIGRAVITY_SUBSCRIPTION_MODEL?: string;
   /**
    * Optional. Devin account API key for the devin harness — injected as a
    * Bearer header by the egress forwarders on api.devin.ai and

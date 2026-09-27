@@ -49,10 +49,12 @@ describe("the selected harness reaches the adapter that runs it", () => {
       readFile: async () => ({ kind: "utf8" as const, content: "" }),
     };
     await adapter.runCodingTask(ops, input("openai/gpt-5"), async () => {});
-    // The agent invocation is the first exec; anything starting "opencode"
-    // means the selection was dropped and egress would block its provider.
-    expect(execs[0]).toMatch(/^'codex' 'exec'/);
-    expect(execs[0]).not.toMatch(/opencode/);
+    // T44: checkpoint git commands precede the harness exec — find the
+    // harness invocation itself; anything starting "opencode" means the
+    // selection was dropped and egress would block its provider.
+    const harnessExec = execs.find((c) => c.includes("'exec'") || c.includes("'run'"));
+    expect(harnessExec).toMatch(/^'codex' 'exec'/);
+    expect(harnessExec).not.toMatch(/opencode/);
   });
 });
 
@@ -79,8 +81,9 @@ describe("per-run harness selection end to end", () => {
       readFile: async () => ({ kind: "utf8" as const, content: "" }),
     };
     await adapter.runCodingTask(ops, approved, async () => {});
-    expect(execs[0]).toMatch(/^'codex' 'exec'/);
-    expect(execs[0]).toContain("gpt-5.3-codex");
+    const harnessExec = execs.find((c) => c.includes("'exec'"));
+    expect(harnessExec).toMatch(/^'codex' 'exec'/);
+    expect(harnessExec).toContain("gpt-5.3-codex");
   });
 
   it("an unsupported provider for the approved harness fails at approval, not exec", () => {
@@ -233,7 +236,7 @@ describe("devin harness", () => {
   it("resolves by name and defaults to the free swe-2 model", () => {
     expect(resolveHarness("devin").name).toBe("devin");
     expect(resolveHarness("DEVIN").name).toBe("devin");
-    expect(HARNESS_DEFAULT_MODELS.devin).toBe("devin/swe-2");
+    expect(HARNESS_DEFAULT_MODELS.devin).toBe("devin/swe-2-medium");
   });
 
   it("runs headless with the bare model alias and bypass inside the sandbox", () => {
@@ -375,7 +378,7 @@ describe("agent cli catalog", () => {
     expect(catalog.find((a) => a.id === "grok")?.version).toBe("1.0.41");
     expect(catalog.find((a) => a.id === "grok")?.defaultModel).toBe("xai/grok-4.6");
     expect(catalog.find((a) => a.id === "devin")?.version).toBe("3000.10.31");
-    expect(catalog.find((a) => a.id === "devin")?.defaultModel).toBe("devin/swe-2");
+    expect(catalog.find((a) => a.id === "devin")?.defaultModel).toBe("devin/swe-2-medium");
   });
 
   it("reports devin's secret presence without exposing the value", () => {

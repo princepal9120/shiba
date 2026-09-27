@@ -5,19 +5,27 @@
  */
 export {
   APPROVAL_TTL_MS,
+  approvalEvidenceFor,
+  automationCommandId,
   createPendingApproval,
   decidedApprovals,
   DECIDED_APPROVALS_LIMIT,
   isApprovalExpired,
   isJsonObject,
   isJsonValue,
+  MAX_COMMAND_RECEIPTS,
   pruneExpiredApprovals,
+  putCommandReceipt,
   recordApprovalExecution,
   resolvePendingApproval,
+  runInputHash,
 } from "@shiba/shared";
 export type {
+  ApprovalEvidence,
   ApprovalExecution,
   ApprovalKind,
+  CommandKind,
+  CommandReceipt,
   CreateApprovalInput,
   JsonArray,
   JsonObject,
@@ -25,4 +33,5 @@ export type {
   PendingApproval,
   ResolveApprovalInput,
   ResolveResult,
+  RunInputFields,
 } from "@shiba/shared";

@@ -88,7 +88,7 @@ export function shellQuote(arg: string): string {
 }
 
 /** Join argv into one shell command string with every argument quoted. */
-export function shellJoin(argv: string[]): string {
+export function shellJoin(argv: readonly string[]): string {
   return argv.map(shellQuote).join(" ");
 }
 
@@ -146,6 +146,21 @@ export function boundTail(text: string, maxChars: number): string {
   if (maxChars <= 0) return "";
   if (text.length <= maxChars) return text;
   return `…[truncated ${text.length - maxChars} chars]\n${text.slice(-maxChars)}`;
+}
+
+/**
+ * Constant-time string equality — for bearer-token compares where
+ * crypto.subtle.timingSafeEqual is not in the runtime's type surface.
+ * Lengths are compared first; a length mismatch rejects before the loop
+ * so no prefix information leaks.
+ */
+export function timingSafeEqualString(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return diff === 0;
 }
 
 /**

@@ -12,12 +12,17 @@ import { Effect } from "effect";
 import { z } from "zod";
 import type { Env } from "../env.js";
 import {
+  LOCAL_INTAKE_DASHBOARD,
+  LOCAL_INTAKE_HEADER,
+  LOCAL_RUNTIME_FLAG,
+  runtimeSelectionSchema,
+} from "@shiba/shared";
+import {
   formatAgentToolInput,
   parseAgentResult,
   type CodingTaskInput,
 } from "../opencode-input.js";
 import {
-  MAX_CONCURRENT_RUNS,
   RUN_DEADLINE_MS,
   RunStore,
   AGENT_PRINCIPAL_HEADER,
@@ -33,13 +38,16 @@ import {
 import { makeReceipt } from "../receipts.js";
 import { createRunCodeTool } from "../codemode.js";
 import {
+  approvalEvidenceFor,
   createPendingApproval,
   decidedApprovals,
   isApprovalExpired,
   isJsonObject,
   pruneExpiredApprovals,
+  putCommandReceipt,
   recordApprovalExecution,
   resolvePendingApproval,
+  type CommandReceipt,
   type PendingApproval,
   type ResolveResult,
 } from "../pending-approvals.js";
@@ -68,12 +76,13 @@ import {
 } from "../slack-persona.js";
 import { postSlackMessage } from "../slack.js";
 import { extractPullRequestUrl } from "../transcript.js";
-import { HARNESS_DEFAULT_MODELS, allowedHostsFor, resolveHarness } from "../harness/index.js";
+import { HARNESS_DEFAULT_MODELS, allowedHostsFor, harnessRunsOn, resolveHarness } from "../harness/index.js";
 import { describeRoute, isApprovedRoute, type ApprovedRoute } from "../model-connections.js";
 import { readModelConfig, revalidateCodingRoute, resolveCodingRoute } from "../model-policy.js";
 import { OpenCodeAgent } from "./opencode-agent.js";
 import {
   MAX_SESSIONS_PER_USER,
+  isDashboardAgentName,
   sanitizeSessionMetadata,
   sanitizeSessionName,
   validateSessionRecordIntegrity,
@@ -95,6 +104,13 @@ export interface OrchestratorState {
    * a request already past that check, or a socket opened before it.
    */
   sessionDeletedAt?: number;
+  /**
+   * Durable command receipts (T41): one per processed command, keyed by
+   * commandId and committed in the same setState write as the decision
+   * or run it records. A retried resolve or queue reads the receipt and
+   * answers from it instead of re-running the effect.
+   */
+  commandReceipts?: Record<string, CommandReceipt>;
 }
 
 /** A classified error lands as its matching terminal status. */
@@ -122,11 +138,21 @@ const delegateInputSchema = z.object({
     .default(false)
     .describe("Open a pull request with the result. Requires GITHUB_TOKEN."),
   harness: z
-    .enum(["opencode", "claude-code", "codex", "devin", "grok"])
+    .enum(["opencode", "claude-code", "claude-subscription", "codex", "devin", "grok"])
     .optional()
     .describe(
       "Coding agent harness. Defaults to the deployment's AGENT_HARNESS, else opencode. " +
-        "claude-code needs an anthropic/* model; codex needs an openai/* model; devin needs a devin/* model; grok needs an xai/* model.",
+        "claude-code needs an anthropic/* model; claude-subscription needs an anthropic-subscription/* model and is only " +
+        "registered on deployments with SHIBA_CLAUDE_SUBSCRIPTION=1; codex needs an openai/* model; " +
+        "devin needs a devin/* model; grok needs an xai/* model.",
+    ),
+  authAccount: z
+    .string()
+    .regex(/^[a-z0-9][a-z0-9-]{0,31}$/)
+    .optional()
+    .describe(
+      "Subscription account name for subscription-authed harnesses (e.g. claude-subscription). " +
+        "Maps to a named Worker secret; 'default' when absent. Never a credential.",
     ),
   codingModel: z
     .string()
@@ -141,6 +167,22 @@ const delegateInputSchema = z.object({
     .describe(
       "Model connection id (conn_*) from the deployment's connection catalog. " +
         "Defaults to the deployment's implicit gateway/secret default.",
+    ),
+  testCommand: z
+    .array(z.string().min(1))
+    .max(8)
+    .optional()
+    .describe(
+      "The project's test command as argv, e.g. [\"pnpm\",\"test\"]. Runs in the " +
+        "sandbox through the scoped exec allowlist; the run only reports " +
+        "completed when the command is allowlisted and exits 0.",
+    ),
+  runtime: runtimeSelectionSchema
+    .optional()
+    .describe(
+      "Execution runtime: \"sandbox\" (default) runs in an isolated container; " +
+        "\"local\" runs on the operator's machine through the local daemon. \"local\" " +
+        "is admissible only from the dashboard on a deployment with SHIBA_LOCAL_RUNTIME=1.",
     ),
 });
 
@@ -206,6 +248,18 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
 
   private writeApprovals(next: PendingApproval[]): void {
     this.setState({ ...this.state, pendingApprovals: next });
+  }
+
+  private commandReceipt(commandId: string): CommandReceipt | undefined {
+    return this.state?.commandReceipts?.[commandId];
+  }
+
+  private withCommandReceipt(receipt: CommandReceipt): Record<string, CommandReceipt> {
+    return putCommandReceipt(this.state?.commandReceipts ?? {}, receipt);
+  }
+
+  private recordCommandReceipt(receipt: CommandReceipt): void {
+    this.setState({ ...this.state, commandReceipts: this.withCommandReceipt(receipt) });
   }
 
   get storedWebSessions(): WebSessionRecord[] {
@@ -342,6 +396,57 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         this.dispatchApprovedEmail(approval);
       }
     }
+    // Run-kind mirror of the email re-drive (T41): an eviction between
+    // the persisted decision and the dispatch leaves `approved` with no
+    // run — or a pending run whose dispatch never ran — and nothing to
+    // re-drive it. The command receipt bounds the re-drive: once
+    // `dispatched` is recorded the command is done, even if the run
+    // never reached a terminal state (a stranded pending run stays
+    // operator-visible and cancelable rather than silently re-fired).
+    for (const approval of this.approvals) {
+      if (
+        approval.status !== "approved" ||
+        approval.kind === "email_send" ||
+        approval.kind === "email_delete"
+      ) {
+        continue;
+      }
+      const commandId = `approval:${approval.approvalId}`;
+      const receipt = this.commandReceipt(commandId);
+      if (receipt?.dispatched === true) {
+        continue;
+      }
+      const runId = `agent-tool:${approval.approvalId}`;
+      const receiptDone = {
+        commandId,
+        kind: "approval.resolve" as const,
+        outcome: "approved",
+        threadKey: approval.threadKey,
+        approvalId: approval.approvalId,
+        runId,
+        dispatched: true,
+        at: Date.now(),
+      };
+      if (this.store.get(runId) !== null) {
+        // The dispatch ran — the run record exists and the interrupt
+        // pass above already stamped any active status unknown. Just
+        // record that the command completed.
+        this.recordCommandReceipt(receiptDone);
+        continue;
+      }
+      // Capacity still applies across a restart — a deferred re-drive
+      // retries on the next one rather than oversubscribing the pool.
+      if (!canStartRun(this.store.list())) {
+        continue;
+      }
+      const run = this.mintApprovedRun(approval);
+      this.setState({
+        ...this.state,
+        runs: [...this.store.list(), run],
+        commandReceipts: this.withCommandReceipt(receiptDone),
+      });
+      this.dispatchApprovedRun(run, approval, approval.approvalId);
+    }
     this.sweepStaleDrafts(true);
   }
 
@@ -397,17 +502,23 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
 
   private resolveHarnessAndModel(input: DelegateInput): { harness: string; codingModel: string } {
     const harnessName = input.harness ?? this.env.AGENT_HARNESS?.trim() ?? "opencode";
-    const harness = resolveHarness(harnessName);
+    const harness = resolveHarness(harnessName, this.env);
     const perHarnessVar =
       harness.name === "opencode"
         ? this.env.CODING_MODEL?.trim()
         : harness.name === "claude-code"
           ? this.env.CLAUDE_CODE_MODEL?.trim()
-          : harness.name === "codex"
-            ? this.env.CODEX_MODEL?.trim()
-            : harness.name === "grok"
-              ? this.env.GROK_MODEL?.trim()
-              : this.env.DEVIN_MODEL?.trim();
+          : harness.name === "claude-subscription"
+            ? this.env.CLAUDE_SUBSCRIPTION_MODEL?.trim()
+            : harness.name === "codex-subscription"
+              ? this.env.CODEX_SUBSCRIPTION_MODEL?.trim()
+              : harness.name === "antigravity-subscription"
+                ? this.env.ANTIGRAVITY_SUBSCRIPTION_MODEL?.trim()
+              : harness.name === "codex"
+              ? this.env.CODEX_MODEL?.trim()
+              : harness.name === "grok"
+                ? this.env.GROK_MODEL?.trim()
+                : this.env.DEVIN_MODEL?.trim();
     const codingModel =
       input.codingModel?.trim() ||
       perHarnessVar ||
@@ -469,20 +580,33 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         abortSignal?.throwIfAborted();
         if (this.sessionDeleted) throw new Error("Session deleted.");
       });
-      const runs = this.store.list();
       const callId = toolCallId ?? crypto.randomUUID();
       const runId = `agent-tool:${callId}`;
       const reserved = this.store.get(runId);
-      if (!reserved && this.approvals.some((approval) => approval.approvalId === callId && approval.status === "approved")) {
+      const pointer = this.approvals.find((approval) => approval.approvalId === callId);
+      if (!reserved && pointer?.status === "approved") {
         return "Run was removed before execution.";
       }
       if (reserved && reserved.status !== "pending") {
         return reserved.summary ?? reserved.error ?? `Run is ${reserved.status}.`;
       }
-      if (!reserved && !canStartRun(runs)) {
-        throw new Error(
-          `Already running ${MAX_CONCURRENT_RUNS} coding tasks. Wait for one to finish before starting another.`,
-        );
+      // T40 gate: the only production caller is the /api/approvals resolve
+      // dispatch, which mints the reserved run carrying approval evidence.
+      // An execute with no approved pointer was a latent bypass — refuse it
+      // instead of queueing a run the decider could never legally start.
+      if (!reserved) {
+        return "Run is not approved to execute.";
+      }
+      // T51 dispatch-side check — the queued record's frozen runtime is what
+      // counts; the intake gate can never be bypassed by a chat-surface tool
+      // call because a `default`/`slack:*` DO fails isDashboardAgentName.
+      if (input.runtime === "local" || reserved.runtime === "local") {
+        if (reserved.runtime !== input.runtime) {
+          return "Approved input does not match this call's runtime.";
+        }
+        if (this.env[LOCAL_RUNTIME_FLAG] !== "1" || !isDashboardAgentName(this.name)) {
+          return "runtime \"local\" requires SHIBA_LOCAL_RUNTIME=1 and a dashboard session.";
+        }
       }
       parseGitHubRepoUrl(input.repoUrl);
       if (input.publishPullRequest && !this.env.GITHUB_TOKEN) {
@@ -496,7 +620,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       // route frozen on its pointer verbatim; a fresh tool call resolves it
       // now. Either way the route is revalidated just before dispatch — a
       // revoked connection fails the run honestly, never a substitution.
-      const frozen = reserved?.route;
+      const frozen = reserved.route;
       const { harness: resolvedHarness, codingModel, route } = frozen !== undefined && isApprovedRoute(frozen)
         ? { harness: frozen.harness, codingModel: frozen.modelId, route: frozen }
         : yield* Effect.promise(() => this.resolveRoute(input));
@@ -514,18 +638,9 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         harness: resolvedHarness as CodingTaskInput["harness"],
         route,
         ...(slackIds ? { slackThread: { channelId: slackIds.channelId, threadTs: slackIds.threadTs } } : {}),
+        ...(input.testCommand ? { testCommand: input.testCommand } : {}),
+        ...(input.authAccount ? { authAccount: input.authAccount } : {}),
       };
-      if (!reserved) this.store.add(
-        createRun({
-          runId,
-          sandboxId,
-          repoUrl: fullInput.repoUrl,
-          task: fullInput.task,
-          baseBranch: fullInput.baseBranch,
-          publishPullRequest: fullInput.publishPullRequest,
-          route,
-        }),
-      );
       // Chat-originated runs get the outcome back in the thread in the
       // coworker voice; the summary carries the PR link when one was published.
       const finish = (status: RunStatus, patch?: RunPatch, threadText?: string): DelegatedRun | null => {
@@ -543,7 +658,12 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         }
         return updated;
       };
-      const running = this.store.transition(runId, "running", undefined, this.store.get(runId)?.generation);
+      // T40: `start` re-asserts the approval that reserved this run —
+      // evidence is re-derived from the pointer when it still reads
+      // approved, otherwise the stored evidence on the record stands.
+      const startEvidence =
+        pointer?.status === "approved" ? approvalEvidenceFor(pointer, reserved) : reserved.approval;
+      const running = this.store.transition(runId, "running", undefined, this.store.get(runId)?.generation, startEvidence);
       if (running === null || running.status !== "running") {
         return `Run ${runId} did not start — it is already ${this.store.get(runId)?.status ?? "missing"}.`;
       }
@@ -624,6 +744,9 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
                     // T33: the stored screenshot link rides the same envelope;
                     // a failed capture arrives as an absent field → null.
                     screenshotUrl: parsed.screenshotUrl ?? null,
+                    // T42: the typed milestones ride the same envelope and
+                    // land on the row — a waiter reads signals, not clocks.
+                    signals: parsed.signals,
                   },
                   slackRunCompleted({
                     repoUrl: fullInput.repoUrl,
@@ -673,6 +796,9 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
                 summary: output.slice(0, 4000),
                 error: redactSecrets(parsed?.summary ?? output.slice(0, 4000)).slice(0, 4000),
                 errorCode: failure.code,
+                // T42: partial signals survive a failed run — the missing
+                // milestones name the phase it never reached.
+                signals: parsed?.signals,
               }, slackRunFailed({
                 repoUrl: fullInput.repoUrl,
                 userMessage: runErrorWire(failure.code).userMessage,
@@ -732,13 +858,24 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
    * the pointer via POST /api/approvals. Email-kind approvals freeze a
    * mailbox payload instead of a run input.
    */
-  private async queueSlackRun(input: { repoUrl?: unknown; task?: unknown; baseBranch?: unknown; publishPullRequest?: unknown; harness?: unknown; codingModel?: unknown; connectionId?: unknown; threadKey?: unknown; kind?: unknown; mailbox?: unknown; payload?: unknown; queuedBy?: unknown }): Promise<Response> {
+  private async queueSlackRun(input: { repoUrl?: unknown; task?: unknown; baseBranch?: unknown; publishPullRequest?: unknown; harness?: unknown; codingModel?: unknown; connectionId?: unknown; authAccount?: unknown; runtime?: unknown; intake?: unknown; threadKey?: unknown; kind?: unknown; mailbox?: unknown; payload?: unknown; queuedBy?: unknown; commandId?: unknown }): Promise<Response> {
     const kind = typeof input.kind === "string" && input.kind.trim() ? input.kind.trim() : "run";
     if (kind === "email_send" || kind === "email_delete") {
       return this.queueEmailApprovalRecord(kind, input);
     }
     if (kind !== "run") {
       return Response.json({ error: `Unknown approval kind "${kind}".` }, { status: 400 });
+    }
+    // T41: a caller-deterministic commandId makes a retried queue safe —
+    // the receipt answers with the minted approvalId, never a second mint.
+    const queueCommandId = typeof input.commandId === "string" && input.commandId.trim()
+      ? `queue:${input.commandId.trim().slice(0, 200)}`
+      : undefined;
+    if (queueCommandId !== undefined) {
+      const prior = this.commandReceipt(queueCommandId);
+      if (prior !== undefined && prior.approvalId !== undefined) {
+        return Response.json({ ok: true, approvalId: prior.approvalId, deduped: true });
+      }
     }
     const repoUrl = typeof input.repoUrl === "string" ? input.repoUrl : "";
     const task = typeof input.task === "string" ? input.task : "";
@@ -755,7 +892,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     const harness = typeof input.harness === "string" && input.harness.trim() ? input.harness.trim() : undefined;
     if (harness !== undefined) {
       try {
-        resolveHarness(harness);
+        resolveHarness(harness, this.env);
       } catch (error) {
         return Response.json({ error: error instanceof Error ? error.message : "Unknown agent harness." }, { status: 400 });
       }
@@ -782,6 +919,31 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     } catch (error) {
       return Response.json({ error: error instanceof Error ? error.message : "Unsupported model route." }, { status: 400 });
     }
+    // T51 intake boundary — the sharpest edge in the plan. `runtime: "local"`
+    // is admitted only when BOTH hold: the deployment opted in
+    // (SHIBA_LOCAL_RUNTIME=1) AND the request arrived through the Worker's
+    // authenticated /api/runs path, which stamps X-Shiba-Intake: dashboard
+    // after deleting any inbound copy. Slack, email, MCP, and automation
+    // posts never carry that voucher — they refuse here, before an approval
+    // exists. The delegate tool path re-checks the same rule against the DO
+    // name in executeDelegatedTask.
+    const runtimeRaw = typeof input.runtime === "string" ? input.runtime.trim() : "";
+    if (runtimeRaw !== "" && runtimeRaw !== "sandbox" && runtimeRaw !== "local") {
+      return Response.json({ error: `Unknown runtime "${runtimeRaw.slice(0, 40)}": expected "sandbox" or "local".` }, { status: 400 });
+    }
+    const runtime = runtimeRaw === "local" ? ("local" as const) : undefined;
+    if (runtime === "local") {
+      if (this.env[LOCAL_RUNTIME_FLAG] !== "1") {
+        return Response.json({ error: "The local runtime is not enabled on this deployment (SHIBA_LOCAL_RUNTIME=1)." }, { status: 403 });
+      }
+      if (input.intake !== LOCAL_INTAKE_DASHBOARD) {
+        return Response.json({ error: "runtime \"local\" is admitted only through the dashboard." }, { status: 403 });
+      }
+      const localHarness = route !== undefined ? resolveHarness(route.harness, this.env) : undefined;
+      if (localHarness === undefined || !harnessRunsOn(localHarness, "local")) {
+        return Response.json({ error: `Harness "${route?.harness ?? harness ?? "default"}" does not run on the local runtime.` }, { status: 400 });
+      }
+    }
     const approvalId = crypto.randomUUID();
     const threadKey = typeof input.threadKey === "string" && input.threadKey.trim() ? input.threadKey.trim() : "default";
     // Flood guard: pending approvals persist in DO state — an uncapped queue
@@ -791,21 +953,43 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       return Response.json({ error: "Approval queue is full — resolve pending approvals first." }, { status: 429 });
     }
     try {
-      this.writeApprovals(createPendingApproval(this.approvals, {
-        threadKey,
-        approvalId,
-        repoUrl,
-        task: task.slice(0, 4000),
-        baseBranch: typeof input.baseBranch === "string" && input.baseBranch.trim() ? input.baseBranch.slice(0, 200) : "main",
-        publishPullRequest,
-        route,
-        // Worker-vouched principal (X-Agent-Principal) — never the raw body,
-        // so an operator-queued record can't be claimed by an agent token.
-        ...(typeof input.queuedBy === "string" && input.queuedBy.trim()
-          ? { queuedBy: input.queuedBy.trim().slice(0, 200) }
+      // Approval mint and its queue receipt commit in one state write.
+      this.setState({
+        ...this.state,
+        pendingApprovals: createPendingApproval(this.approvals, {
+          threadKey,
+          approvalId,
+          repoUrl,
+          task: task.slice(0, 4000),
+          baseBranch: typeof input.baseBranch === "string" && input.baseBranch.trim() ? input.baseBranch.slice(0, 200) : "main",
+          publishPullRequest,
+          route,
+          // T48: the approved subscription account name, frozen with the input.
+          ...(typeof input.authAccount === "string" && input.authAccount.trim()
+            ? { authAccount: input.authAccount.trim().slice(0, 32) }
+            : {}),
+          // T51: the approved runtime rides the hashed frozen input.
+          ...(runtime !== undefined ? { runtime } : {}),
+          // Worker-vouched principal (X-Agent-Principal) — never the raw body,
+          // so an operator-queued record can't be claimed by an agent token.
+          ...(typeof input.queuedBy === "string" && input.queuedBy.trim()
+            ? { queuedBy: input.queuedBy.trim().slice(0, 200) }
+            : {}),
+          createdAt: Date.now(),
+        }),
+        ...(queueCommandId !== undefined
+          ? {
+              commandReceipts: this.withCommandReceipt({
+                commandId: queueCommandId,
+                kind: "run.queue",
+                outcome: "queued",
+                approvalId,
+                threadKey,
+                at: Date.now(),
+              }),
+            }
           : {}),
-        createdAt: Date.now(),
-      }));
+      });
     } catch (error) {
       return Response.json({ error: error instanceof Error ? error.message : "Could not queue approval." }, { status: 409 });
     }
@@ -962,6 +1146,15 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       return Response.json({ error: "Invalid approval payload." }, { status: 400 });
     }
     const decidedBy = typeof rawDecidedBy === "string" && rawDecidedBy.trim() ? rawDecidedBy.slice(0, 200) : "unknown";
+    // A retried resolve (double-clicked card, redelivered callback) reads
+    // the durable command receipt and learns the original answer instead
+    // of re-litigating the decision — the receipt, the pointer update,
+    // and the run mint committed in one state write.
+    const commandId = `approval:${approvalId}`;
+    const prior = this.commandReceipt(commandId);
+    if (prior !== undefined && prior.threadKey === threadKey) {
+      return Response.json({ result: prior.outcome });
+    }
     if (approved) await this.reclaimRuns();
     const now = Date.now();
     const result = resolvePendingApproval(this.approvals, { threadKey, approvalId, approved, decidedBy }, now);
@@ -1008,79 +1201,27 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
           )
         : undefined;
     const isEmailRecord = record !== undefined && (record.kind === "email_send" || record.kind === "email_delete");
-    const run = record && !isEmailRecord ? createRun({
-      runId: `agent-tool:${approvalId}`,
-      sandboxId: makeSandboxId(record.repoUrl, record.task, approvalId),
-      repoUrl: record.repoUrl,
-      task: record.task,
-      baseBranch: record.baseBranch ?? "main",
-      publishPullRequest: record.publishPullRequest ?? false,
-      queuedBy: record.queuedBy,
-      ...(record.route ? { route: record.route } : {}),
-    }) : undefined;
-    // One state write reserves capacity and records the decision before any await.
+    const run = record && !isEmailRecord ? this.mintApprovedRun(record) : undefined;
+    // One state write reserves capacity, records the decision, and
+    // commits the command receipt — a redelivery after this point
+    // answers from the receipt, never re-dispatches (T41).
     this.setState({
       ...this.state,
       pendingApprovals: approvals,
       runs: run ? [...this.store.list(), run] : this.store.list(),
+      commandReceipts: this.withCommandReceipt({
+        commandId,
+        kind: "approval.resolve",
+        outcome: result.result,
+        threadKey,
+        approvalId,
+        ...(run !== undefined ? { runId: run.runId } : {}),
+        ...(result.result === "approved" ? { dispatched: true } : {}),
+        at: now,
+      }),
     });
     if (run) {
-      const dispatch = async () => {
-        const generation = this.store.get(run.runId)?.generation;
-        try {
-          const delegate = this.getTools()["delegate_coding_task"] as {
-            execute: (input: unknown, options?: unknown) => Promise<unknown>;
-          };
-          await delegate.execute({
-            repoUrl: run.repoUrl,
-            task: run.task,
-            baseBranch: run.baseBranch,
-            publishPullRequest: run.publishPullRequest,
-            // The frozen route is the exact approved input: harness, model,
-            // and connection ride the pointer, never a fresh lookup. Pending
-            // approvals queued before route freezing carry `harness` only —
-            // pass it so the approved agent is not silently re-defaulted.
-            ...(run.route
-              ? {
-                  harness: run.route.harness,
-                  codingModel: run.route.modelId,
-                  ...(run.route.connectionId ? { connectionId: run.route.connectionId } : {}),
-                }
-              : record?.harness
-                ? { harness: record.harness as DelegateInput["harness"] }
-                : {}),
-          }, { toolCallId: approvalId });
-        } catch (error) {
-          // delegate.execute can throw before its inner `finish` seam ran;
-          // this fallback is the terminal transition then. Fence on the
-          // pre-dispatch generation so a terminal state that already landed
-          // (cancel, reclaim, or `finish` itself) is never overwritten —
-          // the dropped write means this catch also distills nothing.
-          const failure = classifyRunError(error);
-          const status = terminalStatusFor(failure.code);
-          const updated = this.store.transition(run.runId, status, {
-            error: redactSecrets(failure.message).slice(0, 4000),
-            errorCode: failure.code,
-          }, generation);
-          if (updated !== null) {
-            // A pre-start failure never reaches `finish`'s slackText seam —
-            // post here or the thread sees ack + card + approved, then silence.
-            this.postToThread(slackRunFailed({
-              repoUrl: run.repoUrl,
-              userMessage: runErrorWire(failure.code).userMessage,
-              detail: redactSecrets(failure.message).slice(0, 1000),
-              unknown: status === "unknown",
-            }));
-            if (status === "completed" || status === "error") {
-              this.dispatchSessionDistill(updated);
-            }
-          }
-        }
-      };
-      // Slack/dashboard approvals hold no socket open, so without the heartbeat the DO can idle out mid-run.
-      this.keepAliveWhile(dispatch).catch((error) => {
-        console.error(`Run ${run.runId} dispatch failed`, redactSecrets(String(error)));
-      });
+      this.dispatchApprovedRun(run, record, approvalId);
     }
     if (record && isEmailRecord) {
       this.dispatchApprovedEmail(record);
@@ -1097,6 +1238,117 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     this.releaseEmailApprovalDrafts(releasable, this.liveApprovalDrafts(now));
     this.sweepStaleDrafts(expiredSends.length > 0);
     return Response.json({ result: result.result satisfies ResolveResult });
+  }
+
+  /**
+   * Mint the run an approved run-kind record points at — shared by the
+   * resolve path and the onStart re-drive so both build the identical
+   * record (run id, sandbox id, frozen route, and T40 evidence).
+   */
+  private mintApprovedRun(record: PendingApproval): DelegatedRun {
+    // T48: a subscription-authed harness stamps its continuation key on the
+    // record — the decider then refuses resumes under a different account.
+    // resolveHarness throws for a disabled gated harness, which is the
+    // correct refusal: the run must not mint under an unregistered auth path.
+    const harnessName = record.route?.harness ?? record.harness;
+    const continuationKey = harnessName !== undefined
+      ? resolveHarness(harnessName, this.env).continuationKey?.({ authAccount: record.authAccount })
+      : undefined;
+    return createRun({
+      runId: `agent-tool:${record.approvalId}`,
+      sandboxId: makeSandboxId(record.repoUrl, record.task, record.approvalId),
+      repoUrl: record.repoUrl,
+      task: record.task,
+      baseBranch: record.baseBranch ?? "main",
+      publishPullRequest: record.publishPullRequest ?? false,
+      queuedBy: record.queuedBy,
+      ...(record.route ? { route: record.route } : {}),
+      ...(record.authAccount ? { authAccount: record.authAccount } : {}),
+      ...(record.runtime !== undefined ? { runtime: record.runtime } : {}),
+      ...(continuationKey !== undefined ? { continuationKey } : {}),
+      // T40: the run carries its approval evidence from birth — who decided,
+      // when, and the hash of the exact frozen input they approved.
+      approval: approvalEvidenceFor(record, {
+        repoUrl: record.repoUrl,
+        task: record.task,
+        baseBranch: record.baseBranch ?? "main",
+        publishPullRequest: record.publishPullRequest ?? false,
+        ...(record.route ? { route: record.route } : {}),
+        ...(record.authAccount ? { authAccount: record.authAccount } : {}),
+        ...(record.runtime !== undefined ? { runtime: record.runtime } : {}),
+      }),
+    });
+  }
+
+  /**
+   * Schedule execution of a minted approval-backed run — the resolve
+   * path's fire-and-forget dispatch and the onStart re-drive share it.
+   * The run must already sit in the store; a pre-start failure lands
+   * through the same fenced terminal seam `finish` would have used.
+   */
+  private dispatchApprovedRun(
+    run: DelegatedRun,
+    record: PendingApproval | undefined,
+    approvalId: string,
+  ): void {
+    const dispatch = async () => {
+      const generation = this.store.get(run.runId)?.generation;
+      try {
+        const delegate = this.getTools()["delegate_coding_task"] as {
+          execute: (input: unknown, options?: unknown) => Promise<unknown>;
+        };
+        await delegate.execute({
+          repoUrl: run.repoUrl,
+          task: run.task,
+          baseBranch: run.baseBranch,
+          publishPullRequest: run.publishPullRequest,
+          // The frozen route is the exact approved input: harness, model,
+          // and connection ride the pointer, never a fresh lookup. Pending
+          // approvals queued before route freezing carry `harness` only —
+          // pass it so the approved agent is not silently re-defaulted.
+          ...(run.route
+            ? {
+                harness: run.route.harness,
+                codingModel: run.route.modelId,
+                ...(run.route.connectionId ? { connectionId: run.route.connectionId } : {}),
+              }
+            : record?.harness
+              ? { harness: record.harness as DelegateInput["harness"] }
+              : {}),
+          ...(run.authAccount ? { authAccount: run.authAccount } : {}),
+          ...(run.runtime !== undefined ? { runtime: run.runtime } : {}),
+        }, { toolCallId: approvalId });
+      } catch (error) {
+        // delegate.execute can throw before its inner `finish` seam ran;
+        // this fallback is the terminal transition then. Fence on the
+        // pre-dispatch generation so a terminal state that already landed
+        // (cancel, reclaim, or `finish` itself) is never overwritten —
+        // the dropped write means this catch also distills nothing.
+        const failure = classifyRunError(error);
+        const status = terminalStatusFor(failure.code);
+        const updated = this.store.transition(run.runId, status, {
+          error: redactSecrets(failure.message).slice(0, 4000),
+          errorCode: failure.code,
+        }, generation);
+        if (updated !== null) {
+          // A pre-start failure never reaches `finish`'s slackText seam —
+          // post here or the thread sees ack + card + approved, then silence.
+          this.postToThread(slackRunFailed({
+            repoUrl: run.repoUrl,
+            userMessage: runErrorWire(failure.code).userMessage,
+            detail: redactSecrets(failure.message).slice(0, 1000),
+            unknown: status === "unknown",
+          }));
+          if (status === "completed" || status === "error") {
+            this.dispatchSessionDistill(updated);
+          }
+        }
+      }
+    };
+    // Slack/dashboard approvals hold no socket open, so without the heartbeat the DO can idle out mid-run.
+    this.keepAliveWhile(dispatch).catch((error) => {
+      console.error(`Run ${run.runId} dispatch failed`, redactSecrets(String(error)));
+    });
   }
 
   /**
@@ -1736,8 +1988,14 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         return Response.json({ error: "Request body must be a JSON object." }, { status: 400 });
       }
       // queuedBy comes only from the vouched header — a body field would
-      // let any caller attribute its run to another principal.
-      return this.queueSlackRun({ ...(queueBody as Record<string, unknown>), queuedBy: agentPrincipal ?? undefined });
+      // let any caller attribute its run to another principal. Same for the
+      // T51 intake voucher: only the Worker's /api/runs handler stamps
+      // X-Shiba-Intake: dashboard (after deleting the caller's copy).
+      return this.queueSlackRun({
+        ...(queueBody as Record<string, unknown>),
+        queuedBy: agentPrincipal ?? undefined,
+        intake: request.headers.get(LOCAL_INTAKE_HEADER) ?? undefined,
+      });
     }
     if (request.method !== "GET" && request.method !== "DELETE") {
       return Response.json({ error: "Method not allowed." }, { status: 405 });

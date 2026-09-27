@@ -172,6 +172,10 @@ describe("withRetry", () => {
     );
     // Let the first failure land and the long backoff begin before aborting,
     // so the interrupt hits the wait — not the entry check or the catch path.
+    // [T42 timing exemption — marked per §18.3: the property under test is
+    // that the backoff WAIT itself is interruptible; there is no signal to
+    // await because "the delay has begun" is observable only as elapsed
+    // scheduling. The assertion below pins the abort latency, not a sync.]
     await new Promise((resolve) => setTimeout(resolve, 20));
     const started = Date.now();
     controller.abort();
@@ -332,8 +336,8 @@ describe("withRetry wired into the runtime adapter", () => {
           if (opencodeCalls === 1) throw new Error("provider returned status 503: overloaded");
           return { stdout: "", stderr: "", exitCode: 0 };
         }
-        if (command.includes("status")) return { stdout: "", stderr: "", exitCode: 0 };
-        if (command.includes("diff")) return { stdout: "", stderr: "", exitCode: 0 };
+        if (command.includes("status")) return { stdout: " M src/a.ts\n", stderr: "", exitCode: 0 };
+        if (command.includes("diff")) return { stdout: "diff --git a/src/a.ts", stderr: "", exitCode: 0 };
         return { stdout: "", stderr: "", exitCode: 0 };
       },
     });
@@ -365,7 +369,7 @@ describe("withRetry wired into the runtime adapter", () => {
         if (command.includes("status")) {
           statusCalls += 1;
           if (statusCalls === 1) throw new Error("provider returned status 503: overloaded");
-          return { stdout: "", stderr: "", exitCode: 0 };
+          return { stdout: " M src/a.ts\n", stderr: "", exitCode: 0 };
         }
         if (command.includes("diff")) return { stdout: "diff --git a/x", stderr: "", exitCode: 0 };
         return { stdout: "", stderr: "", exitCode: 0 };

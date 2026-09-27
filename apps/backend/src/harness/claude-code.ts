@@ -1,12 +1,14 @@
 /**
  * Claude Code harness (PLAN.md T22).
  *
- * API-key only. Subscription credentials are deliberately not supported:
- * Anthropic's terms forbid third parties routing requests through Free/Pro/
- * Max plan credentials on behalf of users (PLAN.md §3). The container gets
- * the dummy key; the real one is injected at the egress boundary.
+ * API-key only — this harness is scoped to the gateway/BYOK path (PLAN.md
+ * §3). Subscription credentials (`claude setup-token`) are a *separate*
+ * harness — claude-subscription.ts (T48/§18.10) — carrying their own
+ * egress branch, opt-in gate, and terms note, never a mode flag here.
+ * The container gets the dummy key; the real one is injected at the
+ * egress boundary.
  */
-import type { CodingTaskInput } from "../opencode-input.js";
+import type { CodingTaskInput, CodingTaskResult } from "../opencode-input.js";
 import { DUMMY_PROVIDER_KEY } from "../provider-gateway.js";
 import { boundTail } from "../security.js";
 import {
@@ -14,6 +16,9 @@ import {
   PROVIDER_HOSTS,
   PROVIDER_KEY_ENV,
   type AgentHarness,
+  type HarnessCapabilities,
+  type VerificationOutcome,
+  verifyRunOutcome,
 } from "./types.js";
 
 export const CLAUDE_CODE_PROVIDERS = ["anthropic"] as const;
@@ -129,6 +134,17 @@ export class ClaudeCodeHarness implements AgentHarness {
   parseEvent(line: string): string | null {
     return parseClaudeCodeEvent(line);
   }
+  /** T43 declared capabilities — the gates read this, not the name. */
+  capabilities(_model?: string): HarnessCapabilities {
+    return { streamsText: true, emitsToolCalls: true, supportsResume: true, supportsSteering: false, supportsFileAttachments: false, canRunTests: true, supportsConversationRollback: false, execAllowlist: [["pnpm","test"],["npm","test"],["bun","test"],["pnpm","vitest","run"],["npx","vitest","run"]],
+      supportedRuntimes: ["sandbox", "local"] };
+  }
+
+  /** Deterministic outcome check — gates the completed claim (T43/T46 feed). */
+  async verify(input: CodingTaskInput, result: CodingTaskResult): Promise<VerificationOutcome> {
+    return verifyRunOutcome(input, result, this.capabilities(input.codingModel));
+  }
+
 }
 
 /** The CLI takes a bare model id; the `provider/` prefix is ours. */

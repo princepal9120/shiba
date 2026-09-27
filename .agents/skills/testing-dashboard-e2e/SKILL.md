@@ -26,12 +26,13 @@ Repo layout is `apps/frontend`, `apps/backend`, `apps/web` (not root-level
 - Full stack: run BOTH vite :5173 AND the worker on :8788:
 
 ```bash
-pnpm -C apps/frontend dev                                          # vite :5173
-pnpm -C apps/backend dev                                           # wrangler :8788
-# Docker absent / daemon down? wrangler aborts building the Sandbox image —
-# the fix wrangler itself prints: add --enable-containers=false
-pnpm exec wrangler dev --port 8788 --config apps/backend/wrangler.jsonc --enable-containers=false
+pnpm -C apps/frontend dev  # vite :5173, in one terminal
+pnpm exec wrangler dev --port 8788 --config apps/backend/wrangler.jsonc --enable-containers=false  # worker, in another terminal
 ```
+
+`--enable-containers=false` is for machines without Docker; approval-queue
+testing works, but sandbox execution does not. To test the built dashboard
+instead of Vite, run `pnpm build:dashboard` and serve the Worker on :8787.
 
 - Approval-queue endpoints (`POST /api/runs`, `GET /api/approvals`) work fully
   without containers, secrets, or Cloudflare auth — they only write a pending
@@ -66,7 +67,7 @@ worker edge. The reliable seam is the agents-SDK state row in the DO sqlite.
 ```bash
 node -e '
 const {DatabaseSync} = require("node:sqlite");
-const f = "apps/backend/.wrangler/state/v3/do/shiba-CodingOrchestrator/<hash>.sqlite"; // the non-metadata .sqlite
+const f = "apps/backend/.wrangler/state/v3/do/shiba-ai-coworker-CodingOrchestrator/<hash>.sqlite"; // the non-metadata .sqlite
 const db = new DatabaseSync(f);
 const row = db.prepare("SELECT state FROM cf_agents_state WHERE id=\"cf_state_row_id\"").get();
 const state = JSON.parse(row.state);
@@ -76,8 +77,7 @@ db.prepare("UPDATE cf_agents_state SET state=? WHERE id=\"cf_state_row_id\"").ru
 '
 ```
 
-4. Restart `npx wrangler dev --port 8788 --config apps/backend/wrangler.jsonc`
-   (add `--enable-containers=false` when no Docker daemon is available).
+4. Restart `pnpm exec wrangler dev --port 8788 --config apps/backend/wrangler.jsonc --enable-containers=false`.
 
 ### Tricks that hit real code paths
 

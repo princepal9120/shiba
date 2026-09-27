@@ -4,6 +4,7 @@ import type { OrchestratorState } from "../src/agents/orchestrator.js";
 import { createRun, RUN_DEADLINE_MS, type DelegatedRun } from "../src/runs.js";
 import { formatAgentResult, parseAgentToolInput } from "../src/opencode-input.js";
 import { createPendingApproval, resolvePendingApproval } from "../src/pending-approvals.js";
+import { approveDirect } from "./seeding.js";
 import {
   destroyManagedContainer,
   leakedContainers,
@@ -136,16 +137,16 @@ describe("orchestrator run routes", () => {
   it("propagates cancellation to the running child execution", async () => {
     const instance = agent();
     mocks.execute.mockImplementation(async (_input, options: { abortSignal?: AbortSignal }) => {
-      // The child hangs like a real container run until its signal aborts.
-      await new Promise((resolve, reject) => {
-        const timer = setTimeout(resolve, 1000);
+      // The child hangs like a real container run until its signal aborts —
+      // T42: no timer fallback; only the abort resolves this promise.
+      await new Promise((_resolve, reject) => {
         options?.abortSignal?.addEventListener("abort", () => {
-          clearTimeout(timer);
           reject(new Error("Run cancelled."));
         });
       });
       return "unreachable";
     });
+    approveDirect(instance, "tc1");
     const delegate = instance.getTools()["delegate_coding_task"] as {
       execute: (input: unknown, options?: unknown) => Promise<string>;
     };
@@ -167,6 +168,7 @@ describe("orchestrator run routes", () => {
       await new Promise(() => {}); // never resolves; only cancellation ends it
       return "unreachable";
     });
+    approveDirect(instance, "tc2");
     const delegate = instance.getTools()["delegate_coding_task"] as {
       execute: (input: unknown, options?: unknown) => Promise<unknown>;
     };
@@ -298,9 +300,10 @@ describe("orchestrator run routes", () => {
     expect((await rejected.json() as { result: string }).result).toBe("rejected");
     expect(mocks.execute).not.toHaveBeenCalled();
 
-    // Rejected is terminal: an approve replay resolves nothing and runs nothing.
+    // Rejected is terminal: an approve replay reads the receipt's
+    // recorded answer (T41) and runs nothing.
     const replay = await post(true);
-    expect((await replay.json() as { result: string }).result).toBe("unknown");
+    expect((await replay.json() as { result: string }).result).toBe("rejected");
     expect(mocks.execute).not.toHaveBeenCalled();
 
     // A fresh approval runs the exact frozen input through the gated path.
@@ -316,7 +319,9 @@ describe("orchestrator run routes", () => {
       body: JSON.stringify({ threadKey: "default", approvalId: freshId, approved: true, decidedBy: "U1" }),
     }));
     expect((await approved.json() as { result: string }).result).toBe("approved");
-    expect(mocks.execute).toHaveBeenCalledOnce();
+    // Dispatch rides keepAliveWhile — the approval response returns before the
+    // delegated run starts; wait for the async dispatch instead of racing it.
+    await vi.waitFor(() => { expect(mocks.execute).toHaveBeenCalledOnce(); });
     const calls = mocks.execute.mock.calls as unknown as [[string, { toolCallId: string }]];
     expect(parseAgentToolInput([{ role: "user", text: calls[0]![0]! }])).toMatchObject({ task: "second", baseBranch: "develop", publishPullRequest: true });
   });
@@ -362,7 +367,9 @@ describe("approval handoff recovery", () => {
     expect(restarted.state.runs[0]?.error).toContain("orchestrator restart");
     expect(restarted.state.pendingApprovals?.[0]?.status).toBe("approved");
     expect(mocks.destroy).toHaveBeenCalledOnce();
-    expect(await (await restarted.onRequest(request())).json()).toEqual({ result: "unknown" });
+    // The replayed resolve answers from the committed command receipt
+    // (T41) — the decision was recorded; it is not re-litigated.
+    expect(await (await restarted.onRequest(request())).json()).toEqual({ result: "approved" });
     expect(restarted.state.runs).toHaveLength(1);
     expect(mocks.execute).not.toHaveBeenCalled();
   });
@@ -377,6 +384,7 @@ describe("combined cancellation signals", () => {
         options.abortSignal.addEventListener("abort", () => reject(new Error("cancelled")), { once: true });
       });
     });
+    approveDirect(instance, "combined");
     const delegate = instance.getTools()["delegate_coding_task"] as {
       execute: (input: unknown, options: unknown) => Promise<unknown>;
     };
@@ -496,6 +504,7 @@ describe("run reliability", () => {
     mocks.execute.mockResolvedValue(formatAgentResult({
       status: "completed", exitCode: 0, stderrTail: "", changedFiles: [], diff: "", files: [], summary: "done",
     }));
+    approveDirect(instance, "sched");
     const delegate = instance.getTools()["delegate_coding_task"] as {
       execute: (input: unknown, options?: unknown) => Promise<unknown>;
     };
@@ -545,6 +554,7 @@ describe("run reliability", () => {
       status: "completed", exitCode: 0, stderrTail: "", changedFiles: ["a.ts"], diff, files: [],
       summary: "OpenCode completed for https://github.com/o/r (main): 1 changed files.", pullUrl,
     })}`);
+    approveDirect(instance, "pr");
     const delegate = instance.getTools()["delegate_coding_task"] as {
       execute: (input: unknown, options?: unknown) => Promise<unknown>;
     };

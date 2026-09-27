@@ -6,9 +6,31 @@
  * completed/error/cancelled/aborted are terminal, and there is no
  * stop/resume — resumable runs are a real architecture change and were
  * deliberately cut (PLAN.md §4, "Future work").
+ *
+ * T40: transition legality now lives in the pure decider
+ * (`decideRunTransition` in @shiba/shared); these functions are the thin
+ * wrappers that keep existing call sites stable. The decider refuses what
+ * the old patch API silently allowed: no `running` without approval
+ * evidence on the run, no `completed` from `pending`, no rewrites of a
+ * terminal record.
  */
-import { isActiveStatus, isTerminalStatus, normalizeRun, RUN_DEADLINE_MS } from "@shiba/shared";
-import type { ApprovedRoute, DelegatedRun, Receipt, RunPatch, RunStatus } from "@shiba/shared";
+import {
+  applyRunEvents,
+  decideRunTransition,
+  isActiveStatus,
+  normalizeRun,
+  RUN_DEADLINE_MS,
+} from "@shiba/shared";
+import type {
+  ApprovalEvidence,
+  ApprovedRoute,
+  DelegatedRun,
+  Receipt,
+  RunCommand,
+  RunPatch,
+  RunStatus,
+  RuntimeSelection,
+} from "@shiba/shared";
 import { appendReceipt, makeReceipt } from "./receipts.js";
 
 // Wire types and pure predicates live in @shiba/shared so the dashboard
@@ -34,38 +56,124 @@ export function createRun(args: {
   publishPullRequest: boolean;
   queuedBy?: string;
   route?: ApprovedRoute;
+  /** T48: account-scoped continuation identity from the selected harness. */
+  continuationKey?: string;
+  /** T48: the continuation key a resumed conversation was started under. */
+  continuesKey?: string;
+  /** T48: subscription account selector — hashed into the approved input. */
+  authAccount?: string;
+  /** T51: the approved runtime — "local" dispatches to the operator daemon. */
+  runtime?: RuntimeSelection;
+  /** T40: approval evidence stamped at queue time (the resolve path). */
+  approval?: ApprovalEvidence;
   now?: number;
 }): DelegatedRun {
   const now = args.now ?? Date.now();
-  return {
-    runId: args.runId,
-    sandboxId: args.sandboxId,
-    repoUrl: args.repoUrl,
-    task: args.task,
-    baseBranch: args.baseBranch,
-    publishPullRequest: args.publishPullRequest,
-    ...(args.queuedBy !== undefined ? { queuedBy: args.queuedBy } : {}),
-    ...(args.route !== undefined ? { route: args.route } : {}),
-    status: "pending",
-    generation: 0,
-    createdAt: now,
-    updatedAt: now,
-    receipts: [makeReceipt("init", `Queued ${args.repoUrl} (${args.baseBranch}).`, now)],
-  };
+  const decision = decideRunTransition(
+    { run: null },
+    {
+      type: "queue",
+      commandId: `queue:${args.runId}`,
+      runId: args.runId,
+      input: {
+        sandboxId: args.sandboxId,
+        repoUrl: args.repoUrl,
+        task: args.task,
+        baseBranch: args.baseBranch,
+        publishPullRequest: args.publishPullRequest,
+        ...(args.queuedBy !== undefined ? { queuedBy: args.queuedBy } : {}),
+        ...(args.route !== undefined ? { route: args.route } : {}),
+        ...(args.continuationKey !== undefined ? { continuationKey: args.continuationKey } : {}),
+        ...(args.continuesKey !== undefined ? { continuesKey: args.continuesKey } : {}),
+        ...(args.authAccount !== undefined ? { authAccount: args.authAccount } : {}),
+        ...(args.runtime !== undefined ? { runtime: args.runtime } : {}),
+      },
+      ...(args.approval !== undefined ? { approval: args.approval } : {}),
+      at: now,
+    },
+  );
+  // Queue on an empty machine can only fail on a mismatched evidence hash —
+  // a wiring bug, so it throws rather than silently returning a half-record.
+  if ("error" in decision) throw new Error(decision.error.message);
+  const run = applyRunEvents(null, decision.events, makeReceipt);
+  if (run === null) throw new Error(`decider produced no record for ${args.runId}`);
+  return run;
 }
 
-function applyPatch(run: DelegatedRun, patch: RunPatch | undefined): DelegatedRun {
-  if (!patch) return run;
-  const next: DelegatedRun = { ...run };
-  if (patch.summary !== undefined) next.summary = patch.summary;
-  if (patch.error !== undefined) next.error = patch.error;
-  if (patch.errorCode !== undefined) next.errorCode = patch.errorCode;
-  if (patch.diff !== undefined) next.diff = patch.diff;
-  if (patch.pullUrl !== undefined) next.pullUrl = patch.pullUrl;
-  if (patch.screenshotUrl !== undefined) next.screenshotUrl = patch.screenshotUrl;
-  if (patch.receipts !== undefined) next.receipts = patch.receipts;
-  if (patch.sandboxId !== undefined) next.sandboxId = patch.sandboxId;
-  return next;
+/**
+ * Map the legacy (run, status, patch) call shape onto the command the
+ * decider understands.
+ */
+function commandForStatus(
+  run: DelegatedRun,
+  status: RunStatus,
+  patch: RunPatch | undefined,
+  at: number,
+  evidence?: ApprovalEvidence,
+): RunCommand {
+  const commandId = `transition:${run.runId}:${run.generation}:${status}`;
+  switch (status) {
+    case "pending":
+      // Re-queue with the run's own input: on a live run the decider
+      // replays it as a no-op; it refuses (input_conflict) only if the
+      // stored fields were corrupted out from under the record.
+      return {
+        type: "queue",
+        commandId,
+        runId: run.runId,
+        input: {
+          sandboxId: run.sandboxId,
+          repoUrl: run.repoUrl,
+          task: run.task,
+          baseBranch: run.baseBranch,
+          publishPullRequest: run.publishPullRequest,
+          ...(run.queuedBy !== undefined ? { queuedBy: run.queuedBy } : {}),
+          ...(run.route !== undefined ? { route: run.route } : {}),
+          ...(run.runtime !== undefined ? { runtime: run.runtime } : {}),
+        },
+        at,
+      };
+    case "running":
+      return {
+        type: "start",
+        commandId,
+        runId: run.runId,
+        // An unevidenced start is rejected inside the decider; stored
+        // evidence on the run itself satisfies it when the caller has none.
+        ...(evidence !== undefined ? { approvalEvidence: evidence } : {}),
+        at,
+      };
+    case "completed":
+      return { type: "finish", commandId, runId: run.runId, patch: patch ?? {}, at };
+    case "cancelled":
+      return { type: "cancel", commandId, runId: run.runId, ...(patch !== undefined ? { patch } : {}), at };
+    case "aborted":
+      return {
+        type: "abort",
+        commandId,
+        runId: run.runId,
+        reason: patch?.error ?? "aborted",
+        ...(patch !== undefined ? { patch } : {}),
+        at,
+      };
+    case "unknown":
+      return {
+        type: "fail",
+        commandId,
+        runId: run.runId,
+        patch: { ...patch, errorCode: patch?.errorCode ?? "outcome_unknown" },
+        at,
+      };
+    case "error":
+    default:
+      return {
+        type: "fail",
+        commandId,
+        runId: run.runId,
+        patch: { ...patch, errorCode: patch?.errorCode ?? "executor_failed" },
+        at,
+      };
+  }
 }
 
 export function transitionRun(
@@ -73,26 +181,17 @@ export function transitionRun(
   status: RunStatus,
   patch?: RunPatch,
   now?: number,
+  evidence?: ApprovalEvidence,
 ): DelegatedRun {
-  if (isTerminalStatus(run.status)) return run;
   const stamped = now ?? Date.now();
-  const next = applyPatch(run, patch);
-  const kind =
-    status === "error" || status === "aborted" || status === "unknown"
-      ? "error"
-      : status === "completed"
-        ? "submit"
-        : undefined;
-  const receipts = kind
-    ? appendReceipt(next.receipts, makeReceipt(kind, patch?.error ?? patch?.summary ?? status, stamped))
-    : next.receipts;
-  return {
-    ...next,
-    status,
-    generation: next.generation + 1,
-    receipts,
-    updatedAt: stamped,
-  };
+  const decision = decideRunTransition(
+    { run },
+    commandForStatus(run, status, patch, stamped, evidence),
+  );
+  // Preserve the pre-decider contract: an illegal or terminal transition
+  // returns the record unchanged — callers fence on generation for drops.
+  if ("error" in decision) return run;
+  return applyRunEvents(run, decision.events, makeReceipt) ?? run;
 }
 
 export function recordReceipt(run: DelegatedRun, receipt: Receipt): DelegatedRun {
@@ -110,16 +209,19 @@ export function reclaimStaleRuns(
     if (!isActiveStatus(run.status) || now - run.updatedAt <= deadlineMs) {
       return run;
     }
-    reclaimed.push(run.runId);
-    return transitionRun(
-      run,
-      "unknown",
+    const decision = decideRunTransition(
+      { run },
       {
-        error: `Run exceeded its ${Math.round(deadlineMs / 60000)}-minute deadline and was reclaimed; side effects are unverified — it may have pushed or opened a PR.`,
-        errorCode: "outcome_unknown",
+        type: "reclaim",
+        commandId: `reclaim:${run.runId}:${run.generation}`,
+        runId: run.runId,
+        deadlineMs,
+        at: now,
       },
-      now,
     );
+    if ("error" in decision) return run;
+    reclaimed.push(run.runId);
+    return applyRunEvents(run, decision.events, makeReceipt) ?? run;
   });
   return { runs: next, reclaimed };
 }
@@ -159,6 +261,7 @@ export class RunStore {
     status: RunStatus,
     patch?: RunPatch,
     expectedGeneration?: number,
+    evidence?: ApprovalEvidence,
   ): DelegatedRun | null {
     const runs = this.read().map(normalizeRun);
     const current = runs.find((run) => run.runId === runId);
@@ -170,7 +273,7 @@ export class RunStore {
     this.write(
       runs.map((run) => {
         if (run.runId !== runId) return run;
-        updated = transitionRun(run, status, patch);
+        updated = transitionRun(run, status, patch, undefined, evidence);
         return updated;
       }),
     );

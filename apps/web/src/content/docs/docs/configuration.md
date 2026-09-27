@@ -16,6 +16,14 @@ Non-secret defaults are in `apps/backend/wrangler.jsonc` and `alchemy.run.ts`. F
 | `GROK_MODEL` | `xai/grok-4.6` | Grok default model; medium reasoning effort |
 | `AGENT_HARNESS` | `opencode` | Deployment fallback; a task can select a harness explicitly |
 | `SLACK_AGENT_HARNESS` | `AGENT_HARNESS`, then `claude-code` | Harness for Slack-originated runs (mentions, DMs, /shiba) |
+| `SHIBA_CLAUDE_SUBSCRIPTION` | unset | Set `1` to enable the opt-in `claude-subscription` harness (below) |
+| `CLAUDE_SUBSCRIPTION_MODEL` | `anthropic-subscription/claude-sonnet-4-6` | `claude-subscription` default model |
+| `SHIBA_CODEX_SUBSCRIPTION` | unset | Set `1` to enable the opt-in `codex-subscription` harness (below) |
+| `CODEX_SUBSCRIPTION_MODEL` | `openai-subscription/gpt-5.3-codex` | `codex-subscription` default model |
+| `SHIBA_ANTIGRAVITY_SUBSCRIPTION` | unset | Set `1` to enable the opt-in `antigravity-subscription` harness (below) |
+| `ANTIGRAVITY_SUBSCRIPTION_MODEL` | `google-subscription/gemini-3-pro` | `antigravity-subscription` default model |
+| `SHIBA_LOCAL_RUNTIME` | unset | Set `1` to enable the opt-in `local` runtime (below) — dashboards can queue runs that execute on an operator machine |
+| `LOCAL_ADAPTER_TOKEN` | unset | Bearer token the operator daemon presents on `/api/local/*`; required for the surface to answer (dark otherwise) |
 | `RUNTIME` | `sandbox` | Runtime adapter; current default is Cloudflare Sandbox |
 | `INSTANCE_TYPE` | `standard-1` | Configured Cloudflare container size |
 | `REQUIRE_ACCESS` | Wrangler default unset; live Alchemy stages set `1` | Require Access identity at the Worker boundary |
@@ -28,7 +36,35 @@ The current source registry and Dockerfile include five harnesses: `opencode`, `
 
 OpenCode, Claude Code, and Codex provider traffic uses the account-owned AI Gateway path; configure provider credentials there. `AI_GATEWAY_TOKEN` is an optional Worker secret for gateway authentication. Devin is different: its API key is a Worker-side `DEVIN_API_KEY` secret, injected by the egress proxy for Devin hosts and not stored in the container. The dummy container key is not a real credential. Keep keys out of repository files, logs, and task text.
 
-Subscription credentials (such as Claude or ChatGPT consumer subscriptions) are not the configured provider-key path. Use supported API credentials and check the provider and Cloudflare's current terms/configuration. The assistant/model used to edit this repository is independent of these application settings.
+### Claude subscription (opt-in)
+
+Setting `SHIBA_CLAUDE_SUBSCRIPTION=1` registers a second Claude harness, `claude-subscription`, that drives the same `claude` binary against the operator's own subscription credential instead of AI Gateway. To connect an account, run `claude setup-token` on your own machine and store the printed token as a Worker secret — `CLAUDE_SUBSCRIPTION_TOKEN`, or `CLAUDE_SUBSCRIPTION_TOKEN_<ACCOUNT>` for a named account — then drive the lifecycle under `/api/auth/claude-subscription` (begin, verify, clear). Your own Anthropic plan terms apply; this deployment makes no use of anyone else's credential. The token is a deployment secret: it stays outside the sandbox, is attached only at the egress boundary, and appears in no log, command line, or UI response. Signing out (or revoking the token) stops in-flight subscription runs and refuses new ones.
+
+### Codex subscription (opt-in)
+
+Setting `SHIBA_CODEX_SUBSCRIPTION=1` registers `codex-subscription`, which drives the same `codex` binary against the operator's own ChatGPT subscription instead of AI Gateway. Codex's credential is directory-shaped: run `codex login` on your own machine and store the resulting `~/.codex/auth.json` contents verbatim as a Worker secret — `CODEX_SUBSCRIPTION_AUTH_JSON`, or `CODEX_SUBSCRIPTION_AUTH_JSON_<ACCOUNT>` for a named account — then drive the lifecycle under `/api/auth/codex-subscription` (begin, verify, clear). In the sandbox the run's `CODEX_HOME` is a per-account shadow holding a stub `auth.json` as a real file plus symlinks into the shared home (sessions, caches, the install) — a conversation thread survives an account switch while each account revokes independently. The real tokens never enter the container: the dedicated `chatgpt.com` egress branch attaches `Bearer` + `chatgpt-account-id` at the boundary, token refresh hosts are not admitted (an expired token fails the run honestly — re-store the secret), and the credential appears in no sandbox file, argv, log, or UI response. Your own plan terms apply.
+
+### Antigravity subscription (opt-in)
+
+Setting `SHIBA_ANTIGRAVITY_SUBSCRIPTION=1` registers `antigravity-subscription`, which drives the pinned `agy` ACP server against the operator's own Google subscription. There is no secret to store — the credential never touches the Worker. Connect an account by posting to `/api/auth/antigravity-subscription/begin` (optionally `{"account": "<name>"}`): shiba boots a dedicated auth sandbox, prepares the isolated profile (`0700` dirs, `auth.type=oauth-personal`, ambient Google credentials stripped from the launch environment), starts `agy` there, and returns the Google sign-in URL it prints. Sign in as the operator's own account; the browser lands on a `http://127.0.0.1:…/` redirect that fails in the browser — copy that URL verbatim and POST it to `/api/antigravity/callback` as `{"url": "<pasted>", "account": "<name>"}`. Shiba validates it is the pending flow's exact listener (same origin, same state, exactly one code-or-error) and forwards it into the container unmodified — no proxies, no redirects, no logging of the URL. Finish with `/verify`; signing in is not proof, the capability probe (token materialized in the profile) is. Clear via `/clear` destroys the auth sandbox. Your own plan terms apply.
+
+Subscription credentials are not the default provider-key path — API credentials via AI Gateway are. The `claude-subscription` opt-in above is the deliberate exception: it exists for the single-tenant operator driving their own credential, and stays dark unless they set the flag. Check the provider's current terms before enabling it. The assistant/model used to edit this repository is independent of these application settings.
+
+### Local runtime (opt-in)
+
+Setting `SHIBA_LOCAL_RUNTIME=1` and provisioning the `LOCAL_ADAPTER_TOKEN` secret registers a third `RuntimeAdapter` name, `local`, alongside `sandbox`. A run with `runtime: "local"` still mints the same approval card and still computes its verdict with `harness.verify` — the gate does not relax because the work is local. What changes is where step 5 executes: instead of booting a sandbox, the Worker posts a schema-checked envelope to the `LocalDispatch` DO and an operator-side daemon claims it over an authenticated outbound connection.
+
+The daemon is `scripts/shiba-local-daemon.mjs` — a single dependency-free Node ≥20 script. On the operator machine (macOS or Linux):
+
+```sh
+export SHIBA_WORKER_URL=https://<your-worker>.workers.dev
+export LOCAL_ADAPTER_TOKEN=<same secret the Worker knows>
+node scripts/shiba-local-daemon.mjs            # poll loop; --once for a single cycle
+```
+
+The agent CLIs (`opencode`, `claude`, `codex`) must be on the daemon's `PATH` and authenticated in the operator's own terminal — `claude auth login`, `codex login`, Google sign-in happen locally; no credential ever transits the Worker, egress, or a container. Runs materialize under `~/.shiba-local/runs/<sandboxId>/` (`work/` for the clone, `home/` for `HOME`); provider config bodies reference `${OPENCODE_API_KEY}`-style placeholders resolved from the operator's environment, and the dummy key is stripped entirely. Process leases under `leases/run/<id>.lease` keep a second daemon from double-claiming; dead workspaces are reaped at startup.
+
+Intake is provably dashboard-only: `runtime: "local"` is refused at intake on every chat surface (Slack, email, MCP, automations) because only the authenticated `/api/runs` handler stamps the `X-Shiba-Intake: dashboard` voucher `queueSlackRun` requires. Harnesses opt in via `supportedRuntimes` — `opencode`, `claude-code`, `codex` declare `["sandbox", "local"]`; every other harness refuses local dispatch. Git publish stays Worker-side: the daemon returns receipts plus the diff, and the existing publish path opens the PR. Cancelling an approved-but-unclaimed run is supported (`POST /cancel` settles it); a daemon that dies mid-run is recoverable — stale claims are reaped after 45 minutes.
 
 ## Optional secrets
 

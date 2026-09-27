@@ -6,6 +6,8 @@ import { Sandbox as SandboxBase } from "@cloudflare/sandbox";
 import {
   denyUnscopedGitHub,
   forwardAnthropic,
+  forwardClaudeSubscription,
+  forwardCodexSubscription,
   forwardDevinApi,
   forwardDevinInference,
   forwardGitHubScoped,
@@ -46,6 +48,19 @@ export class Sandbox<Env = WorkerEnv> extends SandboxBase<Env> {
   }
 
   /**
+   * T48: per-run outbound-handler overrides from the selected harness —
+   * subscription providers swap their hosts onto the token branch (the
+   * static map still shows the gateway path for API-key harnesses).
+   */
+  async approveEgressOverrides(
+    overrides: { host: string; handler: string; params?: Record<string, string> }[],
+  ): Promise<void> {
+    for (const override of overrides) {
+      await this.setOutboundByHost(override.host, override.handler, override.params);
+    }
+  }
+
+  /**
    * Called before the clone. One sandbox id is one task, so the scope is per
    * run; `/${owner}/${repo}` is the only path that gets the credential.
    */
@@ -58,7 +73,7 @@ export class Sandbox<Env = WorkerEnv> extends SandboxBase<Env> {
 // maps in module-level registries keyed by class name, so a `static get`
 // override would read correctly but leave runtime dispatch empty.
 /** Named handlers addressable by `setOutboundByHost` at run time. */
-Sandbox.outboundHandlers = { githubScoped: forwardGitHubScoped };
+Sandbox.outboundHandlers = { githubScoped: forwardGitHubScoped, claudeSubscription: forwardClaudeSubscription, codexSubscription: forwardCodexSubscription };
 // github.com defaults to refusal; approveRepoScope swaps in the scoped
 // handler for the one repo a run was approved for (B6). Provider hosts are
 // mapped for every supported harness, but allowedHosts admits only one.

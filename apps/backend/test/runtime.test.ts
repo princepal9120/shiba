@@ -148,8 +148,17 @@ describe("SandboxRuntimeAdapter", () => {
   });
 
   it("reports non-zero OpenCode exits with a bounded stderr tail", async () => {
+    const baseExec = makeFakeOps().exec;
     const ops = makeFakeOps({
-      async exec() {
+      async exec(command, opts) {
+        // T44: checkpoint git commands still need real-ish answers — only
+        // the harness exec itself is the nonzero exit under test.
+        if (!command.includes("opencode")) {
+          if (command.includes("rev-parse")) return { stdout: ".git\n", stderr: "", exitCode: 0 };
+          if (command.includes("write-tree")) return { stdout: "tree\n", stderr: "", exitCode: 0 };
+          if (command.includes("commit-tree")) return { stdout: "commit\n", stderr: "", exitCode: 0 };
+          return baseExec(command, opts);
+        }
         return { stdout: "", stderr: `x\n${"e".repeat(50_000)}`, exitCode: 3 };
       },
     });
@@ -391,7 +400,9 @@ describe("streamed opencode progress", () => {
   it("emits bounded progress from streamed stdout JSON events", async () => {
     const ops = makeFakeOps();
     const events: string[] = [];
+    const baseExec = ops.exec;
     ops.exec = async (command, opts) => {
+      if (!command.includes("opencode")) return baseExec(command, opts);
       for (const line of [
         JSON.stringify({ type: "step-start", part: "reading src/a.ts" }),
         "not json at all",
@@ -426,7 +437,9 @@ describe("streamed opencode progress", () => {
 
   it("caps progress events so a chatty run cannot flood the stream", async () => {
     const ops = makeFakeOps();
-    ops.exec = async (_command, opts) => {
+    const baseExec = ops.exec;
+    ops.exec = async (command, opts) => {
+      if (!command.includes("opencode")) return baseExec(command, opts);
       for (let i = 0; i < 5000; i += 1) {
         opts?.onOutput?.("stdout", `${JSON.stringify({ type: "log", part: `line ${i}` })}\n`);
       }
@@ -442,11 +455,12 @@ describe("streamed opencode progress", () => {
   });
 
   it("redacts secrets from the stderr tail", async () => {
-    const ops = makeFakeOps({
-      async exec() {
-        return { stdout: "", stderr: "boom AI_GATEWAY_TOKEN=real-secret-value", exitCode: 0 };
-      },
-    });
+    const ops = makeFakeOps();
+    const baseExec = ops.exec;
+    ops.exec = async (command, opts) => {
+      if (!command.includes("opencode")) return baseExec(command, opts);
+      return { stdout: "", stderr: "boom AI_GATEWAY_TOKEN=real-secret-value", exitCode: 0 };
+    };
     const adapter = new SandboxRuntimeAdapter();
     const result = await adapter.runCodingTask(ops, INPUT, () => {});
     expect(result.status).toBe("completed");

@@ -430,7 +430,12 @@ export function App(): React.JSX.Element {
       const res = await fetch(`${url}/get-messages`, { credentials: "include" });
       if (!res.ok) return [];
       const text = await res.text();
-      return text.trim() ? JSON.parse(text) : [];
+      if (!text.trim()) return [];
+      try {
+        return JSON.parse(text);
+      } catch {
+        return [];
+      }
     },
     onError: () => {
       submitFailed.current = true;
