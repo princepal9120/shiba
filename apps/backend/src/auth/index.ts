@@ -1,15 +1,16 @@
 /**
  * T47/T48 — worker-side auth registry: instanceId → provider controller.
- * The admission gate is provider-agnostic; adding a subscription harness
- * (T49 codex, T50 antigravity) means a module under src/auth/ plus one
- * line here, not a new mechanism.
+ * This file is Worker wiring, not a service: it maps backend harness
+ * types to @shiba/auth implementations, so it stays in apps/backend while
+ * the services themselves live in packages/auth. The admission gate is
+ * provider-agnostic; adding a subscription harness (T49 codex, T50
+ * antigravity) means a module under packages/auth plus one line here.
  */
 import type { ProviderAuthController } from "@shiba/shared";
+import { claudeSubscriptionAuth, codexSubscriptionAuth, antigravitySubscriptionAuth } from "@shiba/auth";
 import type { AgentHarness, AgentHarnessName } from "../harness/types.js";
 import type { CodingTaskInput } from "../opencode-input.js";
-import { antigravitySubscriptionAuth } from "./antigravity-subscription.js";
-import { claudeSubscriptionAuth } from "./claude-subscription.js";
-import { codexSubscriptionAuth } from "./codex-subscription.js";
+import { forwardClaudeSubscription, forwardCodexSubscription, type EgressEnv } from "../egress.js";
 
 interface AuthRegistryEnv {
   AGENT_TOKENS: KVNamespace;
@@ -27,9 +28,15 @@ export function authControllerFor<Env extends AuthRegistryEnv>(
   const instanceId = harness.auth.instanceId(input);
   switch (harness.name as AgentHarnessName) {
     case "claude-subscription":
-      return claudeSubscriptionAuth(env, instanceId);
+      // The registry's env is only known to carry AGENT_TOKENS; the
+      // forwarder itself reads the egress fields off the real Env.
+      return claudeSubscriptionAuth(env, instanceId, (request, e, ctx) =>
+        forwardClaudeSubscription(request, e as EgressEnv, ctx),
+      );
     case "codex-subscription":
-      return codexSubscriptionAuth(env, instanceId);
+      return codexSubscriptionAuth(env, instanceId, (request, e, ctx) =>
+        forwardCodexSubscription(request, e as EgressEnv, ctx),
+      );
     case "antigravity-subscription":
       return antigravitySubscriptionAuth(env, instanceId);
     default:

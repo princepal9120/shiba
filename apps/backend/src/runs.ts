@@ -42,7 +42,6 @@ export {
   isActiveStatus,
   isTerminalStatus,
   MAX_CONCURRENT_RUNS,
-  normalizeRun,
   RUN_DEADLINE_MS,
 } from "@shiba/shared";
 export type { DelegatedRun, RunPatch, RunStatus } from "@shiba/shared";

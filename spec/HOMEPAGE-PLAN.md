@@ -62,7 +62,7 @@ First diff `client/src/` against the baseline for unique helpers/imports. The on
 
 Architecture: single root package and lockfile — no docs-local package, no workspaces. Astro runs with `--root docs`; static output only, no adapter, no SSR (Context7 `/withastro/docs`, configuration reference: https://docs.astro.build/en/reference/configuration-reference/ — static output is default; `outDir` documented). Starlight provides navigation, search, theming, accessibility — use natively, no custom reinvention. Manual setup verified via Context7 `/withastro/starlight` (https://starlight.astro.build/manual-setup/): the docs collection is defined in `docs/src/content.config.ts` with `defineCollection`, `docsLoader` from `@astrojs/starlight/loaders`, and `docsSchema` from `@astrojs/starlight/schema`; Starlight prerenders its pages. Pagefind indexing is skipped during development, so search is tested from a production preview of the built output, never from `docs:dev`. Functional React dashboard stays at `/` per GOAL.
 
-Build order (root `npm run build`): 1) `vite build` (empties `public/`), 2) `astro build --root docs` into `docs/dist` with `base: '/docs'`, 3) small copy step (`scripts/copy-docs.mjs`, ~15 lines, fs.cp) moving `docs/dist` -> `public/docs`. This ordering prevents Vite's `emptyOutDir` from wiping docs output. `docs:dev` on port 4321 (`astro dev --root docs --port 4321`); `docs:check` runs `astro check --root docs`.
+Build order (root `npm run build`): 1) `vite build` (empties `public/`), 2) `astro build --root docs` into `docs/dist` with `base: '/docs'`, 3) small copy step (`scripts/assemble-public.mjs`, ~15 lines, fs.cp) moving `docs/dist` -> `public/docs`. This ordering prevents Vite's `emptyOutDir` from wiping docs output. `docs:dev` on port 4321 (`astro dev --root docs --port 4321`); `docs:check` runs `astro check --root docs`.
 
 Wrangler 404 implication: `apps/backend/wrangler.jsonc` currently sets `not_found_handling: "single-page-application"`, so any missing `/docs/*` path would serve the SPA shell instead of 404. Plan: switch to `"404-page"` with a static 404 (hand-authored minimal `client/public/404.html` so Vite copies it into `public/`; Astro's generated `404.html` lands at `public/docs/404.html` via the copy step). `/api` and `/agents` are Worker-routed before assets and unaffected. The dashboard has no client-side routes, so a global static 404 is safe; if this config change is judged too invasive at review, that decision is made explicitly, not silently.
 
@@ -73,7 +73,7 @@ docs/
   src/content.config.ts     # defineCollection + docsLoader (@astrojs/starlight/loaders) + docsSchema (@astrojs/starlight/schema)
   src/content/docs/*.md     # pages below
   src/styles/custom.css     # ONLY if a genuine gap; otherwise pure Starlight
-scripts/copy-docs.mjs
+scripts/assemble-public.mjs
 client/public/404.html
 ```
 New devDependencies: `astro`, `@astrojs/starlight`, plus `@astrojs/check` for `docs:check`. Node floor stated in docs comes from installed engines, not README: Vite 8 requires `^20.19.0 || >=22.12.0` (verified in installed node_modules); README's "Node.js 18 or later" is wrong. Astro's own engines verified from the installed package at implementation. Setup sources: https://docs.astro.build/en/reference/configuration-reference/ and https://starlight.astro.build/manual-setup/.

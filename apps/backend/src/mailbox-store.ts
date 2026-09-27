@@ -141,7 +141,6 @@ export const MAILBOX_SCHEMA = {
 export {
   DRAFT_STATUSES,
   DRAFT_UPDATE_STATUSES,
-  EMAIL_DIRECTIONS,
   EMAIL_STATUSES,
 } from "@shiba/shared";
 export type {
@@ -153,7 +152,6 @@ export type {
   MailboxRecord,
   StoredAttachment,
   StoredEmail,
-  StoredThread,
   ThreadView,
 } from "@shiba/shared";
 import { DRAFT_UPDATE_STATUSES, EMAIL_DIRECTIONS, EMAIL_STATUSES } from "@shiba/shared";

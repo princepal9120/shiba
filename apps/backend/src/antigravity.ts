@@ -17,11 +17,8 @@
  * owns that.
  */
 import type { Env } from "./env.js";
-import {
-  antigravitySubscriptionAuth,
-} from "./auth/antigravity-subscription.js";
+import { antigravitySubscriptionAuth, AuthFlowError } from "@shiba/auth";
 import { antigravitySubscriptionInstanceId } from "./harness/antigravity-subscription.js";
-import { AuthFlowError } from "./auth/controller.js";
 import { AntigravityCallbackError } from "@shiba/shared";
 
 function authError(reason: unknown): Response {

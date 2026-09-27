@@ -25,11 +25,6 @@ export default defineConfig({
     target: "es2022",
     sourcemap: false,
   },
-  environments: {
-    // Start writes <build.outDir>/client and /server; only the client build
-    // belongs in the Worker's assets dir (the server bundle stays in dist/).
-    client: { build: { outDir: resolve(rootDir, "../../public") } },
-  },
   server: {
     port: 5173,
     // Same-origin in prod; in dev the Worker runs on 8788 (8787 is often taken).

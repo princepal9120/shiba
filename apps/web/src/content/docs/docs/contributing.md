@@ -39,10 +39,10 @@ Source: `apps/web/astro.config.mjs`.
 
 Write technical claims from `apps/backend/src/`, `apps/backend/wrangler.jsonc`, `apps/backend/Dockerfile`, and installed configuration rather than copying README assumptions. Cite relevant source files or symbols. When source and the goal differ, label **Current behavior (as implemented)** and **Specification target (GOAL)** explicitly. Distinguish implementation, unit tests (often fake-backed), local end-to-end exercises, and successful cloud-live evidence; cite the dated `VERIFICATION.md` entry. Its 2026-09-24 summary has no cloud end-to-end run. The 2026-09-19 local OpenCode run ended with a 401 provider response, not successful inference.
 
-The combined build builds the dashboard first, then documentation, copies
-the documentation output into `public/docs`, and verifies the assembled site.
-Do not reverse that order: Vite empties `public` before its build.
-Source: root `package.json`, `apps/frontend/vite.config.ts`, and `scripts/copy-docs.mjs`.
+The combined build builds the dashboard and documentation, merges
+`apps/frontend/dist/client` then `apps/web/dist` into `public/` (the second
+copy wins on name collisions), and verifies the assembled site.
+Source: root `package.json`, `apps/frontend/vite.config.ts`, and `scripts/assemble-public.mjs`.
 
 ## Review and publication
 

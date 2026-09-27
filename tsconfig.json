@@ -35,6 +35,8 @@
   },
   "include": [
     "packages/shared/src",
+    "packages/auth/src",
+    "packages/auth/test",
     "apps/backend/src",
     "apps/backend/test",
     "apps/frontend/src",

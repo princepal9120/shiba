@@ -145,6 +145,19 @@ export interface HarnessConfigFile {
 }
 
 /**
+ * One parsed line of a harness's stdout stream — typed enough for the
+ * dashboard to render a step timeline (assistant text vs tool calls vs the
+ * terminal result) instead of one channel. `text` is always the
+ * human-readable line the progress feed shows — identical to what the old
+ * string return produced.
+ */
+export type HarnessEvent =
+  | { readonly kind: "text"; readonly text: string }
+  | { readonly kind: "tool"; readonly name: string; readonly text: string }
+  | { readonly kind: "result"; readonly text: string }
+  | { readonly kind: "progress"; readonly text: string };
+
+/**
  * T43 declared capabilities — the interface is the seam: a new harness
  * declares what it can do and the UI/gates read the declaration instead
  * of name-checking. `capabilities` replaces the hardcoded name lists;
@@ -243,11 +256,12 @@ export interface AgentHarness {
   env(input: CodingTaskInput, configPath: string | null): Record<string, string>;
   buildArgv(input: CodingTaskInput, workdir: string): string[];
   /**
-   * Parse one streamed event line into progress text. Returns null for blank
-   * lines. Throws the harness's event error (e.g. OpenCodeErrorEvent) for
-   * error events so the run fails honestly instead of pretending success.
+   * Parse one streamed event line into a typed {@link HarnessEvent}. Returns
+   * null for blank lines and events not worth surfacing. Throws the
+   * harness's event error (e.g. OpenCodeErrorEvent) for error events so the
+   * run fails honestly instead of pretending success.
    */
-  parseEvent(line: string): string | null;
+  parseEvent(line: string): HarnessEvent | null;
   /**
    * T48: subscription-authed harnesses declare the auth instance this run
    * uses; undefined for API-key harnesses. The admission gate checks the

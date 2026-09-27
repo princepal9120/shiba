@@ -9,11 +9,10 @@ import { listTokens, verifyToken } from "./agent-tokens.js";
 import { OpenCodeAgent } from "./agents/opencode-agent.js";
 import { CodingOrchestrator } from "./agents/orchestrator.js";
 import { AUDIT_RETENTION_MS, listAuditEntries, pruneAuditLog } from "./audit.js";
-import { claudeSubscriptionAuth } from "./auth/claude-subscription.js";
-import { codexSubscriptionAuth } from "./auth/codex-subscription.js";
+import { claudeSubscriptionAuth, codexSubscriptionAuth, AuthFlowError } from "@shiba/auth";
 import { handleAntigravityCallback, handleAntigravitySubscriptionAuth } from "./antigravity.js";
 import { codexSubscriptionInstanceId } from "./harness/codex-subscription.js";
-import { AuthFlowError } from "./auth/controller.js";
+import { forwardClaudeSubscription, forwardCodexSubscription, type EgressEnv } from "./egress.js";
 import { AUTOMATIONS_DO_NAME } from "./automation-runner.js";
 import { Automations } from "./automations-do.js";
 import { parseAutomationWebhookPath } from "./automations.js";
@@ -182,7 +181,9 @@ async function handleClaudeSubscriptionAuth(request: Request, env: Env): Promise
       : {};
   const accountRaw = request.method === "GET" ? url.searchParams.get("account") : body.account;
   const account = typeof accountRaw === "string" && accountRaw.trim() !== "" ? accountRaw.trim() : "default";
-  const controller = claudeSubscriptionAuth(env, `claude-sub:${account}`);
+  const controller = claudeSubscriptionAuth(env, `claude-sub:${account}`, (request, e, ctx) =>
+    forwardClaudeSubscription(request, e as EgressEnv, ctx),
+  );
   const authError = (reason: unknown) =>
     Response.json(
       { error: reason instanceof AuthFlowError ? reason.message : "Auth flow error." },
@@ -226,7 +227,9 @@ async function handleCodexSubscriptionAuth(request: Request, env: Env): Promise<
       : {};
   const accountRaw = request.method === "GET" ? url.searchParams.get("account") : body.account;
   const account = typeof accountRaw === "string" && accountRaw.trim() !== "" ? accountRaw.trim() : "default";
-  const controller = codexSubscriptionAuth(env, codexSubscriptionInstanceId({ authAccount: account }));
+  const controller = codexSubscriptionAuth(env, codexSubscriptionInstanceId({ authAccount: account }), (request, e, ctx) =>
+    forwardCodexSubscription(request, e as EgressEnv, ctx),
+  );
   const authError = (reason: unknown) =>
     Response.json(
       { error: reason instanceof AuthFlowError ? reason.message : "Auth flow error." },
@@ -1571,7 +1574,7 @@ async function handleGitHubWebhook(request: Request, env: Env, ctx?: ExecutionCo
           }
         })
         .catch((error: unknown) => {
-          console.error(redactSecrets(error instanceof Error ? error.message : String(error)));
+          console.error(redactSecrets(error instanceof Error ? (error.message) : String(error)));
         }),
     );
   }
@@ -1602,7 +1605,7 @@ export default {
           }
         })
         .catch((error: unknown) => {
-          console.error(redactSecrets(error instanceof Error ? error.message : String(error)));
+          console.error(redactSecrets(error instanceof Error ? (error.message) : String(error)));
         }),
     );
     // Stale-draft sweep: the approvals-poll and restart paths only run it
@@ -1620,7 +1623,7 @@ export default {
           }
         })
         .catch((error: unknown) => {
-          console.error(redactSecrets(error instanceof Error ? error.message : String(error)));
+          console.error(redactSecrets(error instanceof Error ? (error.message) : String(error)));
         }),
     );
     // Retention: audit_log keeps 90 days — pruned here on the same cron
@@ -1815,7 +1818,7 @@ export default {
                 console.error(`automation slack fan-out failed: ${response.status}`);
               }
             } catch (error: unknown) {
-              console.error(redactSecrets(error instanceof Error ? error.message : String(error)));
+              console.error(redactSecrets(error instanceof Error ? (error.message) : String(error)));
             }
           },
         },
@@ -1885,10 +1888,16 @@ export default {
       if (agentResponse) {
         return agentResponse;
       }
+      // An unmatched /api/* path must not fall through to the static site —
+      // assets serves the marketing 404 page, which breaks JSON clients and
+      // deep links like the run-card screenshot URL.
+      if (url.pathname.startsWith("/api/")) {
+        return Response.json({ error: "Not found." }, { status: 404 });
+      }
       return env.ASSETS.fetch(request);
     } catch (error) {
       // The client gets a generic 500; the redacted detail stays in the log.
-      console.error(redactSecrets(error instanceof Error ? error.message : String(error)));
+      console.error(redactSecrets(error instanceof Error ? (error.message) : String(error)));
       return Response.json({ error: "Internal error." }, { status: 500 });
     }
   },

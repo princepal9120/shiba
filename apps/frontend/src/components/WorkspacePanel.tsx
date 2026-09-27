@@ -310,7 +310,7 @@ export function WorkspacePanel({
           title="Expand workspace panel"
           className="w-7 h-7 rounded-none flex items-center justify-center text-[#6a6f63] hover:text-[#222320] hover:bg-[#fffef8] transition-colors"
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg aria-hidden="true"  className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
@@ -379,10 +379,10 @@ export function WorkspacePanel({
           title="Collapse workspace panel"
           className="w-11 h-11 lg:w-7 lg:h-7 mx-1 lg:mx-2 mt-1 shrink-0 rounded-none flex items-center justify-center text-[#6a6f63] hover:text-[#222320] hover:bg-[#fffef8] transition-colors"
         >
-          <svg className="w-5 h-5 lg:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg aria-hidden="true"  className="w-5 h-5 lg:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
-          <svg className="w-4 h-4 hidden lg:block" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg aria-hidden="true"  className="w-4 h-4 hidden lg:block" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
         </button>
@@ -414,7 +414,7 @@ export function WorkspacePanel({
                 title="Refresh runs"
                 className="text-[11px] text-[#6a6f63] hover:text-[#222320] border border-[#e0ded5] hover:border-[#d3d2c8] rounded-none px-2 py-1 transition-colors flex items-center gap-1"
               >
-                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg aria-hidden="true"  className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
                 Refresh
@@ -517,7 +517,7 @@ export function WorkspacePanel({
                             aria-label={`${run.task} — ${run.repoUrl} — ${run.status}`}
                           >
                             <div className="flex items-center gap-2 overflow-hidden">
-                              <svg className="w-3.5 h-3.5 text-[#6a6f63] transform group-open:rotate-90 transition-transform shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <svg aria-hidden="true"  className="w-3.5 h-3.5 text-[#6a6f63] transform group-open:rotate-90 transition-transform shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                               </svg>
                               <span className="font-mono text-[11px] text-[#222320] truncate font-medium">

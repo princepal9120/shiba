@@ -1187,7 +1187,7 @@ export function App(): React.JSX.Element {
           aria-expanded={mobileNavOpen}
           className="lg:hidden size-11 -my-1 shrink-0 rounded-none flex items-center justify-center text-white/90 hover:bg-white/15 transition-colors"
         >
-          <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <svg aria-hidden="true"  className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
           </svg>
         </button>
@@ -1208,7 +1208,7 @@ export function App(): React.JSX.Element {
               aria-label="Open command menu"
               className="h-7 touch:h-9 touch:min-w-11 justify-center rounded-none border border-white/20 bg-white/10 text-white/90 hover:bg-white/20 hover:text-white flex items-center gap-1.5 px-2 text-[11px] font-medium transition-colors"
             >
-              <svg className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg aria-hidden="true"  className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 10.5a6.5 6.5 0 11-13 0 6.5 6.5 0 0113 0z" />
               </svg>
               <span className="font-mono text-[10px] text-white/60">⌘K</span>
@@ -1344,7 +1344,7 @@ export function App(): React.JSX.Element {
                   aria-expanded={!sessionsCollapsed}
                   className="hidden lg:flex w-7 h-7 rounded-none border border-black/[0.08] bg-[#fffef8] text-[#6a6f63] hover:text-[#222320] hover:bg-[#e0ded5] items-center justify-center transition-colors shrink-0"
                 >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg aria-hidden="true"  className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     {sessionsCollapsed ? (
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
                     ) : (
@@ -1362,7 +1362,7 @@ export function App(): React.JSX.Element {
                 aria-label="Open sessions"
                 className="lg:hidden w-7 h-7 touch:w-11 touch:h-11 rounded-none border border-black/[0.08] bg-[#fffef8] text-[#6a6f63] hover:text-[#222320] flex items-center justify-center transition-colors shrink-0"
               >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg aria-hidden="true"  className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </button>
@@ -1426,7 +1426,7 @@ export function App(): React.JSX.Element {
                   </span>
                 ) : (
                   <span className="text-[#15803d] flex items-center gap-2">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg aria-hidden="true"  className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
                     {approvalAnnouncement}
@@ -1450,7 +1450,7 @@ export function App(): React.JSX.Element {
             <div className="px-3 sm:px-5 xl:px-6 pt-3 flex flex-col gap-2 shrink-0">
               {notice ? (
                 <div role="status" aria-live="polite" className="text-xs text-[#6a6f63] bg-[#fffef8] p-3 rounded-none border border-[#e0ded5] flex items-start gap-2">
-                  <svg className="w-4 h-4 text-[#0000a8] shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg aria-hidden="true"  className="w-4 h-4 text-[#0000a8] shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   <div className="break-words">{notice}</div>
@@ -1458,7 +1458,7 @@ export function App(): React.JSX.Element {
               ) : null}
               {chat.error ? (
                 <div role="alert" className="text-xs text-[#fb2c36] bg-[#fb2c36]/10 p-3 rounded-none border border-[#fb2c36]/30 flex items-start gap-2">
-                  <svg className="w-4 h-4 text-[#fb2c36] shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg aria-hidden="true"  className="w-4 h-4 text-[#fb2c36] shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                   </svg>
                   <div className="break-words">Chat error: {chat.error.message}</div>
@@ -1466,7 +1466,7 @@ export function App(): React.JSX.Element {
               ) : null}
               {runsError ? (
                 <div className="text-xs text-[#fb2c36] bg-[#fb2c36]/10 p-3 rounded-none border border-[#fb2c36]/30 flex items-start gap-2">
-                  <svg className="w-4 h-4 text-[#fb2c36] shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg aria-hidden="true"  className="w-4 h-4 text-[#fb2c36] shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   <div className="break-words">Runs registry: {runsError}</div>

@@ -35,7 +35,7 @@ import { ClaudeCodeErrorEvent } from "../src/harness/claude-code.js";
 import { resolveHarness, SANDBOX_HARNESS_NAMES, sandboxHarnessNames } from "../src/harness/index.js";
 import { forwardClaudeSubscription, GATEWAY_PROVIDERS, type EgressEnv } from "../src/egress.js";
 import { assertHarnessAuthorized } from "../src/auth/index.js";
-import { claudeSubscriptionSecretName } from "../src/auth/claude-subscription.js";
+import { claudeSubscriptionSecretName } from "@shiba/auth";
 import { Sandbox } from "../src/sandbox.js";
 import type { CodingTaskInput } from "../src/opencode-input.js";
 
@@ -277,12 +277,14 @@ describe("admission gate (T47 controller)", () => {
     ).rejects.toThrow(/no authenticated account/);
     // Operator drives the flow end-to-end on the same env: begin → verify.
     // The probe hits forwardClaudeSubscription; stub the wire to a 200.
-    const { claudeSubscriptionAuth } = await import("../src/auth/claude-subscription.js");
+    const { claudeSubscriptionAuth } = await import("@shiba/auth");
     const original = globalThis.fetch;
     globalThis.fetch = (async () => new Response("{}", { status: 200 })) as typeof fetch;
     try {
       const secretEnv = { ...env, CLAUDE_SUBSCRIPTION_TOKEN: "sk-ant-oat01-real" };
-      const controller = claudeSubscriptionAuth(secretEnv, "claude-sub:default");
+      const controller = claudeSubscriptionAuth(secretEnv, "claude-sub:default", (r, e, c) =>
+        forwardClaudeSubscription(r, e as EgressEnv, c),
+      );
       await controller.begin("owner@example.com");
       await controller.verify("owner@example.com");
     } finally {
@@ -296,11 +298,13 @@ describe("admission gate (T47 controller)", () => {
   it("a cleared flow refuses the next run — admission closes on sign-out", async () => {
     const env = kvEnv();
     const secretEnv = { ...env, CLAUDE_SUBSCRIPTION_TOKEN: "sk-ant-oat01-real" };
-    const { claudeSubscriptionAuth } = await import("../src/auth/claude-subscription.js");
+    const { claudeSubscriptionAuth } = await import("@shiba/auth");
     const original = globalThis.fetch;
     globalThis.fetch = (async () => new Response("{}", { status: 200 })) as typeof fetch;
     try {
-      const controller = claudeSubscriptionAuth(secretEnv, "claude-sub:default");
+      const controller = claudeSubscriptionAuth(secretEnv, "claude-sub:default", (r, e, c) =>
+        forwardClaudeSubscription(r, e as EgressEnv, c),
+      );
       await controller.begin("owner@example.com");
       await controller.verify("owner@example.com");
       await controller.clear("owner@example.com");
