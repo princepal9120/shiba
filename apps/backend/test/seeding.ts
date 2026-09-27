@@ -23,6 +23,8 @@ export interface SeedInput {
   baseBranch?: string;
   publishPullRequest?: boolean;
   route?: ApprovedRoute;
+  /** T51: the approved runtime the pointer reserves. */
+  runtime?: "sandbox" | "local";
 }
 
 type SeedableState = { runs: DelegatedRun[]; pendingApprovals?: PendingApproval[] };
@@ -68,6 +70,7 @@ export function approvePointerOnly<S extends SeedableState>(
     ...(input.baseBranch !== undefined ? { baseBranch: input.baseBranch } : {}),
     ...(input.publishPullRequest !== undefined ? { publishPullRequest: input.publishPullRequest } : {}),
     ...(input.route !== undefined ? { route: input.route } : {}),
+    ...(input.runtime !== undefined ? { runtime: input.runtime } : {}),
     createdAt: now - 1_000,
   });
   const { approvals } = resolvePendingApproval(
@@ -94,11 +97,13 @@ export function approveDirect<S extends SeedableState>(
     baseBranch: record.baseBranch ?? "main",
     publishPullRequest: record.publishPullRequest ?? false,
     ...(record.route !== undefined ? { route: record.route } : {}),
+    ...(record.runtime !== undefined ? { runtime: record.runtime } : {}),
   };
   const run = createRun({
     runId: `agent-tool:${callId}`,
     sandboxId: `sbx-${callId}`,
     ...frozen,
+    ...(record.runtime !== undefined ? { runtime: record.runtime } : {}),
     approval: approvalEvidenceFor(record, frozen),
   });
   host.setState({

@@ -200,6 +200,11 @@ export const Worker = Cloudflare.Worker("Worker", {
     ModelConfig: Cloudflare.DurableObject<ModelConfig>("ModelConfig", {
       className: "ModelConfig",
     }),
+    // T51: the local-runtime claim mailbox — one singleton DO serializes
+    // dispatch/claim/settle between the Worker and the operator daemon.
+    LocalDispatch: Cloudflare.DurableObject("LocalDispatch", {
+      className: "LocalDispatch",
+    }),
 
     // Megaplan stores — wrangler keeps `__PENDING__` ids until the resources
     // are created; alchemy provisions them on first deploy.
@@ -247,6 +252,8 @@ export const Worker = Cloudflare.Worker("Worker", {
       // T49: the operator's `codex login` auth.json contents; per-account
       // secrets (CODEX_SUBSCRIPTION_AUTH_JSON_<ACCOUNT>) resolve by name.
       "CODEX_SUBSCRIPTION_AUTH_JSON",
+      // T51: the bearer the `shiba local` daemon presents on /api/local/*.
+      "LOCAL_ADAPTER_TOKEN",
     ]),
     // Live deploys fail closed: no Access identity = 401 on the dashboard/API.
     ...(isLiveStage ? { REQUIRE_ACCESS: "1" } : {}),
@@ -266,6 +273,8 @@ export const Worker = Cloudflare.Worker("Worker", {
       // credential var exists — OAuth tokens live in the container profile.
       "SHIBA_ANTIGRAVITY_SUBSCRIPTION",
       "ANTIGRAVITY_SUBSCRIPTION_MODEL",
+      // T51 opt-in (§18.13): absent = the local runtime is dark.
+      "SHIBA_LOCAL_RUNTIME",
       "CODEX_MODEL",
       "DEVIN_MODEL",
       "GROK_MODEL",
