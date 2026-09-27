@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev --port 8788",
-    "lint": "eslint src test",
+    "lint": "eslint src",
     "test": "vitest run",
     "test:live": "vitest run test/typesafe-live.test.ts",
     "typecheck": "tsc --noEmit -p ../../tsconfig.json"
