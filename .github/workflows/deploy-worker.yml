@@ -1,0 +1,55 @@
+name: Deploy worker (alchemy)
+
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: ALCHEMY_STAGE (empty = live shiba-ai-coworker)
+        required: false
+        default: ""
+      sandbox_image:
+        description: Prebuilt registry.cloudflare.com image ref (empty = Docker build)
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Deploy stack via alchemy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ALCHEMY_STAGE: ${{ inputs.stage }}
+          SANDBOX_IMAGE: ${{ inputs.sandbox_image }}
+          # Operator-managed vars come from repo secrets too — absent names
+          # are skipped by secrets()/configVars() in alchemy.run.ts. The
+          # worker's GITHUB_TOKEN/GITHUB_WEBHOOK_SECRET bindings aren't
+          # mappable here (GitHub forbids repo secrets starting GITHUB_) —
+          # stored values persist across deploys once set via wrangler.
+          ACCESS_EMAILS: ${{ secrets.ACCESS_EMAILS }}
+          WORKERS_SUBDOMAIN: ${{ secrets.WORKERS_SUBDOMAIN }}
+          SLACK_SIGNING_SECRET: ${{ secrets.SLACK_SIGNING_SECRET }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_APPROVERS: ${{ secrets.SLACK_APPROVERS }}
+          SLACK_CHANNEL_REPOS: ${{ secrets.SLACK_CHANNEL_REPOS }}
+          SLACK_APPROVALS_CHANNEL: ${{ secrets.SLACK_APPROVALS_CHANNEL }}
+          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+          AI_GATEWAY_TOKEN: ${{ secrets.AI_GATEWAY_TOKEN }}
+          DEVIN_API_KEY: ${{ secrets.DEVIN_API_KEY }}
+          CLAUDE_SUBSCRIPTION_TOKEN: ${{ secrets.CLAUDE_SUBSCRIPTION_TOKEN }}
+          CODEX_SUBSCRIPTION_AUTH_JSON: ${{ secrets.CODEX_SUBSCRIPTION_AUTH_JSON }}
+          LOCAL_ADAPTER_TOKEN: ${{ secrets.LOCAL_ADAPTER_TOKEN }}
+        # alchemy deploy reads .env via process.loadEnvFile — no file needed;
+        # env vars above win. `pnpm run deploy` = build + alchemy deploy.
+        run: pnpm run deploy
