@@ -126,12 +126,16 @@ export interface GitHubAutomationEvent {
   branch?: string;
   author?: string;
   labels?: string[];
+  /** `x-github-delivery` header value — the command-receipt key (T41). */
+  deliveryId?: string;
 }
 
 export interface SlackAutomationEvent {
   channel?: string;
   author?: string;
   text?: string;
+  /** Slack envelope `event_id` — the command-receipt key (T41). */
+  eventId?: string;
 }
 
 export type AutomationMatchEvent =

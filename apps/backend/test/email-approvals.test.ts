@@ -542,8 +542,10 @@ describe("email approval execution", () => {
     await settled();
     const callsAfterFirst = mailboxCalls.length;
     expect(send).toHaveBeenCalledOnce();
+    // T41: the replay reads the durable command receipt and learns the
+    // recorded answer — it executes nothing.
     const replay = await approve(instance, approval_id, true);
-    expect((await replay.json() as { result: string }).result).toBe("unknown");
+    expect((await replay.json() as { result: string }).result).toBe("approved");
     await settled();
     await flush();
     expect(send).toHaveBeenCalledOnce();
@@ -569,9 +571,10 @@ describe("email approval execution", () => {
       { method: "GET", path: "/internal/mailbox/drafts/draft-1", body: undefined },
       { method: "POST", path: "/internal/mailbox/drafts/draft-1/unqueue", body: undefined },
     ]);
-    // The spent pointer cannot later send the payload either.
+    // The spent pointer cannot later send the payload either — T41's
+    // receipt answers the replay with the recorded decision.
     const replay = await approve(instance, approval_id, true);
-    expect((await replay.json() as { result: string }).result).toBe("unknown");
+    expect((await replay.json() as { result: string }).result).toBe("rejected");
     await settled();
     await flush();
     expect(send).not.toHaveBeenCalled();

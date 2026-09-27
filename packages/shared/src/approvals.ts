@@ -262,7 +262,7 @@ export interface RunInputFields {
 }
 
 /** Key-sorted JSON — the canonical form the input hash covers. */
-function stableJson(value: JsonValue): string {
+export function stableJson(value: JsonValue): string {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
   const entries = Object.keys(value)
@@ -271,21 +271,26 @@ function stableJson(value: JsonValue): string {
   return `{${entries.join(",")}}`;
 }
 
-/** FNV-1a over the canonical input — a tamper check, not a credential. */
-export function runInputHash(input: RunInputFields): string {
-  const canonical = stableJson({
-    repoUrl: input.repoUrl,
-    task: input.task,
-    baseBranch: input.baseBranch,
-    publishPullRequest: input.publishPullRequest,
-    ...(input.route !== undefined ? { route: input.route as unknown as JsonValue } : {}),
-  });
+/** FNV-1a over a canonical JSON value — a tamper check, not a credential. */
+export function stableHash(value: JsonValue): string {
+  const canonical = stableJson(value);
   let hash = 0x811c9dc5;
   for (let i = 0; i < canonical.length; i++) {
     hash ^= canonical.charCodeAt(i);
     hash = Math.imul(hash, 0x01000193) >>> 0;
   }
   return hash.toString(16).padStart(8, "0");
+}
+
+/** FNV-1a over the canonical input — a tamper check, not a credential. */
+export function runInputHash(input: RunInputFields): string {
+  return stableHash({
+    repoUrl: input.repoUrl,
+    task: input.task,
+    baseBranch: input.baseBranch,
+    publishPullRequest: input.publishPullRequest,
+    ...(input.route !== undefined ? { route: input.route as unknown as JsonValue } : {}),
+  });
 }
 
 /**

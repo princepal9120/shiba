@@ -38,7 +38,7 @@ export interface OrchestratorStub {
 
 async function queueOnOrchestrator(
   stub: OrchestratorStub,
-  input: { repoUrl: string; task: string; publishPullRequest: boolean; threadKey: string },
+  input: { repoUrl: string; task: string; publishPullRequest: boolean; threadKey: string; commandId?: string },
 ): Promise<{ approvalId: string }> {
   const queued = await stub.fetch(
     new Request("https://internal/api/runs", {
@@ -162,7 +162,16 @@ export class Automations {
       const record = typeof body === "object" && body !== null ? (body as Record<string, unknown>) : {};
       const githubEvent = typeof record.event === "string" ? record.event : "unknown";
       const mapped = githubWebhookToEvent(githubEvent, record.payload);
-      const result = await this.fireEvent({ kind: "github", ...mapped }, await this.orchestrator());
+      const result = await this.fireEvent(
+        {
+          kind: "github",
+          ...mapped,
+          ...(typeof record.deliveryId === "string" && record.deliveryId !== ""
+            ? { deliveryId: record.deliveryId }
+            : {}),
+        },
+        await this.orchestrator(),
+      );
       return Response.json(result);
     }
     if (request.method === "POST" && url.pathname === "/internal/dedupe") {
