@@ -30,7 +30,7 @@ pnpm -C apps/frontend dev                                          # vite :5173
 pnpm -C apps/backend dev                                           # wrangler :8788
 # Docker absent / daemon down? wrangler aborts building the Sandbox image —
 # the fix wrangler itself prints: add --enable-containers=false
-../../node_modules/.bin/wrangler dev --port 8788 --enable-containers=false
+pnpm exec wrangler dev --port 8788 --config apps/backend/wrangler.jsonc --enable-containers=false
 ```
 
 - Approval-queue endpoints (`POST /api/runs`, `GET /api/approvals`) work fully

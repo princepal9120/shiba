@@ -50,7 +50,7 @@ interface GateNotice {
   approvalId?: string;
 }
 
-const REPO_RE = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+/;
+const REPO_RE = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+(?:\.git)?\/?$/;
 
 const inputClass =
   "w-full bg-[#fffef8] text-xs font-mono text-[#222320] border border-[#e0ded5] rounded-none px-3 py-1.5 transition-colors focus:outline-none focus:border-[#0000a8] focus:ring-1 focus:ring-[#0000a8]/30 placeholder:text-[#6a6f63]/50";
@@ -202,7 +202,7 @@ export function GatesView({ onNavigate }: { onNavigate?: (view: AppNavView) => v
                 <div className="flex items-center gap-3 flex-wrap">
                   <button
                     type="button"
-                    disabled={busyId === gate.id}
+                    disabled={busyId !== null}
                     onClick={() => void launch(gate)}
                     className="bg-[#0000a8] hover:bg-[#1c1cc8] text-white font-semibold py-1.5 px-4 rounded-none transition-all disabled:opacity-40 disabled:cursor-not-allowed text-xs flex items-center gap-1.5 shadow-[2px_2px_0_var(--paper-shadow)] active:translate-y-px"
                   >
