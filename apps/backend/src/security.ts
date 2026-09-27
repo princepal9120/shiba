@@ -118,28 +118,9 @@ export function cyrb53(input: string, seed = 0): string {
   return `${upper}${lower}`.toLowerCase();
 }
 
-const SECRET_PATTERNS: RegExp[] = [
-  /ghp_[A-Za-z0-9]{8,}/g,
-  /gho_[A-Za-z0-9]{8,}/g,
-  /ghu_[A-Za-z0-9]{8,}/g,
-  /github_pat_[A-Za-z0-9_]{8,}/g,
-  /AIza[A-Za-z0-9_-]{8,}/g,
-  /sk-[A-Za-z0-9]{8,}/g,
-  /xox[bpas]-[A-Za-z0-9-]{8,}/g,
-  /Bearer\s+[A-Za-z0-9._~+/-]{8,}={0,2}/gi,
-  /api[_-]?key\s*[:=]\s*['"]?[A-Za-z0-9._~+/-]{8,}['"]?/gi,
-  /AI_GATEWAY_TOKEN\s*[:=]\s*[A-Za-z0-9._~+/-]{8,}/gi,
-];
-
-/** Replace known secret shapes with [redacted]. Safe to run on any text. */
-export function redactSecrets(text: string): string {
-  let out = text;
-  for (const pattern of SECRET_PATTERNS) {
-    pattern.lastIndex = 0;
-    out = out.replace(pattern, "[redacted]");
-  }
-  return out;
-}
+// The scrubber lives in @shiba/shared so packages/ code can redact too;
+// re-exported so existing `./security.js` imports are unchanged.
+export { redactSecrets } from "@shiba/shared";
 
 /** Keep the tail of a log bounded, with a marker when truncated. */
 export function boundTail(text: string, maxChars: number): string {

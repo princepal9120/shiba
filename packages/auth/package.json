@@ -1,0 +1,23 @@
+{
+  "name": "@shiba/auth",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Worker-facing auth services: the shared provider auth state machine (T47) plus credential/login mechanics. Imports @shiba/shared types; harnesses never import this package — they read the type contracts from shared.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint src test",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@shiba/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260916.1",
+    "vitest": "5.0.1"
+  }
+}

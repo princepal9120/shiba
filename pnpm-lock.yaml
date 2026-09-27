@@ -230,6 +230,19 @@ importers:
         specifier: 5.9.3
         version: 5.9.3
 
+  packages/auth:
+    dependencies:
+      '@shiba/shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      '@cloudflare/workers-types':
+        specifier: ^5.20260916.1
+        version: 5.20260923.1
+      vitest:
+        specifier: 5.0.1
+        version: 5.0.1(@types/node@26.6.2)(vite@8.3.0(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+
   packages/shared:
     dependencies:
       zod:

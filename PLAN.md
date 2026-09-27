@@ -67,7 +67,7 @@
 | T45 scoped exec allowlist | **Done** — §18.6 |
 | T29 OAuth MCP | **Done (2026-09-27).** `src/oauth-mcp.ts` is a full OAuth 2.1 AS: RFC 8414/9728 discovery, RFC 7591 public-client registration (redirect URIs: https or loopback-http only, no fragments), code+PKCE(S256-only) authorize with owner consent (Access identity or `admin:tokens` bearer — never a URL credential), single-use 10-min codes keyed by hash, 1h `sho_` access + 30d rotating `shr_` refresh hashed in the AGENT_TOKENS KV, RFC 7009 revoke. `handleMcp` resolves `sho_` to the same TokenRecord `requireScope` gates on — the gate is byte-identical; 401s carry `WWW-Authenticate: resource_metadata`. Issuance rate-limited (20/IP/hour KV buckets) + audited. Static `shb_` tokens unchanged. 13 tests; 1415 green; evidence in VERIFICATION.md. |
 | T46 proof attachment gate | **Done (2026-09-27).** `CodingTaskResult.testEvidence` ({command, exitCode, outputTail}) recorded by the adapter after a declared testCommand's scoped exec — survives verify, rides the envelope (uiResult re-safeTexts it). `publishResult` PR body gains a `**Test evidence:**` block quoting the bounded tail verbatim, and states "No preview captured" when `captureRunPreview` yields nothing instead of implying proof. The tokenized exposePort URL stays out of the body (T33 hardening retained — it is a bearer credential). The gate itself is T43's verify at settle: empty diff + empty changedFiles + no test evidence settles `error` ("Verification failed: …"), a docs-only diff still completes. 3 new tests (PR-body proof section; no-diff/no-proof → error; docs-only → completed); 1399 green; evidence in VERIFICATION.md. |
-| T47 shared auth core | **Done (2026-09-27).** `packages/shared/src/auth.ts` owns the types (`AuthPhase` incl. `waiting` for T50 only; `AuthSnapshot`; `ProviderAuthController`) so harnesses import the *type* across the `harness/ → shared` rule — `src/auth/` imports nothing from `harness/`. `src/auth/controller.ts` is `createAuthController(env, instanceId, hooks)`: flows persist as metadata under `auth_flow_<instanceId>` in AGENT_TOKENS KV (never a credential — credentials are per-account Worker secrets declared by each provider task); ownership enforced on every mutating method (`not_owner` refuses everyone but `begin`'s session); only `hooks.probe` — the per-provider capability probe — may set `succeeded`; `clear` runs closeAdmission → stopInFlight → wipe, idempotent. KV outages fail closed (`store_unavailable`). 10 tests; evidence in VERIFICATION.md. |
+| T47 shared auth core | **Done (2026-09-27).** `packages/shared/src/auth.ts` owns the types (`AuthPhase` incl. `waiting` for T50 only; `AuthSnapshot`; `ProviderAuthController`) so harnesses import the *type* across the `harness/ → shared` rule — `packages/auth/` imports nothing from `harness/`. `packages/auth/src/controller.ts` is `createAuthController(env, instanceId, hooks)`: flows persist as metadata under `auth_flow_<instanceId>` in AGENT_TOKENS KV (never a credential — credentials are per-account Worker secrets declared by each provider task); ownership enforced on every mutating method (`not_owner` refuses everyone but `begin`'s session); only `hooks.probe` — the per-provider capability probe — may set `succeeded`; `clear` runs closeAdmission → stopInFlight → wipe, idempotent. KV outages fail closed (`store_unavailable`). 10 tests; evidence in VERIFICATION.md. |
 | T48 claude-subscription | **Planned** — §18.10 (dark: `SHIBA_CLAUDE_SUBSCRIPTION=1`) |
 | T49 codex-subscription | **Planned** — §18.11 (dark: `SHIBA_CODEX_SUBSCRIPTION=1`) |
 | T50 antigravity-subscription | **Planned** — §18.12 (dark: `SHIBA_ANTIGRAVITY_SUBSCRIPTION=1`) |
@@ -976,7 +976,7 @@ not code.
 
 **What this phase is not:** not event sourcing, not a rewrite, not a restructure. Runs are not a financial ledger; the receipt log plus a pure decider plus command receipts get the properties that matter at a fraction of the cost. The five security invariants (ARCHITECTURE.md §5) and the five working rules (CLAUDE.md) are unchanged and binding on every task below. Phases 1–8 are infrastructure and ship regardless; Phases 9–13 are the subscription credential path and are each **dark by default** — inert without a per-provider acknowledgement env var.
 
-**Dependency rule, restated so it cannot be quietly skipped:** a harness may import from `harness/types.ts`, `security.ts`, and `@shiba/shared` only — never `index.ts`, `orchestrator.ts`, or a chat module. The auth core (`src/auth/`) imports nothing from `harness/`. If a new file needs to violate this, the seam is in the wrong place — stop and say so rather than importing anyway.
+**Dependency rule, restated so it cannot be quietly skipped:** a harness may import from `harness/types.ts`, `security.ts`, and `@shiba/shared` only — never `index.ts`, `orchestrator.ts`, or a chat module. The auth core (`packages/auth/`) imports nothing from `harness/`. If a new file needs to violate this, the seam is in the wrong place — stop and say so rather than importing anyway.
 
 ### 18.0 As-built reconciliation — where the brief's map disagreed with the tree
 
@@ -1117,7 +1117,7 @@ Roomote's differentiator is a reviewer verifies without reading the diff line by
 
 ### 18.9 T47 · Shared auth core (~6h) — the skeleton three providers share
 
-New `src/auth/` (a Worker concern, never a container concern). One shared state machine, three provider-specific modules — not a framework. Ported from t3code's `ProviderAuthFlow`/`ProviderAuthService`, trimmed to what this system needs:
+New `packages/auth/` (a Worker concern, never a container concern). One shared state machine, three provider-specific modules — not a framework. Ported from t3code's `ProviderAuthFlow`/`ProviderAuthService`, trimmed to what this system needs:
 
 ```ts
 export type AuthPhase =
@@ -1142,7 +1142,7 @@ Three rules, ported because t3code earns them the hard way:
 
 **Storage.** The credential lives in a named Worker secret per account — declared in `env.ts`, and in **both** `alchemy.run.ts` and `wrangler.jsonc` (the drift check `scripts/check-alchemy-drift.mjs` must keep passing). Never a DO field, never a KV value, never in a UI response; the credential is only ever *read* at the egress boundary. Account identity is the stable `instanceId`; `queuedBy`-style records carry it, never the secret.
 
-**Boundary:** `src/auth/` imports nothing from `harness/`; harnesses import the controller *type* from `@shiba/shared` (`auth/types.ts` re-exported) so the dependency rule holds.
+**Boundary:** `packages/auth/` imports nothing from `harness/`; harnesses import the controller *type* from `@shiba/shared` (`auth/types.ts` re-exported) so the dependency rule holds.
 
 ### 18.10 T48 · `claude-subscription` harness — `setup-token` handoff (~8h)
 

@@ -25,8 +25,9 @@ import {
   type AuthPhase,
   type AuthSnapshot,
   type ProviderAuthController,
+  redactSecrets,
 } from "@shiba/shared";
-import { redactSecrets } from "../security.js";
+
 
 /** Provider-specific seams the shared machine calls into. */
 export interface AuthProviderHooks<Env> {
