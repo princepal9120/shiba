@@ -20,6 +20,7 @@ import { OpenCodeErrorEvent as OpenCodeErrorEventImpl, opencodeHarness } from ".
 import { HARNESS_RETRY, withRetry } from "./harness/retry.js";
 import type { AgentHarness } from "./harness/types.js";
 import { boundTail, redactSecrets, shellJoin, shellQuote } from "./security.js";
+import { ScopedExecRefusal, scopedExec } from "./exec-allowlist.js";
 
 export const MAX_DIFF_CHARS = 120_000;
 export const MAX_STDERR_TAIL_CHARS = 8_000;
@@ -29,6 +30,7 @@ export const MAX_FILE_CHARS = 100_000;
 export const MAX_TOTAL_FILE_CHARS = 500_000;
 export const OPENCODE_TIMEOUT_MS = 15 * 60 * 1000;
 export const GIT_TIMEOUT_MS = 5 * 60 * 1000;
+export const TEST_COMMAND_TIMEOUT_MS = 5 * 60 * 1000;
 export const MAX_PROGRESS_EVENTS = 256;
 
 export interface ExecResult {
@@ -110,6 +112,30 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
       signals.push(detail !== undefined ? { kind, at: Date.now(), detail } : { kind, at: Date.now() });
     };
 
+    // T45: every exec this run sends to the sandbox goes through the scoped
+    // executor — argv-prefix allowlist (adapter-internal git + the harness's
+    // own argv0 + its declared execAllowlist), timeout, output cap, receipts.
+    const capabilities = this.harness.capabilities(input.codingModel);
+    const harnessArgv = this.harness.buildArgv(input, workdir);
+    const allowlist: readonly (readonly string[])[] = [
+      ["git"],
+      [harnessArgv[0] as string],
+      ...capabilities.execAllowlist,
+    ];
+    const scoped: SandboxOps = {
+      ...ops,
+      exec: (command, execOpts) =>
+        scopedExec(ops, command, {
+          cwd: execOpts?.cwd,
+          env: execOpts?.env,
+          signal: execOpts?.signal,
+          onOutput: execOpts?.onOutput,
+          timeoutMs: execOpts?.timeoutMs,
+          allowlist,
+          signals,
+        }),
+    };
+
     throwIfAborted(opts?.signal);
     await emit({ phase: "clone", message: `Cloning ${input.repoUrl} (branch ${input.baseBranch}).`, fraction: 0.05 });
     // The ops handle being bound is the readiness claim; egress pinning
@@ -133,7 +159,7 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
 
     await emit({ phase: "code", message: `Running ${this.harness.name} headlessly.`, fraction: 0.25 });
     throwIfAborted(opts?.signal);
-    const argv = this.harness.buildArgv(input, workdir);
+    const argv = harnessArgv;
     let run: ExecResult;
     const output = streamProgress(this.harness, emit, opts?.signal);
     try {
@@ -141,7 +167,7 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
       // Only thrown errors are retry candidates: a returned nonzero
       // exitCode is the harness's verdict, not a transient failure.
       run = await withRetry(HARNESS_RETRY, () =>
-        ops.exec(shellJoin(argv), {
+        scoped.exec(shellJoin(argv), {
           cwd: workdir,
           timeoutMs: OPENCODE_TIMEOUT_MS,
           signal: opts?.signal,
@@ -192,7 +218,7 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
     try {
       const collection = await withRetry(
         HARNESS_RETRY,
-        () => collectChanges(ops, workdir, opts?.signal),
+        () => collectChanges(scoped, workdir, opts?.signal),
         opts?.signal,
       );
       milestone("collect.complete", `${collection.changedFiles.length} files`);
@@ -207,8 +233,32 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
         signals,
         summary: summarizeRun(this.harness.name, input, collection.changedFiles, boundTail(run.stdout, MAX_STDOUT_TAIL_CHARS)),
       };
+      // T45: a declared test command runs scoped after collection — the
+      // exec.settled receipt is what T43's verify reads. A refusal is caught
+      // here and left for verify to reject; a thrown container error is real.
+      if (input.testCommand !== undefined && input.testCommand.length > 0) {
+        try {
+          throwIfAborted(opts?.signal);
+          await emit({ phase: "collect", message: `Running test command: ${input.testCommand.join(" ")}`, fraction: 0.9 });
+          const testRun = await scoped.exec(shellJoin(input.testCommand), {
+            cwd: workdir,
+            timeoutMs: TEST_COMMAND_TIMEOUT_MS,
+            signal: opts?.signal,
+          });
+          if (testRun.exitCode !== 0) {
+            await emit({ phase: "collect", message: `Test command exited ${testRun.exitCode}.`, fraction: 0.92 });
+          }
+        } catch (error) {
+          if (!(error instanceof ScopedExecRefusal)) {
+            return failureResult(`Test command failed to execute: ${shortError(error)}`, run.exitCode, stderrTail, signals);
+          }
+          // Refused: receipt recorded; verify below reports the real reason.
+          await emit({ phase: "collect", message: "Test command refused by the exec allowlist.", fraction: 0.92 });
+        }
+      }
       // T43 verify gate — load-bearing: an exit-0 run with an empty diff is NOT
-      // completed. Deterministic evidence only; this feeds T46's proof gate.
+      // completed, and a declared test command needs a clean exec.settled
+      // receipt. Deterministic evidence only; this feeds T46's proof gate.
       const verification = await this.harness.verify(input, completed);
       if (!verification.ok) {
         return failureResult(`Verification failed: ${verification.reason}`, run.exitCode, stderrTail, signals);

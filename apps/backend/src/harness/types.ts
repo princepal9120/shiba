@@ -11,6 +11,7 @@
  * the container by the Worker's egress handler (src/egress.ts).
  */
 import type { CodingTaskInput, CodingTaskResult } from "../opencode-input.js";
+import { shellJoin } from "../security.js";
 
 /** Implemented harnesses. Aider was in the original sketch but has no adapter — add it here with one, not before. */
 export type AgentHarnessName = "opencode" | "claude-code" | "codex" | "devin" | "grok" | "cursor" | "antigravity";
@@ -112,6 +113,13 @@ export interface HarnessCapabilities {
   canRunTests: boolean;
   /** antigravity's documented trap: no conversation rollback — T44's revert refuses first. */
   supportsConversationRollback: boolean;
+  /**
+   * T45: argv-prefix allowlist entries for scoped commands the harness may
+   * request (e.g. `["pnpm","test"]` when canRunTests). Never a bare
+   * interpreter ("bash", "sh", "node", "python") — that is a blanket grant
+   * wearing a harness's clothes.
+   */
+  execAllowlist: readonly (readonly string[])[];
   maxContextTokens?: number;
   supportedRuntimes: readonly RuntimeName[];
 }
@@ -121,17 +129,52 @@ export type VerificationOutcome = { ok: true } | { ok: false; reason: string };
 
 /**
  * The shared deterministic verify every sandbox harness runs: a completed
- * run must have produced evidence — a non-empty diff or captured files.
- * Exit 0 with an empty tree is NOT completed; this feeds T46's gate.
+ * run must have produced evidence — a non-empty diff or captured files,
+ * and a declared `testCommand` must have a `exec.settled` exit-0 receipt
+ * (T45). Exit 0 with an empty tree is NOT completed; this feeds T46's gate.
  * Non-completed results pass — verify only gates the success claim.
  */
-export function verifyRunOutcome(result: CodingTaskResult): VerificationOutcome {
+export function verifyRunOutcome(
+  input: CodingTaskInput,
+  result: CodingTaskResult,
+  capabilities: Pick<HarnessCapabilities, "canRunTests">,
+): VerificationOutcome {
   if (result.status !== "completed") return { ok: true };
   if (result.changedFiles.length === 0 && result.diff.trim() === "") {
     return {
       ok: false,
       reason: "Run exited 0 but produced no file changes — refusing to report a no-op as completed.",
     };
+  }
+  if (input.testCommand !== undefined && input.testCommand.length > 0) {
+    if (!capabilities.canRunTests) {
+      return {
+        ok: false,
+        reason: "testCommand was declared but this harness cannot run tests — refusing to report unverified success.",
+      };
+    }
+    // Receipts record the shell-joined command — compare the same form.
+    // A refused command never executed: its receipt does not count as run.
+    const commandString = shellJoin(input.testCommand);
+    const settled = (result.signals ?? []).find(
+      (signal) =>
+        signal.kind === "exec.settled" &&
+        signal.detail?.includes(commandString) &&
+        !signal.detail.includes('"refused":true'),
+    );
+    const display = input.testCommand.join(" ");
+    if (!settled) {
+      return {
+        ok: false,
+        reason: `Test command ${JSON.stringify(display)} produced no exec receipt — refused by the allowlist or never ran.`,
+      };
+    }
+    if (!settled.detail?.includes('"exit":0')) {
+      return {
+        ok: false,
+        reason: `Test command ${JSON.stringify(display)} did not exit 0 — refusing to report a failed-test run as completed.`,
+      };
+    }
   }
   return { ok: true };
 }
