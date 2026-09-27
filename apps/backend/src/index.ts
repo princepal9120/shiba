@@ -1383,7 +1383,7 @@ async function handleGitHubWebhook(request: Request, env: Env, ctx?: ExecutionCo
           new Request("https://internal/internal/github", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ event: githubEvent, payload: event }),
+            body: JSON.stringify({ event: githubEvent, payload: event, deliveryId }),
           }),
         )
         .then((response) => {

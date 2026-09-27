@@ -38,8 +38,10 @@ import {
   isApprovalExpired,
   isJsonObject,
   pruneExpiredApprovals,
+  putCommandReceipt,
   recordApprovalExecution,
   resolvePendingApproval,
+  type CommandReceipt,
   type PendingApproval,
   type ResolveResult,
 } from "../pending-approvals.js";
@@ -95,6 +97,13 @@ export interface OrchestratorState {
    * a request already past that check, or a socket opened before it.
    */
   sessionDeletedAt?: number;
+  /**
+   * Durable command receipts (T41): one per processed command, keyed by
+   * commandId and committed in the same setState write as the decision
+   * or run it records. A retried resolve or queue reads the receipt and
+   * answers from it instead of re-running the effect.
+   */
+  commandReceipts?: Record<string, CommandReceipt>;
 }
 
 /** A classified error lands as its matching terminal status. */
@@ -206,6 +215,18 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
 
   private writeApprovals(next: PendingApproval[]): void {
     this.setState({ ...this.state, pendingApprovals: next });
+  }
+
+  private commandReceipt(commandId: string): CommandReceipt | undefined {
+    return this.state?.commandReceipts?.[commandId];
+  }
+
+  private withCommandReceipt(receipt: CommandReceipt): Record<string, CommandReceipt> {
+    return putCommandReceipt(this.state?.commandReceipts ?? {}, receipt);
+  }
+
+  private recordCommandReceipt(receipt: CommandReceipt): void {
+    this.setState({ ...this.state, commandReceipts: this.withCommandReceipt(receipt) });
   }
 
   get storedWebSessions(): WebSessionRecord[] {
@@ -341,6 +362,57 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       if (approval.kind === "email_send" || approval.kind === "email_delete") {
         this.dispatchApprovedEmail(approval);
       }
+    }
+    // Run-kind mirror of the email re-drive (T41): an eviction between
+    // the persisted decision and the dispatch leaves `approved` with no
+    // run — or a pending run whose dispatch never ran — and nothing to
+    // re-drive it. The command receipt bounds the re-drive: once
+    // `dispatched` is recorded the command is done, even if the run
+    // never reached a terminal state (a stranded pending run stays
+    // operator-visible and cancelable rather than silently re-fired).
+    for (const approval of this.approvals) {
+      if (
+        approval.status !== "approved" ||
+        approval.kind === "email_send" ||
+        approval.kind === "email_delete"
+      ) {
+        continue;
+      }
+      const commandId = `approval:${approval.approvalId}`;
+      const receipt = this.commandReceipt(commandId);
+      if (receipt?.dispatched === true) {
+        continue;
+      }
+      const runId = `agent-tool:${approval.approvalId}`;
+      const receiptDone = {
+        commandId,
+        kind: "approval.resolve" as const,
+        outcome: "approved",
+        threadKey: approval.threadKey,
+        approvalId: approval.approvalId,
+        runId,
+        dispatched: true,
+        at: Date.now(),
+      };
+      if (this.store.get(runId) !== null) {
+        // The dispatch ran — the run record exists and the interrupt
+        // pass above already stamped any active status unknown. Just
+        // record that the command completed.
+        this.recordCommandReceipt(receiptDone);
+        continue;
+      }
+      // Capacity still applies across a restart — a deferred re-drive
+      // retries on the next one rather than oversubscribing the pool.
+      if (!canStartRun(this.store.list())) {
+        continue;
+      }
+      const run = this.mintApprovedRun(approval);
+      this.setState({
+        ...this.state,
+        runs: [...this.store.list(), run],
+        commandReceipts: this.withCommandReceipt(receiptDone),
+      });
+      this.dispatchApprovedRun(run, approval, approval.approvalId);
     }
     this.sweepStaleDrafts(true);
   }
@@ -728,13 +800,24 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
    * the pointer via POST /api/approvals. Email-kind approvals freeze a
    * mailbox payload instead of a run input.
    */
-  private async queueSlackRun(input: { repoUrl?: unknown; task?: unknown; baseBranch?: unknown; publishPullRequest?: unknown; harness?: unknown; codingModel?: unknown; connectionId?: unknown; threadKey?: unknown; kind?: unknown; mailbox?: unknown; payload?: unknown; queuedBy?: unknown }): Promise<Response> {
+  private async queueSlackRun(input: { repoUrl?: unknown; task?: unknown; baseBranch?: unknown; publishPullRequest?: unknown; harness?: unknown; codingModel?: unknown; connectionId?: unknown; threadKey?: unknown; kind?: unknown; mailbox?: unknown; payload?: unknown; queuedBy?: unknown; commandId?: unknown }): Promise<Response> {
     const kind = typeof input.kind === "string" && input.kind.trim() ? input.kind.trim() : "run";
     if (kind === "email_send" || kind === "email_delete") {
       return this.queueEmailApprovalRecord(kind, input);
     }
     if (kind !== "run") {
       return Response.json({ error: `Unknown approval kind "${kind}".` }, { status: 400 });
+    }
+    // T41: a caller-deterministic commandId makes a retried queue safe —
+    // the receipt answers with the minted approvalId, never a second mint.
+    const queueCommandId = typeof input.commandId === "string" && input.commandId.trim()
+      ? `queue:${input.commandId.trim().slice(0, 200)}`
+      : undefined;
+    if (queueCommandId !== undefined) {
+      const prior = this.commandReceipt(queueCommandId);
+      if (prior !== undefined && prior.approvalId !== undefined) {
+        return Response.json({ ok: true, approvalId: prior.approvalId, deduped: true });
+      }
     }
     const repoUrl = typeof input.repoUrl === "string" ? input.repoUrl : "";
     const task = typeof input.task === "string" ? input.task : "";
@@ -787,21 +870,37 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       return Response.json({ error: "Approval queue is full — resolve pending approvals first." }, { status: 429 });
     }
     try {
-      this.writeApprovals(createPendingApproval(this.approvals, {
-        threadKey,
-        approvalId,
-        repoUrl,
-        task: task.slice(0, 4000),
-        baseBranch: typeof input.baseBranch === "string" && input.baseBranch.trim() ? input.baseBranch.slice(0, 200) : "main",
-        publishPullRequest,
-        route,
-        // Worker-vouched principal (X-Agent-Principal) — never the raw body,
-        // so an operator-queued record can't be claimed by an agent token.
-        ...(typeof input.queuedBy === "string" && input.queuedBy.trim()
-          ? { queuedBy: input.queuedBy.trim().slice(0, 200) }
+      // Approval mint and its queue receipt commit in one state write.
+      this.setState({
+        ...this.state,
+        pendingApprovals: createPendingApproval(this.approvals, {
+          threadKey,
+          approvalId,
+          repoUrl,
+          task: task.slice(0, 4000),
+          baseBranch: typeof input.baseBranch === "string" && input.baseBranch.trim() ? input.baseBranch.slice(0, 200) : "main",
+          publishPullRequest,
+          route,
+          // Worker-vouched principal (X-Agent-Principal) — never the raw body,
+          // so an operator-queued record can't be claimed by an agent token.
+          ...(typeof input.queuedBy === "string" && input.queuedBy.trim()
+            ? { queuedBy: input.queuedBy.trim().slice(0, 200) }
+            : {}),
+          createdAt: Date.now(),
+        }),
+        ...(queueCommandId !== undefined
+          ? {
+              commandReceipts: this.withCommandReceipt({
+                commandId: queueCommandId,
+                kind: "run.queue",
+                outcome: "queued",
+                approvalId,
+                threadKey,
+                at: Date.now(),
+              }),
+            }
           : {}),
-        createdAt: Date.now(),
-      }));
+      });
     } catch (error) {
       return Response.json({ error: error instanceof Error ? error.message : "Could not queue approval." }, { status: 409 });
     }
@@ -958,6 +1057,15 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       return Response.json({ error: "Invalid approval payload." }, { status: 400 });
     }
     const decidedBy = typeof rawDecidedBy === "string" && rawDecidedBy.trim() ? rawDecidedBy.slice(0, 200) : "unknown";
+    // A retried resolve (double-clicked card, redelivered callback) reads
+    // the durable command receipt and learns the original answer instead
+    // of re-litigating the decision — the receipt, the pointer update,
+    // and the run mint committed in one state write.
+    const commandId = `approval:${approvalId}`;
+    const prior = this.commandReceipt(commandId);
+    if (prior !== undefined && prior.threadKey === threadKey) {
+      return Response.json({ result: prior.outcome });
+    }
     if (approved) await this.reclaimRuns();
     const now = Date.now();
     const result = resolvePendingApproval(this.approvals, { threadKey, approvalId, approved, decidedBy }, now);
@@ -1004,88 +1112,27 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
           )
         : undefined;
     const isEmailRecord = record !== undefined && (record.kind === "email_send" || record.kind === "email_delete");
-    const run = record && !isEmailRecord ? createRun({
-      runId: `agent-tool:${approvalId}`,
-      sandboxId: makeSandboxId(record.repoUrl, record.task, approvalId),
-      repoUrl: record.repoUrl,
-      task: record.task,
-      baseBranch: record.baseBranch ?? "main",
-      publishPullRequest: record.publishPullRequest ?? false,
-      queuedBy: record.queuedBy,
-      ...(record.route ? { route: record.route } : {}),
-      // T40: the run carries its approval evidence from birth — who decided,
-      // when, and the hash of the exact frozen input they approved.
-      approval: approvalEvidenceFor(record, {
-        repoUrl: record.repoUrl,
-        task: record.task,
-        baseBranch: record.baseBranch ?? "main",
-        publishPullRequest: record.publishPullRequest ?? false,
-        ...(record.route ? { route: record.route } : {}),
-      }),
-    }) : undefined;
-    // One state write reserves capacity and records the decision before any await.
+    const run = record && !isEmailRecord ? this.mintApprovedRun(record) : undefined;
+    // One state write reserves capacity, records the decision, and
+    // commits the command receipt — a redelivery after this point
+    // answers from the receipt, never re-dispatches (T41).
     this.setState({
       ...this.state,
       pendingApprovals: approvals,
       runs: run ? [...this.store.list(), run] : this.store.list(),
+      commandReceipts: this.withCommandReceipt({
+        commandId,
+        kind: "approval.resolve",
+        outcome: result.result,
+        threadKey,
+        approvalId,
+        ...(run !== undefined ? { runId: run.runId } : {}),
+        ...(result.result === "approved" ? { dispatched: true } : {}),
+        at: now,
+      }),
     });
     if (run) {
-      const dispatch = async () => {
-        const generation = this.store.get(run.runId)?.generation;
-        try {
-          const delegate = this.getTools()["delegate_coding_task"] as {
-            execute: (input: unknown, options?: unknown) => Promise<unknown>;
-          };
-          await delegate.execute({
-            repoUrl: run.repoUrl,
-            task: run.task,
-            baseBranch: run.baseBranch,
-            publishPullRequest: run.publishPullRequest,
-            // The frozen route is the exact approved input: harness, model,
-            // and connection ride the pointer, never a fresh lookup. Pending
-            // approvals queued before route freezing carry `harness` only —
-            // pass it so the approved agent is not silently re-defaulted.
-            ...(run.route
-              ? {
-                  harness: run.route.harness,
-                  codingModel: run.route.modelId,
-                  ...(run.route.connectionId ? { connectionId: run.route.connectionId } : {}),
-                }
-              : record?.harness
-                ? { harness: record.harness as DelegateInput["harness"] }
-                : {}),
-          }, { toolCallId: approvalId });
-        } catch (error) {
-          // delegate.execute can throw before its inner `finish` seam ran;
-          // this fallback is the terminal transition then. Fence on the
-          // pre-dispatch generation so a terminal state that already landed
-          // (cancel, reclaim, or `finish` itself) is never overwritten —
-          // the dropped write means this catch also distills nothing.
-          const failure = classifyRunError(error);
-          const status = terminalStatusFor(failure.code);
-          const updated = this.store.transition(run.runId, status, {
-            error: redactSecrets(failure.message).slice(0, 4000),
-            errorCode: failure.code,
-          }, generation);
-          if (updated !== null) {
-            // A pre-start failure never reaches `finish`'s slackText seam —
-            // post here or the thread sees ack + card + approved, then silence.
-            this.postToThread(slackRunFailed({
-              repoUrl: run.repoUrl,
-              userMessage: runErrorWire(failure.code).userMessage,
-              detail: redactSecrets(failure.message).slice(0, 1000),
-              unknown: status === "unknown",
-            }));
-            if (status === "completed" || status === "error") {
-              this.dispatchSessionDistill(updated);
-            }
-          }
-        }
-      };
-      // Slack/dashboard approvals hold no socket open, so without the heartbeat the DO can idle out mid-run.
-      this.keepAliveWhile(dispatch).catch((error) => {
-        console.error(`Run ${run.runId} dispatch failed`, redactSecrets(String(error)));
-      });
+      this.dispatchApprovedRun(run, record, approvalId);
     }
     if (record && isEmailRecord) {
       this.dispatchApprovedEmail(record);
@@ -1102,6 +1149,102 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     this.releaseEmailApprovalDrafts(releasable, this.liveApprovalDrafts(now));
     this.sweepStaleDrafts(expiredSends.length > 0);
     return Response.json({ result: result.result satisfies ResolveResult });
+  }
+
+  /**
+   * Mint the run an approved run-kind record points at — shared by the
+   * resolve path and the onStart re-drive so both build the identical
+   * record (run id, sandbox id, frozen route, and T40 evidence).
+   */
+  private mintApprovedRun(record: PendingApproval): DelegatedRun {
+    return createRun({
+      runId: `agent-tool:${record.approvalId}`,
+      sandboxId: makeSandboxId(record.repoUrl, record.task, record.approvalId),
+      repoUrl: record.repoUrl,
+      task: record.task,
+      baseBranch: record.baseBranch ?? "main",
+      publishPullRequest: record.publishPullRequest ?? false,
+      queuedBy: record.queuedBy,
+      ...(record.route ? { route: record.route } : {}),
+      // T40: the run carries its approval evidence from birth — who decided,
+      // when, and the hash of the exact frozen input they approved.
+      approval: approvalEvidenceFor(record, {
+        repoUrl: record.repoUrl,
+        task: record.task,
+        baseBranch: record.baseBranch ?? "main",
+        publishPullRequest: record.publishPullRequest ?? false,
+        ...(record.route ? { route: record.route } : {}),
+      }),
+    });
+  }
+
+  /**
+   * Schedule execution of a minted approval-backed run — the resolve
+   * path's fire-and-forget dispatch and the onStart re-drive share it.
+   * The run must already sit in the store; a pre-start failure lands
+   * through the same fenced terminal seam `finish` would have used.
+   */
+  private dispatchApprovedRun(
+    run: DelegatedRun,
+    record: PendingApproval | undefined,
+    approvalId: string,
+  ): void {
+    const dispatch = async () => {
+      const generation = this.store.get(run.runId)?.generation;
+      try {
+        const delegate = this.getTools()["delegate_coding_task"] as {
+          execute: (input: unknown, options?: unknown) => Promise<unknown>;
+        };
+        await delegate.execute({
+          repoUrl: run.repoUrl,
+          task: run.task,
+          baseBranch: run.baseBranch,
+          publishPullRequest: run.publishPullRequest,
+          // The frozen route is the exact approved input: harness, model,
+          // and connection ride the pointer, never a fresh lookup. Pending
+          // approvals queued before route freezing carry `harness` only —
+          // pass it so the approved agent is not silently re-defaulted.
+          ...(run.route
+            ? {
+                harness: run.route.harness,
+                codingModel: run.route.modelId,
+                ...(run.route.connectionId ? { connectionId: run.route.connectionId } : {}),
+              }
+            : record?.harness
+              ? { harness: record.harness as DelegateInput["harness"] }
+              : {}),
+        }, { toolCallId: approvalId });
+      } catch (error) {
+        // delegate.execute can throw before its inner `finish` seam ran;
+        // this fallback is the terminal transition then. Fence on the
+        // pre-dispatch generation so a terminal state that already landed
+        // (cancel, reclaim, or `finish` itself) is never overwritten —
+        // the dropped write means this catch also distills nothing.
+        const failure = classifyRunError(error);
+        const status = terminalStatusFor(failure.code);
+        const updated = this.store.transition(run.runId, status, {
+          error: redactSecrets(failure.message).slice(0, 4000),
+          errorCode: failure.code,
+        }, generation);
+        if (updated !== null) {
+          // A pre-start failure never reaches `finish`'s slackText seam —
+          // post here or the thread sees ack + card + approved, then silence.
+          this.postToThread(slackRunFailed({
+            repoUrl: run.repoUrl,
+            userMessage: runErrorWire(failure.code).userMessage,
+            detail: redactSecrets(failure.message).slice(0, 1000),
+            unknown: status === "unknown",
+          }));
+          if (status === "completed" || status === "error") {
+            this.dispatchSessionDistill(updated);
+          }
+        }
+      }
+    };
+    // Slack/dashboard approvals hold no socket open, so without the heartbeat the DO can idle out mid-run.
+    this.keepAliveWhile(dispatch).catch((error) => {
+      console.error(`Run ${run.runId} dispatch failed`, redactSecrets(String(error)));
+    });
   }
 
   /**
