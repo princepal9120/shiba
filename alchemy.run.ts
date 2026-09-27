@@ -217,6 +217,12 @@ export const Worker = Cloudflare.Worker("Worker", {
     }),
     SEND_EMAIL: Cloudflare.Email.SendEmail("SEND_EMAIL"),
 
+    // Pre-auth limit on /mcp — wrangler [[ratelimits]] MCP_RATE_LIMIT.
+    MCP_RATE_LIMIT: Cloudflare.RateLimit("MCP_RATE_LIMIT", {
+      namespaceId: "1001",
+      simple: { limit: 100, period: 60 },
+    }),
+
     // wrangler durable_objects.bindings Sandbox + containers[0]: the
     // Container decl is the DO namespace binding plus its container app.
     Sandbox: Cloudflare.Container<Sandbox>("Sandbox", {

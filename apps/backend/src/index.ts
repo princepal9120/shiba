@@ -1296,6 +1296,16 @@ async function handleMcp(request: Request, env: Env, _ctx: ExecutionContext): Pr
   if (!isMcpPath(url.pathname)) {
     return null;
   }
+  // Pre-auth limit: verifyToken is a KV read per request — without this an
+  // unauthenticated flood on /mcp is a KV quota-exhaustion vector.
+  if (env.MCP_RATE_LIMIT) {
+    const { success } = await env.MCP_RATE_LIMIT.limit({
+      key: request.headers.get("cf-connecting-ip") ?? "unknown",
+    });
+    if (!success) {
+      return Response.json({ error: "Too many requests." }, { status: 429 });
+    }
+  }
   const token = bearerToken(request);
   const record = token === null ? null : await verifyToken(env, token);
   if (!record) {
@@ -1470,6 +1480,14 @@ export default {
   async fetch(request: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
     try {
       request = await withVerifiedAccessIdentity(request, env);
+      // MCP_PRINCIPAL_HEADER is minted only by the verified-bearer path in
+      // handleMcp — no external caller may set it. Strip at ingress so a
+      // future route cannot accidentally trust a client-supplied copy.
+      if (request.headers.has(MCP_PRINCIPAL_HEADER)) {
+        const headers = new Headers(request.headers);
+        headers.delete(MCP_PRINCIPAL_HEADER);
+        request = new Request(request, { headers });
+      }
       const url = new URL(request.url);
       if (!isPublicRequest(request) && !isAuthenticated(request, env)) {
         return Response.json({ error: "Authentication required." }, { status: 401 });

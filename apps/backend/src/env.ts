@@ -66,6 +66,12 @@ export interface Env {
    */
   AGENT_AUDIT: D1Database;
   /**
+   * Optional. Pre-auth rate limit on `/mcp` (wrangler `ratelimits` binding):
+   * `verifyToken` costs a KV read per request, so an unauthenticated flood
+   * would be a quota-exhaustion vector. Keyed on `cf-connecting-ip`.
+   */
+  MCP_RATE_LIMIT?: RateLimit;
+  /**
    * Optional. Workers Browser Rendering endpoint (wrangler `browser` binding,
    * megaplan T33). `puppeteer.launch()` accepts the Fetcher shape directly;
    * typed as Fetcher so tests can stub it without @cloudflare/puppeteer types.
