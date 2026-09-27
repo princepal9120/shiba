@@ -1,6 +1,8 @@
 /** Harness registry (PLAN.md T22). Selection is by name, default OpenCode. */
+import { antigravityHarness } from "./antigravity.js";
 import { claudeCodeHarness } from "./claude-code.js";
 import { codexHarness } from "./codex.js";
+import { cursorHarness } from "./cursor.js";
 import { devinHarness } from "./devin.js";
 import { grokHarness } from "./grok.js";
 import { opencodeHarness } from "./opencode.js";
@@ -12,6 +14,8 @@ export const HARNESSES: Record<string, AgentHarness> = {
   codex: codexHarness,
   devin: devinHarness,
   grok: grokHarness,
+  cursor: cursorHarness,
+  antigravity: antigravityHarness,
 };
 
 export function resolveHarness(name: string | undefined): AgentHarness {
@@ -44,7 +48,7 @@ export function allowedHostsFor(harness: AgentHarness, model: string): string[] 
 
 export type { AgentHarness, AgentHarnessName };
 
-export const HARNESS_NAMES = ["opencode", "claude-code", "codex", "devin", "grok"] as const;
+export const HARNESS_NAMES = ["opencode", "claude-code", "codex", "devin", "grok", "cursor", "antigravity"] as const;
 
 /**
  * Per-harness default coding model. The checked-in ids are defaults, not
@@ -59,4 +63,6 @@ export const HARNESS_DEFAULT_MODELS: Record<string, string> = {
   // swe-2 is free on Devin Pro; the alias resolves to the latest SWE-2.
   devin: "devin/swe-2",
   grok: "xai/grok-4.6",
+  cursor: "cursor/claude-4-5-sonnet",
+  antigravity: "google/gemini-3.5-flash",
 };

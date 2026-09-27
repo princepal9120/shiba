@@ -48,6 +48,8 @@ const CATALOG_META: Record<
   codex: { label: "Codex", binary: "codex", version: "0.155.0", docsUrl: "https://github.com/openai/codex" },
   devin: { label: "Devin", binary: "devin", version: "3000.10.31", docsUrl: "https://cli.devin.ai/docs" },
   grok: { label: "Grok", binary: "grok", version: "1.0.41", docsUrl: "https://docs.x.ai" },
+  cursor: { label: "Cursor", binary: "cursor-agent", version: "0.50.0", docsUrl: "https://docs.cursor.com" },
+  antigravity: { label: "Antigravity", binary: "agy", version: "1.0.0", docsUrl: "https://antigravity.google" },
 };
 
 const GATEWAY_PROVIDER: Record<string, string> = {
@@ -55,6 +57,8 @@ const GATEWAY_PROVIDER: Record<string, string> = {
   "claude-code": "anthropic",
   codex: "openai",
   grok: "xAI",
+  cursor: "cursor",
+  antigravity: "google",
 };
 
 /**
