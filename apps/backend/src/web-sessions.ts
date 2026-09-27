@@ -259,6 +259,27 @@ export function isAuthorizedSessionAgent(
 }
 
 /**
+ * T51: whether this orchestrator DO name is a dashboard surface. The local
+ * runtime is operator-initiated from the dashboard only — chat surfaces all
+ * land on DOs this predicate rejects: `slack:*` thread DOs and the shared
+ * `default` DO that MCP/email/automations intake posts to. Base user DOs
+ * (`<userId>`) and named web sessions (`web:<userId>:<sessionId>`) count.
+ *
+ * Note the asymmetry: `<userId>` is dashboard-able only because the same
+ * name is also what the authenticated `/api/runs` route resolves to — the
+ * intake side additionally requires the Worker-stamped X-Shiba-Intake
+ * header, so a chat surface can never reach this predicate's "true" branch
+ * through queueSlackRun even when its DO name happens to be a user id.
+ */
+export function isDashboardAgentName(agentName: string | undefined): boolean {
+  if (typeof agentName !== "string" || agentName === "") return false;
+  if (agentName.startsWith(WEB_SESSION_PREFIX)) return true;
+  if (agentName === DEFAULT_SESSION_ID) return false;
+  if (agentName.startsWith("slack:")) return false;
+  return true;
+}
+
+/**
  * Returns the synthetic base session record for a user.
  */
 export function getBaseSessionRecord(userId: string): WebSessionRecord {

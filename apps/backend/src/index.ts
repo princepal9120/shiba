@@ -10,6 +10,9 @@ import { OpenCodeAgent } from "./agents/opencode-agent.js";
 import { CodingOrchestrator } from "./agents/orchestrator.js";
 import { AUDIT_RETENTION_MS, listAuditEntries, pruneAuditLog } from "./audit.js";
 import { claudeSubscriptionAuth } from "./auth/claude-subscription.js";
+import { codexSubscriptionAuth } from "./auth/codex-subscription.js";
+import { handleAntigravityCallback, handleAntigravitySubscriptionAuth } from "./antigravity.js";
+import { codexSubscriptionInstanceId } from "./harness/codex-subscription.js";
 import { AuthFlowError } from "./auth/controller.js";
 import { AUTOMATIONS_DO_NAME } from "./automation-runner.js";
 import { Automations } from "./automations-do.js";
@@ -21,6 +24,13 @@ import { handleInboundEmail } from "./email-handler.js";
 import type { Env } from "./env.js";
 import { agentCliCatalog } from "./harness/catalog.js";
 import { Mailbox, mailboxDirectoryStub, mailboxStub } from "./mailbox-do.js";
+import { LocalDispatch, localDispatchStub } from "./local-dispatch.js";
+import {
+  LOCAL_ADAPTER_TOKEN_ENV,
+  LOCAL_INTAKE_DASHBOARD,
+  LOCAL_INTAKE_HEADER,
+  LOCAL_RUNTIME_FLAG,
+} from "@shiba/shared";
 import { DECIDED_APPROVALS_LIMIT, type PendingApproval } from "./pending-approvals.js";
 import type {
   DraftRecord,
@@ -33,7 +43,7 @@ import { createShibaMcpHandler, encodePrincipal, MCP_PRINCIPAL_HEADER } from "./
 import { Memory, memoryRegistryStub } from "./memory-do.js";
 import { Sandbox } from "./sandbox.js";
 import { withVerifiedAccessIdentity } from "./access-jwt.js";
-import { InputError, NotFoundError, redactSecrets, verifyGitHubWebhookSignature } from "./security.js";
+import { InputError, NotFoundError, redactSecrets, timingSafeEqualString, verifyGitHubWebhookSignature } from "./security.js";
 import { handleSlackInteract } from "./slack-approval.js";
 import { handleSlackEvents } from "./slack-events.js";
 import { handleSlackEvent } from "./slack-mention.js";
@@ -63,7 +73,7 @@ import {
   type WebSessionRecord,
 } from "./web-sessions.js";
 
-export { Automations, CodingOrchestrator, Mailbox, Memory, ModelConfig, OpenCodeAgent, Sandbox, ContainerProxy, Waitlist };
+export { Automations, CodingOrchestrator, LocalDispatch, Mailbox, Memory, ModelConfig, OpenCodeAgent, Sandbox, ContainerProxy, Waitlist };
 export { assertLiveCodingModel } from "./coding-model.js";
 
 export function getUserId(request: Request): string | null {
@@ -105,6 +115,14 @@ function isOAuthPath(pathname: string): boolean {
     || pathname === "/oauth/revoke";
 }
 
+// T51: the operator daemon's surface is self-authenticated — handleLocalAdapter
+// enforces the SHIBA_LOCAL_RUNTIME flag and the LOCAL_ADAPTER_TOKEN bearer
+// before a byte reaches the dispatch DO. It is NOT in SIGNATURE_AUTHENTICATED
+// because a daemon holds no CF Access identity and cannot sign like Slack.
+function isLocalRuntimePath(pathname: string): boolean {
+  return pathname === "/api/local" || pathname.startsWith("/api/local/");
+}
+
 // Startup assertion (VERIFICATION_PLAN.md G2): `assertLiveCodingModel` already
 // enforces the retired-model deny list (see coding-model.ts). Re-running it on
 // every request is pure overhead once a request has proven CODING_MODEL live,
@@ -122,6 +140,7 @@ export function isAuthenticated(request: Request, env: Env): boolean {
   // T29: OAuth endpoints are self-authenticated; /oauth/authorize is NOT
   // in this list — owner consent requires the outer identity check.
   if (isOAuthPath(pathname)) return true;
+  if (isLocalRuntimePath(pathname)) return true;
   if (!env.REQUIRE_ACCESS && !env.ACCESS_AUD) return true; // opt-out for `wrangler dev`
   return getUserId(request) !== null;
 }
@@ -164,6 +183,50 @@ async function handleClaudeSubscriptionAuth(request: Request, env: Env): Promise
   const accountRaw = request.method === "GET" ? url.searchParams.get("account") : body.account;
   const account = typeof accountRaw === "string" && accountRaw.trim() !== "" ? accountRaw.trim() : "default";
   const controller = claudeSubscriptionAuth(env, `claude-sub:${account}`);
+  const authError = (reason: unknown) =>
+    Response.json(
+      { error: reason instanceof AuthFlowError ? reason.message : "Auth flow error." },
+      { status: 400 },
+    );
+  try {
+    if (request.method === "GET" && sub === "") {
+      return Response.json({ snapshot: await controller.snapshot() });
+    }
+    if (request.method === "POST" && sub === "begin") {
+      return Response.json({ snapshot: await controller.begin(ownerSessionId) });
+    }
+    if (request.method === "POST" && sub === "verify") {
+      return Response.json({ snapshot: await controller.verify(ownerSessionId) });
+    }
+    if (request.method === "POST" && sub === "clear") {
+      return Response.json({ snapshot: await controller.clear(ownerSessionId) });
+    }
+  } catch (error) {
+    return authError(error);
+  }
+  return Response.json({ error: "Not found." }, { status: 404 });
+}
+
+/**
+ * T49: operator surface for the codex-subscription auth flow (T47
+ * controller). Same verbs as claude-subscription; the instanceId keys on
+ * the auth.json-holding directory (`codex-sub:<effectiveHomePath>`) so a
+ * named account's `clear` revokes only its shadow overlay, never the
+ * shared CODEX_HOME or a sibling account (§18.11).
+ *   GET  /api/auth/codex-subscription?account=<name>  → snapshot
+ *   POST /api/auth/codex-subscription/begin|verify|clear  → {account}
+ */
+async function handleCodexSubscriptionAuth(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  const sub = url.pathname.slice("/api/auth/codex-subscription".length).replace(/^\/+|\/+$/g, "");
+  const ownerSessionId = getUserId(request) ?? "default";
+  const body =
+    request.method === "POST"
+      ? ((await request.json().catch(() => ({}))) as { account?: unknown })
+      : {};
+  const accountRaw = request.method === "GET" ? url.searchParams.get("account") : body.account;
+  const account = typeof accountRaw === "string" && accountRaw.trim() !== "" ? accountRaw.trim() : "default";
+  const controller = codexSubscriptionAuth(env, codexSubscriptionInstanceId({ authAccount: account }));
   const authError = (reason: unknown) =>
     Response.json(
       { error: reason instanceof AuthFlowError ? reason.message : "Auth flow error." },
@@ -234,7 +297,48 @@ async function handleRuns(request: Request, env: Env): Promise<Response | null> 
   }
   const stub = await getAgentByName(env.CodingOrchestrator, targetAgentName);
   const rewritten = new Request(new URL(url.pathname + url.search, request.url), request);
+  // T51: the intake voucher. Any inbound copy is replaced by the only value
+  // this Worker ever stamps — a run carrying `runtime: "local"` is provably
+  // dashboard-originated when queueSlackRun reads this header. Internal
+  // surfaces (Slack, email, MCP, automations) post through
+  // `https://internal` and never carry it.
+  rewritten.headers.delete(LOCAL_INTAKE_HEADER);
+  rewritten.headers.set(LOCAL_INTAKE_HEADER, LOCAL_INTAKE_DASHBOARD);
   return stub.fetch(rewritten);
+}
+
+/**
+ * T51: the operator daemon's mailbox surface. Flag off = the surface is
+ * dark (404, like the subscription-auth verbs). Flag on = a bearer token
+ * check gates every verb; claim/result are the daemon's, status lets the
+ * operator poll what the dashboard already sees.
+ *   POST /api/local/claim    {operator?} → oldest pending envelope + claimToken
+ *   POST /api/local/result   {sandboxId, claimToken, result} → settle
+ *   GET  /api/local/status?sandboxId=    → record status + result
+ *   GET  /api/local/pending              → pending/claimed inventory
+ * The Worker-side dispatch/cancel go through the DO stub directly — no
+ * HTTP surface exists for minting work, only for claiming it.
+ */
+async function handleLocalAdapter(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  const sub = url.pathname.slice("/api/local".length).replace(/^\/+|\/+$/g, "");
+  if (env[LOCAL_RUNTIME_FLAG] !== "1" || env.LocalDispatch === undefined) {
+    return Response.json({ error: "Not found." }, { status: 404 });
+  }
+  const expected = env[LOCAL_ADAPTER_TOKEN_ENV]?.trim();
+  if (expected === undefined || expected === "") {
+    return Response.json({ error: "Not found." }, { status: 404 });
+  }
+  const presented = request.headers.get("authorization") ?? "";
+  if (!timingSafeEqualString(presented, `Bearer ${expected}`)) {
+    return Response.json({ error: "Unauthorized." }, { status: 401 });
+  }
+  const stub = localDispatchStub(env);
+  const target = new URL(`https://local-dispatch/${sub}${url.search}`);
+  if (sub !== "claim" && sub !== "result" && sub !== "status" && sub !== "pending") {
+    return Response.json({ error: "Not found." }, { status: 404 });
+  }
+  return stub.fetch(new Request(target, request));
 }
 
 /**
@@ -1595,6 +1699,29 @@ export default {
         }
         return handleClaudeSubscriptionAuth(request, env);
       }
+      // Dark unless SHIBA_CODEX_SUBSCRIPTION=1 (§18.11).
+      if (url.pathname === "/api/auth/codex-subscription" || url.pathname.startsWith("/api/auth/codex-subscription/")) {
+        if (env.SHIBA_CODEX_SUBSCRIPTION !== "1") {
+          return Response.json({ error: "Not found." }, { status: 404 });
+        }
+        return handleCodexSubscriptionAuth(request, env);
+      }
+      // T50: OAuth sign-in flow + the pasted-redirect callback (§18.12) —
+      // handlers live in src/antigravity.ts, not here. Dark unless
+      // SHIBA_ANTIGRAVITY_SUBSCRIPTION=1.
+      if (url.pathname === "/api/auth/antigravity-subscription" || url.pathname.startsWith("/api/auth/antigravity-subscription/")) {
+        if (env.SHIBA_ANTIGRAVITY_SUBSCRIPTION !== "1") {
+          return Response.json({ error: "Not found." }, { status: 404 });
+        }
+        return handleAntigravitySubscriptionAuth(request, env, getUserId(request) ?? "default");
+      }
+      if (url.pathname === "/api/antigravity/callback") {
+        if (env.SHIBA_ANTIGRAVITY_SUBSCRIPTION !== "1") {
+          return Response.json({ error: "Not found." }, { status: 404 });
+        }
+        const callbackResponse = await handleAntigravityCallback(request, env, getUserId(request) ?? "default");
+        if (callbackResponse) return callbackResponse;
+      }
       const mcpResponse = await handleMcp(
         request,
         env,
@@ -1602,6 +1729,10 @@ export default {
       );
       if (mcpResponse) {
         return mcpResponse;
+      }
+      // T51: self-authenticated daemon surface — flag + bearer inside.
+      if (isLocalRuntimePath(url.pathname)) {
+        return handleLocalAdapter(request, env);
       }
       // `/internal/*` paths exist only inside DO stub fetches (Automations
       // tick/dedupe, the Mailbox JSON API under `/internal/mailbox/`) — the

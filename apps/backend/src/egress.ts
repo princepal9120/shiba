@@ -10,7 +10,7 @@ import { sanitizeContainerHeaders, stripCredentialParams } from "./provider-gate
 
 export type EgressEnv = Pick<
   WorkerEnv,
-  "AI" | "GATEWAY_ID" | "AI_GATEWAY_TOKEN" | "GITHUB_TOKEN" | "DEVIN_API_KEY" | "CLAUDE_SUBSCRIPTION_TOKEN"
+  "AI" | "GATEWAY_ID" | "AI_GATEWAY_TOKEN" | "GITHUB_TOKEN" | "DEVIN_API_KEY" | "CLAUDE_SUBSCRIPTION_TOKEN" | "CODEX_SUBSCRIPTION_AUTH_JSON"
 >;
 
 /**
@@ -168,6 +168,92 @@ export async function forwardClaudeSubscription(
   } catch {
     // Fetch errors can embed authenticated request details; never surface them.
     return new Response("Subscription request failed.", { status: 502 });
+  }
+}
+
+/**
+ * T49 — the codex-subscription egress branch. The container's CODEX_HOME
+ * holds a stub auth.json (placeholder access token + account id); the real
+ * `codex login` credential is stored Worker-side as the
+ * `CODEX_SUBSCRIPTION_AUTH_JSON` secret — the auth.json CONTENTS — and
+ * materialized here: the forwarder rewrites the Bearer and pins the
+ * `chatgpt-account-id` header on chatgpt.com's backend API.
+ * Deliberately NOT a GATEWAY_PROVIDERS entry: this path never rides the
+ * gateway's BYOK route. Deny-by-default: wrong host/protocol → 403, no
+ * usable secret → 503 (fail closed).
+ */
+export async function forwardCodexSubscription(
+  request: Request,
+  env: EgressEnv,
+  ctx?: OutboundHandlerCtx,
+): Promise<Response> {
+  const params = (ctx?.params ?? {}) as Record<string, unknown>;
+  const account = typeof params.account === "string" && params.account !== "" ? params.account : "default";
+  const secretName =
+    account === "default"
+      ? "CODEX_SUBSCRIPTION_AUTH_JSON"
+      : `CODEX_SUBSCRIPTION_AUTH_JSON_${account.toUpperCase().replace(/-/g, "_")}`;
+  const target = new URL(request.url);
+  if (
+    target.protocol !== "https:" ||
+    target.hostname !== "chatgpt.com" ||
+    target.username !== "" ||
+    target.password !== ""
+  ) {
+    return new Response("Invalid subscription destination.", { status: 403 });
+  }
+  if (request.method !== "GET" && request.method !== "POST") {
+    return new Response("Method not allowed.", { status: 405 });
+  }
+  const raw = (env as Record<string, unknown>)[secretName];
+  if (typeof raw !== "string" || raw.trim() === "") {
+    return new Response(`${secretName} is not configured on this deployment.`, { status: 503 });
+  }
+  const credential = parseCodexAuthJson(raw);
+  if (credential === null) {
+    return new Response(`${secretName} is not a valid codex auth.json — re-store the full file contents.`, { status: 503 });
+  }
+  target.search = stripCredentialParams(target.search);
+  const headers = outboundHeaders(request);
+  headers.set("Authorization", `Bearer ${credential.accessToken}`);
+  if (credential.accountId !== null) {
+    headers.set("chatgpt-account-id", credential.accountId);
+  }
+  headers.set("OpenAI-Beta", "responses=experimental");
+  try {
+    return await fetch(target, {
+      method: request.method,
+      headers,
+      body: request.method === "POST" ? request.body : undefined,
+      redirect: "manual",
+    });
+  } catch {
+    // Fetch errors can embed authenticated request details; never surface them.
+    return new Response("Subscription request failed.", { status: 502 });
+  }
+}
+
+/**
+ * The stored secret is the auth.json file contents verbatim:
+ * `{tokens: {access_token, account_id, ...}}`. Only the two fields the
+ * wire needs are read; a malformed file or missing access_token is a
+ * provisioning failure, not a forwarding decision.
+ */
+export function parseCodexAuthJson(raw: string): { accessToken: string; accountId: string | null } | null {
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const tokens = parsed.tokens;
+    if (typeof tokens !== "object" || tokens === null) return null;
+    const record = tokens as Record<string, unknown>;
+    const accessToken = record.access_token;
+    if (typeof accessToken !== "string" || accessToken === "") return null;
+    const accountId = record.account_id;
+    return {
+      accessToken,
+      accountId: typeof accountId === "string" && accountId !== "" ? accountId : null,
+    };
+  } catch {
+    return null;
   }
 }
 

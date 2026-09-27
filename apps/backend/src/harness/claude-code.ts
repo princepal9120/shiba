@@ -146,7 +146,7 @@ export class ClaudeCodeHarness implements AgentHarness {
   /** T43 declared capabilities — the gates read this, not the name. */
   capabilities(_model?: string): HarnessCapabilities {
     return { streamsText: true, emitsToolCalls: true, supportsResume: true, supportsSteering: false, supportsFileAttachments: false, canRunTests: true, supportsConversationRollback: false, execAllowlist: [["pnpm","test"],["npm","test"],["bun","test"],["pnpm","vitest","run"],["npx","vitest","run"]],
-      supportedRuntimes: ["sandbox"] };
+      supportedRuntimes: ["sandbox", "local"] };
   }
 
   /** Deterministic outcome check — gates the completed claim (T43/T46 feed). */

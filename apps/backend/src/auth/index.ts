@@ -7,10 +7,14 @@
 import type { ProviderAuthController } from "@shiba/shared";
 import type { AgentHarness, AgentHarnessName } from "../harness/types.js";
 import type { CodingTaskInput } from "../opencode-input.js";
+import { antigravitySubscriptionAuth } from "./antigravity-subscription.js";
 import { claudeSubscriptionAuth } from "./claude-subscription.js";
+import { codexSubscriptionAuth } from "./codex-subscription.js";
 
 interface AuthRegistryEnv {
   AGENT_TOKENS: KVNamespace;
+  /** The Worker env carries the binding; the antigravity provider hands it to getSandbox. */
+  Sandbox?: unknown;
 }
 
 /** Map a harness + run input to its T47 controller, or null when the harness carries no auth requirement. */
@@ -24,6 +28,10 @@ export function authControllerFor<Env extends AuthRegistryEnv>(
   switch (harness.name as AgentHarnessName) {
     case "claude-subscription":
       return claudeSubscriptionAuth(env, instanceId);
+    case "codex-subscription":
+      return codexSubscriptionAuth(env, instanceId);
+    case "antigravity-subscription":
+      return antigravitySubscriptionAuth(env, instanceId);
     default:
       return null;
   }

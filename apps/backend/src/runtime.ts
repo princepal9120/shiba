@@ -11,6 +11,11 @@
  */
 import type { CodingTaskInput, CodingTaskResult } from "./opencode-input.js";
 import type { RunSignal, RunSignalKind } from "@shiba/shared";
+import {
+  buildLocalRunEnvelope,
+  RUN_SIGNAL_KINDS,
+  type LocalRunResult,
+} from "@shiba/shared";
 import { AntigravityErrorEvent } from "./harness/antigravity.js";
 import { ClaudeCodeErrorEvent } from "./harness/claude-code.js";
 import { CodexErrorEvent } from "./harness/codex.js";
@@ -21,6 +26,7 @@ import { OpenCodeErrorEvent as OpenCodeErrorEventImpl, opencodeHarness } from ".
 import { HARNESS_RETRY, withRetry } from "./harness/retry.js";
 import type { AgentHarness } from "./harness/types.js";
 import { boundTail, redactSecrets, shellJoin, shellQuote } from "./security.js";
+import { DUMMY_PROVIDER_KEY } from "./provider-gateway.js";
 import { ScopedExecRefusal, scopedExec } from "./exec-allowlist.js";
 import { captureCheckpoint, checkpointRef, diffCheckpoints, pruneCheckpoints } from "./git-checkpoint.js";
 
@@ -76,7 +82,7 @@ export interface ProgressEvent {
 export type ProgressEmitter = (event: ProgressEvent) => void | Promise<void>;
 
 export interface RuntimeAdapter {
-  readonly name: "sandbox" | "computer";
+  readonly name: "sandbox" | "computer" | "local";
   runCodingTask(
     ops: SandboxOps,
     input: CodingTaskInput,
@@ -100,6 +106,15 @@ export interface RuntimeAdapter {
   ): Promise<CodingTaskResult>;
 }
 
+/**
+ * T49: setupCommands run through their own argv-prefix allowlist — home
+ * layout materialization needs mkdir/symlink and nothing else. Disjoint
+ * from the harness/test-command allowlist on purpose.
+ */
+// Harness-declared setup ops only — never model-controlled. `chmod` is
+// for credential-dir modes (T50 profile dirs must be 0700).
+const SETUP_COMMAND_ALLOWLIST: readonly (readonly string[])[] = [["mkdir"], ["ln"], ["chmod"]];
+
 export const COMPUTER_PREVIEW_MESSAGE =
   "@cloudflare/computer is preview-only and not production-ready, so it is disabled. " +
   "Set RUNTIME=sandbox (the default) or wait for Computer to graduate from preview. " +
@@ -120,7 +135,11 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
     opts?: { signal?: AbortSignal; signals?: RunSignal[]; exportDiff?: (diff: string) => Promise<string> },
   ): Promise<CodingTaskResult> {
     const workdir = `/workspace/${input.sandboxId}`;
-    const config = this.harness.configFile(input, input.sandboxId);
+    const configValue = this.harness.configFile(input, input.sandboxId);
+    // T49: a harness may write several files (codex-subscription's stub
+    // auth.json + config.toml); normalize to a list.
+    const configFiles = configValue === null ? [] : Array.isArray(configValue) ? configValue : [configValue];
+    const config = configFiles[0] ?? null;
     // T42: one ordered signal list per attempt — the caller's collector
     // and the returned result read the same record.
     const signals = opts?.signals ?? [];
@@ -179,7 +198,24 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
     await emit({ phase: "configure", message: `Writing isolated ${this.harness.name} config.`, fraction: 0.15 });
     throwIfAborted(opts?.signal);
     try {
-      if (config) await ops.writeFile(config.path, config.contents);
+      // T49: directory-shaped harnesses materialize their home layout first
+      // (mkdir/symlink ops only — a dedicated allowlist disjoint from the
+      // harness's test-command one; these commands are harness-declared,
+      // never model-controlled).
+      const setupCommands = this.harness.setupCommands?.(input, workdir) ?? [];
+      for (const argv of setupCommands) {
+        const result = await scopedExec(ops, shellJoin(argv), {
+          allowlist: SETUP_COMMAND_ALLOWLIST,
+          signals,
+          signal: opts?.signal,
+        });
+        if (result.exitCode !== 0) {
+          return failureResult(`Home layout setup failed (${argv.join(" ")}): ${boundTail(result.stderr, 500)}`, 0, "", signals);
+        }
+      }
+      for (const file of configFiles) {
+        await ops.writeFile(file.path, file.contents);
+      }
       milestone("config.written", config?.path ?? "none");
     } catch (error) {
       return failureResult(`Config write failed: ${shortError(error)}`, 0, "", signals);
@@ -324,21 +360,213 @@ export class ComputerPreviewAdapter implements RuntimeAdapter {
   }
 }
 
-export function resolveRuntimeName(raw: string | undefined): "sandbox" | "computer" {
+/**
+ * T51: the LocalDispatch mailbox as the adapter sees it. The production
+ * client wraps the DO stub; tests inject an in-memory one.
+ */
+export interface LocalDispatchClient {
+  dispatch(envelope: import("@shiba/shared").LocalRunEnvelope): Promise<void>;
+  status(sandboxId: string): Promise<{
+    status: "pending" | "claimed" | "settled" | "cancelled";
+    claimedAt?: number;
+    claimedBy?: string;
+    result?: LocalRunResult;
+  }>;
+  cancel(sandboxId: string): Promise<void>;
+}
+
+export const LOCAL_DISPATCH_MESSAGE =
+  "runtime \"local\" requires SHIBA_LOCAL_RUNTIME=1 on the deployment and " +
+  "an operator daemon polling /api/local — see configuration.md.";
+
+/** The adapter's own poll cadence and the total mailbox budget. */
+export const LOCAL_POLL_INTERVAL_MS = 2_500;
+export const LOCAL_MAILBOX_TIMEOUT_MS = OPENCODE_TIMEOUT_MS + 2 * GIT_TIMEOUT_MS;
+
+/**
+ * T51 local runtime: the Worker never touches the operator's machine — it
+ * publishes a fully-computed run envelope (argv, config files, env minus
+ * dummy keys) to LocalDispatch and waits. The operator's daemon executes
+ * it and posts back the same result shape a sandbox run produces, which
+ * then passes the same T43 verify gate before it can claim completed.
+ */
+export class LocalRuntimeAdapter implements RuntimeAdapter {
+  readonly name = "local" as const;
+  private readonly harness: AgentHarness;
+  private readonly client: LocalDispatchClient;
+  private readonly pollIntervalMs: number;
+
+  constructor(
+    harness: AgentHarness,
+    deps: { client: LocalDispatchClient; pollIntervalMs?: number },
+  ) {
+    this.harness = harness;
+    this.client = deps.client;
+    this.pollIntervalMs = deps.pollIntervalMs ?? LOCAL_POLL_INTERVAL_MS;
+  }
+
+  async runCodingTask(
+    _ops: SandboxOps,
+    input: CodingTaskInput,
+    emit: ProgressEmitter,
+    opts?: { signal?: AbortSignal; signals?: RunSignal[] },
+  ): Promise<CodingTaskResult> {
+    const signals = opts?.signals ?? [];
+    const milestone = (kind: RunSignalKind, detail?: string) => {
+      signals.push(detail !== undefined ? { kind, at: Date.now(), detail } : { kind, at: Date.now() });
+    };
+    if (!this.harness.capabilities(input.codingModel).supportedRuntimes.includes("local")) {
+      return failureResult(
+        `Harness ${this.harness.name} does not run on the local runtime.`,
+        0,
+        "",
+        signals,
+      );
+    }
+    const workdir = `/workspace/${input.sandboxId}`;
+    const configValue = this.harness.configFile(input, input.sandboxId);
+    const configFiles = configValue === null ? [] : Array.isArray(configValue) ? configValue : [configValue];
+    const env = this.harness.env(input, configFiles[0]?.path ?? null);
+    const dummyKeys = Object.entries(env)
+      .filter(([, value]) => value === DUMMY_PROVIDER_KEY)
+      .map(([key]) => key);
+    const deadlineAt = Date.now() + LOCAL_MAILBOX_TIMEOUT_MS;
+    const envelope = buildLocalRunEnvelope({
+      input: {
+        sandboxId: input.sandboxId,
+        repoUrl: input.repoUrl,
+        baseBranch: input.baseBranch,
+        task: input.task,
+        ...(input.testCommand !== undefined ? { testCommand: input.testCommand } : {}),
+      },
+      harnessName: this.harness.name,
+      workdir,
+      configFiles,
+      setupCommands: (this.harness.setupCommands?.(input, workdir) ?? []).map((cmd) => [...cmd]),
+      argv: this.harness.buildArgv(input, workdir),
+      env,
+      dummyKey: DUMMY_PROVIDER_KEY,
+      providerKeyEnv: dummyKeys[0],
+      execAllowlist: this.harness
+        .capabilities(input.codingModel)
+        .execAllowlist.map((prefix) => [...prefix]),
+      setupAllowlist: SETUP_COMMAND_ALLOWLIST.map((prefix) => [...prefix]),
+      deadlineAt,
+    });
+
+    throwIfAborted(opts?.signal);
+    await emit({ phase: "clone", message: `Dispatching ${this.harness.name} to the local runtime.`, fraction: 0.05 });
+    try {
+      await this.client.dispatch(envelope);
+    } catch (error) {
+      return failureResult(`Local dispatch failed: ${shortError(error)}`, 0, "", signals);
+    }
+    milestone("local.dispatched", input.sandboxId);
+
+    // The wait IS the runtime semantics — a daemon claims, executes, and
+    // settles on its own clock; the abort path cancels the record so a
+    // late claim can never start a cancelled run.
+    let seenClaimed = false;
+    for (;;) {
+      if (opts?.signal?.aborted) {
+        await this.client.cancel(input.sandboxId).catch(() => undefined);
+        throw new Error("Run cancelled.");
+      }
+      if (Date.now() > deadlineAt) {
+        await this.client.cancel(input.sandboxId).catch(() => undefined);
+        return failureResult(
+          "Local run timed out waiting for the daemon — is `shiba local` running?",
+          0,
+          "",
+          signals,
+        );
+      }
+      let status: Awaited<ReturnType<LocalDispatchClient["status"]>>;
+      try {
+        status = await this.client.status(input.sandboxId);
+      } catch (error) {
+        return failureResult(`Local dispatch status failed: ${shortError(error)}`, 0, "", signals);
+      }
+      if (status.status === "claimed" && !seenClaimed) {
+        seenClaimed = true;
+        milestone("local.claimed", status.claimedBy ?? "operator");
+        await emit({ phase: "code", message: `Daemon${status.claimedBy ? ` ${status.claimedBy}` : ""} claimed the run.`, fraction: 0.25 });
+      }
+      if (status.status === "cancelled") {
+        return failureResult("Local run was cancelled before a daemon settled it.", 0, "", signals);
+      }
+      if (status.status === "settled" && status.result !== undefined) {
+        milestone("local.settled", `exitCode:${status.result.exitCode}`);
+        // Daemon-emitted exec receipts merge ahead of the mailbox
+        // milestones — verify() reads exec.settled from the same list.
+        for (const signal of status.result.signals ?? []) {
+          if ((RUN_SIGNAL_KINDS as readonly string[]).includes(signal.kind)) {
+            signals.push({ kind: signal.kind as RunSignalKind, at: signal.at, ...(signal.detail !== undefined ? { detail: signal.detail } : {}) });
+          }
+        }
+        const result = status.result;
+        const stderrTail = redactSecrets(boundTail(result.stderrTail, MAX_STDERR_TAIL_CHARS));
+        if (result.status === "error" || result.exitCode !== 0) {
+          const detail = stderrTail.trim();
+          return failureResult(
+            `${this.harness.name} (local) ${result.exitCode !== 0 ? `exited with code ${result.exitCode}` : "failed"}.${detail ? ` stderr: ${boundTail(detail, 1500)}` : ""} ${boundTail(result.summary, 1500)}`.trim(),
+            result.exitCode,
+            stderrTail,
+            signals,
+          );
+        }
+        const completed: CodingTaskResult = {
+          status: "completed",
+          exitCode: 0,
+          stderrTail,
+          changedFiles: result.changedFiles,
+          diff: boundTail(result.diff, MAX_DIFF_CHARS),
+          files: result.files.slice(0, MAX_CAPTURED_FILES).map((file) => ({
+            path: file.path,
+            content: file.content === null ? null : boundTail(file.content, MAX_FILE_CHARS),
+            encoding: file.encoding,
+          })),
+          signals,
+          summary: boundTail(result.summary, 8000),
+          ...(result.testEvidence !== undefined ? { testEvidence: result.testEvidence } : {}),
+        };
+        await emit({ phase: "collect", message: `Done: ${result.changedFiles.length} changed files.`, fraction: 1 });
+        // T43 verify gate — identical to the sandbox path: the daemon's
+        // report is evidence, not truth.
+        const verification = await this.harness.verify(input, completed);
+        if (!verification.ok) {
+          return failureResult(`Verification failed: ${verification.reason}`, result.exitCode, stderrTail, signals);
+        }
+        return completed;
+      }
+      await new Promise((resolve) => setTimeout(resolve, this.pollIntervalMs));
+    }
+  }
+}
+
+export function resolveRuntimeName(raw: string | undefined): "sandbox" | "computer" | "local" {
   if (raw === undefined || raw === "") return "sandbox";
-  if (raw === "sandbox" || raw === "computer") return raw;
-  throw new Error(`Unknown RUNTIME ${JSON.stringify(raw)}: expected "sandbox" or "computer".`);
+  if (raw === "sandbox" || raw === "computer" || raw === "local") return raw;
+  throw new Error(`Unknown RUNTIME ${JSON.stringify(raw)}: expected "sandbox", "computer", or "local".`);
 }
 
 /**
  * The harness must reach the adapter that actually runs it: egress is
  * narrowed to the selected harness's host, so running a different one would
- * block its own provider.
+ * block its own provider. `"local"` requires its dispatch client — the
+ * caller that lacks one (flag off) throws instead of silently sandboxing.
  */
 export function createRuntimeAdapter(
-  name: "sandbox" | "computer",
+  name: "sandbox" | "computer" | "local",
   harness: AgentHarness = opencodeHarness,
+  local?: { client: LocalDispatchClient; pollIntervalMs?: number },
 ): RuntimeAdapter {
+  if (name === "local") {
+    if (local === undefined) {
+      throw new Error(LOCAL_DISPATCH_MESSAGE);
+    }
+    return new LocalRuntimeAdapter(harness, local);
+  }
   return name === "computer" ? new ComputerPreviewAdapter() : new SandboxRuntimeAdapter(harness);
 }
 

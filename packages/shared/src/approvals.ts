@@ -2,6 +2,7 @@
  * Durable pending-approval records: the wire shape `/api/approvals` serves
  * and the pure list transforms the orchestrator applies to DO state.
  */
+import type { RuntimeSelection } from "./local-runtime.js";
 import type { ApprovedRoute } from "./model.js";
 
 export const APPROVAL_TTL_MS = 30 * 60 * 1000;
@@ -92,6 +93,12 @@ export interface PendingApproval {
    * like the rest of the approved input.
    */
   authAccount?: string;
+  /**
+   * T51: the approved runtime — `"local"` runs on the operator's machine
+   * via the dispatch mailbox; absent = sandbox. Frozen at queue time and
+   * hashed like the rest of the approved input.
+   */
+  runtime?: RuntimeSelection;
   /** Approval kind; absent on records written before email kinds landed — treated as `"run"`. */
   kind?: ApprovalKind;
   /** Frozen email send/delete input for email-kind approvals. */
@@ -132,6 +139,7 @@ export interface CreateApprovalInput {
   route?: ApprovedRoute;
   harness?: string;
   authAccount?: string;
+  runtime?: RuntimeSelection;
   kind?: ApprovalKind;
   payload?: JsonValue;
   queuedBy?: string;
@@ -157,6 +165,7 @@ export function createPendingApproval(
       ...(input.route !== undefined ? { route: input.route } : {}),
       ...(input.harness !== undefined ? { harness: input.harness } : {}),
       ...(input.authAccount !== undefined ? { authAccount: input.authAccount } : {}),
+      ...(input.runtime !== undefined ? { runtime: input.runtime } : {}),
       ...(input.kind !== undefined ? { kind: input.kind } : {}),
       ...(input.payload !== undefined ? { payload: input.payload } : {}),
       ...(input.queuedBy !== undefined ? { queuedBy: input.queuedBy } : {}),
@@ -269,6 +278,8 @@ export interface RunInputFields {
   route?: ApprovedRoute;
   /** T48: which subscription account — part of what the human approved. */
   authAccount?: string;
+  /** T51: which runtime — part of what the human approved. */
+  runtime?: RuntimeSelection;
 }
 
 /** Key-sorted JSON — the canonical form the input hash covers. */
@@ -301,6 +312,7 @@ export function runInputHash(input: RunInputFields): string {
     publishPullRequest: input.publishPullRequest,
     ...(input.route !== undefined ? { route: input.route as unknown as JsonValue } : {}),
     ...(input.authAccount !== undefined ? { authAccount: input.authAccount } : {}),
+    ...(input.runtime !== undefined ? { runtime: input.runtime } : {}),
   });
 }
 
