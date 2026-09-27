@@ -329,7 +329,6 @@ describe("interruption-safe release", () => {
   it("rejects and releases when the caller's signal aborts an in-flight task that never settles", async () => {
     const controller = new AbortController();
     const release = vi.fn(async (_sandboxId: string) => {});
-    let container: ManagedContainer | undefined;
     const taskStarted = latch();
     const run = runWithContainer(
       {
@@ -338,8 +337,7 @@ describe("interruption-safe release", () => {
         sandboxId: "sbx-stuck",
         signal: controller.signal,
       },
-      async (managed) => {
-        container = managed;
+      async (_managed) => {
         taskStarted.resolve();
         // An in-flight operation that ignores the signal entirely — only a
         // real interruption can unwind the task, and release must still run.
