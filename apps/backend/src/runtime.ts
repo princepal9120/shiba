@@ -104,7 +104,9 @@ export interface RuntimeAdapter {
  * layout materialization needs mkdir/symlink and nothing else. Disjoint
  * from the harness/test-command allowlist on purpose.
  */
-const SETUP_COMMAND_ALLOWLIST: readonly (readonly string[])[] = [["mkdir"], ["ln"]];
+// Harness-declared setup ops only — never model-controlled. `chmod` is
+// for credential-dir modes (T50 profile dirs must be 0700).
+const SETUP_COMMAND_ALLOWLIST: readonly (readonly string[])[] = [["mkdir"], ["ln"], ["chmod"]];
 
 export const COMPUTER_PREVIEW_MESSAGE =
   "@cloudflare/computer is preview-only and not production-ready, so it is disabled. " +

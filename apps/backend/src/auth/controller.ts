@@ -43,7 +43,19 @@ export interface AuthProviderHooks<Env> {
    * flows that block on an out-of-band artifact (T50's pasted redirect)
    * do so; token providers omit the field and go straight to verifying.
    */
-  onBegin?(env: Env, instanceId: string, ownerSessionId: string): Promise<{ wait?: string } | void>;
+  onBegin?(
+    env: Env,
+    instanceId: string,
+    ownerSessionId: string,
+  ): Promise<{ wait?: string; authorizationUrl?: string; pending?: unknown } | void>;
+  /**
+   * T50 only: deliver the operator's pasted `127.0.0.1` redirect URL into
+   * the listener the `waiting` flow described by `pending`. The provider
+   * validates state/redirect_uri against `pending` before any packet is
+   * sent; throw to fail the flow. Never set `succeeded` here — delivery
+   * is not authentication.
+   */
+  deliverCallback?(env: Env, instanceId: string, pending: unknown, callbackUrl: string): Promise<{ message?: string }>;
   /** Clear step 1: close admission — the harness becomes unselectable. */
   closeAdmission?(env: Env, instanceId: string): Promise<void>;
   /** Clear step 2: stop in-flight runs on this instance (existing cancel path). */
@@ -68,6 +80,15 @@ interface FlowRecord {
   ownerSessionId: string | null;
   message?: string;
   expiresAt?: number;
+  /** T50: the operator-opened sign-in URL while `waiting`. */
+  authorizationUrl?: string;
+  /**
+   * T50: opaque provider payload binding the pending callback — the single
+   * expected `state` + listener address; the provider owns its shape.
+   */
+  pending?: unknown;
+  /** Set once a callback URL has been delivered — the paste is single-use. */
+  callbackSent?: boolean;
 }
 
 /** The phases from which a new begin() is legal. */
@@ -137,6 +158,7 @@ export function createAuthController<Env extends AuthKvEnv>(
       phase: record.phase,
       ownerSessionId: record.ownerSessionId,
       ...(record.message !== undefined ? { message: record.message } : {}),
+      ...(record.authorizationUrl !== undefined ? { authorizationUrl: record.authorizationUrl } : {}),
       ...(record.expiresAt !== undefined ? { expiresAt: record.expiresAt } : {}),
     };
   };
@@ -161,7 +183,10 @@ export function createAuthController<Env extends AuthKvEnv>(
       // for an out-of-band artifact — only T50's flow returns `wait`.
       const outcome = await hooks.onBegin?.(env, instanceId, ownerSessionId);
       if (outcome?.wait !== undefined) {
-        await writeFlow(env, instanceId, { phase: "waiting", ownerSessionId, message: outcome.wait });
+        const waiting: FlowRecord = { phase: "waiting", ownerSessionId, message: outcome.wait };
+        if (outcome.authorizationUrl !== undefined) waiting.authorizationUrl = outcome.authorizationUrl;
+        if (outcome.pending !== undefined) waiting.pending = outcome.pending;
+        await writeFlow(env, instanceId, waiting);
       }
     },
 
@@ -194,6 +219,33 @@ export function createAuthController<Env extends AuthKvEnv>(
         const message = `probe threw: ${error instanceof Error ? error.message : String(error)}`;
         await writeFlow(env, instanceId, { phase: "failed", ownerSessionId, message });
         return { phase: "failed", ownerSessionId, message };
+      }
+    },
+
+    async deliverCallback(ownerSessionId: string, callbackUrl: string): Promise<{ message?: string }> {
+      const record = await readFlow(env, instanceId);
+      requireOwner(record, ownerSessionId, "deliver a callback");
+      if (record.phase !== "waiting" || record.pending === undefined) {
+        throw new AuthFlowError("invalid_phase", "no pending sign-in callback for this flow.");
+      }
+      if (hooks.deliverCallback === undefined) {
+        throw new AuthFlowError("invalid_phase", "this provider does not accept callbacks.");
+      }
+      if (record.callbackSent) {
+        throw new AuthFlowError("invalid_phase", "a callback was already delivered — begin() again to retry.");
+      }
+      try {
+        const result = await hooks.deliverCallback(env, instanceId, record.pending, callbackUrl);
+        await writeFlow(env, instanceId, {
+          ...record,
+          callbackSent: true,
+          ...(result.message !== undefined ? { message: result.message } : {}),
+        });
+        return { message: result.message };
+      } catch (error) {
+        const message = `callback delivery failed: ${error instanceof Error ? error.message : String(error)}`;
+        await writeFlow(env, instanceId, { phase: "failed", ownerSessionId, message });
+        throw new AuthFlowError("invalid_phase", message);
       }
     },
 

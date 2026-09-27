@@ -498,6 +498,8 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
             ? this.env.CLAUDE_SUBSCRIPTION_MODEL?.trim()
             : harness.name === "codex-subscription"
               ? this.env.CODEX_SUBSCRIPTION_MODEL?.trim()
+              : harness.name === "antigravity-subscription"
+                ? this.env.ANTIGRAVITY_SUBSCRIPTION_MODEL?.trim()
               : harness.name === "codex"
               ? this.env.CODEX_MODEL?.trim()
               : harness.name === "grok"

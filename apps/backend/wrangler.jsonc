@@ -33,6 +33,10 @@
     //   CODEX_SUBSCRIPTION_MODEL     per-deploy model override
     //   CODEX_SUBSCRIPTION_AUTH_JSON[_<ACCOUNT>]  the operator's `codex
     //   login` auth.json contents — a Wrangler secret, read only at egress.
+    //   SHIBA_ANTIGRAVITY_SUBSCRIPTION=1  registers antigravity-subscription
+    //   + /api/antigravity/callback (the pasted-redirect OAuth flow). No
+    //   secret var — Google tokens live in the container profile.
+    //   ANTIGRAVITY_SUBSCRIPTION_MODEL  per-deploy model override
   },
   "ai": {
     "binding": "AI",

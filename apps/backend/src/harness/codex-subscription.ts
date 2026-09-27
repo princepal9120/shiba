@@ -97,15 +97,9 @@ export function codexSubscriptionInstanceId(input: Pick<CodingTaskInput, "authAc
   return `codex-sub:${codexSubscriptionHomeDir(input)}`;
 }
 
-/**
- * Recover the account name from an instanceId's home path — the shadow
- * dir encodes it (`acc-<name>`); the shared home means "default".
- */
-export function codexSubscriptionAccountFromInstanceId(instanceId: string): string {
-  const path = instanceId.slice("codex-sub:".length);
-  const base = path.split("/").pop() ?? "";
-  return base.startsWith("acc-") ? base.slice(4) : "default";
-}
+// `codexSubscriptionAccountFromInstanceId` lives in @shiba/shared
+// (codex-home.ts) — src/auth/ must not import from harness/.
+export { codexSubscriptionAccountFromInstanceId } from "@shiba/shared";
 
 /**
  * The stub `auth.json` — shape-valid (the CLI parses the ChatGPT-auth

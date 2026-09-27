@@ -1,5 +1,6 @@
 /** Harness registry (PLAN.md T22). Selection is by name, default OpenCode. */
 import { antigravityHarness } from "./antigravity.js";
+import { antigravitySubscriptionHarness } from "./antigravity-subscription.js";
 import { claudeCodeHarness } from "./claude-code.js";
 import { claudeSubscriptionHarness } from "./claude-subscription.js";
 import { codexHarness } from "./codex.js";
@@ -20,10 +21,15 @@ export const HARNESSES: Record<string, AgentHarness> = {
   grok: grokHarness,
   cursor: cursorHarness,
   antigravity: antigravityHarness,
+  "antigravity-subscription": antigravitySubscriptionHarness,
 };
 
 /** The env surface the opt-in gate reads. */
-type HarnessGateEnv = { SHIBA_CLAUDE_SUBSCRIPTION?: string; SHIBA_CODEX_SUBSCRIPTION?: string } | undefined;
+type HarnessGateEnv = {
+  SHIBA_CLAUDE_SUBSCRIPTION?: string;
+  SHIBA_CODEX_SUBSCRIPTION?: string;
+  SHIBA_ANTIGRAVITY_SUBSCRIPTION?: string;
+} | undefined;
 
 /**
  * T48: opt-in subscription harnesses are *unregistered* unless the
@@ -34,6 +40,8 @@ type HarnessGateEnv = { SHIBA_CLAUDE_SUBSCRIPTION?: string; SHIBA_CODEX_SUBSCRIP
 const HARNESS_GATES: Partial<Record<AgentHarnessName, (env: HarnessGateEnv) => boolean>> = {
   "claude-subscription": (env) => env?.SHIBA_CLAUDE_SUBSCRIPTION === "1",
   "codex-subscription": (env) => env?.SHIBA_CODEX_SUBSCRIPTION === "1",
+  // T50: the OAuth-in-container flow is opt-in separately (§18.12).
+  "antigravity-subscription": (env) => env?.SHIBA_ANTIGRAVITY_SUBSCRIPTION === "1",
 };
 
 function harnessEnabled(harness: AgentHarness, env: HarnessGateEnv): boolean {
@@ -110,7 +118,7 @@ export function allowedHostsFor(harness: AgentHarness, model: string): string[] 
 
 export type { AgentHarness, AgentHarnessName };
 
-export const HARNESS_NAMES = ["opencode", "claude-code", "claude-subscription", "codex", "codex-subscription", "devin", "grok", "cursor", "antigravity"] as const;
+export const HARNESS_NAMES = ["opencode", "claude-code", "claude-subscription", "codex", "codex-subscription", "devin", "grok", "cursor", "antigravity", "antigravity-subscription"] as const;
 
 /**
  * Per-harness default coding model. The checked-in ids are defaults, not
@@ -135,4 +143,7 @@ export const HARNESS_DEFAULT_MODELS: Record<string, string> = {
   grok: "xai/grok-4.6",
   cursor: "cursor/claude-4-5-sonnet",
   antigravity: "google/gemini-3.5-flash",
+  // Subscription models carry the google-subscription namespace: the
+  // provider prefix is the auth-path distinction, not a different vendor.
+  "antigravity-subscription": "google-subscription/gemini-3-pro",
 };

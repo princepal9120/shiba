@@ -11,6 +11,7 @@ import { CodingOrchestrator } from "./agents/orchestrator.js";
 import { AUDIT_RETENTION_MS, listAuditEntries, pruneAuditLog } from "./audit.js";
 import { claudeSubscriptionAuth } from "./auth/claude-subscription.js";
 import { codexSubscriptionAuth } from "./auth/codex-subscription.js";
+import { handleAntigravityCallback, handleAntigravitySubscriptionAuth } from "./antigravity.js";
 import { codexSubscriptionInstanceId } from "./harness/codex-subscription.js";
 import { AuthFlowError } from "./auth/controller.js";
 import { AUTOMATIONS_DO_NAME } from "./automation-runner.js";
@@ -1647,6 +1648,22 @@ export default {
           return Response.json({ error: "Not found." }, { status: 404 });
         }
         return handleCodexSubscriptionAuth(request, env);
+      }
+      // T50: OAuth sign-in flow + the pasted-redirect callback (§18.12) —
+      // handlers live in src/antigravity.ts, not here. Dark unless
+      // SHIBA_ANTIGRAVITY_SUBSCRIPTION=1.
+      if (url.pathname === "/api/auth/antigravity-subscription" || url.pathname.startsWith("/api/auth/antigravity-subscription/")) {
+        if (env.SHIBA_ANTIGRAVITY_SUBSCRIPTION !== "1") {
+          return Response.json({ error: "Not found." }, { status: 404 });
+        }
+        return handleAntigravitySubscriptionAuth(request, env, getUserId(request) ?? "default");
+      }
+      if (url.pathname === "/api/antigravity/callback") {
+        if (env.SHIBA_ANTIGRAVITY_SUBSCRIPTION !== "1") {
+          return Response.json({ error: "Not found." }, { status: 404 });
+        }
+        const callbackResponse = await handleAntigravityCallback(request, env, getUserId(request) ?? "default");
+        if (callbackResponse) return callbackResponse;
       }
       const mcpResponse = await handleMcp(
         request,

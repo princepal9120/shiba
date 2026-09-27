@@ -262,6 +262,10 @@ export const Worker = Cloudflare.Worker("Worker", {
       // T49 opt-ins (§18.11): absent = the subscription harness is dark.
       "SHIBA_CODEX_SUBSCRIPTION",
       "CODEX_SUBSCRIPTION_MODEL",
+      // T50 opt-ins (§18.12): absent = the antigravity flow is dark. No
+      // credential var exists — OAuth tokens live in the container profile.
+      "SHIBA_ANTIGRAVITY_SUBSCRIPTION",
+      "ANTIGRAVITY_SUBSCRIPTION_MODEL",
       "CODEX_MODEL",
       "DEVIN_MODEL",
       "GROK_MODEL",
