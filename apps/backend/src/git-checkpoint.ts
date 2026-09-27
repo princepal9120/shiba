@@ -16,10 +16,8 @@
  * refuses up front on a harness whose `supportsConversationRollback` is
  * false — every harness today — rather than half-restoring state.
  */
-import type { RunSignal } from "@shiba/shared";
 import type { AgentHarness } from "./harness/types.js";
 import { boundTail, shellJoin } from "./security.js";
-import type { SandboxOps } from "./runtime.js";
 
 export const CHECKPOINT_REF_PREFIX = "refs/shiba/checkpoints/";
 
