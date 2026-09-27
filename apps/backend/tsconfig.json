@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "strict": true,
@@ -16,6 +20,17 @@
     "emitDeclarationOnly": true,
     "outDir": "dist"
   },
-  "include": ["src", "src/email-openapi.json", "vitest.config.ts"],
-  "references": [{ "path": "../../packages/shared" }]
+  "include": [
+    "src",
+    "src/email-openapi.json",
+    "vitest.config.ts"
+  ],
+  "references": [
+    {
+      "path": "../../packages/shared"
+    },
+    {
+      "path": "../../packages/auth"
+    }
+  ]
 }
