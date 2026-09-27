@@ -260,12 +260,20 @@ describe("createSandboxOps", () => {
     expect(gitCheckout).not.toHaveBeenCalled();
   });
 
-  it("forwards execution cancellation and preserves process exit code", async () => {
+  it("does not cross the RPC boundary with AbortSignal but aborts locally", async () => {
+    const controller = new AbortController();
     const exec = vi.fn().mockResolvedValue({ stdout: "out", stderr: "err", exitCode: 4 });
     mocks.sandbox.mockReturnValue({ exec });
-    const signal = new AbortController().signal;
     const ops = createSandboxOps({} as never, INPUT.sandboxId);
-    expect(await ops.exec("command", { cwd: "/workspace", timeoutMs: 100, signal })).toEqual({ stdout: "out", stderr: "err", exitCode: 4 });
-    expect(exec).toHaveBeenCalledWith("command", expect.objectContaining({ cwd: "/workspace", timeout: 100, signal }));
+    expect(await ops.exec("command", { cwd: "/workspace", timeoutMs: 100, signal: controller.signal })).toEqual({ stdout: "out", stderr: "err", exitCode: 4 });
+    // AbortSignal is not RPC-serializable; the stub must never see it. The
+    // remote process is bounded by timeout and abort is raced in locally.
+    expect(exec).toHaveBeenCalledWith("command", expect.not.objectContaining({ signal: expect.anything() }));
+    await expect(ops.exec("command", { signal: AbortSignal.abort() })).rejects.toThrow(/abort/i);
+    exec.mockReturnValue(new Promise(() => {}));
+    const midFlight = new AbortController();
+    const pending = ops.exec("command", { signal: midFlight.signal });
+    midFlight.abort();
+    await expect(pending).rejects.toThrow("Run cancelled.");
   });
 });

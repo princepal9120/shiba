@@ -219,10 +219,14 @@ export const Worker = Cloudflare.Worker("Worker", {
 
     // wrangler durable_objects.bindings Sandbox + containers[0]: the
     // Container decl is the DO namespace binding plus its container app.
+    // SANDBOX_IMAGE swaps in a pre-pushed registry.cloudflare.com ref so
+    // deploys work on machines without a local Docker daemon (the image is
+    // built+ pushed by .github/workflows/build-sandbox-image.yml).
     Sandbox: Cloudflare.Container<Sandbox>("Sandbox", {
       name: containerName,
-      context: "./apps/backend",
-      dockerfile: "./apps/backend/Dockerfile",
+      ...(process.env.SANDBOX_IMAGE
+        ? { image: process.env.SANDBOX_IMAGE }
+        : { context: "./apps/backend", dockerfile: "./apps/backend/Dockerfile" }),
       instanceType: "standard-1",
       maxInstances: 5,
     }),

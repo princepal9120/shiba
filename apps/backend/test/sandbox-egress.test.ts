@@ -235,7 +235,7 @@ describe("devin egress forwarders", () => {
     }
   });
 
-  it("injects DEVIN_API_KEY on server.codeium.com too", async () => {
+  it("injects DEVIN_API_KEY on server.codeium.com in the CLI's Basic key-key form", async () => {
     const seen: { auth?: string | null; url?: string } = {};
     const original = globalThis.fetch;
     spyOnFetch(seen);
@@ -248,7 +248,49 @@ describe("devin egress forwarders", () => {
         devinEnv,
       );
       expect(response.status).toBe(200);
-      expect(seen.auth).toBe("Bearer devin-key-secret");
+      expect(seen.auth).toBe("Basic devin-key-secret-devin-key-secret");
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
+  it("swaps the dummy key inside a nested protobuf message body", async () => {
+    // Real GetCliModelConfigs wire shape: field 1 (wt 2) wraps a nested
+    // message whose field 3 (wt 2) is the credential. The flat byte-splice
+    // used to corrupt the outer LEN prefix -> upstream "cannot parse".
+    const dummy = new TextEncoder().encode("dummy-egress-swapped");
+    const inner = new Uint8Array([0x0a, 0x04, 0x31, 0x2e, 0x30, 0x2e, 0x1a, dummy.length, ...dummy]);
+    const body = new Uint8Array([0x0a, inner.length, ...inner, 0x22, 0x02, 0x65, 0x6e]);
+    const seen: { auth?: string | null; body?: ArrayBuffer | null } = {};
+    const original = globalThis.fetch;
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      seen.body = init?.body instanceof ArrayBuffer ? init.body : null;
+      const h = init?.headers instanceof Headers ? init.headers : new Headers(init?.headers as HeadersInit | undefined);
+      seen.auth = h.get("authorization");
+      return new Response("", { status: 200 });
+    }) as typeof fetch;
+    try {
+      const response = await forwardDevinInference(
+        new Request("https://server.codeium.com/exa.api_server_pb.ApiServerService/GetCliModelConfigs", {
+          method: "POST",
+          headers: { "content-type": "application/proto" },
+          body,
+        }),
+        devinEnv,
+      );
+      expect(response.status).toBe(200);
+      const out = new Uint8Array(seen.body!);
+      const real = new TextEncoder().encode("devin-key-secret");
+      // Outer len varint must now cover the grown inner message.
+      const innerLen = inner.length - dummy.length + real.length;
+      expect(out[0]).toBe(0x0a);
+      expect(out[1]).toBe(innerLen);
+      // Inner field: tag 0x1a, len varint = real.length, then the real key.
+      const tagAt = 2 + 2 + 4;
+      expect(out[tagAt]).toBe(0x1a);
+      expect(out[tagAt + 1]).toBe(real.length);
+      expect(new TextDecoder().decode(out.subarray(tagAt + 2, tagAt + 2 + real.length))).toBe("devin-key-secret");
+      expect(new TextDecoder("latin1").decode(out)).not.toContain("dummy-egress-swapped");
     } finally {
       globalThis.fetch = original;
     }

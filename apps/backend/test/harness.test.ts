@@ -233,7 +233,7 @@ describe("devin harness", () => {
   it("resolves by name and defaults to the free swe-2 model", () => {
     expect(resolveHarness("devin").name).toBe("devin");
     expect(resolveHarness("DEVIN").name).toBe("devin");
-    expect(HARNESS_DEFAULT_MODELS.devin).toBe("devin/swe-2");
+    expect(HARNESS_DEFAULT_MODELS.devin).toBe("devin/swe-2-medium");
   });
 
   it("runs headless with the bare model alias and bypass inside the sandbox", () => {
@@ -375,7 +375,7 @@ describe("agent cli catalog", () => {
     expect(catalog.find((a) => a.id === "grok")?.version).toBe("1.0.41");
     expect(catalog.find((a) => a.id === "grok")?.defaultModel).toBe("xai/grok-4.6");
     expect(catalog.find((a) => a.id === "devin")?.version).toBe("3000.10.31");
-    expect(catalog.find((a) => a.id === "devin")?.defaultModel).toBe("devin/swe-2");
+    expect(catalog.find((a) => a.id === "devin")?.defaultModel).toBe("devin/swe-2-medium");
   });
 
   it("reports devin's secret presence without exposing the value", () => {

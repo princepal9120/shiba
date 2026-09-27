@@ -149,8 +149,11 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
     }
     const stderrTail = redactSecrets(boundTail(run.stderr, MAX_STDERR_TAIL_CHARS));
     if (run.exitCode !== 0) {
+      // stderr is the only diagnostic a harness failure carries; fold the tail
+      // into the summary so the run record shows why the CLI died.
+      const detail = stderrTail.trim();
       return failureResult(
-        `${this.harness.name} exited with code ${run.exitCode}.`,
+        `${this.harness.name} exited with code ${run.exitCode}.${detail ? ` stderr: ${boundTail(detail, 1500)}` : ""}`,
         run.exitCode,
         stderrTail,
       );

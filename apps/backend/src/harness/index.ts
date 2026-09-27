@@ -68,8 +68,10 @@ export const HARNESS_DEFAULT_MODELS: Record<string, string> = {
   opencode: "google/gemini-3.5-flash-lite",
   "claude-code": "anthropic/claude-sonnet-4-6",
   codex: "openai/gpt-5.3-codex",
-  // swe-2 is free on Devin Pro; the alias resolves to the latest SWE-2.
-  devin: "devin/swe-2",
+  // SWE-2 medium is the free tier on Devin Pro; bare "swe-2" is a family
+  // name the pinned CLI (3000.10.31) does not resolve, and "swe" is the
+  // family alias.
+  devin: "devin/swe-2-medium",
   grok: "xai/grok-4.6",
   cursor: "cursor/claude-4-5-sonnet",
   antigravity: "google/gemini-3.5-flash",

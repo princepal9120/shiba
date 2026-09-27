@@ -84,14 +84,31 @@ export function createSandboxOps(env: Env, sandboxId: string, egressHosts?: stri
       await sandbox.writeFile(path, content);
     },
     async exec(command, opts) {
-      const result = await sandbox.exec(command, {
+      opts?.signal?.throwIfAborted();
+      // AbortSignal cannot cross the sandbox RPC boundary; the exec timeout
+      // bounds the remote process, and abort is raced in locally instead.
+      const execPromise = sandbox.exec(command, {
         cwd: opts?.cwd,
         timeout: opts?.timeoutMs,
         env: opts?.env,
-        signal: opts?.signal,
         stream: opts?.onOutput !== undefined,
         onOutput: opts?.onOutput,
       });
+      const result = opts?.signal
+        ? await Promise.race([
+            execPromise,
+            new Promise<never>((_, reject) =>
+              opts.signal!.addEventListener(
+                "abort",
+                () => {
+                  execPromise.catch(() => {});
+                  reject(new Error("Run cancelled."));
+                },
+                { once: true },
+              ),
+            ),
+          ])
+        : await execPromise;
       return {
         stdout: result.stdout ?? "",
         stderr: result.stderr ?? "",
@@ -100,8 +117,18 @@ export function createSandboxOps(env: Env, sandboxId: string, egressHosts?: stri
     },
     async readFile(path, opts) {
       opts?.signal?.throwIfAborted();
-      const stream = await sandbox.readFileStream(path);
-      const bytes = await collectStream(stream, opts?.maxBytes, opts?.signal);
+      let stream;
+      try {
+        stream = await sandbox.readFileStream(path);
+      } catch (error) {
+        throw new Error(`readFileStream RPC failed for ${path}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      let bytes;
+      try {
+        bytes = await collectStream(stream, opts?.maxBytes, opts?.signal);
+      } catch (error) {
+        throw new Error(`collectStream failed for ${path}: ${error instanceof Error ? error.message : String(error)}`);
+      }
       const decoded = tryDecodeUtf8(bytes);
       if (decoded !== null) {
         return { kind: "utf8", content: decoded };
@@ -114,8 +141,9 @@ export function createSandboxOps(env: Env, sandboxId: string, egressHosts?: stri
 async function collectStream(stream: ReadableStream<Uint8Array>, maxBytes = 500_000, signal?: AbortSignal): Promise<Uint8Array> {
   const chunks: Uint8Array[] = [];
   let total = 0;
-  // The pipe interrupts a stalled read as well as cancelling the SDK stream.
-  const source = signal ? stream.pipeThrough(new TransformStream<Uint8Array, Uint8Array>(), { signal }) : stream;
+  // pipeThrough({ signal }) rejects non-native AbortSignals with an illegal
+  // invocation; the for-await's throwIfAborted covers cancellation instead.
+  const source = signal ? stream.pipeThrough(new TransformStream<Uint8Array, Uint8Array>()) : stream;
   // readFileStream is SSE, not raw file bytes. Decode before collecting.
   for await (const chunk of streamFile(source)) {
     signal?.throwIfAborted();

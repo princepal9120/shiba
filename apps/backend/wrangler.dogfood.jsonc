@@ -1,0 +1,55 @@
+{
+  "$schema": "https://developers.cloudflare.com/workers/wrangler/configuration-schema.json",
+  "name": "shiba-ai-coworker-dogfood",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-06-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "../../public",
+    "not_found_handling": "404-page",
+  },
+  "preview_urls": false,
+  "vars": {
+    "GATEWAY_ID": "default",
+    "ORCHESTRATOR_MODEL": "@cf/zai-org/glm-4.7-flash",
+    "CODING_MODEL": "google/gemini-3.5-flash-lite",
+    "RUNTIME": "sandbox",
+    "INSTANCE_TYPE": "standard-1",
+    "WORKER_HOSTNAME": "",
+    "AGENT_HARNESS": "devin",
+  },
+  "ai": { "binding": "AI" },
+  "worker_loaders": [{ "binding": "LOADER" }],
+  "browser": { "binding": "BROWSER" },
+  "triggers": { "crons": ["*/5 * * * *"] },
+  "durable_objects": {
+    "bindings": [
+      { "name": "CodingOrchestrator", "class_name": "CodingOrchestrator" },
+      { "name": "OpenCodeAgent", "class_name": "OpenCodeAgent" },
+      { "name": "Sandbox", "class_name": "Sandbox" },
+      { "name": "Automations", "class_name": "Automations" },
+      { "name": "Mailbox", "class_name": "Mailbox" },
+      { "name": "Memory", "class_name": "Memory" },
+      { "name": "Waitlist", "class_name": "Waitlist" },
+      { "name": "ModelConfig", "class_name": "ModelConfig" },
+    ],
+  },
+  "r2_buckets": [{ "binding": "ATTACHMENTS", "bucket_name": "shiba-attachments-dogfood" }],
+  "kv_namespaces": [{ "binding": "AGENT_TOKENS", "id": "b218feeb42cf4c3a8000031d5e8bc431" }],
+  "d1_databases": [
+    { "binding": "AGENT_AUDIT", "database_name": "shiba-audit-dogfood", "database_id": "ccd931df-85e2-407c-8f62-22e491684c18" },
+  ],
+  "vectorize": [{ "binding": "MEMORY_VECTORS", "index_name": "shiba-memory-dogfood" }],
+  "send_email": [{ "name": "SEND_EMAIL" }],
+  "containers": [
+    {
+      "class_name": "Sandbox",
+      "name": "shiba-ai-coworker-sandbox-dogfood",
+      "image": "registry.cloudflare.com/202ca2bee300067a918a67a4d17d2178/shiba-ai-coworker-sandbox-dogfood:boot",
+      "instance_type": "standard-1",
+      "max_instances": 5,
+    },
+  ],
+}
+
