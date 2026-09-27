@@ -14,6 +14,7 @@ import {
   PROVIDER_KEY_ENV,
   type AgentHarness,
   type HarnessCapabilities,
+  type HarnessEvent,
   type VerificationOutcome,
   verifyRunOutcome,
 } from "./types.js";
@@ -40,7 +41,7 @@ export class CodexEventError extends Error {}
  * Parse one `codex exec --json` line. Error envelopes throw so a failed run
  * cannot be reported as a successful one.
  */
-export function parseCodexEvent(line: string): string | null {
+export function parseCodexEvent(line: string): HarnessEvent | null {
   const trimmed = line.trim();
   if (!trimmed) return null;
   let event: unknown;
@@ -65,8 +66,9 @@ export function parseCodexEvent(line: string): string | null {
     ? record.text.trim()
     : typeof record.message === "string" && record.message.trim()
       ? record.message.trim()
-      : summarize(record);
-  return boundTail(text, 500);
+      : "";
+  if (text) return { kind: "text", text: boundTail(text, 500) };
+  return { kind: "progress", text: boundTail(summarize(record), 500) };
 }
 
 function summarize(record: Record<string, unknown>): string {
@@ -106,7 +108,7 @@ export class CodexHarness implements AgentHarness {
     ];
   }
 
-  parseEvent(line: string): string | null {
+  parseEvent(line: string): HarnessEvent | null {
     return parseCodexEvent(line);
   }
   /** T43 declared capabilities — the gates read this, not the name. */

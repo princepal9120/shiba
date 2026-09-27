@@ -317,8 +317,8 @@ function streamProgress(harness: AgentHarness, emit: ProgressEmitter, _signal?: 
         const line = buffer.slice(0, newline);
         buffer = buffer.slice(newline + 1);
         try {
-          const text = harness.parseEvent(line);
-          if (text) emitText(`[${harness.name}] ${text}`);
+          const event = harness.parseEvent(line);
+          if (event) emitText(`[${harness.name}] ${event.text}`);
         } catch (error) {
           // Error events must propagate so the run fails honestly.
           if (

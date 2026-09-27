@@ -22,6 +22,7 @@ import {
   PROVIDER_KEY_ENV,
   type AgentHarness,
   type HarnessCapabilities,
+  type HarnessEvent,
   type VerificationOutcome,
   verifyRunOutcome,
 } from "./types.js";
@@ -52,7 +53,7 @@ export class GrokEventError extends Error {}
  * types throw so a rejected model or aborted turn fails the run honestly
  * instead of reporting success.
  */
-export function parseGrokEvent(line: string): string | null {
+export function parseGrokEvent(line: string): HarnessEvent | null {
   const trimmed = line.trim();
   if (!trimmed) return null;
   let event: unknown;
@@ -88,7 +89,7 @@ export function parseGrokEvent(line: string): string | null {
     case "text":
     case "thought": {
       const data = record.data;
-      return typeof data === "string" && data.trim() ? boundTail(data, 500) : null;
+      return typeof data === "string" && data.trim() ? { kind: "text", text: boundTail(data, 500) } : null;
     }
     case "tool_call": {
       const title = typeof record.title === "string" && record.title
@@ -96,7 +97,7 @@ export function parseGrokEvent(line: string): string | null {
         : typeof record.toolName === "string" && record.toolName
           ? record.toolName
           : "tool";
-      return `tool: ${title}`;
+      return { kind: "tool", name: title, text: `tool: ${title}` };
     }
     default:
       // available_commands, tool_call_update, plan, usage, session bootstrap —
@@ -154,7 +155,7 @@ export class GrokHarness implements AgentHarness {
     ];
   }
 
-  parseEvent(line: string): string | null {
+  parseEvent(line: string): HarnessEvent | null {
     return parseGrokEvent(line);
   }
   /** T43 declared capabilities — the gates read this, not the name. */

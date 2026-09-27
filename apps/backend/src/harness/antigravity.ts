@@ -17,6 +17,7 @@ import {
   PROVIDER_KEY_ENV,
   type AgentHarness,
   type HarnessCapabilities,
+  type HarnessEvent,
   type VerificationOutcome,
   verifyRunOutcome,
 } from "./types.js";
@@ -39,17 +40,17 @@ export class AntigravityErrorEvent extends Error {
 }
 
 /** JSON lines surface their text/message field; anything else is plain progress text. */
-export function parseAntigravityEvent(line: string): string | null {
+export function parseAntigravityEvent(line: string): HarnessEvent | null {
   const trimmed = line.trim();
   if (!trimmed) return null;
   let event: unknown;
   try {
     event = JSON.parse(trimmed);
   } catch {
-    return boundTail(trimmed, 500);
+    return { kind: "text", text: boundTail(trimmed, 500) };
   }
   if (event === null || typeof event !== "object" || Array.isArray(event)) {
-    return boundTail(trimmed, 500);
+    return { kind: "text", text: boundTail(trimmed, 500) };
   }
   const record = event as Record<string, unknown>;
   if (record.type === "error") {
@@ -63,7 +64,7 @@ export function parseAntigravityEvent(line: string): string | null {
       : typeof record.content === "string"
         ? record.content
         : "";
-  return text.trim() ? boundTail(text.trim(), 500) : null;
+  return text.trim() ? { kind: "text", text: boundTail(text.trim(), 500) } : null;
 }
 
 export class AntigravityHarness implements AgentHarness {
@@ -97,7 +98,7 @@ export class AntigravityHarness implements AgentHarness {
     ];
   }
 
-  parseEvent(line: string): string | null {
+  parseEvent(line: string): HarnessEvent | null {
     return parseAntigravityEvent(line);
   }
   /** T43 declared capabilities — the gates read this, not the name. */
