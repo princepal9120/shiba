@@ -20,12 +20,6 @@ export interface Env {
    */
   Mailbox: DurableObjectNamespace;
   /**
-   * Bound to the McpGateway Durable Object class in wrangler.jsonc — the
-   * `/mcp` tool surface for external agents (megaplan T5, see
-   * `mcp-gateway.ts`). One instance per MCP session id.
-   */
-  McpGateway: DurableObjectNamespace;
-  /**
    * Bound to the Memory Durable Object class in wrangler.jsonc — one stub
    * per agent name plus the shared "global" registry that indexes fact ids
    * across agents (megaplan T8, see `memory-do.ts`).
@@ -66,6 +60,13 @@ export interface Env {
    */
   AGENT_AUDIT: D1Database;
   /**
+   * Optional. Workers Browser Rendering endpoint (wrangler `browser` binding,
+   * megaplan T33). `puppeteer.launch()` accepts the Fetcher shape directly;
+   * typed as Fetcher so tests can stub it without @cloudflare/puppeteer types.
+   * Absent = preview screenshot capture disabled (fail-safe, never fails a run).
+   */
+  BROWSER?: Fetcher;
+  /**
    * Optional. Outbound email sender the approval-gated `email_send`
    * executor uses (megaplan T7, `send_email` binding in wrangler.jsonc).
    * Requires Email Routing's Email Sending enabled on the account; the
@@ -86,6 +87,8 @@ export interface Env {
   CODEX_MODEL?: string;
   /** Optional default model for the devin harness, e.g. devin/swe-2. */
   DEVIN_MODEL?: string;
+  /** Optional default model for the grok harness, e.g. xai/grok-4.6. */
+  GROK_MODEL?: string;
   /** Optional kill switch. "false"/"0"/"off" stops every automation firing. */
   AUTOMATIONS_ENABLED?: string;
   /**
@@ -108,6 +111,12 @@ export interface Env {
    * lite | basic | standard-1 | standard-2 | standard-3 | standard-4.
    */
   INSTANCE_TYPE?: string;
+  /**
+   * Optional. This Worker's public hostname (no scheme), used by T33 to mint
+   * sandbox preview URLs (`sandbox.exposePort`) and to form the absolute
+   * screenshot link embedded in published PRs. Empty/unset = capture skipped.
+   */
+  WORKER_HOSTNAME?: string;
   /** Optional. Verifies Slack callbacks; unset disables all Slack routes. */
   SLACK_SIGNING_SECRET?: string;
   /** Optional. Comma-separated Slack user ids allowed to approve; unset = nobody. */

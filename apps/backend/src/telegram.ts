@@ -14,16 +14,14 @@
  * Telegram redelivers on any non-2xx, so an authenticated update is acked
  * at once and the work runs behind `ctx.waitUntil`, deduped on `update_id`.
  */
+import { buildChatThreadName, buildDecisionData, parseDecisionData } from "@shiba/shared";
 import {
-  buildChatThreadName,
-  buildDecisionData,
   chatApprovalText,
   chatTaskChunks,
   createSeenRing,
   decideChatApproval,
   decisionLine,
   parseChatTaskRequest,
-  parseDecisionData,
   queueChatRun,
   telegramApi,
   type ResolveOrchestrator,

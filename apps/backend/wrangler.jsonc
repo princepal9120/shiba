@@ -19,9 +19,18 @@
     "RUNTIME": "sandbox",
     // Must match containers.instance_type. Cloudbox-style deploy-time size knob.
     "INSTANCE_TYPE": "standard-1",
+    // Public hostname of this Worker (e.g. "shiba.example.com") — used to
+    // mint sandbox preview URLs and absolute screenshot links for PRs.
+    // Empty = PR screenshot capture disabled (capture fails safe, never fails the run).
+    "WORKER_HOSTNAME": "",
   },
   "ai": {
     "binding": "AI",
+  },
+  // Workers Browser Rendering (T33): headless Chromium for post-run preview
+  // screenshots. Puppeteer connects via env.BROWSER.
+  "browser": {
+    "binding": "BROWSER",
   },
   "triggers": {
     "crons": ["*/5 * * * *"],
@@ -33,7 +42,6 @@
       { "name": "Sandbox", "class_name": "Sandbox" },
       { "name": "Automations", "class_name": "Automations" },
       { "name": "Mailbox", "class_name": "Mailbox" },
-      { "name": "McpGateway", "class_name": "McpGateway" },
       { "name": "Memory", "class_name": "Memory" },
       { "name": "Waitlist", "class_name": "Waitlist" },
       { "name": "ModelConfig", "class_name": "ModelConfig" },
@@ -86,5 +94,7 @@
     { "tag": "v5", "new_sqlite_classes": ["Memory"] },
     { "tag": "v6", "new_sqlite_classes": ["Waitlist"] },
     { "tag": "v7", "new_sqlite_classes": ["ModelConfig"] },
+    // v4 already applied on existing installs; delete has to be a new tag.
+    { "tag": "v8", "deleted_classes": ["McpGateway"] },
   ],
 }

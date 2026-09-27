@@ -25,10 +25,11 @@ export default defineConfig({
     environment: "node",
     server: {
       deps: {
-        // agents/mcp transitively imports cloudflare:* specifiers, which
-        // Node's ESM loader cannot resolve — inlining routes them through
-        // Vite so the resolveId stub above applies.
-        inline: ["agents"],
+        // agents/mcp and @cloudflare/sandbox + @cloudflare/puppeteer
+        // transitively import cloudflare:* specifiers, which Node's ESM
+        // loader cannot resolve — inlining routes them through Vite so
+        // the resolveId stub above applies.
+        inline: ["agents", "@cloudflare/sandbox", "@cloudflare/puppeteer"],
       },
     },
   },

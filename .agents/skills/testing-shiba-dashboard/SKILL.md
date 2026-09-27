@@ -1,9 +1,9 @@
 ---
 name: testing-shiba-dashboard
-description: How to run and browser-test the shiba-ai-coworker dashboard locally — dev server, routes, expected backend-down artifacts, and which UI surfaces need live data.
+description: How to run and browser-test the shiba dashboard locally — dev server, routes, expected backend-down artifacts, and which UI surfaces need live data.
 ---
 
-# Testing the shiba-ai-coworker dashboard locally
+# Testing the shiba dashboard locally
 
 ## Run it
 

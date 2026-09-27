@@ -35,6 +35,7 @@ import {
 } from "../runtime.js";
 import { HARNESS_RETRY, withRetry } from "../harness/retry.js";
 import { boundTail, parseGitHubRepoUrl, redactSecrets } from "../security.js";
+import { captureRunPreview } from "../screenshot.js";
 import { postSlackMessage } from "../slack.js";
 import { SlackProgressReporter } from "../slack-persona.js";
 import { messageText, renderRunTranscript } from "../transcript.js";
@@ -210,8 +211,13 @@ export class OpenCodeAgent extends AIChatAgent<Env> {
           // is worse than a late commit. The only abort check inside
           // publishResult sits before the first remote write.
           let pullUrl: string | undefined;
+          let previewUrl: string | undefined;
+          let screenshotUrl: string | undefined;
           if (result.status === "completed" && input.publishPullRequest) {
-            pullUrl = await this.publishResult(input, result, signal);
+            const published = await this.publishResult(input, result, signal);
+            pullUrl = published.pullUrl;
+            previewUrl = published.previewUrl;
+            screenshotUrl = published.screenshotUrl;
           }
           const safeResult = this.uiResult(result);
           // The transcript commit below is part of the same UNINTERRUPTIBLE
@@ -229,7 +235,12 @@ export class OpenCodeAgent extends AIChatAgent<Env> {
           }
           // pullUrl rides the envelope: the parent's text scrape of the
           // transcript is only a legacy fallback, never the source of truth.
-          write(formatAgentResult({ ...safeResult, ...(pullUrl ? { pullUrl } : {}) }));
+          write(formatAgentResult({
+            ...safeResult,
+            ...(pullUrl ? { pullUrl } : {}),
+            ...(previewUrl ? { previewUrl } : {}),
+            ...(screenshotUrl ? { screenshotUrl } : {}),
+          }));
           writer.write({ type: "text-end", id });
           if (safeResult.status === "error") writer.write({ type: "error", errorText: safeResult.summary });
           writer.write({ type: "finish", finishReason: safeResult.status === "error" ? "error" : "stop" });
@@ -268,16 +279,32 @@ export class OpenCodeAgent extends AIChatAgent<Env> {
     };
   }
 
-  private async publishResult(input: CodingTaskInput, result: CodingTaskResult, signal?: AbortSignal): Promise<string> {
+  private async publishResult(
+    input: CodingTaskInput,
+    result: CodingTaskResult,
+    signal?: AbortSignal,
+  ): Promise<{ pullUrl: string; previewUrl?: string; screenshotUrl?: string }> {
     const token = this.env.GITHUB_TOKEN;
     if (!token) throw new Error("publishPullRequest was requested but GITHUB_TOKEN is not configured.");
     signal?.throwIfAborted();
+    // T33: render the finished workdir through the preview port and screenshot
+    // it BEFORE the PR is written so the links land in the body. captureRunPreview
+    // is fail-safe — it returns null rather than throwing, so a Browser Rendering
+    // or sandbox problem can never lose a publish.
+    const capture = await captureRunPreview(this.env, { sandboxId: input.sandboxId });
+    const bodyLines = [
+      this.safeText(result.summary, 4000),
+      "",
+      `Sandbox: ${input.sandboxId}`,
+    ];
+    if (capture?.screenshotUrl) bodyLines.push("", `[Preview screenshot](${capture.screenshotUrl})`);
+    if (capture?.previewUrl) bodyLines.push(`Preview: ${capture.previewUrl}`);
     const published = await publishFilesAsPullRequest({
       repoUrl: input.repoUrl,
       baseBranch: input.baseBranch,
-      newBranch: `shiba-ai-coworker/${input.sandboxId}`,
+      newBranch: `shiba/${input.sandboxId}`,
       title: `AI Coworker: ${this.safeText(input.task, 80)}`,
-      body: `${this.safeText(result.summary, 4000)}\n\nSandbox: ${input.sandboxId}`,
+      body: bodyLines.join("\n"),
       files: result.files,
       token,
       message: `AI Coworker: ${this.safeText(input.task, 120)}`,
@@ -288,7 +315,11 @@ export class OpenCodeAgent extends AIChatAgent<Env> {
     (this.ctx as DurableObjectState | undefined)?.waitUntil?.(
       this.syncProjectBoard(input.repoUrl, published.pullNumber),
     );
-    return published.pullUrl;
+    return {
+      pullUrl: published.pullUrl,
+      ...(capture?.previewUrl ? { previewUrl: capture.previewUrl } : {}),
+      ...(capture?.screenshotUrl ? { screenshotUrl: capture.screenshotUrl } : {}),
+    };
   }
 
   // Board sync is best-effort: a missing PAT or a broken board never fails a published PR.

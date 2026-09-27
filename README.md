@@ -1,18 +1,18 @@
 # Shiba — AI Coworker
 
-[![Site](https://img.shields.io/badge/Site-shiba--ai--coworker.pages.dev-0B9F95?style=flat-square&logo=cloudflarepages&logoColor=white)](https://shiba-ai-coworker.pages.dev/)
-[![Documentation](https://img.shields.io/badge/Docs-shiba--ai--coworker.pages.dev%2Fdocs-teal?style=flat-square)](https://shiba-ai-coworker.pages.dev/docs/)
+[![Site](https://img.shields.io/badge/Site-shiba--ai--coworker.pages.dev-0B9F95?style=flat-square&logo=cloudflarepages&logoColor=white)](https://shiba.pages.dev/)
+[![Documentation](https://img.shields.io/badge/Docs-shiba--ai--coworker.pages.dev%2Fdocs-teal?style=flat-square)](https://shiba.pages.dev/docs/)
 [![License: AGPL-3.0-only](https://img.shields.io/badge/License-AGPL--3.0--only-blue.svg?style=flat-square)](LICENSE)
 
 Shiba is an open-source, self-hosted AI software engineer — an account-owned Cloudflare workspace: describe a GitHub task, review the proposed delegation, approve or reject it, and inspect a sandbox-generated diff. The repository is a pnpm monorepo containing a React dashboard, an Astro/Starlight documentation site, and a Cloudflare Worker backend built around Agents and Sandbox containers running OpenCode.
 
 **Status: local prototype, not production-ready.** No live end-to-end cloud run is claimed. The deployed Cloudflare Pages site contains the static landing page at `/`, dashboard UI at `/app/`, and documentation at `/docs/` — it does not include the Worker backend, so it does not establish a live coding run. `VERIFICATION.md` records passing local typecheck, lint, tests, and build checks; the backend remains a prototype until a dated run meets the P2 acceptance bar in `PLAN.md` §15: submit → approve → clone/code/collect with a diff that matches reality, rejection starting no container, honest failure exit codes, PRs with deletions shown as deleted, and peak memory measured.
 
-**Static site (landing, docs, dashboard UI):** [https://shiba-ai-coworker.pages.dev/](https://shiba-ai-coworker.pages.dev/)
+**Static site (landing, docs, dashboard UI):** [https://shiba.pages.dev/](https://shiba.pages.dev/)
 
-- **Landing Page:** [https://shiba-ai-coworker.pages.dev/](https://shiba-ai-coworker.pages.dev/)
-- **Documentation:** [https://shiba-ai-coworker.pages.dev/docs/](https://shiba-ai-coworker.pages.dev/docs/)
-- **Tasks Dashboard:** [https://shiba-ai-coworker.pages.dev/app/](https://shiba-ai-coworker.pages.dev/app/)
+- **Landing Page:** [https://shiba.pages.dev/](https://shiba.pages.dev/)
+- **Documentation:** [https://shiba.pages.dev/docs/](https://shiba.pages.dev/docs/)
+- **Tasks Dashboard:** [https://shiba.pages.dev/app/](https://shiba.pages.dev/app/)
 
 Provider traffic is intercepted at the Sandbox egress boundary and forwarded through the account owner's AI Gateway binding — there is no provider callback route (the dead callback path was deleted; the forwarder and its route no longer exist).
 
@@ -26,18 +26,18 @@ Provider traffic is intercepted at the Sandbox egress boundary and forwarded thr
 ├── alchemy.run.ts          # the ONE stack — declares the Worker + assets + DOs
 └── apps/
     ├── backend/
-    │   ├── package.json    # @shiba-ai-coworker/backend
+    │   ├── package.json    # @shiba/backend
     │   ├── wrangler.jsonc  # worker config + DO migrations + bindings
     │   ├── Dockerfile      # pinned harness image (cloudflare/sandbox base)
     │   ├── .dev.vars.example
     │   ├── src/            # Worker + Durable Objects + harness adapters
     │   └── test/           # vitest suite
     ├── frontend/
-    │   ├── package.json    # @shiba-ai-coworker/frontend
+    │   ├── package.json    # @shiba/frontend
     │   ├── src/            # dashboard SPA
     │   └── vite.config.ts  # root=apps/frontend/, outDir=../../public
     └── web/
-        ├── package.json    # @shiba-ai-coworker/web (Astro + Starlight)
+        ├── package.json    # @shiba/web (Astro + Starlight)
         ├── public/         # static assets copied into public/
         └── src/            # docs content + landing page
 ~~~
@@ -72,11 +72,11 @@ pnpm docs:preview
 
 ## Deploy the UI
 
-The `shiba-ai-coworker` Cloudflare Pages project hosts the static UI. Build the dashboard and docs, then deploy the assembled `public/` directory:
+The `shiba` Cloudflare Pages project hosts the static UI. Build the dashboard and docs, then deploy the assembled `public/` directory:
 
 ~~~sh
 pnpm build
-pnpm exec wrangler pages deploy public --project-name shiba-ai-coworker --branch main --commit-dirty=true
+pnpm exec wrangler pages deploy public --project-name shiba --branch main --commit-dirty=true
 ~~~
 
 This flow deploys only the landing page, `/app/` dashboard, and `/docs/` documentation. The UI is currently static and has no Worker API or WebSocket proxy.
@@ -111,7 +111,7 @@ Rollback to wrangler (same bindings): `npx wrangler deploy --config apps/backend
 |---|---|
 | Web dashboard | `https://<worker-host>/app/` — Access login with an allowed email |
 | iPhone | Same URL in Safari → Share → **Add to Home Screen** (standalone app). Slack mobile works for approvals too. |
-| Slack | `@shiba-ai-coworker` in a thread or `/shiba-ai-coworker <repo> <task>`; approve on the card |
+| Slack | `@shiba` in a thread or `/shiba <repo> <task>`; approve on the card |
 | Telegram & Discord | *Coming soon* — end-to-end task delegation and interactive approval bots |
 | Claude Code | MCP over `https://<worker-host>/mcp` with a bearer token — see below |
 
@@ -188,7 +188,7 @@ Bumping any of them requires re-running the P2 live acceptance run before claimi
 
 ## Slack
 
-Shipped: `/shiba-ai-coworker <github-repo-url> <task>` (`POST /api/slack/command`) and `@shiba-ai-coworker` mention (`POST /api/slack/events`). Both HMAC-verify, queue a durable pending approval, and post a Block Kit card. Mentions need `SLACK_BOT_TOKEN`; empty token means no card and no run. Repo comes from a GitHub URL in the mention/thread, else `SLACK_CHANNEL_REPOS`, else an in-thread ask. Clicks resolve on the DO named by the card pointer (`default` for slash, `slack:{team}:{channel}:{thread_ts}` for mentions), gated by `SLACK_APPROVERS` (unset = nobody).
+Shipped: `/shiba <github-repo-url> <task>` (`POST /api/slack/command`) and `@shiba` mention (`POST /api/slack/events`). Both HMAC-verify, queue a durable pending approval, and post a Block Kit card. Mentions need `SLACK_BOT_TOKEN`; empty token means no card and no run. Repo comes from a GitHub URL in the mention/thread, else `SLACK_CHANNEL_REPOS`, else an in-thread ask. Clicks resolve on the DO named by the card pointer (`default` for slash, `slack:{team}:{channel}:{thread_ts}` for mentions), gated by `SLACK_APPROVERS` (unset = nobody).
 
 **`SLACK_APPROVERS` unset means nobody can approve from Slack.** That is deliberate: a valid signature authenticates Slack, not the human who clicked, and a Block Kit button in a public channel is clickable by every member.
 

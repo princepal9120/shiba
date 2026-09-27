@@ -103,11 +103,11 @@ const delegateInputSchema = z.object({
     .default(false)
     .describe("Open a pull request with the result. Requires GITHUB_TOKEN."),
   harness: z
-    .enum(["opencode", "claude-code", "codex", "devin"])
+    .enum(["opencode", "claude-code", "codex", "devin", "grok"])
     .optional()
     .describe(
       "Coding agent harness. Defaults to the deployment's AGENT_HARNESS, else opencode. " +
-        "claude-code needs an anthropic/* model; codex needs an openai/* model; devin needs a devin/* model.",
+        "claude-code needs an anthropic/* model; codex needs an openai/* model; devin needs a devin/* model; grok needs an xai/* model.",
     ),
   codingModel: z
     .string()
@@ -291,7 +291,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       "You are AI Coworker, a planning and delegation agent.",
       "You never edit repositories yourself. When the user describes a coding task,",
       "call delegate_coding_task with the repository URL and the task.",
-      "Pass the harness the user asked for (opencode, claude-code, codex, or devin) when they name one,",
+      "Pass the harness the user asked for (opencode, claude-code, codex, devin, or grok) when they name one,",
       "and a codingModel as provider/model when they name a model; otherwise leave both unset.",
       "The tool requires human approval before anything runs: summarize exactly",
       "what will happen (repository, branch, task, whether a pull request is requested).",
@@ -335,7 +335,9 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
           ? this.env.CLAUDE_CODE_MODEL?.trim()
           : harness.name === "codex"
             ? this.env.CODEX_MODEL?.trim()
-            : this.env.DEVIN_MODEL?.trim();
+            : harness.name === "grok"
+              ? this.env.GROK_MODEL?.trim()
+              : this.env.DEVIN_MODEL?.trim();
     const codingModel =
       input.codingModel?.trim() ||
       perHarnessVar ||
@@ -539,7 +541,15 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
               if (parsed?.status === "completed") {
                 const finished = finish(
                   "completed",
-                  { summary: output.slice(0, 4000), diff: parsed?.diff ? parsed.diff.slice(0, 20000) : undefined, pullUrl: parsed.pullUrl },
+                  {
+                    summary: output.slice(0, 4000),
+                    diff: parsed?.diff ? parsed.diff.slice(0, 20000) : undefined,
+                    pullUrl: parsed.pullUrl,
+                    // T33: preview/screenshot links ride the same envelope; a
+                    // failed capture arrives as absent fields → record stays null.
+                    previewUrl: parsed.previewUrl ?? null,
+                    screenshotUrl: parsed.screenshotUrl ?? null,
+                  },
                   slackRunCompleted({
                     repoUrl: fullInput.repoUrl,
                     summary: redactSecrets(parsed.summary ?? "").slice(0, 4000),

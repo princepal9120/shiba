@@ -4,13 +4,10 @@ import { describe, expect, it, vi } from "vitest";
 // `mcp-gateway.js` pulls agents/mcp at module load; stub the base class —
 // the registry seam under test never constructs it.
 vi.mock("agents/mcp", () => ({
-  McpAgent: class {
-    static serve(_path: string, _opts?: unknown) {
-      return {
-        fetch: async () => Response.json({ mcp: "served" }, { status: 200 }),
-      };
-    }
-  },
+  createMcpHandler: () => ({
+    fetch: async () => Response.json({ mcp: "served" }, { status: 200 }),
+    notify: {},
+  }),
 }));
 
 import { registerMemoryTools } from "../src/mcp-memory-tools.js";
@@ -29,9 +26,20 @@ import type { SqlRow } from "../src/memory-store.js";
 
 const DIMS = 768;
 
-/** Deterministic pseudo-embedding: text length spreads across dims so queries differ. */
+/**
+ * Deterministic pseudo-embedding: a text-seeded stream centered at 0, so
+ * identical texts score ~1.0 and unrelated texts near 0 — the dedupe
+ * threshold (0.92) needs real separation, not the length-only collapse.
+ */
 function fakeEmbed(text: string): number[] {
-  return Array.from({ length: DIMS }, (_, i) => ((text.length * (i + 1)) % 7) / 7);
+  let seed = 2166136261;
+  for (let i = 0; i < text.length; i++) {
+    seed = Math.imul(seed ^ text.charCodeAt(i), 16777619);
+  }
+  return Array.from({ length: DIMS }, () => {
+    seed = Math.imul(seed ^ (seed >>> 13), 1274126177);
+    return ((seed >>> 0) / 0xffffffff) * 2 - 1;
+  });
 }
 
 function cosine(a: number[], b: number[]): number {
@@ -74,7 +82,7 @@ class FakeD1 {
 
 function makeEnv() {
   const stubs = new Map<string, FakeStub>();
-  const vectors = new Map<string, { values: number[]; metadata?: { agent?: string } }>();
+  const vectors = new Map<string, { values: number[]; metadata?: Record<string, unknown> }>();
   const d1 = new FakeD1();
   const env = {
     Memory: {
@@ -92,6 +100,8 @@ function makeEnv() {
                   toArray: () => db.prepare(sql).all(...(params as any[])) as SqlRow[],
                 }),
               },
+              getAlarm: async () => 1,
+              setAlarm: async () => {},
             },
             blockConcurrencyWhile: async (fn: () => Promise<unknown>) => fn(),
             waitUntil: () => {},
@@ -104,11 +114,13 @@ function makeEnv() {
       },
     },
     AI: {
-      run: async (_model: string, input: { text: string }) => ({ data: [fakeEmbed(input.text)] }),
+      run: async (_model: string, input: { text: string | string[] }) => ({
+        data: (Array.isArray(input.text) ? input.text : [input.text]).map(fakeEmbed),
+      }),
     },
     MEMORY_VECTORS: {
       upsert: async (
-        entries: Array<{ id: string; values: number[]; metadata?: { agent?: string } }>,
+        entries: Array<{ id: string; values: number[]; metadata?: Record<string, unknown> }>,
       ) => {
         for (const entry of entries) {
           vectors.set(entry.id, { values: entry.values, metadata: entry.metadata });
@@ -117,13 +129,17 @@ function makeEnv() {
       },
       query: async (
         vector: number[],
-        options?: { topK?: number; filter?: { agent?: string } },
+        options?: { topK?: number; filter?: { agent?: string }; returnMetadata?: boolean },
       ) => {
         const matches = [...vectors.entries()]
           .filter(([, v]) =>
             options?.filter?.agent === undefined ? true : v.metadata?.agent === options.filter.agent,
           )
-          .map(([id, v]) => ({ id, score: cosine(vector, v.values), metadata: v.metadata }))
+          .map(([id, v]) => ({
+            id,
+            score: cosine(vector, v.values),
+            ...(options?.returnMetadata ? { metadata: v.metadata } : {}),
+          }))
           .sort((a, b) => b.score - a.score)
           .slice(0, options?.topK ?? 10);
         return { matches, count: matches.length };

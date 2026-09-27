@@ -273,7 +273,7 @@ export function App(): React.JSX.Element {
   }, [mobileNavOpen]);
   const [sessionsCollapsed, setSessionsCollapsed] = useState(() =>
     typeof window !== "undefined"
-      ? localStorage.getItem("shiba-ai-coworker:sidebar-collapsed") === "true"
+      ? localStorage.getItem("shiba:sidebar-collapsed") === "true"
       : false,
   );
 
@@ -282,7 +282,7 @@ export function App(): React.JSX.Element {
       const next = !current;
       if (typeof window !== "undefined") {
         try {
-          localStorage.setItem("shiba-ai-coworker:sidebar-collapsed", String(next));
+          localStorage.setItem("shiba:sidebar-collapsed", String(next));
         } catch {
           // Ignore storage quota or access errors in private mode
         }

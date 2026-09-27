@@ -1,5 +1,5 @@
 {
-  "name": "@shiba-ai-coworker/frontend",
+  "name": "@shiba/frontend",
   "version": "0.1.0",
   "private": true,
   "description": "Shiba AI Coworker dashboard: TanStack Start SPA served by the backend Worker.",
@@ -7,10 +7,12 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite",
-    "lint": "eslint src"
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@ai-sdk/react": "^4.0.105",
+    "@shiba/shared": "workspace:*",
     "@cloudflare/ai-chat": "0.12.0",
     "@tanstack/react-router": "^1.170.39",
     "@tanstack/react-start": "^1.168.58",

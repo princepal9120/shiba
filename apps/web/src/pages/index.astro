@@ -1,7 +1,7 @@
 ---
 import MarketingPage from '../layouts/MarketingPage.astro';
 
-const description = 'A self-hosted AI engineer that asks before it writes code. Runs in your Cloudflare account, on Claude Code, Codex, OpenCode, Grok, Cursor or Devin.';
+const description = 'A self-hosted AI engineer that asks before it writes code. Runs in your Cloudflare account, on Claude Code, Codex, OpenCode, Grok or Devin.';
 const schema = {
   '@context': 'https://schema.org',
   '@type': 'SoftwareApplication',
@@ -18,7 +18,7 @@ const schema = {
 // absent — each row names a concrete thing the buyer either gets or does not.
 const comparisons = [
   { point: 'Runs in infrastructure you own', shiba: 'Your Cloudflare account', them: "The provider's account" },
-  { point: 'Model and harness per run', shiba: 'Claude Code, Codex, OpenCode, Devin, Cursor, Grok', them: 'Chosen by the provider' },
+  { point: 'Model and harness per run', shiba: 'Claude Code, Codex, OpenCode, Devin, Grok', them: 'Chosen by the provider' },
   { point: 'Approval before code runs', shiba: 'Required by default', them: 'Varies by product' },
   { point: 'Who holds the credentials', shiba: 'You do, at egress', them: 'Held by the provider' },
   { point: 'License', shiba: 'AGPL-3.0, source readable', them: 'Proprietary' },
@@ -79,13 +79,12 @@ const capabilities = [
   <section id="harnesses" class="shell harness-section" aria-labelledby="harness-title">
     <p class="eyebrow">TOOLS &amp; MODEL PROVIDERS</p>
     <h2 id="harness-title">Bring your tools. Keep control.</h2>
-    <p class="harness-lead">All six harnesses are supported — pick OpenCode, Claude Code, Codex, Devin CLI, Cursor, or Grok, and run them with your own provider credentials.</p>
+    <p class="harness-lead">Five harnesses are supported — pick OpenCode, Claude Code, Codex, Devin CLI, or Grok, and run them with your own provider credentials.</p>
     <div class="harness-grid" role="list" aria-label="Coding tools and model providers">
       <div class="harness-item integrated" role="listitem"><span class="harness-icon"><img src="/assets/harnesses/opencode.svg" alt="" width="32" height="32" /></span><span class="harness-label">OpenCode<small>INTEGRATED</small></span></div>
       <div class="harness-item integrated" role="listitem"><span class="harness-icon"><img src="/assets/harnesses/claude.svg" alt="" width="32" height="32" /></span><span class="harness-label">Claude Code<small>INTEGRATED</small></span></div>
       <div class="harness-item integrated" role="listitem"><span class="harness-icon"><img src="/assets/harnesses/openai.svg" alt="" width="32" height="32" /></span><span class="harness-label">Codex<small>INTEGRATED</small></span></div>
       <div class="harness-item integrated" role="listitem"><span class="harness-icon"><img src="/assets/harnesses/devin.svg" alt="" width="32" height="32" /></span><span class="harness-label">Devin CLI<small>INTEGRATED</small></span></div>
-      <div class="harness-item integrated" role="listitem"><span class="harness-icon"><img src="/assets/harnesses/cursor.svg" alt="" width="32" height="32" /></span><span class="harness-label">Cursor<small>INTEGRATED</small></span></div>
       <div class="harness-item integrated" role="listitem"><span class="harness-icon"><img src="/assets/harnesses/grok.svg" alt="" width="32" height="32" /></span><span class="harness-label">Grok<small>INTEGRATED</small></span></div>
     </div>
     <p class="harness-note">Product names and logos belong to their respective owners. No affiliation is implied. <a href="/docs/claude-code/">See supported configuration →</a></p>

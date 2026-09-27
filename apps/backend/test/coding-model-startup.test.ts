@@ -24,11 +24,10 @@ vi.mock("@cloudflare/think", () => ({
 vi.mock("agents/agent-tools", () => ({ agentTool: () => ({ execute: vi.fn() }) }));
 vi.mock("../src/agents/opencode-agent.js", () => ({ OpenCodeAgent: class {} }));
 vi.mock("agents/mcp", () => ({
-  McpAgent: class {
-    static serve() {
-      return { fetch: async () => Response.json({ mcp: "served" }) };
-    }
-  },
+  createMcpHandler: () => ({
+    fetch: async () => Response.json({ mcp: "served" }, { status: 200 }),
+    notify: {},
+  }),
 }));
 vi.mock("../src/email-approvals.js", () => ({
   queueEmailApproval: async () => ({ approval_id: "apv-test" }),

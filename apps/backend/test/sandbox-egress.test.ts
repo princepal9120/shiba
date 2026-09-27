@@ -158,7 +158,7 @@ describe("provider egress forwarders (T22)", () => {
       "generativelanguage.googleapis.com": "google-ai-studio",
       "api.anthropic.com": "anthropic",
       "api.openai.com": "openai",
-      "api.x.ai": "xai",
+      "api.x.ai": "grok",
       "opencode.ai": "opencode-go",
     });
   });
@@ -167,7 +167,7 @@ describe("provider egress forwarders (T22)", () => {
     [forwardGoogle, "https://generativelanguage.googleapis.com/v1/x", "google-ai-studio"],
     [forwardAnthropic, "https://api.anthropic.com/v1/messages", "anthropic"],
     [forwardOpenAI, "https://api.openai.com/v1/responses", "openai"],
-    [forwardXAI, "https://api.x.ai/v1/chat/completions", "xai"],
+    [forwardXAI, "https://api.x.ai/v1/chat/completions", "grok"],
   ])("%# routes its own host through the gateway", async (forward, url, slug) => {
     const seen: { slug?: string } = {};
     const original = globalThis.fetch;

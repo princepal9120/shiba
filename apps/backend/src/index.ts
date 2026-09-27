@@ -27,7 +27,7 @@ import type {
   StoredEmail,
   ThreadView,
 } from "./mailbox-store.js";
-import { encodePrincipal, McpGateway, MCP_PRINCIPAL_HEADER } from "./mcp-gateway.js";
+import { createShibaMcpHandler, encodePrincipal, MCP_PRINCIPAL_HEADER } from "./mcp-gateway.js";
 import { Memory, memoryRegistryStub } from "./memory-do.js";
 import { Sandbox } from "./sandbox.js";
 import { withVerifiedAccessIdentity } from "./access-jwt.js";
@@ -39,14 +39,15 @@ import { ORCHESTRATOR_NAME, handleSlackCommand } from "./slack-routes.js";
 import { handleDiscordInteractions } from "./discord.js";
 import { handleTelegramWebhook } from "./telegram.js";
 import { handleTrigger } from "./trigger.js";
-import { handleSandboxRoutes } from "./sandbox-routes.js";
+import { handleSandboxRoutes, isValidSandboxId } from "./sandbox-routes.js";
+import { screenshotKeyFor } from "./screenshot.js";
 import { readSetupStatus } from "./setup-status.js";
 import { isPublicRequest } from "./public-routes.js";
 import { handleWaitlist } from "./waitlist.js";
 import { Waitlist } from "./waitlist-do.js";
 import { ModelConfig } from "./model-config-do.js";
 
-export { Automations, CodingOrchestrator, Mailbox, McpGateway, Memory, ModelConfig, OpenCodeAgent, Sandbox, ContainerProxy, Waitlist };
+export { Automations, CodingOrchestrator, Mailbox, Memory, ModelConfig, OpenCodeAgent, Sandbox, ContainerProxy, Waitlist };
 export { assertLiveCodingModel } from "./coding-model.js";
 
 export function getUserId(request: Request): string | null {
@@ -140,6 +141,45 @@ async function handleRuns(request: Request, env: Env): Promise<Response | null> 
   const stub = await getAgentByName(env.CodingOrchestrator, userId);
   const rewritten = new Request(new URL(url.pathname + url.search, request.url), request);
   return stub.fetch(rewritten);
+}
+
+/**
+ * T33: stored PR preview screenshots, served from the ATTACHMENTS bucket
+ * under `screenshots/{sandboxId}.png`. Same gate as every other read API —
+ * the link in a published PR body resolves only for authenticated viewers.
+ */
+async function handleScreenshot(request: Request, env: Env): Promise<Response | null> {
+  const { pathname } = new URL(request.url);
+  const match = /^\/api\/screenshots\/([^/]+)$/.exec(pathname);
+  if (!match) return null;
+  if (!isAuthenticated(request, env)) {
+    return Response.json({ error: "Authentication required." }, { status: 401 });
+  }
+  if (request.method !== "GET") {
+    return Response.json({ error: "Method not allowed." }, { status: 405 });
+  }
+  let sandboxId: string;
+  try {
+    sandboxId = decodeURIComponent(match[1]!);
+  } catch {
+    return Response.json({ error: "Invalid sandbox ID encoding." }, { status: 400 });
+  }
+  if (!isValidSandboxId(sandboxId)) {
+    return Response.json({ error: "Invalid sandbox ID format." }, { status: 400 });
+  }
+  const object = await env.ATTACHMENTS.get(screenshotKeyFor(sandboxId));
+  if (!object) {
+    return Response.json({ error: "Screenshot not found." }, { status: 404 });
+  }
+  return new Response(object.body, {
+    headers: {
+      "Content-Type": "image/png",
+      "Content-Disposition": "inline",
+      "Content-Length": String(object.size),
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
 }
 
 // ---------- Dashboard inbox + memory API (megaplan T11) ----------
@@ -849,10 +889,10 @@ function bearerToken(request: Request): string | null {
  * `/mcp` (and `/mcp/*`) → bearer auth before any MCP handling: a missing
  * or invalid token is a plain 401 JSON, never an MCP protocol error — the
  * request never reaches the transport. On success the verified principal
- * rides into the DO as the `x-shiba-principal` header, which the tool
- * registry reads per call.
+ * rides into the stateless MCP handler as the `x-shiba-principal` header,
+ * which the tool registry reads per call.
  */
-async function handleMcp(request: Request, env: Env, ctx: ExecutionContext): Promise<Response | null> {
+async function handleMcp(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response | null> {
   const url = new URL(request.url);
   if (!isMcpPath(url.pathname)) {
     return null;
@@ -863,17 +903,18 @@ async function handleMcp(request: Request, env: Env, ctx: ExecutionContext): Pro
     return Response.json({ error: "Authentication required." }, { status: 401 });
   }
   // Any client-supplied copy must go first — only the worker-verified
-  // record may reach the DO under this name.
+  // record may reach the MCP handler under this name.
   const headers = new Headers(request.headers);
   headers.delete(MCP_PRINCIPAL_HEADER);
   // encodePrincipal keeps the JSON ByteString-safe — a non-ASCII
   // principal name would otherwise make Headers.set throw and 500 every
   // call for that token.
   headers.set(MCP_PRINCIPAL_HEADER, encodePrincipal(record));
-  return McpGateway.serve("/mcp", { binding: "McpGateway" }).fetch(
+  // Stateless serving: the handler builds a fresh server per request (env
+  // is closed over). `route` is an exact-pathname match, so pass this
+  // request's own pathname to keep authenticated /mcp/* subpaths served.
+  return createShibaMcpHandler(env, url.pathname).fetch(
     new Request(request, { headers }),
-    env,
-    ctx,
   );
 }
 
@@ -1101,6 +1142,10 @@ export default {
       const runsResponse = await handleRuns(request, env);
       if (runsResponse) {
         return runsResponse;
+      }
+      const screenshotResponse = await handleScreenshot(request, env);
+      if (screenshotResponse) {
+        return screenshotResponse;
       }
       const inboxResponse = await handleInbox(request, env);
       if (inboxResponse) {

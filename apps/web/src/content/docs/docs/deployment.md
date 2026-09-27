@@ -37,7 +37,7 @@ The supported first-deploy path is the interactive bootstrap. It provisions Clou
 
 3. If Alchemy is not already authenticated, the bootstrap opens Cloudflare OAuth. Alternatively, set `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in the ignored root `.env` file before rerunning it. Use an API token with the Cloudflare permissions needed for the resources in `alchemy.run.ts`; do not paste credentials into source files or commit `.env`.
 4. Enter the email addresses allowed to sign in (`ACCESS_EMAILS`) and your account’s `workers.dev` subdomain (`WORKERS_SUBDOMAIN`). The script prompts for optional integration secrets; leave unused ones blank. It saves the answers in `.env` with owner-only permissions, builds the app, and runs `npx alchemy deploy`.
-5. Open `https://shiba-ai-coworker.<your-subdomain>.workers.dev/app/`, sign in with an allowed email, then check `/api/setup/status` and complete the dashboard’s setup checks.
+5. Open `https://shiba.<your-subdomain>.workers.dev/app/`, sign in with an allowed email, then check `/api/setup/status` and complete the dashboard’s setup checks.
 
 `ACCESS_EMAILS` and `WORKERS_SUBDOMAIN` are important for a live deployment: they let Alchemy create hostname-scoped Cloudflare Access applications. Live stages set `REQUIRE_ACCESS=1`; if managed Access is not created, the dashboard/API will return 401 unless another Access application already protects the Worker. Do not publish or share the `workers.dev` URL until you have verified the Access policy and machine-callback exceptions. See [Security](/docs/security/).
 
