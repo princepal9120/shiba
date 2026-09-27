@@ -158,7 +158,7 @@ describe("storage", () => {
     await controller.begin("sess-A");
     const keys = [...kv.map.keys()];
     expect(keys).toEqual([`${"auth_flow_"}${ID}`]);
-    const raw = kv.map.get(keys[0])!;
+    const raw = kv.map.get(keys[0]!)!;
     expect(raw).not.toContain("token"); // never a credential field
     kv.fail = true;
     await expect(controller.snapshot()).rejects.toMatchObject({ reason: "store_unavailable" });
