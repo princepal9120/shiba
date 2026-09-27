@@ -32,6 +32,9 @@ export const MAX_TOTAL_FILE_CHARS = 500_000;
 export const OPENCODE_TIMEOUT_MS = 15 * 60 * 1000;
 export const GIT_TIMEOUT_MS = 5 * 60 * 1000;
 export const TEST_COMMAND_TIMEOUT_MS = 5 * 60 * 1000;
+// T46: the test tail quoted into the PR body is bounded — enough for a
+// reviewer to see the verdict lines, never a whole log.
+export const TEST_EVIDENCE_TAIL_CHARS = 4000;
 export const MAX_PROGRESS_EVENTS = 256;
 
 export interface ExecResult {
@@ -280,6 +283,13 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
             timeoutMs: TEST_COMMAND_TIMEOUT_MS,
             signal: opts?.signal,
           });
+          // T46: the PR body quotes this tail — the reviewer sees the real
+          // test output, not the model's claim about it.
+          completed.testEvidence = {
+            command: shellJoin(input.testCommand),
+            exitCode: testRun.exitCode,
+            outputTail: boundTail(`${testRun.stdout}\n${testRun.stderr}`.trim(), TEST_EVIDENCE_TAIL_CHARS),
+          };
           if (testRun.exitCode !== 0) {
             await emit({ phase: "collect", message: `Test command exited ${testRun.exitCode}.`, fraction: 0.92 });
           }
