@@ -7,27 +7,50 @@ description: Run the shiba dashboard end-to-end locally and seed Durable Object 
 
 ## Environment
 
-- node/pnpm are NOT on PATH. Prefix every command:
-  `export PATH=/home/ubuntu/.nvm/versions/node/v24.19.0/bin:$PATH`
+- node/pnpm availability varies by box: Linux CI images keep node under
+  `~/.nvm/versions/node/v24.19.0/bin` (add to PATH); macOS dev boxes already
+  have them via homebrew. Check `which node pnpm` first.
 - If `node_modules` looks broken: `CI=true pnpm install --shamefully-hoist`
   (transitive `sharp` must be hoisted or `pnpm build` fails — env quirk, not a bug).
 
 ## Serve the real stack
 
-`pnpm dev` (vite, :5173) serves ONLY the dashboard shell — there is **no `/api`
-proxy**, so `/api/runs` and `/api/whoami` 404 and the app shows error banners.
-For e2e with real data, use wrangler dev, which serves the built dashboard AND
-the worker API + local Durable Objects on :8787:
+Repo layout is `apps/frontend`, `apps/backend`, `apps/web` (not root-level
+`frontend/`/`backend/` — older docs may say otherwise).
+
+- Frontend alone: `pnpm -C apps/frontend dev` → vite on :5173 serving `/app/`.
+  vite.config.ts DOES proxy `/api` and `/agents` (ws) to `http://localhost:8788`,
+  so with no backend the proxy returns `502` with an empty body (fetch resolves
+  non-ok; `.json()` on the empty body throws → dashboards show
+  `Unexpected token`-style errors or status-based messages).
+- Full stack: run BOTH vite :5173 AND the worker on :8788:
 
 ```bash
-pnpm build:dashboard        # emits public/ (bundle must contain new CSS classes)
-npx wrangler dev --port 8787 --config backend/wrangler.jsonc
+pnpm -C apps/frontend dev                                          # vite :5173
+pnpm -C apps/backend dev                                           # wrangler :8788
+# Docker absent / daemon down? wrangler aborts building the Sandbox image —
+# the fix wrangler itself prints: add --enable-containers=false
+../../node_modules/.bin/wrangler dev --port 8788 --enable-containers=false
 ```
 
+- Approval-queue endpoints (`POST /api/runs`, `GET /api/approvals`) work fully
+  without containers, secrets, or Cloudflare auth — they only write a pending
+  approval row in the local CodingOrchestrator DO. Caveats verified locally:
+  - `publishPullRequest: true` in the POST body → 400
+    `"publishPullRequest was requested but GITHUB_TOKEN is not configured."`
+    unless you provide GITHUB_TOKEN (e.g. `--var GITHUB_TOKEN:$GITHUB_PAT` or a
+    `.dev.vars`). Use `false` or expect this exact error — useful for testing
+    error-rendering paths.
+  - Vectorize binding warns "not supported" locally — Memory features degrade;
+    everything else is fine. AI binding is remote-mode but only touched when a
+    run actually executes (post-approval).
 - `REQUIRE_ACCESS` is unset → all routes are unauthenticated; identity = `"default"`.
-- Dashboard URL: `http://localhost:8787/app/`
-- Useful checks: `curl localhost:8787/api/whoami` → `{"agent":"default"}`;
-  `curl localhost:8787/api/runs` → `{runs:[...]}` (also triggers `reclaimRuns()`).
+- Useful checks: `curl localhost:8788/api/whoami` → `{"agent":"default"}`;
+  `curl localhost:8788/api/runs` → `{runs:[...]}` (also triggers `reclaimRuns()`).
+- Killing the listener pid alone leaves a zombie — wrangler's supervisor
+  respawns workerd, and a half-dead workerd LISTENs but never responds (fetch
+  hangs indefinitely; the app's busy state has no timeout). Kill the whole
+  tree: `pkill -f "wrangler.js dev"; pkill -f "workerd serve"`.
 
 ## Seeding run records without a sandbox
 
@@ -43,7 +66,7 @@ worker edge. The reliable seam is the agents-SDK state row in the DO sqlite.
 ```bash
 node -e '
 const {DatabaseSync} = require("node:sqlite");
-const f = "backend/.wrangler/state/v3/do/shiba-CodingOrchestrator/<hash>.sqlite"; // the non-metadata .sqlite
+const f = "apps/backend/.wrangler/state/v3/do/shiba-CodingOrchestrator/<hash>.sqlite"; // the non-metadata .sqlite
 const db = new DatabaseSync(f);
 const row = db.prepare("SELECT state FROM cf_agents_state WHERE id=\"cf_state_row_id\"").get();
 const state = JSON.parse(row.state);
@@ -53,7 +76,8 @@ db.prepare("UPDATE cf_agents_state SET state=? WHERE id=\"cf_state_row_id\"").ru
 '
 ```
 
-4. Restart `npx wrangler dev --port 8787 --config backend/wrangler.jsonc`.
+4. Restart `npx wrangler dev --port 8788 --config apps/backend/wrangler.jsonc`
+   (add `--enable-containers=false` when no Docker daemon is available).
 
 ### Tricks that hit real code paths
 
