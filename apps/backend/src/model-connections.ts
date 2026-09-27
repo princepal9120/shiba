@@ -168,10 +168,12 @@ export function providerOfService(service: ConnectionService): string {
 }
 
 /**
- * Harnesses a model on this connection can drive. A service with no
- * PROVIDER_HOSTS entry (cursor) is a remote executor — no harness runs it.
+ * Harnesses a model on this connection can drive. Cursor is a remote
+ * executor — its PROVIDER_HOSTS row exists only so the (unwired) harness can
+ * name an egress host, not because a sandbox harness runs its models.
  */
 export function compatibleHarnesses(service: ConnectionService): string[] {
+  if (service === "cursor") return [];
   const provider = providerOfService(service);
   if (!(provider in PROVIDER_HOSTS)) return [];
   return HARNESS_NAMES.filter((name) => {

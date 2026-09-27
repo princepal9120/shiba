@@ -52,6 +52,13 @@ const CATALOG_META: Record<
   antigravity: { label: "Antigravity", binary: "agy", version: "1.0.0", docsUrl: "https://antigravity.google" },
 };
 
+/**
+ * Harnesses actually installed in the sandbox image. Cursor and Antigravity
+ * stay registered (HARNESS_NAMES) but are not selectable sandbox paths —
+ * their CLIs can't hold the dummy-key invariant — so they never appear here.
+ */
+const SANDBOX_HARNESSES = ["opencode", "claude-code", "codex", "devin", "grok"] as const;
+
 const GATEWAY_PROVIDER: Record<string, string> = {
   opencode: "google / anthropic / openai / xAI",
   "claude-code": "anthropic",
@@ -66,7 +73,7 @@ const GATEWAY_PROVIDER: Record<string, string> = {
  * values never leave the Worker.
  */
 export function agentCliCatalog(env: Pick<Env, "DEVIN_API_KEY">): AgentCliInfo[] {
-  return HARNESS_NAMES.map((id) => {
+  return SANDBOX_HARNESSES.map((id) => {
     const meta = CATALOG_META[id];
     const credential: AgentCliCredential =
       id === "devin"
