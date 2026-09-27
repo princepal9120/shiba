@@ -240,7 +240,6 @@ export async function forwardCodexSubscription(
  * back into the app. Re-exported: callers keep `../egress.js` imports.
  */
 export { parseCodexAuthJson } from "@shiba/shared";
-}
 
 /**
  * Devin CLI is not an AI Gateway provider — it authenticates to Cognition's

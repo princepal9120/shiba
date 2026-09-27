@@ -50,7 +50,7 @@ interface AuthControllerEnv {
 async function probeCodexSubscription<Env extends AuthControllerEnv>(
   env: Env,
   instanceId: string,
-  forward: SubscriptionForwarder<Env>,
+  forward: SubscriptionForwarder,
 ): Promise<{ ok: boolean; message?: string }> {
   const account = codexSubscriptionAccountFromInstanceId(instanceId);
   const raw = codexSubscriptionAuthJson(env, account);
@@ -77,7 +77,7 @@ async function probeCodexSubscription<Env extends AuthControllerEnv>(
 export function codexSubscriptionAuth<Env extends AuthControllerEnv>(
   env: Env,
   instanceId: string,
-  forward: SubscriptionForwarder<Env>,
+  forward: SubscriptionForwarder,
 ): ProviderAuthController {
   const hooks: AuthProviderHooks<Env> = {
     probe: (e, id) => probeCodexSubscription(e, id, forward),

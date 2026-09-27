@@ -394,7 +394,9 @@ describe("admission gate (T47 controller, account-keyed)", () => {
       const shared = codexSubscriptionAuth(secretEnv, codexSubscriptionInstanceId(input()), (r, e, c) =>
         forwardCodexSubscription(r, e as EgressEnv, c),
       );
-      const work = codexSubscriptionAuth(secretEnv, codexSubscriptionInstanceId(input({ authAccount: "work" })));
+      const work = codexSubscriptionAuth(secretEnv, codexSubscriptionInstanceId(input({ authAccount: "work" })), (r, e, c) =>
+        forwardCodexSubscription(r, e as EgressEnv, c),
+      );
       await shared.begin("owner@example.com");
       await shared.verify("owner@example.com");
       await work.begin("owner@example.com");

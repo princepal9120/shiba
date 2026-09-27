@@ -12,7 +12,7 @@ import { AUDIT_RETENTION_MS, listAuditEntries, pruneAuditLog } from "./audit.js"
 import { claudeSubscriptionAuth, codexSubscriptionAuth, AuthFlowError } from "@shiba/auth";
 import { handleAntigravityCallback, handleAntigravitySubscriptionAuth } from "./antigravity.js";
 import { codexSubscriptionInstanceId } from "./harness/codex-subscription.js";
-import { forwardClaudeSubscription, forwardCodexSubscription } from "./egress.js";
+import { forwardClaudeSubscription, forwardCodexSubscription, type EgressEnv } from "./egress.js";
 import { AUTOMATIONS_DO_NAME } from "./automation-runner.js";
 import { Automations } from "./automations-do.js";
 import { parseAutomationWebhookPath } from "./automations.js";
@@ -227,7 +227,9 @@ async function handleCodexSubscriptionAuth(request: Request, env: Env): Promise<
       : {};
   const accountRaw = request.method === "GET" ? url.searchParams.get("account") : body.account;
   const account = typeof accountRaw === "string" && accountRaw.trim() !== "" ? accountRaw.trim() : "default";
-  const controller = codexSubscriptionAuth(env, codexSubscriptionInstanceId({ authAccount: account }), forwardCodexSubscription);
+  const controller = codexSubscriptionAuth(env, codexSubscriptionInstanceId({ authAccount: account }), (request, e, ctx) =>
+    forwardCodexSubscription(request, e as EgressEnv, ctx),
+  );
   const authError = (reason: unknown) =>
     Response.json(
       { error: reason instanceof AuthFlowError ? reason.message : "Auth flow error." },
