@@ -15,6 +15,7 @@ import { AntigravityErrorEvent } from "./harness/antigravity.js";
 import { ClaudeCodeErrorEvent } from "./harness/claude-code.js";
 import { CodexErrorEvent } from "./harness/codex.js";
 import { CursorErrorEvent } from "./harness/cursor.js";
+import { DevinErrorEvent } from "./harness/devin.js";
 import { GrokErrorEvent } from "./harness/grok.js";
 import { OpenCodeErrorEvent as OpenCodeErrorEventImpl, opencodeHarness } from "./harness/opencode.js";
 import { HARNESS_RETRY, withRetry } from "./harness/retry.js";
@@ -224,6 +225,7 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
         error instanceof CodexErrorEvent ||
         error instanceof GrokErrorEvent ||
         error instanceof CursorErrorEvent ||
+        error instanceof DevinErrorEvent ||
         error instanceof AntigravityErrorEvent
       ) {
         return failureResult(error.message, 0, "", signals);
@@ -413,7 +415,7 @@ function streamProgress(harness: AgentHarness, emit: ProgressEmitter, _signal?: 
         buffer = buffer.slice(newline + 1);
         try {
           const event = harness.parseEvent(line);
-          if (event) emitText(`[${harness.name}] ${event.text}`);
+          if (event?.text.trim()) emitText(`[${harness.name}] ${event.text}`);
         } catch (error) {
           // Error events must propagate so the run fails honestly.
           if (
@@ -422,6 +424,7 @@ function streamProgress(harness: AgentHarness, emit: ProgressEmitter, _signal?: 
             error instanceof CodexErrorEvent ||
             error instanceof GrokErrorEvent ||
             error instanceof CursorErrorEvent ||
+            error instanceof DevinErrorEvent ||
             error instanceof AntigravityErrorEvent
           ) {
             throw error;
