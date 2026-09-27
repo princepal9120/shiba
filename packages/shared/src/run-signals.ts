@@ -15,6 +15,9 @@ export const RUN_SIGNAL_KINDS = [
   // T45: every scoped exec invocation is receipted — command, exit, duration.
   "exec.invoked",
   "exec.settled",
+  // T44: baseline/settle checkpoint captures and an R2-exported oversize diff.
+  "checkpoint.captured",
+  "diff.exported",
   "pr.opened",
   "screenshot.captured",
 ] as const;

@@ -81,9 +81,11 @@ describe("run-signal producer", () => {
     expect(kinds(signals)).toEqual([
       "sandbox.ready",
       "clone.complete",
+      "checkpoint.captured",
       "config.written",
       "harness.started",
       "harness.idle",
+      "checkpoint.captured",
       "collect.complete",
     ]);
     for (const signal of signals) expect(signal.at).toBeGreaterThan(0);
@@ -128,7 +130,8 @@ describe("run-signal producer", () => {
     );
     expect(result.status).toBe("error");
     expect(kinds(result.signals ?? [])).toEqual([
-      "sandbox.ready", "clone.complete", "config.written", "harness.started", "harness.idle",
+      "sandbox.ready", "clone.complete", "checkpoint.captured", "config.written",
+      "harness.started", "harness.idle", "checkpoint.captured",
     ]);
   });
 });
