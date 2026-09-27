@@ -4,6 +4,7 @@ import type { OrchestratorState } from "../src/agents/orchestrator.js";
 import { createRun, RUN_DEADLINE_MS, type DelegatedRun } from "../src/runs.js";
 import { formatAgentResult, parseAgentToolInput } from "../src/opencode-input.js";
 import { createPendingApproval, resolvePendingApproval } from "../src/pending-approvals.js";
+import { approveDirect } from "./seeding.js";
 import {
   destroyManagedContainer,
   leakedContainers,
@@ -146,6 +147,7 @@ describe("orchestrator run routes", () => {
       });
       return "unreachable";
     });
+    approveDirect(instance, "tc1");
     const delegate = instance.getTools()["delegate_coding_task"] as {
       execute: (input: unknown, options?: unknown) => Promise<string>;
     };
@@ -167,6 +169,7 @@ describe("orchestrator run routes", () => {
       await new Promise(() => {}); // never resolves; only cancellation ends it
       return "unreachable";
     });
+    approveDirect(instance, "tc2");
     const delegate = instance.getTools()["delegate_coding_task"] as {
       execute: (input: unknown, options?: unknown) => Promise<unknown>;
     };
@@ -379,6 +382,7 @@ describe("combined cancellation signals", () => {
         options.abortSignal.addEventListener("abort", () => reject(new Error("cancelled")), { once: true });
       });
     });
+    approveDirect(instance, "combined");
     const delegate = instance.getTools()["delegate_coding_task"] as {
       execute: (input: unknown, options: unknown) => Promise<unknown>;
     };
@@ -498,6 +502,7 @@ describe("run reliability", () => {
     mocks.execute.mockResolvedValue(formatAgentResult({
       status: "completed", exitCode: 0, stderrTail: "", changedFiles: [], diff: "", files: [], summary: "done",
     }));
+    approveDirect(instance, "sched");
     const delegate = instance.getTools()["delegate_coding_task"] as {
       execute: (input: unknown, options?: unknown) => Promise<unknown>;
     };
@@ -547,6 +552,7 @@ describe("run reliability", () => {
       status: "completed", exitCode: 0, stderrTail: "", changedFiles: ["a.ts"], diff, files: [],
       summary: "OpenCode completed for https://github.com/o/r (main): 1 changed files.", pullUrl,
     })}`);
+    approveDirect(instance, "pr");
     const delegate = instance.getTools()["delegate_coding_task"] as {
       execute: (input: unknown, options?: unknown) => Promise<unknown>;
     };

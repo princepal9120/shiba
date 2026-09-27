@@ -59,7 +59,7 @@
 
 | Task | State |
 |---|---|
-| T40 pure run decider | **Planned** — §18.1 |
+| T40 pure run decider | **Done (2026-09-27).** `decideRunTransition` in `packages/shared/src/decide.ts` is pure (no I/O/clock/DO); `runs.ts` is the thin wrapper. `start` requires `ApprovalEvidence` ({approvalId, decidedBy, decidedAt, inputHash}) matching the run's frozen input; the approval pointer must read `approved`. Terminal commands on terminal runs are errors; replayed queue/start/approve/cancel return the prior outcome. **Gate audit finding:** `delegate.execute` with a `toolCallId` lacking an approval record previously minted+started a run (`!reserved` branch) — reachable only from tests/SDK edge, now refused with "Run is not approved to execute." 45 decider tests + full suite green (1351); evidence in VERIFICATION.md. |
 | T41 durable command receipts | **Planned** — §18.2 |
 | T42 typed runtime receipts + sleep audit | **Planned** — §18.3 |
 | T43 harness capabilities + verify | **Planned** — §18.4 |

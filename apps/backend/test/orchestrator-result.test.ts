@@ -7,6 +7,7 @@ vi.mock("../src/agents/opencode-agent.js", () => ({ OpenCodeAgent: class {} }));
 
 import { CodingOrchestrator } from "../src/agents/orchestrator.js";
 import { formatAgentResult, parseAgentResult, type CodingTaskResult } from "../src/opencode-input.js";
+import { approveDirect } from "./seeding.js";
 
 function completedResult(): CodingTaskResult {
   return {
@@ -70,6 +71,7 @@ describe("T8 parseAgentResult", () => {
 describe("T8 orchestrator structured result", () => {
   it("marks an error envelope as error, not completed", async () => {
     const orchestrator = makeOrchestrator();
+    approveDirect(orchestrator, "call-error", DELEGATE_INPUT);
     const childExecute = async () => formatAgentResult(errorResult());
     await (orchestrator as unknown as {
       executeDelegatedTask: (input: unknown, child: unknown, id: string) => Promise<string>;
@@ -80,6 +82,7 @@ describe("T8 orchestrator structured result", () => {
 
   it("marks a completed envelope as completed", async () => {
     const orchestrator = makeOrchestrator();
+    approveDirect(orchestrator, "call-ok", DELEGATE_INPUT);
     const childExecute = async () => formatAgentResult(completedResult());
     await (orchestrator as unknown as {
       executeDelegatedTask: (input: unknown, child: unknown, id: string) => Promise<string>;
@@ -90,6 +93,7 @@ describe("T8 orchestrator structured result", () => {
 
   it("marks malformed output as error, never silent success", async () => {
     const orchestrator = makeOrchestrator();
+    approveDirect(orchestrator, "call-bad", DELEGATE_INPUT);
     const childExecute = async () => "plain prose with no envelope";
     await (orchestrator as unknown as {
       executeDelegatedTask: (input: unknown, child: unknown, id: string) => Promise<string>;
