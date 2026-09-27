@@ -13,7 +13,14 @@
       ]
     },
     "typecheck": {
-      "outputs": []
+      "dependsOn": [
+        "^typecheck"
+      ],
+      "outputs": [
+        "dist/**",
+        "tsconfig.tsbuildinfo"
+      ]
+
     },
     // `test` stays uncached by decision: a stale green result is worse than a
     // slow one. If a live-suite escape hatch is ever needed, keep it here.

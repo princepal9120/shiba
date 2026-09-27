@@ -1,9 +1,10 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2022"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
     "strict": true,
     "skipLibCheck": true,
     "noUncheckedIndexedAccess": true,
@@ -11,10 +12,11 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
+    "noEmit": true,
     "noFallthroughCasesInSwitch": true,
-    "composite": true,
-    "emitDeclarationOnly": true,
-    "outDir": "dist"
+    "types": ["vite/client"]
   },
-  "include": ["src"]
+  // Tests assert SSR of components from apps/frontend and apps/web — those
+  // sources join this program through imports, not this project's include.
+  "include": ["test", "src/worker-types.d.ts"]
 }
