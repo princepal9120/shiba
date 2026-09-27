@@ -47,7 +47,6 @@ import * as Cloudflare from "alchemy/Cloudflare";
 import type { CodingOrchestrator } from "./apps/backend/src/agents/orchestrator.js";
 import type { OpenCodeAgent } from "./apps/backend/src/agents/opencode-agent.js";
 import type { Mailbox } from "./apps/backend/src/mailbox-do.js";
-import type { McpGateway } from "./apps/backend/src/mcp-gateway.js";
 import type { Memory } from "./apps/backend/src/memory-do.js";
 import type { Sandbox } from "./apps/backend/src/sandbox.js";
 import type { Waitlist } from "./apps/backend/src/waitlist-do.js";
@@ -164,13 +163,19 @@ export const Worker = Cloudflare.Worker("Worker", {
   crons: ["*/5 * * * *"],
   env: {
     GATEWAY_ID: "default",
-    ORCHESTRATOR_MODEL: "@cf/meta/llama-3.1-8b-instruct",
+    ORCHESTRATOR_MODEL: "@cf/zai-org/glm-4.7-flash",
     CODING_MODEL: "google/gemini-3.5-flash-lite",
     RUNTIME: "sandbox",
     // Must match the Sandbox container's instanceType.
     INSTANCE_TYPE: "standard-1",
+    // Public hostname for preview URLs + absolute screenshot links (T33).
+    // Empty = PR screenshot capture disabled.
+    WORKER_HOSTNAME: "",
 
     AI: Cloudflare.Workers.AI(),
+
+    // Workers Browser Rendering (T33) — wrangler `browser.binding`.
+    BROWSER: Cloudflare.Browser("BROWSER"),
 
     CodingOrchestrator: Cloudflare.DurableObject<CodingOrchestrator>(
       "CodingOrchestrator",
@@ -185,9 +190,6 @@ export const Worker = Cloudflare.Worker("Worker", {
     }),
     Mailbox: Cloudflare.DurableObject<Mailbox>("Mailbox", {
       className: "Mailbox",
-    }),
-    McpGateway: Cloudflare.DurableObject<McpGateway>("McpGateway", {
-      className: "McpGateway",
     }),
     Memory: Cloudflare.DurableObject<Memory>("Memory", {
       className: "Memory",
@@ -246,6 +248,7 @@ export const Worker = Cloudflare.Worker("Worker", {
       "CLAUDE_CODE_MODEL",
       "CODEX_MODEL",
       "DEVIN_MODEL",
+      "GROK_MODEL",
       "SLACK_APPROVALS_CHANNEL",
       "MEMORY_ENABLED",
     ]),

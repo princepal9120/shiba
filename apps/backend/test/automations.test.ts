@@ -172,10 +172,10 @@ describe("Slack triggers", () => {
     const trigger = automation.triggers[0];
     if (trigger?.kind !== "slack") throw new Error("expected slack trigger");
     expect(
-      matchSlackTrigger(trigger, { channel: "C123", author: "U456", text: "@shiba-ai-coworker fix this now" }),
+      matchSlackTrigger(trigger, { channel: "C123", author: "U456", text: "@shiba fix this now" }),
     ).toBe(true);
     expect(
-      matchSlackTrigger(trigger, { channel: "C999", author: "U456", text: "@shiba-ai-coworker fix this now" }),
+      matchSlackTrigger(trigger, { channel: "C999", author: "U456", text: "@shiba fix this now" }),
     ).toBe(false);
     expect(
       matchSlackTrigger(trigger, { channel: "C123", author: "U456", text: "hello there" }),
@@ -263,7 +263,7 @@ function stubAi(answer: unknown, fail = false): RunWhenAi {
   return { run: async () => { if (fail) throw new Error("model exploded"); return answer; } };
 }
 
-const MODEL = "@cf/meta/llama-3.1-8b-instruct";
+const MODEL = "@cf/zai-org/glm-4.7-flash";
 
 describe("run_when gate (T19)", () => {
   it("runs when the condition clearly holds", async () => {

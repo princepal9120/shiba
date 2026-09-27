@@ -27,7 +27,7 @@ import type {
   StoredEmail,
   ThreadView,
 } from "./mailbox-store.js";
-import { encodePrincipal, McpGateway, MCP_PRINCIPAL_HEADER } from "./mcp-gateway.js";
+import { createShibaMcpHandler, encodePrincipal, MCP_PRINCIPAL_HEADER } from "./mcp-gateway.js";
 import { Memory, memoryRegistryStub } from "./memory-do.js";
 import { Sandbox } from "./sandbox.js";
 import { withVerifiedAccessIdentity } from "./access-jwt.js";
@@ -39,14 +39,28 @@ import { ORCHESTRATOR_NAME, handleSlackCommand } from "./slack-routes.js";
 import { handleDiscordInteractions } from "./discord.js";
 import { handleTelegramWebhook } from "./telegram.js";
 import { handleTrigger } from "./trigger.js";
-import { handleSandboxRoutes } from "./sandbox-routes.js";
+import { handleSandboxRoutes, isValidSandboxId } from "./sandbox-routes.js";
+import { screenshotKeyFor } from "./screenshot.js";
 import { readSetupStatus } from "./setup-status.js";
 import { isPublicRequest } from "./public-routes.js";
 import { handleWaitlist } from "./waitlist.js";
 import { Waitlist } from "./waitlist-do.js";
 import { ModelConfig } from "./model-config-do.js";
+import {
+  createWebSession,
+  formatSessionList,
+  getBaseSessionRecord,
+  isAuthorizedSessionAgent,
+  isValidSessionId,
+  buildSessionAgentName,
+  parseSessionAgentName,
+  sanitizeSessionMetadata,
+  DEFAULT_SESSION_ID,
+  WEB_SESSION_PREFIX,
+  type WebSessionRecord,
+} from "./web-sessions.js";
 
-export { Automations, CodingOrchestrator, Mailbox, McpGateway, Memory, ModelConfig, OpenCodeAgent, Sandbox, ContainerProxy, Waitlist };
+export { Automations, CodingOrchestrator, Mailbox, Memory, ModelConfig, OpenCodeAgent, Sandbox, ContainerProxy, Waitlist };
 export { assertLiveCodingModel } from "./coding-model.js";
 
 export function getUserId(request: Request): string | null {
@@ -123,7 +137,25 @@ async function handleRuns(request: Request, env: Env): Promise<Response | null> 
     return Response.json({ error: "Method not allowed." }, { status: 405 });
   }
   // Local development shares the same fallback as the dashboard identity endpoint.
-  let userId = getUserId(request) ?? "default";
+  const userId = getUserId(request) ?? "default";
+  let targetAgentName = userId;
+  const sessionParam = url.searchParams.get("session") || url.searchParams.get("sessionId");
+  if (sessionParam && sessionParam !== DEFAULT_SESSION_ID) {
+    if (!isValidSessionId(sessionParam)) {
+      return Response.json({ error: "Invalid session id." }, { status: 400 });
+    }
+    const userStub = await getAgentByName(env.CodingOrchestrator, userId);
+    const sessionCheck = await userStub.fetch(
+      `https://internal/internal/web-sessions/${encodeURIComponent(sessionParam)}`,
+    );
+    if (sessionCheck.status === 404) {
+      return Response.json({ error: "Session not found." }, { status: 404 });
+    }
+    if (!sessionCheck.ok) {
+      return Response.json({ error: "Failed to verify session." }, { status: sessionCheck.status });
+    }
+    targetAgentName = buildSessionAgentName(userId, sessionParam);
+  }
   // Email-kind approvals freeze draft claims + mailbox payloads, and claim
   // recovery (releaseRestartedDraftClaim, sweepStaleDrafts, Slack resolve)
   // assumes they live on the one shared instance queueEmailApproval pins —
@@ -134,12 +166,391 @@ async function handleRuns(request: Request, env: Env): Promise<Response | null> 
       () => undefined,
     );
     if (kind === "email_send" || kind === "email_delete") {
-      userId = ORCHESTRATOR_NAME;
+      targetAgentName = ORCHESTRATOR_NAME;
     }
   }
-  const stub = await getAgentByName(env.CodingOrchestrator, userId);
+  const stub = await getAgentByName(env.CodingOrchestrator, targetAgentName);
   const rewritten = new Request(new URL(url.pathname + url.search, request.url), request);
   return stub.fetch(rewritten);
+}
+
+/**
+ * T33: stored PR preview screenshots, served from the ATTACHMENTS bucket
+ * under `screenshots/{sandboxId}.png`. Same gate as every other read API —
+ * the link in a published PR body resolves only for authenticated viewers.
+ */
+async function handleScreenshot(request: Request, env: Env): Promise<Response | null> {
+  const { pathname } = new URL(request.url);
+  const match = /^\/api\/screenshots\/([^/]+)$/.exec(pathname);
+  if (!match) return null;
+  if (!isAuthenticated(request, env)) {
+    return Response.json({ error: "Authentication required." }, { status: 401 });
+  }
+  if (request.method !== "GET") {
+    return Response.json({ error: "Method not allowed." }, { status: 405 });
+  }
+  let sandboxId: string;
+  try {
+    sandboxId = decodeURIComponent(match[1]!);
+  } catch {
+    return Response.json({ error: "Invalid sandbox ID encoding." }, { status: 400 });
+  }
+  if (!isValidSandboxId(sandboxId)) {
+    return Response.json({ error: "Invalid sandbox ID format." }, { status: 400 });
+  }
+  const object = await env.ATTACHMENTS.get(screenshotKeyFor(sandboxId));
+  if (!object) {
+    return Response.json({ error: "Screenshot not found." }, { status: 404 });
+  }
+  return new Response(object.body, {
+    headers: {
+      "Content-Type": "image/png",
+      "Content-Disposition": "inline",
+      "Content-Length": String(object.size),
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
+}
+
+/**
+ * Safe per-user web-session listing, creation, inspection, and resume API (T30/T32).
+ * Strictly Access-authenticated; server-mints all session IDs.
+ */
+export async function handleWebSessions(request: Request, env: Env): Promise<Response | null> {
+  const url = new URL(request.url);
+  if (!/^\/api\/sessions(?:\/[^/]+(?:\/resume)?)?$/.test(url.pathname)) {
+    return null;
+  }
+  if (!isAuthenticated(request, env)) {
+    return Response.json({ error: "Authentication required." }, { status: 401 });
+  }
+
+  const userId = getUserId(request) ?? "default";
+  const stub = await getAgentByName(env.CodingOrchestrator, userId);
+
+  // GET /api/sessions — list user's sessions (always includes base session)
+  // POST /api/sessions — create new named session (server-mints session ID)
+  if (url.pathname === "/api/sessions") {
+    if (request.method === "GET") {
+      try {
+        const response = await stub.fetch("https://internal/internal/web-sessions");
+        if (!response.ok) {
+          return Response.json({ error: "Failed to list sessions." }, { status: response.status });
+        }
+        const body = (await response.json()) as { sessions?: WebSessionRecord[] };
+        const sessions = formatSessionList(userId, body.sessions ?? []);
+        return Response.json(
+          { sessions, defaultSessionId: DEFAULT_SESSION_ID },
+          { headers: { "Cache-Control": "no-store" } },
+        );
+      } catch (error) {
+        console.error("Failed to list web sessions:", redactSecrets(String(error)));
+        return Response.json({ error: "Internal error." }, { status: 500 });
+      }
+    }
+
+    if (request.method === "POST") {
+      let body: unknown = {};
+      const rawBody = await request.text().catch(() => "");
+      if (rawBody.trim().length > 0) {
+        try {
+          body = JSON.parse(rawBody);
+        } catch {
+          return Response.json({ error: "Invalid JSON body." }, { status: 400 });
+        }
+      }
+      const opts = (typeof body === "object" && body !== null && !Array.isArray(body) ? body : {}) as {
+        name?: string;
+        metadata?: unknown;
+      };
+      if (opts.metadata !== undefined) {
+        try {
+          opts.metadata = sanitizeSessionMetadata(opts.metadata);
+        } catch (err) {
+          return Response.json(
+            { error: err instanceof Error ? err.message : "Invalid metadata." },
+            { status: 400 },
+          );
+        }
+      }
+      let session: WebSessionRecord;
+      try {
+        session = createWebSession(userId, opts as { name?: string; metadata?: Record<string, unknown> });
+      } catch (err) {
+        return Response.json(
+          { error: err instanceof Error ? err.message : "Failed to create session." },
+          { status: 400 },
+        );
+      }
+      try {
+        const response = await stub.fetch("https://internal/internal/web-sessions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session }),
+        });
+        if (!response.ok) {
+          const err = (await response.json().catch(() => ({}))) as { error?: string };
+          return Response.json(
+            { error: err.error || "Failed to create session." },
+            { status: response.status },
+          );
+        }
+        return Response.json(
+          { session },
+          { status: 201, headers: { "Cache-Control": "no-store" } },
+        );
+      } catch (error) {
+        console.error("Failed to persist web session:", redactSecrets(String(error)));
+        return Response.json({ error: "Internal error." }, { status: 500 });
+      }
+    }
+
+    return Response.json({ error: "Method not allowed." }, { status: 405 });
+  }
+
+  // POST /api/sessions/:id/resume — touch/resume existing session
+  const resumeMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/resume$/);
+  if (resumeMatch) {
+    if (request.method !== "POST") {
+      return Response.json({ error: "Method not allowed." }, { status: 405 });
+    }
+    let sessionId: string;
+    try {
+      sessionId = decodeURIComponent(resumeMatch[1]!);
+    } catch {
+      return Response.json({ error: "Invalid session id." }, { status: 400 });
+    }
+    if (!isValidSessionId(sessionId)) {
+      return Response.json({ error: "Invalid session id." }, { status: 400 });
+    }
+    if (sessionId === DEFAULT_SESSION_ID) {
+      return Response.json(
+        { session: getBaseSessionRecord(userId), resumed: true },
+        { headers: { "Cache-Control": "no-store" } },
+      );
+    }
+    try {
+      const response = await stub.fetch(
+        `https://internal/internal/web-sessions/${encodeURIComponent(sessionId)}/resume`,
+        { method: "POST" },
+      );
+      if (!response.ok) {
+        if (response.status === 404) {
+          return Response.json({ error: "Session not found." }, { status: 404 });
+        }
+        return Response.json({ error: "Failed to resume session." }, { status: response.status });
+      }
+      const body = await response.json();
+      return Response.json(body, { headers: { "Cache-Control": "no-store" } });
+    } catch (error) {
+      console.error("Failed to resume web session:", redactSecrets(String(error)));
+      return Response.json({ error: "Internal error." }, { status: 500 });
+    }
+  }
+
+  // GET /api/sessions/:id — inspect session
+  // PATCH /api/sessions/:id — rename or update session metadata
+  // DELETE /api/sessions/:id — delete session
+  const sessionMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)$/);
+  if (sessionMatch) {
+    let sessionId: string;
+    try {
+      sessionId = decodeURIComponent(sessionMatch[1]!);
+    } catch {
+      return Response.json({ error: "Invalid session id." }, { status: 400 });
+    }
+    if (!isValidSessionId(sessionId)) {
+      return Response.json({ error: "Invalid session id." }, { status: 400 });
+    }
+
+    if (sessionId === DEFAULT_SESSION_ID) {
+      if (request.method === "GET") {
+        return Response.json(
+          { session: getBaseSessionRecord(userId) },
+          { headers: { "Cache-Control": "no-store" } },
+        );
+      }
+      if (request.method === "DELETE") {
+        return Response.json({ error: "Cannot delete the default base session." }, { status: 400 });
+      }
+      if (request.method === "PATCH") {
+        return Response.json({ error: "Cannot modify the default base session." }, { status: 400 });
+      }
+      return Response.json({ error: "Method not allowed." }, { status: 405 });
+    }
+
+    if (request.method === "GET") {
+      try {
+        const response = await stub.fetch(
+          `https://internal/internal/web-sessions/${encodeURIComponent(sessionId)}`,
+        );
+        if (!response.ok) {
+          if (response.status === 404) {
+            return Response.json({ error: "Session not found." }, { status: 404 });
+          }
+          return Response.json({ error: "Failed to fetch session." }, { status: response.status });
+        }
+        const body = await response.json();
+        return Response.json(body, { headers: { "Cache-Control": "no-store" } });
+      } catch (error) {
+        console.error("Failed to fetch web session:", redactSecrets(String(error)));
+        return Response.json({ error: "Internal error." }, { status: 500 });
+      }
+    }
+
+    if (request.method === "PATCH") {
+      let patchBody: unknown;
+      try {
+        patchBody = await request.json();
+      } catch {
+        return Response.json({ error: "Invalid JSON." }, { status: 400 });
+      }
+      const patch = (typeof patchBody === "object" && patchBody !== null ? patchBody : {}) as {
+        name?: string;
+        metadata?: unknown;
+      };
+      if (patch.metadata !== undefined) {
+        try {
+          patch.metadata = sanitizeSessionMetadata(patch.metadata);
+        } catch (err) {
+          return Response.json(
+            { error: err instanceof Error ? err.message : "Invalid metadata." },
+            { status: 400 },
+          );
+        }
+      }
+      try {
+        const response = await stub.fetch(
+          `https://internal/internal/web-sessions/${encodeURIComponent(sessionId)}`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(patch),
+          },
+        );
+        if (!response.ok) {
+          if (response.status === 404) {
+            return Response.json({ error: "Session not found." }, { status: 404 });
+          }
+          return Response.json({ error: "Failed to update session." }, { status: response.status });
+        }
+        const body = await response.json();
+        return Response.json(body, { headers: { "Cache-Control": "no-store" } });
+      } catch (error) {
+        console.error("Failed to update web session:", redactSecrets(String(error)));
+        return Response.json({ error: "Internal error." }, { status: 500 });
+      }
+    }
+
+    if (request.method === "DELETE") {
+      const force = url.searchParams.get("force") === "true";
+      // 1. Verify the session exists in the base registry
+      //    (includeDeleting so a retried delete after a failed registry write
+      //    can still find the tombstoned record).
+      const getRes = await stub.fetch(
+        `https://internal/internal/web-sessions/${encodeURIComponent(sessionId)}?includeDeleting=true`,
+      );
+      if (!getRes.ok) {
+        if (getRes.status === 404) {
+          return Response.json({ error: "Session not found." }, { status: 404 });
+        }
+        return Response.json({ error: "Failed to fetch session." }, { status: getRes.status });
+      }
+      // The stored record's agentName is never trusted: serialized DO
+      // state could hold a forged record pointing teardown at another
+      // user's DO or the default instance. Recompute the target from the
+      // authenticated owner + the already-validated session UUID.
+      const sessionAgentName = buildSessionAgentName(userId, sessionId);
+
+      // 2. Tombstone the session BEFORE teardown so new runs/WS connects and
+      //    listings stop resolving it while teardown is in flight.
+      const markRes = await stub.fetch(
+        `https://internal/internal/web-sessions/${encodeURIComponent(sessionId)}/deleting`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ deleting: true }),
+        },
+      );
+      if (!markRes.ok) {
+        if (markRes.status === 404) {
+          return Response.json({ error: "Session not found." }, { status: 404 });
+        }
+        return Response.json({ error: "Failed to mark session for deletion." }, { status: markRes.status });
+      }
+
+      // 3. Perform teardown on target session DO. Without `force`, any active
+      //    runs/pending approvals abort the delete (409) and the tombstone is
+      //    rolled back. With `force`, teardown failures are tolerated but the
+      //    response reports them via `teardownFailed` so callers know resource
+      //    cleanup may be incomplete.
+      let teardownFailed = false;
+      try {
+        const sessionStub = await getAgentByName(env.CodingOrchestrator, sessionAgentName);
+        const teardownRes = await sessionStub.fetch(
+          `https://internal/internal/session-teardown${force ? "?force=true" : ""}`,
+          { method: "POST" },
+        );
+        if (!teardownRes.ok) {
+          const errBody = await teardownRes.json().catch(() => ({}));
+          if (!force) {
+            await stub.fetch(
+              `https://internal/internal/web-sessions/${encodeURIComponent(sessionId)}/deleting`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ deleting: false }),
+              },
+            ).catch(() => undefined);
+            return Response.json(errBody, { status: teardownRes.status });
+          }
+          teardownFailed = true;
+        }
+      } catch (error) {
+        console.error("Session teardown failed:", redactSecrets(String(error)));
+        if (!force) {
+          await stub.fetch(
+            `https://internal/internal/web-sessions/${encodeURIComponent(sessionId)}/deleting`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ deleting: false }),
+            },
+          ).catch(() => undefined);
+          return Response.json({ error: "Failed to teardown session resources." }, { status: 500 });
+        }
+        teardownFailed = true;
+      }
+
+      // 4. Remove from registry
+      try {
+        const response = await stub.fetch(
+          `https://internal/internal/web-sessions/${encodeURIComponent(sessionId)}`,
+          { method: "DELETE" },
+        );
+        if (!response.ok) {
+          if (response.status === 404) {
+            return Response.json({ error: "Session not found." }, { status: 404 });
+          }
+          return Response.json({ error: "Failed to delete session." }, { status: response.status });
+        }
+        return Response.json({
+          ok: true,
+          deleted: sessionId,
+          force,
+          teardownFailed: teardownFailed || undefined,
+        });
+      } catch (error) {
+        console.error("Failed to delete web session:", redactSecrets(String(error)));
+        return Response.json({ error: "Internal error." }, { status: 500 });
+      }
+    }
+
+    return Response.json({ error: "Method not allowed." }, { status: 405 });
+  }
+
+  return Response.json({ error: "Not found." }, { status: 404 });
 }
 
 // ---------- Dashboard inbox + memory API (megaplan T11) ----------
@@ -635,7 +1046,27 @@ async function handleApprovals(request: Request, env: Env): Promise<Response | n
   if (!isAuthenticated(request, env)) {
     return Response.json({ error: "Authentication required." }, { status: 401 });
   }
-  const names = [...new Set([getUserId(request) ?? ORCHESTRATOR_NAME, ORCHESTRATOR_NAME])];
+  const userId = getUserId(request) ?? ORCHESTRATOR_NAME;
+  const userStub = await getAgentByName(env.CodingOrchestrator, userId);
+  let sessionAgentNames: string[] = [];
+  try {
+    const listRes = await userStub.fetch("https://internal/internal/web-sessions");
+    if (listRes.ok) {
+      const body = (await listRes.json().catch(() => ({}))) as { sessions?: WebSessionRecord[] };
+      // Never trust a stored record's agentName: a forged registry entry
+      // (e.g. via a client state write on a pre-hardening DO) could name
+      // another user's DO or the default instance, and the fan-out below
+      // would then expose or resolve that DO's approvals. Recompute each
+      // fan-out target from the authenticated owner + the record's
+      // server-minted session UUID.
+      sessionAgentNames = (body.sessions ?? [])
+        .filter((s) => s.userId === userId && isValidSessionId(s.id))
+        .map((s) => buildSessionAgentName(userId, s.id));
+    }
+  } catch {
+    // Non-fatal if listing fails
+  }
+  const names = [...new Set([userId, ...sessionAgentNames, ORCHESTRATOR_NAME])];
   const stubs = await Promise.all(
     names.map((name) => getAgentByName(env.CodingOrchestrator, name)),
   );
@@ -679,7 +1110,14 @@ async function handleApprovals(request: Request, env: Env): Promise<Response | n
       return Response.json({ error: "Invalid approval payload." }, { status: 400 });
     }
     const decidedBy = getUserId(request) ?? "default";
-    let unknown: Response | null = null;
+    if (body.threadKey.startsWith(WEB_SESSION_PREFIX)) {
+      if (!isAuthorizedSessionAgent(body.threadKey, decidedBy)) {
+        return Response.json({ error: "Forbidden." }, { status: 403 });
+      }
+      if (!sessionAgentNames.includes(body.threadKey)) {
+        return Response.json({ error: "Session not found." }, { status: 404 });
+      }
+    }
     let probeFailure: Response | null = null;
     for (const stub of stubs) {
       const response = await stub.fetch(
@@ -706,11 +1144,12 @@ async function handleApprovals(request: Request, env: Env): Promise<Response | n
       if (result.result !== "unknown") {
         return Response.json({ result: result.result });
       }
-      unknown = response;
     }
     // No decisive answer: a probe failure means "retry", never the
     // misleading "unknown" a healthy-but-uninvolved stub would imply.
-    return probeFailure ?? unknown ?? Response.json({ result: "unknown" });
+    // The consumed probe response can't be re-serialized to the client,
+    // so the unknown verdict is rebuilt here.
+    return probeFailure ?? Response.json({ result: "unknown" });
   }
   return Response.json({ error: "Method not allowed." }, { status: 405 });
 }
@@ -849,10 +1288,10 @@ function bearerToken(request: Request): string | null {
  * `/mcp` (and `/mcp/*`) → bearer auth before any MCP handling: a missing
  * or invalid token is a plain 401 JSON, never an MCP protocol error — the
  * request never reaches the transport. On success the verified principal
- * rides into the DO as the `x-shiba-principal` header, which the tool
- * registry reads per call.
+ * rides into the stateless MCP handler as the `x-shiba-principal` header,
+ * which the tool registry reads per call.
  */
-async function handleMcp(request: Request, env: Env, ctx: ExecutionContext): Promise<Response | null> {
+async function handleMcp(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response | null> {
   const url = new URL(request.url);
   if (!isMcpPath(url.pathname)) {
     return null;
@@ -863,17 +1302,18 @@ async function handleMcp(request: Request, env: Env, ctx: ExecutionContext): Pro
     return Response.json({ error: "Authentication required." }, { status: 401 });
   }
   // Any client-supplied copy must go first — only the worker-verified
-  // record may reach the DO under this name.
+  // record may reach the MCP handler under this name.
   const headers = new Headers(request.headers);
   headers.delete(MCP_PRINCIPAL_HEADER);
   // encodePrincipal keeps the JSON ByteString-safe — a non-ASCII
   // principal name would otherwise make Headers.set throw and 500 every
   // call for that token.
   headers.set(MCP_PRINCIPAL_HEADER, encodePrincipal(record));
-  return McpGateway.serve("/mcp", { binding: "McpGateway" }).fetch(
+  // Stateless serving: the handler builds a fresh server per request (env
+  // is closed over). `route` is an exact-pathname match, so pass this
+  // request's own pathname to keep authenticated /mcp/* subpaths served.
+  return createShibaMcpHandler(env, url.pathname).fetch(
     new Request(request, { headers }),
-    env,
-    ctx,
   );
 }
 
@@ -1102,6 +1542,14 @@ export default {
       if (runsResponse) {
         return runsResponse;
       }
+      const screenshotResponse = await handleScreenshot(request, env);
+      if (screenshotResponse) {
+        return screenshotResponse;
+      }
+      const webSessionsResponse = await handleWebSessions(request, env);
+      if (webSessionsResponse) {
+        return webSessionsResponse;
+      }
       const inboxResponse = await handleInbox(request, env);
       if (inboxResponse) {
         return inboxResponse;
@@ -1189,8 +1637,24 @@ export default {
         } catch {
           return Response.json({ error: "Invalid agent name." }, { status: 400 });
         }
-        if (name !== (getUserId(request) ?? "default")) {
+        const currentUserId = getUserId(request) ?? "default";
+        if (!isAuthorizedSessionAgent(name, currentUserId)) {
           return Response.json({ error: "Forbidden." }, { status: 403 });
+        }
+        if (name.startsWith(WEB_SESSION_PREFIX)) {
+          const parsed = parseSessionAgentName(name);
+          if (parsed && parsed.sessionId !== DEFAULT_SESSION_ID) {
+            const userStub = await getAgentByName(env.CodingOrchestrator, currentUserId);
+            const checkRes = await userStub.fetch(
+              `https://internal/internal/web-sessions/${encodeURIComponent(parsed.sessionId)}`,
+            );
+            if (checkRes.status === 404) {
+              return Response.json({ error: "Session not found." }, { status: 404 });
+            }
+            if (!checkRes.ok) {
+              return Response.json({ error: "Failed to verify session." }, { status: checkRes.status });
+            }
+          }
         }
         // Slack queue and approval routes are reachable only through verified callbacks.
         if (route[2]?.startsWith("api/") || route[2]?.startsWith("internal/")) {

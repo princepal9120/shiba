@@ -7,7 +7,7 @@
 import { parseGitHubRepoUrl, redactSecrets } from "./security.js";
 
 const GRAPHQL_URL = "https://api.github.com/graphql";
-const USER_AGENT = "shiba-ai-coworker";
+const USER_AGENT = "shiba";
 const API_TIMEOUT_MS = 30_000;
 
 export interface ProjectDeps {

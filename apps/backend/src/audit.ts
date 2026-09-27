@@ -11,6 +11,7 @@
  * it records. A missing table self-heals: the first write per isolate runs
  * {@link initAudit} (idempotent DDL) before inserting.
  */
+import type { AuditRow } from "@shiba/shared";
 import { randomHex } from "./mailbox-store.js";
 import { redactSecrets } from "./security.js";
 
@@ -106,17 +107,8 @@ export async function audit(env: AuditEnv, entry: AuditEntry): Promise<void> {
 }
 
 /** Row shape the dashboard's `GET /api/audit` returns — one per MCP call. */
-export interface AuditRow {
-  id: string;
-  /** Epoch milliseconds. */
-  ts: number;
-  principal: string;
-  tool: string;
-  /** SHA-256 fingerprint of the args — never the args themselves. */
-  args_hash: string;
-  outcome: string;
-  detail: string | null;
-}
+// Wire row shape lives in @shiba/shared — re-exported for existing imports.
+export type { AuditRow } from "@shiba/shared";
 
 /**
  * Read audit rows newest-first for `GET /api/audit`. `principal` narrows to

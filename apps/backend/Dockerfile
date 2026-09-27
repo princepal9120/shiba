@@ -4,13 +4,13 @@
 # exact versions are deterministic regardless of what the base image baked in.
 FROM docker.io/cloudflare/sandbox:0.12.9-opencode
 
-# One image carries every harness (opencode, Claude Code, Codex, Devin); a run
-# picks one at exec time. The credential invariant is unchanged: each gets the
-# dummy key, and the real credential is swapped in at the Worker's egress
-# boundary. Bumping any of these versions requires re-running the T10 live
-# acceptance checklist — the harness event parsers couple to the stream formats.
-RUN npm i -g opencode-ai@1.18.31 @anthropic-ai/claude-code@2.1.277 @openai/codex@0.155.0 \
-  && opencode --version && claude --version && codex --version
+# One image carries every harness (opencode, Claude Code, Codex, Devin, Grok);
+# a run picks one at exec time. The credential invariant is unchanged: each
+# gets the dummy key, and the real credential is swapped in at the Worker's
+# egress boundary. Bumping any of these versions requires re-running the T10
+# live acceptance checklist — the harness event parsers couple to the formats.
+RUN npm i -g opencode-ai@1.18.31 @anthropic-ai/claude-code@2.1.277 @openai/codex@0.155.0 @xai-official/grok@1.0.41 \
+  && opencode --version && claude --version && codex --version && grok --version
 
 # Devin CLI — checksum-verified against the published manifest
 # (https://static.devin.ai/cli/current/manifest.json), version-pinned like the

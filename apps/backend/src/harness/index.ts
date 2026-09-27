@@ -1,4 +1,5 @@
 /** Harness registry (PLAN.md T22). Selection is by name, default OpenCode. */
+import { antigravityHarness } from "./antigravity.js";
 import { claudeCodeHarness } from "./claude-code.js";
 import { codexHarness } from "./codex.js";
 import { cursorHarness } from "./cursor.js";
@@ -11,9 +12,10 @@ export const HARNESSES: Record<string, AgentHarness> = {
   opencode: opencodeHarness,
   "claude-code": claudeCodeHarness,
   codex: codexHarness,
-  cursor: cursorHarness,
   devin: devinHarness,
   grok: grokHarness,
+  cursor: cursorHarness,
+  antigravity: antigravityHarness,
 };
 
 export function resolveHarness(name: string | undefined): AgentHarness {
@@ -46,20 +48,21 @@ export function allowedHostsFor(harness: AgentHarness, model: string): string[] 
 
 export type { AgentHarness, AgentHarnessName };
 
-export const HARNESS_NAMES = ["opencode", "claude-code", "codex", "cursor", "devin", "grok"] as const;
+export const HARNESS_NAMES = ["opencode", "claude-code", "codex", "devin", "grok", "cursor", "antigravity"] as const;
 
 /**
  * Per-harness default coding model. The checked-in ids are defaults, not
  * availability guarantees — model ids retire (see configuration.md).
- * Overridable per deploy via CODING_MODEL / CLAUDE_CODE_MODEL / CODEX_MODEL
- * and per run via the delegate tool's codingModel input.
+ * Overridable per deploy via CODING_MODEL / CLAUDE_CODE_MODEL / CODEX_MODEL /
+ * DEVIN_MODEL / GROK_MODEL and per run via the delegate tool's codingModel input.
  */
 export const HARNESS_DEFAULT_MODELS: Record<string, string> = {
   opencode: "google/gemini-3.5-flash-lite",
   "claude-code": "anthropic/claude-sonnet-4-6",
   codex: "openai/gpt-5.3-codex",
-  cursor: "cursor/claude-4-5-sonnet",
   // swe-2 is free on Devin Pro; the alias resolves to the latest SWE-2.
   devin: "devin/swe-2",
-  grok: "xai/grok-4",
+  grok: "xai/grok-4.6",
+  cursor: "cursor/claude-4-5-sonnet",
+  antigravity: "google/gemini-3.5-flash",
 };

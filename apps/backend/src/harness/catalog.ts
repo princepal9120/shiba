@@ -46,17 +46,26 @@ const CATALOG_META: Record<
   opencode: { label: "OpenCode", binary: "opencode", version: "1.18.31", docsUrl: "https://opencode.ai/docs/" },
   "claude-code": { label: "Claude Code", binary: "claude", version: "2.1.277", docsUrl: "https://docs.anthropic.com/en/docs/claude-code" },
   codex: { label: "Codex", binary: "codex", version: "0.155.0", docsUrl: "https://github.com/openai/codex" },
-  cursor: { label: "Cursor", binary: "cursor-agent", version: "0.50.0", docsUrl: "https://docs.cursor.com" },
   devin: { label: "Devin", binary: "devin", version: "3000.10.31", docsUrl: "https://cli.devin.ai/docs" },
-  grok: { label: "Grok", binary: "grok", version: "0.1.0", docsUrl: "https://x.ai/grok" },
+  grok: { label: "Grok", binary: "grok", version: "1.0.41", docsUrl: "https://docs.x.ai" },
+  cursor: { label: "Cursor", binary: "cursor-agent", version: "0.50.0", docsUrl: "https://docs.cursor.com" },
+  antigravity: { label: "Antigravity", binary: "agy", version: "1.0.0", docsUrl: "https://antigravity.google" },
 };
+
+/**
+ * Harnesses actually installed in the sandbox image. Cursor and Antigravity
+ * stay registered (HARNESS_NAMES) but are not selectable sandbox paths —
+ * their CLIs can't hold the dummy-key invariant — so they never appear here.
+ */
+const SANDBOX_HARNESSES = ["opencode", "claude-code", "codex", "devin", "grok"] as const;
 
 const GATEWAY_PROVIDER: Record<string, string> = {
   opencode: "google / anthropic / openai / xAI",
   "claude-code": "anthropic",
   codex: "openai",
-  cursor: "cursor",
   grok: "xAI",
+  cursor: "cursor",
+  antigravity: "google",
 };
 
 /**
@@ -64,7 +73,7 @@ const GATEWAY_PROVIDER: Record<string, string> = {
  * values never leave the Worker.
  */
 export function agentCliCatalog(env: Pick<Env, "DEVIN_API_KEY">): AgentCliInfo[] {
-  return HARNESS_NAMES.map((id) => {
+  return SANDBOX_HARNESSES.map((id) => {
     const meta = CATALOG_META[id];
     const credential: AgentCliCredential =
       id === "devin"

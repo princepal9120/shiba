@@ -11,7 +11,7 @@ All paths are relative to the Worker origin. The shared orchestrator name is def
 
 The end-to-end flow is:
 
-1. Register an address with `POST /api/mailboxes` (`{"address":"agent@example.com"}`). Configure Cloudflare Email Routing for that address to deliver to this Worker; registration alone cannot change DNS or routing.
+1. Register an address with `POST /api/mailboxes` (`{"address":"agent@example.com","agent":"scout"}`). `agent` is the exact `/mcp` token principal allowed to use that mailbox. Omit it for a new dashboard-only mailbox; omitting it when re-registering preserves the current assignment. Send `"agent":null` to unassign an existing mailbox. Configure Cloudflare Email Routing for that address to deliver to this Worker; registration alone cannot change DNS or routing.
 2. Incoming mail is accepted only for a registered address, stored in its Mailbox Durable Object, and attachment bytes go to R2. `GET /api/emails?mailbox=agent%40example.com` lists it; `GET /api/emails/{emailId}` returns the body and an attachment manifest. `GET /api/emails/{emailId}/attachments/{partId}` streams a manifest-backed attachment as a forced download.
 3. Create an outbound draft with `POST /api/drafts`, then call `POST /api/drafts/{draftId}/send`. This **only queues a frozen `email_send` approval**. The draft stays queued until a human approves it in the Approvals tab or configured Slack channel. Only then does the Worker call its `SEND_EMAIL` binding; a rejected approval releases the draft for editing.
 

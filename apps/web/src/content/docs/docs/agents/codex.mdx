@@ -46,10 +46,10 @@ In your environment or `wrangler.jsonc`:
 
 ```bash
 # Set default harness to Codex
-pnpm wrangler secret put AGENT_HARNESS # enter "codex"
+pnpm wrangler secret put AGENT_HARNESS --config apps/backend/wrangler.jsonc # enter "codex"
 
 # Set default model for Codex
-pnpm wrangler secret put CODEX_MODEL # enter "openai/gpt-5.3-codex"
+pnpm wrangler secret put CODEX_MODEL --config apps/backend/wrangler.jsonc # enter "openai/gpt-5.3-codex"
 ```
 
 ## Selecting Codex in a Task

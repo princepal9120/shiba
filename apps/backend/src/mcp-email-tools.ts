@@ -7,7 +7,8 @@
  * the registry. Tools naming a mailbox go straight to its stub. Tools
  * keyed by bare id can't know the owning stub (ids are random
  * `eml-`/`drf-`/`thr-` hex), so they resolve it by listing registered
- * mailboxes and probing every stub in parallel — a wrong stub 404s
+ * mailboxes assigned to the verified token principal and probing those
+ * stubs in parallel — a wrong stub 404s
  * without touching data, and id collisions across instances are
  * impossible, so the single 2xx hit is authoritative.
  *
@@ -156,30 +157,34 @@ const perMailbox = (address: string): StubTarget => ({ mailbox: address });
 // Registry + probe helpers
 // ---------------------------------------------------------------------------
 
-async function listMailboxes(env: Env): Promise<MailboxRecord[]> {
+async function listMailboxes(env: Env, principal: string): Promise<MailboxRecord[]> {
   const body = await stubJson<{ mailboxes: MailboxRecord[] }>(
     env,
     DIRECTORY,
     "/mailboxes",
   );
-  return body?.mailboxes ?? [];
+  // Dashboard operators may see every mailbox through Access, but an MCP
+  // token sees only addresses explicitly assigned to its principal. An
+  // unassigned mailbox remains operator-only until it is paired.
+  return (body?.mailboxes ?? []).filter((mailbox) => mailbox.agent === principal);
 }
 
-async function requireMailbox(env: Env, address: string): Promise<MailboxRecord> {
+async function requireMailbox(env: Env, address: string, principal: string): Promise<MailboxRecord> {
   // Shared with the `/api/runs` approval intake — one probe, one invariant.
   const mailbox = await registeredMailbox(env, address);
-  if (!mailbox) {
-    throw new InputError(`Mailbox is not registered: ${address}`);
+  if (!mailbox || mailbox.agent !== principal) {
+    throw new InputError(`Mailbox is not available to this agent: ${address}`);
   }
   return mailbox;
 }
 
-/** Run `probe` against every registered stub in parallel; first non-null wins. */
+/** Run `probe` against this principal's assigned stubs in parallel; first non-null wins. */
 async function probeMailboxes<T>(
   env: Env,
+  principal: string,
   probe: (mailbox: string) => Promise<T | null>,
 ): Promise<{ mailbox: string; value: T } | null> {
-  const mailboxes = await listMailboxes(env);
+  const mailboxes = await listMailboxes(env, principal);
   const hits = await Promise.all(
     mailboxes.map(async ({ address }) => {
       const value = await probe(address);
@@ -194,14 +199,14 @@ interface LocatedEmail {
   attachments: StoredAttachment[];
 }
 
-function findEmail(env: Env, id: string) {
-  return probeMailboxes<LocatedEmail>(env, (mailbox) =>
+function findEmail(env: Env, id: string, principal: string) {
+  return probeMailboxes<LocatedEmail>(env, principal, (mailbox) =>
     stubJson<LocatedEmail>(env, perMailbox(mailbox), `/emails/${encodeURIComponent(id)}`, undefined, true),
   );
 }
 
-function findThread(env: Env, id: string) {
-  return probeMailboxes<{ thread: ThreadView }>(env, (mailbox) =>
+function findThread(env: Env, id: string, principal: string) {
+  return probeMailboxes<{ thread: ThreadView }>(env, principal, (mailbox) =>
     stubJson<{ thread: ThreadView }>(env, perMailbox(mailbox), `/threads/${encodeURIComponent(id)}`, undefined, true),
   );
 }
@@ -210,8 +215,9 @@ function findThread(env: Env, id: string) {
 async function findDraft(
   env: Env,
   id: string,
+  principal: string,
 ): Promise<{ mailbox: string; draft: DraftRecord } | null> {
-  const hit = await probeMailboxes<DraftRecord>(env, async (mailbox) => {
+  const hit = await probeMailboxes<DraftRecord>(env, principal, async (mailbox) => {
     const body = await stubJson<{ draft: DraftRecord }>(
       env,
       perMailbox(mailbox),
@@ -313,12 +319,12 @@ export function registerEmailTools(registry: ToolRegistry, env: Env): void {
   registry.registerTool(
     "list_mailboxes",
     READ,
-    async () => {
-      const mailboxes = await listMailboxes(env);
+    async (_args, ctx) => {
+      const mailboxes = await listMailboxes(env, ctx.principal.principal);
       return jsonResult({ mailboxes: mailboxes.map(mailboxView) });
     },
     {
-      description: "List registered mailbox addresses.",
+      description: "List mailbox addresses assigned to this agent token's principal.",
       inputSchema: {},
       annotations: { readOnlyHint: true },
     },
@@ -332,9 +338,9 @@ export function registerEmailTools(registry: ToolRegistry, env: Env): void {
   registry.registerTool(
     "list_emails",
     READ,
-    async (args) => {
+    async (args, ctx) => {
       const { mailbox, status, limit } = parseArgs(listEmailsSchema, args);
-      await requireMailbox(env, mailbox);
+      await requireMailbox(env, mailbox, ctx.principal.principal);
       const params = new URLSearchParams({ mailbox });
       if (status !== undefined) params.set("status", status);
       if (limit !== undefined) params.set("limit", String(limit));
@@ -349,7 +355,7 @@ export function registerEmailTools(registry: ToolRegistry, env: Env): void {
       });
     },
     {
-      description: "List emails in a mailbox (headers only — no bodies).",
+      description: "List emails in an assigned mailbox (headers only — no bodies).",
       inputSchema: {
         mailbox: mailboxField,
         status: emailStatusField.optional(),
@@ -363,9 +369,9 @@ export function registerEmailTools(registry: ToolRegistry, env: Env): void {
   registry.registerTool(
     "get_email",
     READ,
-    async (args) => {
+    async (args, ctx) => {
       const { id } = parseArgs(getEmailSchema, args);
-      const hit = await findEmail(env, id);
+      const hit = await findEmail(env, id, ctx.principal.principal);
       if (hit === null) {
         throw new InputError(`Email not found: ${id}`);
       }
@@ -388,9 +394,9 @@ export function registerEmailTools(registry: ToolRegistry, env: Env): void {
   registry.registerTool(
     "get_thread",
     READ,
-    async (args) => {
+    async (args, ctx) => {
       const { thread_id } = parseArgs(getThreadSchema, args);
-      const hit = await findThread(env, thread_id);
+      const hit = await findThread(env, thread_id, ctx.principal.principal);
       if (hit === null) {
         throw new InputError(`Thread not found: ${thread_id}`);
       }
@@ -422,7 +428,7 @@ export function registerEmailTools(registry: ToolRegistry, env: Env): void {
   registry.registerTool(
     "search_emails",
     READ,
-    async (args) => {
+    async (args, ctx) => {
       const { query, mailbox, limit } = parseArgs(searchEmailsSchema, args);
       const searchOne = async (address: string) => {
         const params = new URLSearchParams({ q: query, mailbox: address });
@@ -438,12 +444,12 @@ export function registerEmailTools(registry: ToolRegistry, env: Env): void {
       };
       let emails: Array<{ mailbox: string } & ReturnType<typeof emailSummary>>;
       if (mailbox !== undefined) {
-        await requireMailbox(env, mailbox);
+        await requireMailbox(env, mailbox, ctx.principal.principal);
         emails = await searchOne(mailbox);
       } else {
         // No mailbox: fan out to every registered mailbox and merge
         // newest-first, capped at the requested limit.
-        const mailboxes = await listMailboxes(env);
+        const mailboxes = await listMailboxes(env, ctx.principal.principal);
         const merged = (await Promise.all(mailboxes.map(({ address }) => searchOne(address))))
           .flat()
           .sort((a, b) => b.created_at - a.created_at);
@@ -472,9 +478,9 @@ export function registerEmailTools(registry: ToolRegistry, env: Env): void {
   registry.registerTool(
     "create_draft",
     DRAFT,
-    async (args) => {
+    async (args, ctx) => {
       const input = parseArgs(createDraftSchema, args);
-      await requireMailbox(env, input.mailbox);
+      await requireMailbox(env, input.mailbox, ctx.principal.principal);
       const body = await stubJson<{ draft: DraftRecord }>(
         env,
         perMailbox(input.mailbox),
@@ -518,9 +524,9 @@ export function registerEmailTools(registry: ToolRegistry, env: Env): void {
   registry.registerTool(
     "update_draft",
     DRAFT,
-    async (args) => {
+    async (args, ctx) => {
       const { draft_id, fields } = parseArgs(updateDraftSchema, args);
-      const located = await findDraft(env, draft_id);
+      const located = await findDraft(env, draft_id, ctx.principal.principal);
       if (located === null) {
         throw new InputError(`Draft not found: ${draft_id}`);
       }
@@ -558,9 +564,9 @@ export function registerEmailTools(registry: ToolRegistry, env: Env): void {
   registry.registerTool(
     "draft_reply",
     DRAFT,
-    async (args) => {
+    async (args, ctx) => {
       const { email_id, body: text } = parseArgs(draftReplySchema, args);
-      const hit = await findEmail(env, email_id);
+      const hit = await findEmail(env, email_id, ctx.principal.principal);
       if (hit === null) {
         throw new InputError(`Email not found: ${email_id}`);
       }
@@ -601,7 +607,7 @@ export function registerEmailTools(registry: ToolRegistry, env: Env): void {
   registry.registerTool(
     "send_email",
     SEND,
-    async (args) => {
+    async (args, ctx) => {
       const input = parseArgs(sendEmailSchema, args);
       // Same fail-fast the dashboard's send route enforces: minting an
       // approval nobody can execute strands a pending record — and for
@@ -625,7 +631,7 @@ export function registerEmailTools(registry: ToolRegistry, env: Env): void {
             "send_email takes draft_id OR mailbox+to+subject+body — not both.",
           );
         }
-        const located = await findDraft(env, input.draft_id);
+        const located = await findDraft(env, input.draft_id, ctx.principal.principal);
         if (located === null) {
           throw new InputError(`Draft not found: ${input.draft_id}`);
         }
@@ -704,7 +710,7 @@ export function registerEmailTools(registry: ToolRegistry, env: Env): void {
           "send_email requires draft_id, or mailbox+to+subject+body.",
         );
       }
-      await requireMailbox(env, input.mailbox);
+      await requireMailbox(env, input.mailbox, ctx.principal.principal);
       const approval = await queueEmailApproval(env, {
         kind: "email_send",
         mailbox: input.mailbox,
@@ -736,7 +742,7 @@ export function registerEmailTools(registry: ToolRegistry, env: Env): void {
   registry.registerTool(
     "send_reply",
     SEND,
-    async (args) => {
+    async (args, ctx) => {
       const { email_id, body: text } = parseArgs(sendReplySchema, args);
       // Same fail-fast as send_email: no pending approval when the
       // bridge that would execute it is not wired.
@@ -745,7 +751,7 @@ export function registerEmailTools(registry: ToolRegistry, env: Env): void {
           "Email sending is not configured — the SEND_EMAIL binding is unset.",
         );
       }
-      const hit = await findEmail(env, email_id);
+      const hit = await findEmail(env, email_id, ctx.principal.principal);
       if (hit === null) {
         throw new InputError(`Email not found: ${email_id}`);
       }
@@ -781,10 +787,11 @@ export function registerEmailTools(registry: ToolRegistry, env: Env): void {
   registry.registerTool(
     "mark_email_read",
     READ,
-    async (args) => {
+    async (args, ctx) => {
       const { id } = parseArgs(markReadSchema, args);
       const hit = await probeMailboxes<{ email: StoredEmail; changed: boolean }>(
         env,
+        ctx.principal.principal,
         (mailbox) =>
           stubJson<{ email: StoredEmail; changed: boolean }>(
             env,
@@ -814,9 +821,9 @@ export function registerEmailTools(registry: ToolRegistry, env: Env): void {
   registry.registerTool(
     "move_email",
     DRAFT,
-    async (args) => {
+    async (args, ctx) => {
       const { id, status } = parseArgs(moveEmailSchema, args);
-      const hit = await probeMailboxes<{ email: StoredEmail }>(env, (mailbox) =>
+      const hit = await probeMailboxes<{ email: StoredEmail }>(env, ctx.principal.principal, (mailbox) =>
         stubJson<{ email: StoredEmail }>(
           env,
           perMailbox(mailbox),
@@ -844,9 +851,9 @@ export function registerEmailTools(registry: ToolRegistry, env: Env): void {
   registry.registerTool(
     "delete_email",
     DELETE,
-    async (args) => {
+    async (args, ctx) => {
       const { id } = parseArgs(deleteEmailSchema, args);
-      const hit = await findEmail(env, id);
+      const hit = await findEmail(env, id, ctx.principal.principal);
       if (hit === null) {
         throw new InputError(`Email not found: ${id}`);
       }

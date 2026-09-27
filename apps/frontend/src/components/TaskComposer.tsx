@@ -24,6 +24,7 @@ const HARNESS_OPTIONS: { value: string; label: string; desc: string }[] = [
   { value: "claude-code", label: "Claude Code", desc: "Anthropic Claude Code CLI" },
   { value: "codex", label: "Codex", desc: "Codex autonomous CLI agent" },
   { value: "devin", label: "Devin", desc: "Cognition Devin CLI (needs DEVIN_API_KEY)" },
+  { value: "grok", label: "Grok", desc: "xAI Grok CLI (AI Gateway BYOK)" },
 ];
 
 export function TaskComposer({

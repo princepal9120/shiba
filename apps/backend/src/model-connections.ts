@@ -168,10 +168,12 @@ export function providerOfService(service: ConnectionService): string {
 }
 
 /**
- * Harnesses a model on this connection can drive. A service with no
- * PROVIDER_HOSTS entry (cursor) is a remote executor — no harness runs it.
+ * Harnesses a model on this connection can drive. Cursor is a remote
+ * executor — its PROVIDER_HOSTS row exists only so the (unwired) harness can
+ * name an egress host, not because a sandbox harness runs its models.
  */
 export function compatibleHarnesses(service: ConnectionService): string[] {
+  if (service === "cursor") return [];
   const provider = providerOfService(service);
   if (!(provider in PROVIDER_HOSTS)) return [];
   return HARNESS_NAMES.filter((name) => {
@@ -179,6 +181,7 @@ export function compatibleHarnesses(service: ConnectionService): string[] {
     if (name === "claude-code") return provider === "anthropic";
     if (name === "codex") return provider === "openai";
     if (name === "devin") return provider === "devin";
+    if (name === "grok") return provider === "xai";
     return false;
   });
 }
@@ -248,34 +251,7 @@ export function modelOptionsForPurpose(
 // Approved routes
 // ---------------------------------------------------------------------------
 
-/**
- * The frozen, approval-gated route for one coding run. Recorded on the
- * pending approval, the run receipt, and the child envelope — ids only,
- * never credentials. `connectionId` null = the deployment's implicit
- * gateway/secret default for the resolved provider.
- */
-export interface ApprovedRoute {
-  purpose: "coding";
-  connectionId: string | null;
-  modelId: string;
-  harness: string;
-  policyVersion: number;
-}
-
-export function isApprovedRoute(value: unknown): value is ApprovedRoute {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
-  const route = value as Record<string, unknown>;
-  return (
-    route.purpose === "coding" &&
-    (typeof route.connectionId === "string" || route.connectionId === null) &&
-    typeof route.modelId === "string" &&
-    typeof route.harness === "string" &&
-    typeof route.policyVersion === "number"
-  );
-}
-
-/** Human-readable route summary for approval cards and run receipts. */
-export function describeRoute(route: ApprovedRoute, connectionName?: string | null): string {
-  const via = connectionName ?? route.connectionId ?? "deployment default";
-  return `${route.harness} · ${route.modelId} · via ${via}`;
-}
+// The frozen route record is a wire type — it lives in @shiba/shared and
+// is re-exported here for existing imports.
+export { describeRoute, isApprovedRoute } from "@shiba/shared";
+export type { ApprovedRoute } from "@shiba/shared";

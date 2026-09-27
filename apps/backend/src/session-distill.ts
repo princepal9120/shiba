@@ -10,7 +10,12 @@
  * any failure (model, stub, store) logs and never fails the run.
  */
 import type { Env } from "./env.js";
-import { MEMORY_REGISTRY_NAME, memoryRegistryStub, memoryStub } from "./memory-do.js";
+import {
+  MEMORY_REGISTRY_NAME,
+  memoryEnabled,
+  memoryRegistryStub,
+  memoryStub,
+} from "./memory-do.js";
 import type { SessionRecord } from "./memory-store.js";
 import type { DelegatedRun } from "./runs.js";
 import { boundTail, redactSecrets } from "./security.js";
@@ -22,7 +27,7 @@ function boundHead(text: string, maxChars: number): string {
 }
 
 /** Workers AI id the orchestrator plans and distills with. */
-export const DEFAULT_ORCHESTRATOR_MODEL = "@cf/meta/llama-3.1-8b-instruct";
+export const DEFAULT_ORCHESTRATOR_MODEL = "@cf/zai-org/glm-4.7-flash";
 
 /** Spec cap: at most 10 durable facts per distilled session. */
 export const MAX_DISTILL_FACTS = 10;
@@ -41,11 +46,11 @@ const DEFAULT_AGENT = "orchestrator";
 
 const ROUTE_BASE = "https://internal/internal/memory";
 
-/** `MEMORY_ENABLED` kill switch. Unset means enabled; "false"/"0"/"off"/"no" disable. */
-export function memoryEnabled(value: string | undefined): boolean {
-  if (value === undefined || value.trim() === "") return true;
-  return !["false", "0", "off", "no"].includes(value.trim().toLowerCase());
-}
+/**
+ * `MEMORY_ENABLED` kill switch — defined on the DO (bank dedupe + alarm
+ * sweep honor it too) and re-exported here where the flag was born.
+ */
+export { memoryEnabled };
 
 /**
  * The transcript a run distills from — task, repo, status, bounded

@@ -50,10 +50,10 @@ Set your preferred harness and model defaults in `apps/backend/wrangler.jsonc` o
 
 ```bash
 # Use Claude Code as the deployment-wide default harness
-pnpm wrangler secret put AGENT_HARNESS # enter "claude-code"
+pnpm wrangler secret put AGENT_HARNESS --config apps/backend/wrangler.jsonc # enter "claude-code"
 
 # Set the default Anthropic model
-pnpm wrangler secret put CLAUDE_CODE_MODEL # enter "anthropic/claude-sonnet-4-6"
+pnpm wrangler secret put CLAUDE_CODE_MODEL --config apps/backend/wrangler.jsonc # enter "anthropic/claude-sonnet-4-6"
 ```
 
 ### 3. Channel-Specific Overrides

@@ -18,7 +18,7 @@ const codingTaskInputSchema = z.object({
   sandboxId: z.string().min(1),
   codingModel: z.string().min(1),
   /** Which coding agent runs the task. Validated at approval time, never in the container. */
-  harness: z.enum(["opencode", "claude-code", "codex", "devin"]).optional(),
+  harness: z.enum(["opencode", "claude-code", "codex", "devin", "grok"]).optional(),
   /**
    * The frozen, approval-gated route (connection/model/harness ids only —
    * spec MODEL-CONNECTIONS-ARCHITECTURE.md §4). Validated with
@@ -68,6 +68,12 @@ const codingTaskResultSchema = z.object({
    * text, where agent stdout could plant a fake `Pull request:` line.
    */
   pullUrl: z.string().optional(),
+  /**
+   * Stored screenshot link captured at run end (T33), carried on the
+   * envelope like pullUrl so the parent records it from structured output.
+   * The sandbox preview URL itself is ephemeral and never leaves the worker.
+   */
+  screenshotUrl: z.string().optional(),
 });
 
 export type CodingTaskResult = z.infer<typeof codingTaskResultSchema>;

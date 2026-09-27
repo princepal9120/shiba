@@ -57,7 +57,7 @@ export function AgentsView(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [copiedSnippet, setCopiedSnippet] = useState<string | null>(null);
-  const [mcpTab, setMcpTab] = useState<"claude" | "cursor" | "cli">("claude");
+  const [mcpTab, setMcpTab] = useState<"claude" | "cursor" | "cli">("cli");
 
   useEffect(() => {
     let cancelled = false;
@@ -96,6 +96,9 @@ export function AgentsView(): JSX.Element {
 
   const origin = typeof window !== "undefined" ? window.location.origin : "https://your-worker.workers.dev";
   const mcpEndpoint = `${origin}/mcp`;
+  const workerHost = typeof window !== "undefined" && !["localhost", "127.0.0.1"].includes(window.location.hostname)
+    ? window.location.host
+    : "<worker-host>";
 
   const claudeConfig = JSON.stringify(
     {
@@ -115,12 +118,12 @@ export function AgentsView(): JSX.Element {
   const cursorConfig = [
     "// In Cursor Settings -> MCP Servers:",
     "Name: shiba",
-    "Type: sse",
+    "Transport: Streamable HTTP",
     `URL: ${mcpEndpoint}`,
     "Header: Authorization: Bearer <YOUR_AGENT_TOKEN>",
   ].join("\n");
 
-  const mintCommand = "node scripts/mint-token.mjs --principal=my-agent --scope=run,email,memory";
+  const mintCommand = `node scripts/mint-token.mjs --agent scout --scopes email:read --host ${workerHost} --namespace-id <agentTokensNamespace> --write`;
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -158,12 +161,7 @@ export function AgentsView(): JSX.Element {
                 </button>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 text-[11px] font-mono font-medium text-[#15803d] bg-[#15803d]/10 border border-[#15803d]/30 px-2 py-0.5">
-                <span className="size-1.5 rounded-full bg-[#15803d] animate-pulse" />
-                MCP 1.30.0 Active
-              </span>
-            </div>
+            <span className="text-[11px] font-mono text-[#6a6f63]">MCP endpoint; connection not verified here</span>
           </div>
 
           <div>
@@ -219,12 +217,13 @@ export function AgentsView(): JSX.Element {
             <pre className="p-3 bg-[#0b0e10] text-[#eef4f2] text-xs font-mono overflow-x-auto border border-white/10 rounded-none leading-relaxed">
               {mcpTab === "claude" ? claudeConfig : mcpTab === "cursor" ? cursorConfig : mintCommand}
             </pre>
+            <p className="mt-2 text-[11px] text-[#6a6f63]">Replace <code>scout</code> with the exact principal assigned in Inbox. Minting without --write only prints a token; it cannot authenticate until its hash is stored in the deployed AGENT_TOKENS namespace. Never paste the token into a mailbox or a public log. <a href="/docs/mcp/" className="text-[#0000a8] hover:underline">Connection guide</a></p>
           </div>
         </div>
 
         <div>
           <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-[#6a6f63] mb-3">
-            Active Capability Modules on your Cloudflare Account
+            Available Capability Modules
           </h3>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 font-mono text-xs">
             <div className="border border-[#e0ded5] bg-[#fffef8] p-3.5 space-y-2">
@@ -233,10 +232,10 @@ export function AgentsView(): JSX.Element {
                 <span className="text-[10px] text-[#15803d] font-semibold">Vectorize</span>
               </div>
               <p className="text-[11px] text-[#6a6f63] leading-relaxed">
-                768-dim semantic fact banking &amp; recall. Scopes: <code>memory</code>.
+                Semantic fact banking &amp; recall. Scopes: <code>memory:read</code>, <code>memory:write</code>.
               </p>
               <div className="text-[10px] text-[#0000a8]/80 font-bold pt-1">
-                bank_fact, recall_facts
+                memory_bank, memory_recall
               </div>
             </div>
 
@@ -246,10 +245,10 @@ export function AgentsView(): JSX.Element {
                 <span className="text-[10px] text-[#15803d] font-semibold">Email + R2</span>
               </div>
               <p className="text-[11px] text-[#6a6f63] leading-relaxed">
-                Transactional inbound &amp; approval-gated sends. Scopes: <code>email</code>.
+                Inbound mail &amp; approval-gated sends. Scopes: <code>email:read</code>, <code>email:draft</code>, <code>email:send</code>.
               </p>
               <div className="text-[10px] text-[#0000a8]/80 font-bold pt-1">
-                list_emails, send_draft
+                list_emails, create_draft, send_email
               </div>
             </div>
 
@@ -259,7 +258,7 @@ export function AgentsView(): JSX.Element {
                 <span className="text-[10px] text-[#15803d] font-semibold">Containers</span>
               </div>
               <p className="text-[11px] text-[#6a6f63] leading-relaxed">
-                Ephemeral Docker micro-containers for code. Scopes: <code>run</code>.
+                Ephemeral containers for code. Scopes: <code>sandbox:exec</code>, <code>runs:read</code>.
               </p>
               <div className="text-[10px] text-[#0000a8]/80 font-bold pt-1">
                 queue_run (Approval Gate)
@@ -298,8 +297,9 @@ export function AgentsView(): JSX.Element {
                 Mint a token to allow Claude Desktop, Cursor, or your custom background worker to access Shiba&apos;s capability plane.
               </p>
               <code className="text-[10px] bg-[#f6f4ed] border border-[#e0ded5] px-2.5 py-1 text-[#0000a8]">
-                node scripts/mint-token.mjs --principal=agent-1 --scope=run,email,memory
+                {mintCommand}
               </code>
+              <div className="mt-3"><a href="/?tab=inbox" className="text-[#0000a8] hover:underline">Open Inbox setup →</a></div>
             </div>
           ) : (
             <div className="border border-[#e0ded5] bg-[#fffef8] rounded-none overflow-x-auto font-mono text-xs">

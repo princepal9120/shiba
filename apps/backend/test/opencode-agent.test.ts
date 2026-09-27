@@ -4,10 +4,11 @@ import { OpenCodeAgent, createSandboxOps } from "../src/agents/opencode-agent.js
 import { formatAgentToolInput, parseAgentResultText, type CodingTaskInput, type CodingTaskResult } from "../src/opencode-input.js";
 
 const mocks = vi.hoisted(() => ({
-  run: vi.fn(), publish: vi.fn(), sandbox: vi.fn(), progress: vi.fn(), decodeFile: vi.fn(),
+  run: vi.fn(), publish: vi.fn(), sandbox: vi.fn(), progress: vi.fn(), decodeFile: vi.fn(), launch: vi.fn(),
 }));
 vi.mock("@cloudflare/ai-chat", () => ({ AIChatAgent: class {} }));
 vi.mock("@cloudflare/sandbox", () => ({ getSandbox: mocks.sandbox, streamFile: mocks.decodeFile }));
+vi.mock("@cloudflare/puppeteer", () => ({ default: { launch: mocks.launch } }));
 vi.mock("../src/runtime.js", () => ({
   createRuntimeAdapter: () => ({ runCodingTask: mocks.run }),
   resolveRuntimeName: (name?: string) => name ?? "sandbox",
@@ -148,6 +149,53 @@ describe("OpenCodeAgent response boundary", () => {
     const { result } = await responseFor(agent({ ...INPUT, publishPullRequest: true }, "token"), controller.signal);
     expect(result.summary).toBe("Run cancelled.");
     expect(mocks.publish).not.toHaveBeenCalled();
+  });
+
+  it("keeps the tokenized preview URL out of the public PR body (T33 hardening)", async () => {
+    // captureRunPreview is real here: the preview URL it mints served the
+    // whole workdir, so the PR body must carry only the auth-gated screenshot
+    // link, never the `{port}-{sandboxId}-{token}` URL itself.
+    const previewUrl = `https://3000-${INPUT.sandboxId}-tok.shiba.example.com`;
+    // Mirror the interception contract in captureRunPreview: the render page
+    // enables request interception and registers a sync "request" listener
+    // that resolves each intercepted request async (same-origin only).
+    const requestHandlers: Array<(request: unknown) => void> = [];
+    const page = {
+      goto: vi.fn(async () => ({})),
+      screenshot: vi.fn(async () => new Uint8Array([0x89, 0x50, 0x4e, 0x47])),
+      setRequestInterception: vi.fn(async () => undefined),
+      on: vi.fn((_event: string, handler: (request: unknown) => void) => {
+        requestHandlers.push(handler);
+      }),
+    };
+    mocks.launch.mockResolvedValue({ newPage: vi.fn(async () => page), close: vi.fn(async () => undefined) });
+    mocks.sandbox.mockReturnValue({
+      startProcess: vi.fn(async () => ({ waitForPort: vi.fn(async () => undefined), kill: vi.fn(async () => undefined) })),
+      exposePort: vi.fn(async () => ({ url: previewUrl })),
+      unexposePort: vi.fn(async () => undefined),
+    });
+    const instance = Object.assign(Object.create(OpenCodeAgent.prototype) as OpenCodeAgent, {
+      env: {
+        GITHUB_TOKEN: "token",
+        BROWSER: {},
+        ATTACHMENTS: { put: vi.fn(async () => undefined) },
+        WORKER_HOSTNAME: "shiba.example.com",
+      },
+      messages: [{ id: "input", role: "user", parts: [{ type: "text", text: formatAgentToolInput({ ...INPUT, publishPullRequest: true }) }] }],
+      reportProgress: mocks.progress,
+    });
+    await responseFor(instance);
+    const body = (mocks.publish.mock.calls[0]?.[0] as { body: string }).body;
+    expect(body).toContain(`[Preview screenshot](https://shiba.example.com/api/screenshots/${INPUT.sandboxId})`);
+    expect(body).not.toContain(previewUrl);
+    expect(body).not.toMatch(/Preview:/);
+    // The render page must intercept requests and register the same-origin
+    // listener before navigation, so untrusted workdir HTML cannot exfiltrate.
+    expect(page.setRequestInterception).toHaveBeenCalledWith(true);
+    expect(page.on).toHaveBeenCalledWith("request", expect.any(Function));
+    expect(requestHandlers).toHaveLength(1);
+    // The result envelope still carries both links for the internal run record.
+    expect(mocks.publish).toHaveBeenCalledTimes(1);
   });
 
   it("reports a publication error instead of emitting coding success", async () => {

@@ -1,5 +1,5 @@
 {
-  "name": "@shiba-ai-coworker/backend",
+  "name": "@shiba/backend",
   "version": "0.1.0",
   "private": true,
   "description": "Shiba AI Coworker backend: Cloudflare Worker + Durable Objects + Sandbox container orchestration.",
@@ -8,13 +8,18 @@
     "dev": "wrangler dev --port 8788",
     "lint": "eslint src test",
     "test": "vitest run",
-    "test:live": "vitest run test/typesafe-live.test.ts"
+    "test:live": "vitest run test/typesafe-live.test.ts",
+    "typecheck": "tsc --noEmit -p ../../tsconfig.json"
   },
   "dependencies": {
     "@cloudflare/ai-chat": "0.12.0",
+    "@cloudflare/codemode": "0.5.2",
+    "@cloudflare/puppeteer": "^1.0.3",
+    "@shiba/shared": "workspace:*",
     "@cloudflare/sandbox": "0.12.9",
     "@cloudflare/think": "0.18.0",
     "@modelcontextprotocol/sdk": "1.30.0",
+    "@modelcontextprotocol/server": "2.0.0",
     "agents": "0.23.0",
     "ai": "7.0.102",
     "effect": "4.0.0-rc.117",

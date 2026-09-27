@@ -19,23 +19,20 @@ vi.mock("agents/agent-tools", () => ({ agentTool: () => ({ execute: vi.fn() }) }
 vi.mock("../src/agents/opencode-agent.js", () => ({ OpenCodeAgent: class {} }));
 
 /**
- * The DO surface is exercised through `worker.fetch` with `agents/mcp`
- * stubbed: `McpGateway.serve(...)` records every request the worker would
- * have forwarded to the DO, so tests see both the auth gate and the exact
- * principal header the tool registry will read inside the DO.
+ * The MCP surface is exercised through `worker.fetch` with `agents/mcp`
+ * stubbed: `createMcpHandler(...)` records every request the worker would
+ * have served, so tests see both the auth gate and the exact principal
+ * header the tool registry reads inside the handler.
  */
 const served = vi.hoisted(() => ({ requests: [] as Request[] }));
 vi.mock("agents/mcp", () => ({
-  McpAgent: class {
-    static serve(_path: string, _opts?: unknown) {
-      return {
-        fetch: async (request: Request) => {
-          served.requests.push(request);
-          return Response.json({ mcp: "served" }, { status: 200 });
-        },
-      };
-    }
-  },
+  createMcpHandler: (_factory: unknown, _opts?: unknown) => ({
+    fetch: async (request: Request) => {
+      served.requests.push(request);
+      return Response.json({ mcp: "served" }, { status: 200 });
+    },
+    notify: {},
+  }),
 }));
 
 import worker from "../src/index.js";
@@ -51,7 +48,6 @@ import {
   hashToolArgs,
   MCP_PRINCIPAL_HEADER,
   principalFor,
-  principalFromInfo,
 } from "../src/mcp-gateway.js";
 
 /** In-memory KV, same fake as the token-store suite. */
@@ -252,7 +248,7 @@ describe("principalFor", () => {
   });
 });
 
-describe("principalFromInfo", () => {
+describe("principalFor", () => {
   const record: TokenRecord = {
     principal: "engage",
     scopes: ["memory:read"],
@@ -260,36 +256,13 @@ describe("principalFromInfo", () => {
     revoked: false,
   };
 
-  it("reads the injected record from requestInfo headers — string or array", () => {
-    const json = encodePrincipal(record);
-    expect(
-      principalFromInfo({ headers: { [MCP_PRINCIPAL_HEADER]: json } }),
-    ).toEqual(record);
-    expect(
-      principalFromInfo({ headers: { [MCP_PRINCIPAL_HEADER]: [json] } }),
-    ).toEqual(record);
-  });
-
   it("decodes a ByteString-escaped non-ASCII principal", () => {
     const unicode: TokenRecord = { ...record, principal: "エージェント🤖" };
     expect(
-      principalFromInfo({
-        headers: { [MCP_PRINCIPAL_HEADER]: encodePrincipal(unicode) },
-      }),
+      principalFor(
+        mcpRequest({ [MCP_PRINCIPAL_HEADER]: encodePrincipal(unicode) }),
+      ),
     ).toEqual(unicode);
-  });
-
-  it("returns null when absent or malformed", () => {
-    expect(principalFromInfo(undefined)).toBeNull();
-    expect(principalFromInfo({ headers: {} })).toBeNull();
-    expect(
-      principalFromInfo({ headers: { [MCP_PRINCIPAL_HEADER]: "{not json" } }),
-    ).toBeNull();
-    expect(
-      principalFromInfo({
-        headers: { [MCP_PRINCIPAL_HEADER]: JSON.stringify({ principal: 7 }) },
-      }),
-    ).toBeNull();
   });
 });
 

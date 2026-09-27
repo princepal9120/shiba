@@ -1,32 +1,14 @@
 /**
- * Cloudbox-style append-only evidence log. A run is the receipts, not a
- * final envelope: init → clone/configure/code/collect → submit|error, plus
- * advisory grades. Bounded so DO state cannot grow without limit.
+ * Cloudbox-style append-only evidence log. The receipt record and bounds
+ * live in @shiba/shared (re-exported below); the secret-redacting write
+ * helpers stay backend-only.
  */
+import { MAX_RECEIPT_MESSAGE, MAX_RECEIPTS } from "@shiba/shared";
+import type { Receipt, ReceiptKind } from "@shiba/shared";
 import { boundTail, redactSecrets } from "./security.js";
 
-export const MAX_RECEIPTS = 256;
-export const MAX_RECEIPT_MESSAGE = 500;
-
-export const RECEIPT_KINDS = [
-  "init",
-  "clone",
-  "configure",
-  "code",
-  "collect",
-  "submit",
-  "grade",
-  "triage",
-  "error",
-] as const;
-
-export type ReceiptKind = (typeof RECEIPT_KINDS)[number];
-
-export interface Receipt {
-  at: number;
-  kind: ReceiptKind;
-  message: string;
-}
+export { MAX_RECEIPTS, MAX_RECEIPT_MESSAGE, RECEIPT_KINDS } from "@shiba/shared";
+export type { Receipt, ReceiptKind } from "@shiba/shared";
 
 export function makeReceipt(kind: ReceiptKind, message: string, at: number = Date.now()): Receipt {
   return {

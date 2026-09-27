@@ -11,7 +11,7 @@ import {
 import { createAutomation, type Automation, type RunWhenAi } from "../src/automations.js";
 
 const REPO = "https://github.com/owner/repo";
-const MODEL = "@cf/meta/llama-3.1-8b-instruct";
+const MODEL = "@cf/zai-org/glm-4.7-flash";
 
 function stubAi(response: string | null, throwError = false): RunWhenAi {
   return {

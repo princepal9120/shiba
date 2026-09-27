@@ -21,7 +21,7 @@
 | **Ceiling** | `standard-4` (4 vCPU / 12 GiB / 20 GB) is Cloudflare's max. Capy goes to 16 vCPU / 128 GB. Heavy builds are out of reach — say so in the README. |
 | **Effort** | P0 ≈ 3h · P1 ≈ 5h · P2 ≈ 5h · P3 ≈ 14h · P4 ≈ 10h · **P5 ≈ 14h** · P6 ≈ 4h → **~55h** |
 | **Rev 4 status** | All of the above is **done except T10** — the live run is now verified locally via `wrangler dev` up to the model call (AI Gateway credential needed); the cloud deploy itself is still blocked on GOAL.md. See §2.0. |
-| **Rev 9 status** | §17 (P7, Roomote parity) is **planned, not started**. ~80% of Roomote's spine already ships; the delta is OAuth MCP, web chat + steering, and screenshot/preview. Recommended scope W0–W3 ≈ 43h. T27 (spec/monorepo contradiction) gates all of it. |
+| **Rev 9 status** | §17 (P7, Roomote parity): **W0 done 2026-09-27** (T27 spec amended, T28 audit clean — see §2.0). ~80% of Roomote's spine already ships; the remaining delta is OAuth MCP, web chat + steering, and screenshot/preview. Recommended scope W1–W3 + T37–T39 ≈ 43h. |
 
 ---
 
@@ -55,9 +55,11 @@
 
 ### 2.0 Status as of rev 8 (2026-09-26)
 
+**Mailbox-scoped cloud-agent pairing (local, 2026-09-26):** the Inbox can assign a mailbox to the exact `/mcp` token principal. All thirteen email tools now restrict listing, direct address access, and ID-based probes to that principal's assigned mailboxes; unassigned mailboxes remain dashboard-only. Sends and deletes still queue human approval. Unit and Worker checks cover this; a live cloud-agent mailbox round trip remains unverified until an account-owned deployment.
+
 **Rev 8 (PR #17):** unified chat lane — Telegram webhook + Discord interactions share `chat-lane.ts` (one orchestrator conversation per chat/channel, approval cards are pointers, server-side approver allowlists) · GitHub Projects v2 board sync on PR publish (best-effort) · model connections + purpose policy + frozen `ApprovedRoute` (approve exactly this route; revalidated at dispatch) · iPhone `/api/trigger` lane (PR #13) · marketing site overhaul. ce-code-review fixes landed: full task text posts in-thread (no blind approval), route shown on the card, outbound chat APIs timeout-bounded, board sync is non-blocking, legacy `harness` approvals still dispatch correctly, dedupe sweep chunked past the 128-key limit, waitlist returns uniform 200.
 
-Baseline: **1178 tests passing across 74 files**, typecheck and lint clean.
+Baseline: **1187 tests passing across 74 files** (count drifts per rev — treat as "all passing", not a contract), typecheck and lint clean.
 
 | Task | State |
 |---|---|
@@ -66,8 +68,10 @@ Baseline: **1178 tests passing across 74 files**, typecheck and lint clean.
 | Model connections + frozen routes | **Done.** `model-config-do.ts` persists the catalog (SECRET_SHAPED refs rejected), `model-policy.ts` resolves/revalidates; dashboard composer picks harness; `queue_run` MCP tool accepts `harness`. |
 | GitHub Projects v2 sync | **Done.** `github-project.ts` + `opencode-agent.syncProjectBoard` (ctx.waitUntil — never delays the terminal transition). Requires GITHUB_PROJECT_TOKEN + GITHUB_PROJECT_NUMBER. |
 | Marketing site (theme tokens, why-shiba, tooltip/touch/focus fixes) | **Done.** bezalel-style navy/cream tokens, both light/dark; coarse-pointer tap targets. |
-| Cursor/Grok ACP harnesses | **In progress.** Both adapters ride the shared ACP transport (t3code method: one transport module + per-harness support shims) rather than bespoke argv/event parsers. |
-| Connected agent accounts (dashboard) | **In progress.** Per-user credential accounts for connected agents — Worker API (`harness-accounts`) plus a dashboard surface to add/list/revoke. |
+| Grok harness | **Done.** Headless print-mode harness (streaming-json) pinned to the `api.x.ai` forwarder via `GROK_MODELS_BASE_URL`. The shared ACP transport was tried and dropped; Cursor stays a remote executor — its token exchange can't hold the dummy-key invariant. |
+| Connected agent accounts (dashboard) | **Not pursued.** Per-user credential storage conflicts with GOAL.md's credential contract — needs a deliberate spec amendment before any `harness-accounts` work. |
+| T27 spec/monorepo reconcile | **Done (2026-09-27).** Option (a): `spec/GOAL.md` accepts the pnpm+turbo monorepo and enumerates the formerly-forbidden primitives now in use — D1 `AGENT_AUDIT`, KV `AGENT_TOKENS`, R2 `ATTACHMENTS`, Vectorize `MEMORY_VECTORS` — each justified; Queues/Workflows/Hono remain forbidden. |
+| T28 VERIFICATION_PLAN re-audit | **Done (2026-09-27).** G1–G11 re-checked in place: all resolve, including G10 (assets tracked under `apps/web/public/`) and G11 (`capy-theme.css` deleted; per-app postcss/tailwind configs are legitimate). Per-row evidence in `VERIFICATION_PLAN.md` §1. |
 
 ### 2.0 Status as of rev 7 (2026-09-19)
 
@@ -185,7 +189,7 @@ Self-hosted own-subscription use is grayer than a SaaS doing it, but shipping it
 Noted so the next reader knows these were considered rather than missed. None of them are on the critical path; none are scheduled.
 
 - **PR review agent** (~9h). A `review_pull_request` tool: clone at the PR head so the agent reads surrounding code rather than diff context alone, emit `{path, line, severity, comment}` findings, publish via `POST /repos/{o}/{r}/pulls/{n}/reviews` as `COMMENT` — never `APPROVE`, an agent must not approve. Reuses the whole pipeline with a different prompt and a different endpoint, so it stays cheap whenever it returns. Competitive cost, stated plainly: [Codra](https://github.com/devarshishimpi/codra) exists solely to be this, and Capy and Hoplite both ship one.
-- **PR feedback loop** (~4h, needs the review agent). Extend `/api/github/webhook` to `pull_request_review_comment`; a comment mentioning the bot on an shiba-ai-coworker PR starts a run against that PR's branch and replies on the same thread.
+- **PR feedback loop** (~4h, needs the review agent). Extend `/api/github/webhook` to `pull_request_review_comment`; a comment mentioning the bot on an shiba PR starts a run against that PR's branch and replies on the same thread.
 - **Live preview URLs.** **Shipped in rev 8** — `index.ts:1093-1099` proxies to the sandbox. Screenshot capture remains open; see §17.5 (T33).
 - **Resumable runs.** Stop/resume/fork, the way Cloudbox does it, for work exceeding `OPENCODE_TIMEOUT_MS`. A real architecture change, not a tuning knob (§16).
 
@@ -218,7 +222,7 @@ Unset → `lite` → 256 MiB. A Node coding CLI plus a git tree does not fit.
 // wrangler.jsonc:27-34
 {
   "class_name": "Sandbox",
-  "name": "shiba-ai-coworker-sandbox",
+  "name": "shiba-sandbox",
   "image": "./Dockerfile",
   // lite (the default) is 256 MiB / 2 GB disk — too small for OpenCode + a clone.
   "instance_type": "standard-1",
@@ -427,12 +431,12 @@ One moderate task (~200K in, ~15K out): **$0.15 + $0.056 ≈ $0.21**, against $0
 
 ## 9. Phase P3 — Slack Bot, End to End (~14h)
 
-The surface the dashboard cannot reach: on call, an alert fires, `@shiba-ai-coworker fix this` in the thread that already holds the stack trace, PR link comes back in that thread.
+The surface the dashboard cannot reach: on call, an alert fires, `@shiba fix this` in the thread that already holds the stack trace, PR link comes back in that thread.
 
 ```
 #incidents
   🔴 PagerDuty: 500s on /orders
-  └ @prince: retry path. @shiba-ai-coworker fix this
+  └ @prince: retry path. @shiba fix this
        │  Events API ─▶ POST /api/slack/events
        │  verify HMAC · dedupe event_id · burst-group · ack <3s · waitUntil
        ▼
@@ -492,7 +496,7 @@ export async function verifySlackRequest(body, headers, secret, now = Date.now()
 
 ### T13 · Resolve the repo, group bursts, gather and redact context (~3h)
 
-**Repo resolution — never guess.** (1) a GitHub URL in the mention or thread; (2) `SLACK_CHANNEL_REPOS` channel→repo map — this is what makes bare `@shiba-ai-coworker fix this` work in `#incidents`; (3) neither → **reply asking**.
+**Repo resolution — never guess.** (1) a GitHub URL in the mention or thread; (2) `SLACK_CHANNEL_REPOS` channel→repo map — this is what makes bare `@shiba fix this` work in `#incidents`; (3) neither → **reply asking**.
 
 **Burst grouping (borrowed from Capy).** An incident thread fires twenty messages in a minute. Each matched message extends a sliding window (default 10s, bounded 1–300s); the group closes when the window elapses, a different author posts, or it hits 20 messages / 100 KB. **One run per burst, not per message.** Without this, on call is unusable.
 
@@ -653,7 +657,7 @@ Both are **API-key** harnesses here, not subscription — §3 explains why that 
 
 **Tests:** each harness round-trips its argv and config · an unsupported provider for the selected harness is refused with a clear message · `allowedHosts` reflects only the selected harness · the OpenCode path produces byte-identical output to pre-refactor.
 
-**Adopted method (t3code).** ACP harnesses (Cursor, Grok, and any future ACP agent) plug in through a single shared ACP transport module plus small per-harness support shims — one JSON-RPC session lifecycle for all of them, so a new ACP adapter is config + capability negotiation, not another parser. Credentials live in per-user connected-agent accounts (`harness-accounts`), resolved at run dispatch the same way model connections are — the container still sees only the egress-scoped forwarder, never the raw key.
+**Adopted method (t3code).** One shared seam plus small per-harness support shims — in this repo the `AgentHarness` registry is that seam. Grok plugs in through its verified headless print mode (`-p` + `--output-format streaming-json` + `--permission-mode auto`), not ACP: the shared ACP transport was tried and dropped, and Cursor stays a remote executor because its API-key→token exchange can't hold the dummy-key invariant. Credentials stay deployment-scoped — model connections and Worker secrets; the container sees only the dummy key and the egress-scoped forwarder, never the raw key.
 
 ---
 
@@ -729,7 +733,7 @@ T5–T8 are independent of each other. Within P3, T12 gates everything; T13/T14 
 
 **P2 — the one that matters** — `VERIFICATION.md` records a dated live run: submit → approve → clone/code/collect → diff matches reality · rejection provably starts no container (container metrics, not the UI) · a failing task reports its real exit code · a PR shows a deleted file as deleted · **peak memory measured**, `basic` vs `standard-1` decided on data
 
-**P3 — verified live in a real workspace** — Request URL verification succeeds *with Access enabled* · `@shiba-ai-coworker fix this` posts a card in-thread · the card shows the exact arguments that will execute · a non-`SLACK_APPROVERS` user clicking Approve is refused and **no container starts** · an approver's click runs it and progress updates in-thread · PR link lands in the same thread · a second click on a resolved card starts nothing · a forced retry (duplicate `event_id`) produces **one** run · a 20-message burst produces **one** run · `aside` never reaches context · a pasted token appears in no Slack message or task input
+**P3 — verified live in a real workspace** — Request URL verification succeeds *with Access enabled* · `@shiba fix this` posts a card in-thread · the card shows the exact arguments that will execute · a non-`SLACK_APPROVERS` user clicking Approve is refused and **no container starts** · an approver's click runs it and progress updates in-thread · PR link lands in the same thread · a second click on a resolved card starts nothing · a forced retry (duplicate `event_id`) produces **one** run · a 20-message burst produces **one** run · `aside` never reaches context · a pasted token appears in no Slack message or task input
 
 **P4** — a cron automation fires on schedule and posts an approval card · **no container starts before approval** · `run_when` skips a non-matching event and records why · a model failure in the gate fails closed · unattended mode refuses a non-allowlisted repo · the daily budget refuses run N+1 with a reason · a disabled automation never fires
 
@@ -784,7 +788,7 @@ T5–T8 are independent of each other. Within P3, T12 gates everything; T13/T14 
 | Web dashboard | **Ahead** | `apps/frontend/src/components/` — Approvals, Agents, Missions, Automations, Memory, Inbox, Audit, Gates, VMInspector |
 | Ephemeral sandbox per task | **Ahead** | `sandbox.ts`, `sandbox/lifecycle.ts` — per-run `allowedHosts`, TLS interception CA, destroy-on-finish |
 | BYOK models | **Ahead** | `model-connections.ts` + `model-config-do.ts` + `model-policy.ts` (frozen `ApprovedRoute`) |
-| Multi-harness CLIs | **Done / in progress** | `harness/index.ts` — opencode, claude-code, codex, cursor, devin, grok + `acp.ts` transport |
+| Multi-harness CLIs | **Done** | `harness/index.ts` — opencode, claude-code, codex, devin, grok |
 | Approval gate before execution | **Ahead** | Sacred invariant (§15 P1) |
 | Automations (cron/webhook/event) | **Ahead** | `automations.ts`, `automations-do.ts`, TypeSafe `run_when` |
 | MCP server | **Partial** | `mcp-gateway.ts` — bearer-only, no OAuth |

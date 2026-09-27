@@ -5,7 +5,7 @@ description: Install and validate the local project, then review account deploym
 
 ## Prerequisites
 
-Use Node.js 22.12.0 or newer and pnpm 10 or newer. Run commands from the repository root. For local container runs or account deployment, also configure a Docker-compatible engine and the Cloudflare resources/credentials required by the deployment. Read [Readiness](/docs/readiness/) before provisioning.
+Use Node.js 22.13.0 or newer and pnpm 10 or newer. Account deployment requires a Cloudflare Workers Paid plan, Cloudflare account access to Workers, Durable Objects, Containers, KV, R2, D1, Vectorize, and Access, plus a running Docker-compatible engine. Run commands from the repository root. Read [Readiness](/docs/readiness/) before provisioning.
 
 ## Install and check locally
 

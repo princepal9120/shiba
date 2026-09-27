@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { ClaudeCodeErrorEvent, claudeCodeHarness, parseClaudeCodeEvent } from "../src/harness/claude-code.js";
 import { CodexErrorEvent, codexHarness, parseCodexEvent } from "../src/harness/codex.js";
 import { DevinErrorEvent, devinHarness, parseDevinEvent } from "../src/harness/devin.js";
+import { GrokErrorEvent, grokHarness, parseGrokEvent } from "../src/harness/grok.js";
 import { agentCliCatalog } from "../src/harness/catalog.js";
+import { compatibleHarnesses } from "../src/model-connections.js";
 import { allowedHostsFor, HARNESS_DEFAULT_MODELS, resolveHarness, resolveRunHarness } from "../src/harness/index.js";
 import { opencodeHarness } from "../src/harness/opencode.js";
 import { providerOf } from "../src/harness/types.js";
@@ -103,10 +105,10 @@ describe("provider validation (T23 fixes B11)", () => {
   });
 
   it("routes Grok (xAI) through OpenCode with an isolated xAI egress host", () => {
-    expect(opencodeHarness.egressHosts("xai/grok-4")).toEqual(["api.x.ai"]);
-    expect(opencodeHarness.buildConfig(input("xai/grok-4")).enabled_providers).toEqual(["xai"]);
-    expect(opencodeHarness.env(input("xai/grok-4"), null).XAI_API_KEY).toBe("shiba-ai-coworker-dummy-key");
-    expect(allowedHostsFor(opencodeHarness, "xai/grok-4")).toContain("api.x.ai");
+    expect(opencodeHarness.egressHosts("xai/grok-4.6")).toEqual(["api.x.ai"]);
+    expect(opencodeHarness.buildConfig(input("xai/grok-4.6")).enabled_providers).toEqual(["xai"]);
+    expect(opencodeHarness.env(input("xai/grok-4.6"), null).XAI_API_KEY).toBe("shiba-dummy-key");
+    expect(allowedHostsFor(opencodeHarness, "xai/grok-4.6")).toContain("api.x.ai");
   });
 
   it("refuses a provider the selected harness cannot drive, naming what it supports", () => {
@@ -149,7 +151,7 @@ describe("the container never receives a real credential", () => {
     [codexHarness, "openai/gpt-5", "OPENAI_API_KEY"],
   ])("%# passes only the dummy key", (harness, model, keyVar) => {
     const env = harness.env(input(model), null);
-    expect(env[keyVar]).toBe("shiba-ai-coworker-dummy-key");
+    expect(env[keyVar]).toBe("shiba-dummy-key");
     for (const value of Object.values(env)) {
       expect(value).not.toMatch(/sk-|ghp_|AIza/);
     }
@@ -173,7 +175,7 @@ describe("OpenCode output is unchanged by the T22 widening", () => {
       model: "google/gemini-3.5-flash-lite",
       enabled_providers: ["google"],
       autoupdate: false,
-      provider: { google: { options: { apiKey: "shiba-ai-coworker-dummy-key" } } },
+      provider: { google: { options: { apiKey: "shiba-dummy-key" } } },
     });
   });
 
@@ -181,7 +183,7 @@ describe("OpenCode output is unchanged by the T22 widening", () => {
     expect(opencodeHarness.env(BASE, "/workspace/cfg.json")).toEqual({
       OPENCODE_CONFIG: "/workspace/cfg.json",
       OPENCODE_DISABLE_AUTOUPDATE: "true",
-      GOOGLE_GENERATIVE_AI_API_KEY: "shiba-ai-coworker-dummy-key",
+      GOOGLE_GENERATIVE_AI_API_KEY: "shiba-dummy-key",
     });
   });
 });
@@ -287,12 +289,91 @@ describe("devin harness", () => {
   });
 });
 
+describe("grok harness", () => {
+  it("runs headless --single mode with the bare model id on the api.x.ai forwarder", () => {
+    expect(grokHarness.configFile()).toBeNull();
+    expect(grokHarness.buildArgv(input("xai/grok-4.6"), "/workspace/x")).toEqual([
+      "grok", "--single", "Fix it.",
+      "--output-format", "streaming-json",
+      "--permission-mode", "bypassPermissions",
+      "--model", "grok-4.6",
+      "--reasoning-effort", "medium",
+      "--cwd", "/workspace/x",
+    ]);
+  });
+
+  it("passes the dummy key and pins inference to api.x.ai — never cli-chat-proxy", () => {
+    const env = grokHarness.env(input("xai/grok-4.6"), null);
+    expect(env.XAI_API_KEY).toBe("shiba-dummy-key");
+    expect(env.GROK_MODELS_BASE_URL).toBe("https://api.x.ai/v1");
+    expect(grokHarness.egressHosts("xai/grok-4.6")).toEqual(["api.x.ai"]);
+    expect(allowedHostsFor(grokHarness, "xai/grok-4.6")).toEqual([
+      "api.x.ai", "github.com", "codeload.github.com",
+    ]);
+  });
+
+  it("surfaces text and tool lines, drops the catalog/bootstrap lines", () => {
+    expect(parseGrokEvent("   ")).toBeNull();
+    expect(parseGrokEvent(JSON.stringify({ type: "available_commands", tools: ["a"], commands: ["b"] }))).toBeNull();
+    expect(parseGrokEvent(JSON.stringify({ type: "tool_call_update", toolCallId: "c1", status: "completed" }))).toBeNull();
+    expect(parseGrokEvent(JSON.stringify({ type: "usage", used: 10 }))).toBeNull();
+    expect(parseGrokEvent(JSON.stringify({ type: "text", data: "Editing src/a.ts" }))).toBe("Editing src/a.ts");
+    expect(parseGrokEvent(JSON.stringify({ type: "thought", data: "planning" }))).toBe("planning");
+    expect(parseGrokEvent(JSON.stringify({
+      type: "tool_call", toolCallId: "c1", title: "write", kind: "write", status: "in_progress",
+    }))).toBe("tool: write");
+  });
+
+  it("throws on error and non-clean stop reasons rather than reporting success", () => {
+    const line = JSON.stringify({ type: "error", message: "model rejected" });
+    expect(() => parseGrokEvent(line)).toThrow(GrokErrorEvent);
+    expect(() => parseGrokEvent(JSON.stringify({ type: "end", stopReason: "refusal" }))).toThrow(GrokErrorEvent);
+    expect(() => parseGrokEvent(JSON.stringify({ type: "end" }))).toThrow(GrokErrorEvent);
+    expect(() => parseGrokEvent(JSON.stringify({ type: "max_turns_reached" }))).toThrow(GrokErrorEvent);
+    expect(parseGrokEvent(JSON.stringify({ type: "end", stopReason: "end_turn" }))).toBeNull();
+    expect(parseGrokEvent(JSON.stringify({ type: "end", stopReason: "EndTurn" }))).toBeNull();
+    expect(() => parseGrokEvent("not json")).toThrow(/Unparseable Grok event/);
+  });
+
+  it("a streamed error line fails the run through the adapter, not just the parser", async () => {
+    const adapter = createRuntimeAdapter("sandbox", grokHarness);
+    let emitOutput: ((stream: "stdout" | "stderr", data: string) => void) | null = null;
+    const ops = {
+      gitCheckout: async () => {},
+      writeFile: async () => {},
+      exec: async (_command: string, opts?: { onOutput?: (stream: "stdout" | "stderr", data: string) => void }) => {
+        emitOutput = opts?.onOutput ?? null;
+        emitOutput?.("stdout", `${JSON.stringify({ type: "error", message: "model rejected" })}\n`);
+        return { stdout: "", stderr: "", exitCode: 0 };
+      },
+      readFile: async () => ({ kind: "utf8" as const, content: "" }),
+    };
+    const result = await adapter.runCodingTask(ops, input("xai/grok-4.6"), async () => {});
+    expect(result.status).toBe("error");
+    expect(result.summary).toContain("model rejected");
+  });
+
+  it("refuses non-xai models", () => {
+    expect(() => grokHarness.egressHosts("openai/gpt-5")).toThrow(/grok harness supports/);
+  });
+});
+
+describe("connection compatibility stays honest", () => {
+  it("cursor is a remote executor — no sandbox harness drives it", () => {
+    // No xai CONNECTION_SERVICES row exists today, so the grok branch is only
+    // reachable through a real service here — cursor must stay empty.
+    expect(compatibleHarnesses("cursor")).toEqual([]);
+    expect(compatibleHarnesses("anthropic")).toContain("claude-code");
+    expect(compatibleHarnesses("anthropic")).toContain("opencode");
+  });
+});
+
 describe("agent cli catalog", () => {
   it("lists every registered harness with its pinned version", () => {
     const catalog = agentCliCatalog({});
-    expect(catalog.map((a) => a.id)).toEqual(["opencode", "claude-code", "codex", "cursor", "devin", "grok"]);
-    expect(catalog.find((a) => a.id === "cursor")?.version).toBe("0.50.0");
-    expect(catalog.find((a) => a.id === "grok")?.version).toBe("0.1.0");
+    expect(catalog.map((a) => a.id)).toEqual(["opencode", "claude-code", "codex", "devin", "grok"]);
+    expect(catalog.find((a) => a.id === "grok")?.version).toBe("1.0.41");
+    expect(catalog.find((a) => a.id === "grok")?.defaultModel).toBe("xai/grok-4.6");
     expect(catalog.find((a) => a.id === "devin")?.version).toBe("3000.10.31");
     expect(catalog.find((a) => a.id === "devin")?.defaultModel).toBe("devin/swe-2");
   });

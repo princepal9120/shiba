@@ -28,7 +28,7 @@ export default defineConfig({
         // agents/mcp transitively imports cloudflare:* specifiers, which
         // Node's ESM loader cannot resolve — inlining routes them through
         // Vite so the resolveId stub above applies.
-        inline: ["agents"],
+        inline: ["agents", "@cloudflare/codemode"],
       },
     },
   },
