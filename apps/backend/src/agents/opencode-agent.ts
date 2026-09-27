@@ -239,7 +239,17 @@ export class OpenCodeAgent extends AIChatAgent<Env> {
           const adapter = createRuntimeAdapter(resolveRuntimeName(this.env.RUNTIME), harness);
           const hosts = allowedHostsFor(harness, input.codingModel);
           const ops = createSandboxOps(this.env, input.sandboxId, hosts);
-          const result = await adapter.runCodingTask(ops, input, emit, { signal, signals: runSignals });
+          const result = await adapter.runCodingTask(ops, input, emit, {
+            signal,
+            signals: runSignals,
+            // T44: an oversize diff lands in R2 instead of being truncated
+            // away — the settle receipt carries this key.
+            exportDiff: async (diff) => {
+              const key = `diffs/${input.sandboxId}.patch`;
+              await this.env.ATTACHMENTS.put(key, diff, { httpMetadata: { contentType: "text/plain" } });
+              return key;
+            },
+          });
           checkCancelled();
           // UNINTERRUPTIBLE: publish + result commit. Once the remote PR write
           // starts, an abort must not lose the outcome — a fake-failed real PR

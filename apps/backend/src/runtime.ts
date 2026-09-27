@@ -21,6 +21,7 @@ import { HARNESS_RETRY, withRetry } from "./harness/retry.js";
 import type { AgentHarness } from "./harness/types.js";
 import { boundTail, redactSecrets, shellJoin, shellQuote } from "./security.js";
 import { ScopedExecRefusal, scopedExec } from "./exec-allowlist.js";
+import { captureCheckpoint, checkpointRef, diffCheckpoints, pruneCheckpoints } from "./git-checkpoint.js";
 
 export const MAX_DIFF_CHARS = 120_000;
 export const MAX_STDERR_TAIL_CHARS = 8_000;
@@ -50,6 +51,11 @@ export interface SandboxOps {
       env?: Record<string, string>;
       signal?: AbortSignal;
       onOutput?: (stream: "stdout" | "stderr", data: string) => void;
+      /**
+       * Per-stream output cap override — T45 enforced either way; raise it
+       * for commands whose full output is the payload (e.g. diff export).
+       */
+      maxOutputChars?: number;
     },
   ): Promise<ExecResult>;
   readFile(path: string, opts?: { maxBytes?: number; signal?: AbortSignal }): Promise<
@@ -80,6 +86,12 @@ export interface RuntimeAdapter {
        * `result.signals`.
        */
       signals?: RunSignal[];
+      /**
+       * T44: durable export for an oversize diff (Worker-side R2 hook).
+       * Called with the full diff before boundTail caps it; the returned
+       * storage key is receipted as `diff.exported`.
+       */
+      exportDiff?: (diff: string) => Promise<string>;
     },
   ): Promise<CodingTaskResult>;
 }
@@ -101,7 +113,7 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
     ops: SandboxOps,
     input: CodingTaskInput,
     emit: ProgressEmitter,
-    opts?: { signal?: AbortSignal; signals?: RunSignal[] },
+    opts?: { signal?: AbortSignal; signals?: RunSignal[]; exportDiff?: (diff: string) => Promise<string> },
   ): Promise<CodingTaskResult> {
     const workdir = `/workspace/${input.sandboxId}`;
     const config = this.harness.configFile(input, input.sandboxId);
@@ -131,6 +143,7 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
           signal: execOpts?.signal,
           onOutput: execOpts?.onOutput,
           timeoutMs: execOpts?.timeoutMs,
+          maxOutputChars: execOpts?.maxOutputChars,
           allowlist,
           signals,
         }),
@@ -146,6 +159,17 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
       milestone("clone.complete", input.baseBranch);
     } catch (error) {
       return failureResult(`Clone failed: ${shortError(error)}`, 0, "", signals);
+    }
+
+    // T44: baseline checkpoint — the whole worktree at post-clone, before
+    // any harness mutation, under a hidden ref that dies with the sandbox.
+    const baselineRef = checkpointRef(input.sandboxId, 0);
+    const settleRef = checkpointRef(input.sandboxId, 1);
+    try {
+      await captureCheckpoint(scoped, workdir, input.sandboxId, 0, opts?.signal);
+      milestone("checkpoint.captured", baselineRef);
+    } catch (error) {
+      return failureResult(`Baseline checkpoint failed: ${shortError(error)}`, 0, "", signals);
     }
 
     await emit({ phase: "configure", message: `Writing isolated ${this.harness.name} config.`, fraction: 0.15 });
@@ -183,6 +207,11 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
       milestone("harness.idle", `exitCode:${run.exitCode}`);
       await output.finish();
       throwIfAborted(opts?.signal);
+      // T44: settle checkpoint — captures the harness's mutations (incl.
+      // untracked files) so the turn diff is baseline→settle commit-diff.
+      await captureCheckpoint(scoped, workdir, input.sandboxId, 1, opts?.signal);
+      milestone("checkpoint.captured", settleRef);
+      await pruneCheckpoints(scoped, workdir, input.sandboxId, 4, opts?.signal);
     } catch (error) {
       await output.finish();
       throwIfAborted(opts?.signal);
@@ -218,7 +247,13 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
     try {
       const collection = await withRetry(
         HARNESS_RETRY,
-        () => collectChanges(scoped, workdir, opts?.signal),
+        () =>
+          collectChanges(scoped, workdir, {
+            signal: opts?.signal,
+            diffSource: () => diffCheckpoints(scoped, workdir, baselineRef, settleRef, opts?.signal),
+            exportDiff: opts?.exportDiff,
+            onDiffExported: (key) => milestone("diff.exported", key),
+          }),
         opts?.signal,
       );
       milestone("collect.complete", `${collection.changedFiles.length} files`);
@@ -511,7 +546,19 @@ function parsePorcelainDeleted(output: string): Set<string> {
   return deleted;
 }
 
-async function collectChanges(ops: SandboxOps, workdir: string, signal?: AbortSignal): Promise<CollectedChanges> {
+async function collectChanges(
+  ops: SandboxOps,
+  workdir: string,
+  opts: {
+    signal?: AbortSignal;
+    /** T44: commit-to-commit diff producer; falls back to the worktree diff. */
+    diffSource?: () => Promise<string>;
+    /** Durable export for an oversize diff — returns the storage key. */
+    exportDiff?: (diff: string) => Promise<string>;
+    onDiffExported?: (key: string) => void;
+  } = {},
+): Promise<CollectedChanges> {
+  const signal = opts.signal;
   const status = await ops.exec(shellJoin(["git", "status", "--porcelain", "-uall"]), {
     cwd: workdir,
     timeoutMs: GIT_TIMEOUT_MS,
@@ -530,27 +577,41 @@ async function collectChanges(ops: SandboxOps, workdir: string, signal?: AbortSi
   }
   const changedFiles = allChanged;
   const deletedFiles = parsePorcelainDeleted(status.stdout);
-  // Intent-to-add makes new files show up in the worktree diff.
-  // Deleted files are already tracked, so they don't need -N.
-  const filesToAdd = changedFiles.filter((path) => !deletedFiles.has(path));
-  if (filesToAdd.length > 0) {
-    const add = await ops.exec(
-      ["git", "add", "-N", "--", ...filesToAdd].map(shellQuote).join(" "),
-      { cwd: workdir, timeoutMs: GIT_TIMEOUT_MS, signal },
-    );
-    if (add.exitCode !== 0) {
-      throw new Error(`git add failed: ${boundTail(add.stderr, 1000)}`);
+  // T44: the turn diff is baseline→settle commits — untracked files are
+  // already in the settle commit, so no intent-to-add step is needed. The
+  // fallback worktree path (no checkpoints captured) keeps the intent-to-add
+  // dance so new files appear in `git diff`.
+  let rawDiff: string;
+  if (opts.diffSource) {
+    rawDiff = await opts.diffSource();
+  } else {
+    const filesToAdd = changedFiles.filter((path) => !deletedFiles.has(path));
+    if (filesToAdd.length > 0) {
+      const add = await ops.exec(
+        ["git", "add", "-N", "--", ...filesToAdd].map(shellQuote).join(" "),
+        { cwd: workdir, timeoutMs: GIT_TIMEOUT_MS, signal },
+      );
+      if (add.exitCode !== 0) {
+        throw new Error(`git add failed: ${boundTail(add.stderr, 1000)}`);
+      }
     }
+    const diffResult = await ops.exec(shellJoin(["git", "diff", "--", "."]), {
+      cwd: workdir,
+      timeoutMs: GIT_TIMEOUT_MS,
+      signal,
+    });
+    if (diffResult.exitCode !== 0) {
+      throw new Error(`git diff failed: ${boundTail(diffResult.stderr, 1000)}`);
+    }
+    rawDiff = diffResult.stdout;
   }
-  const diffResult = await ops.exec(shellJoin(["git", "diff", "--", "."]), {
-    cwd: workdir,
-    timeoutMs: GIT_TIMEOUT_MS,
-    signal,
-  });
-  if (diffResult.exitCode !== 0) {
-    throw new Error(`git diff failed: ${boundTail(diffResult.stderr, 1000)}`);
+  // An oversize diff exports durably before the tail cap — the receipt
+  // carries the storage key so post-mortem inspection survives the sandbox.
+  if (rawDiff.length > MAX_DIFF_CHARS && opts.exportDiff) {
+    const key = await opts.exportDiff(rawDiff);
+    opts.onDiffExported?.(key);
   }
-  const diff = boundTail(diffResult.stdout, MAX_DIFF_CHARS);
+  const diff = boundTail(rawDiff, MAX_DIFF_CHARS);
 
   const files: CollectedChanges["files"] = [];
   let totalChars = 0;

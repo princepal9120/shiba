@@ -148,8 +148,17 @@ describe("SandboxRuntimeAdapter", () => {
   });
 
   it("reports non-zero OpenCode exits with a bounded stderr tail", async () => {
+    const baseExec = makeFakeOps().exec;
     const ops = makeFakeOps({
-      async exec() {
+      async exec(command, opts) {
+        // T44: checkpoint git commands still need real-ish answers — only
+        // the harness exec itself is the nonzero exit under test.
+        if (!command.includes("opencode")) {
+          if (command.includes("rev-parse")) return { stdout: ".git\n", stderr: "", exitCode: 0 };
+          if (command.includes("write-tree")) return { stdout: "tree\n", stderr: "", exitCode: 0 };
+          if (command.includes("commit-tree")) return { stdout: "commit\n", stderr: "", exitCode: 0 };
+          return baseExec(command, opts);
+        }
         return { stdout: "", stderr: `x\n${"e".repeat(50_000)}`, exitCode: 3 };
       },
     });
