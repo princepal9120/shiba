@@ -10,8 +10,7 @@
  * DEVIN_API_KEY Worker secret, whose presence IS observable (never the value).
  */
 import type { Env } from "../env.js";
-import { HARNESS_DEFAULT_MODELS, HARNESS_NAMES } from "./index.js";
-import { SANDBOX_HARNESS_NAMES } from "./types.js";
+import { HARNESS_DEFAULT_MODELS, HARNESS_NAMES, SANDBOX_HARNESS_NAMES } from "./index.js";
 
 export interface AgentCliCredential {
   /** ai-gateway-byok = AI Gateway holds the provider key; worker-secret = a Wrangler secret on this deployment. */

@@ -10,18 +10,18 @@
  * {@link DUMMY_PROVIDER_KEY} and the real credential is swapped in outside
  * the container by the Worker's egress handler (src/egress.ts).
  */
-import type { CodingTaskInput } from "../opencode-input.js";
+import type { CodingTaskInput, CodingTaskResult } from "../opencode-input.js";
 
 /** Implemented harnesses. Aider was in the original sketch but has no adapter — add it here with one, not before. */
 export type AgentHarnessName = "opencode" | "claude-code" | "codex" | "devin" | "grok" | "cursor" | "antigravity";
 
 /**
- * Harnesses the sandbox image can actually drive — their CLIs are baked into
- * the Dockerfile and hold the dummy-key invariant. Cursor and Antigravity stay
- * registered for catalog/type surfaces but cannot start a sandbox run, so a
- * run-selection lookup must refuse them (resolveHarness enforces this).
+ * T43 runtimes a harness can execute under. "sandbox" and the refused
+ * "computer" preview exist today; T51 adds "local". A remote executor
+ * (cursor) and a not-yet-runnable harness (antigravity) declare `[]` —
+ * the runnability gate reads this list, never a parallel name list.
  */
-export const SANDBOX_HARNESS_NAMES: readonly AgentHarnessName[] = ["opencode", "claude-code", "codex", "devin", "grok"];
+export type RuntimeName = "sandbox" | "computer" | "local";
 
 /** Provider id → the single host its API lives on. Feeds allowedHosts (T5). */
 export const PROVIDER_HOSTS: Record<string, string> = {
@@ -94,6 +94,48 @@ export interface HarnessConfigFile {
   contents: string;
 }
 
+/**
+ * T43 declared capabilities — the interface is the seam: a new harness
+ * declares what it can do and the UI/gates read the declaration instead
+ * of name-checking. `capabilities` replaces the hardcoded name lists;
+ * `supportedRuntimes` is the runnability gate.
+ */
+export interface HarnessCapabilities {
+  streamsText: boolean;
+  emitsToolCalls: boolean;
+  /** Conversation-resume support in the baked CLI (e.g. claude --resume). */
+  supportsResume: boolean;
+  /** Mid-run message intake — one-shot CLIs declare false (T31 steers by cancel+re-approval). */
+  supportsSteering: boolean;
+  supportsFileAttachments: boolean;
+  /** The harness can drive a project test command — pairs with T45's executor. */
+  canRunTests: boolean;
+  /** antigravity's documented trap: no conversation rollback — T44's revert refuses first. */
+  supportsConversationRollback: boolean;
+  maxContextTokens?: number;
+  supportedRuntimes: readonly RuntimeName[];
+}
+
+/** Deterministic verify verdict — load-bearing, unlike the advisory quality score. */
+export type VerificationOutcome = { ok: true } | { ok: false; reason: string };
+
+/**
+ * The shared deterministic verify every sandbox harness runs: a completed
+ * run must have produced evidence — a non-empty diff or captured files.
+ * Exit 0 with an empty tree is NOT completed; this feeds T46's gate.
+ * Non-completed results pass — verify only gates the success claim.
+ */
+export function verifyRunOutcome(result: CodingTaskResult): VerificationOutcome {
+  if (result.status !== "completed") return { ok: true };
+  if (result.changedFiles.length === 0 && result.diff.trim() === "") {
+    return {
+      ok: false,
+      reason: "Run exited 0 but produced no file changes — refusing to report a no-op as completed.",
+    };
+  }
+  return { ok: true };
+}
+
 export interface AgentHarness {
   readonly name: AgentHarnessName;
   /** Providers this harness can drive. Checked by {@link assertSupportedModel}. */
@@ -114,4 +156,12 @@ export interface AgentHarness {
    * error events so the run fails honestly instead of pretending success.
    */
   parseEvent(line: string): string | null;
+  /** Declared capabilities — the runnability gate and UI read these, not the name. */
+  capabilities(model?: string): HarnessCapabilities;
+  /**
+   * Deterministic verification of the run's claimed outcome — load-bearing:
+   * the adapter refuses a "completed" result verify rejects. Distinct from
+   * result-quality.ts (advisory, fail-open); this never calls a model.
+   */
+  verify(input: CodingTaskInput, result: CodingTaskResult): Promise<VerificationOutcome>;
 }
