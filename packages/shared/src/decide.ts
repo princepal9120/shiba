@@ -36,6 +36,20 @@ export interface QueuedRunInput {
   publishPullRequest: boolean;
   queuedBy?: string;
   route?: ApprovedRoute;
+  /**
+   * T48: this run's harness continuation identity (e.g. `claude:home:<dir>`).
+   * Persisted on the record so a later run continuing the same conversation
+   * can be checked against it.
+   */
+  continuationKey?: string;
+  /**
+   * T48: when this run claims to continue an existing conversation, the key
+   * that conversation was started under. The decider refuses the queue when
+   * the keys differ — resume may not cross accounts.
+   */
+  continuesKey?: string;
+  /** T48: subscription account selector — part of the approval-hashed input. */
+  authAccount?: string;
 }
 
 export type RunCommand =
@@ -109,6 +123,7 @@ function hashMatchesRun(evidence: ApprovalEvidence, run: RunInputFields): boolea
       baseBranch: run.baseBranch,
       publishPullRequest: run.publishPullRequest,
       ...(run.route !== undefined ? { route: run.route } : {}),
+      ...(run.authAccount !== undefined ? { authAccount: run.authAccount } : {}),
     })
   );
 }
@@ -133,6 +148,14 @@ export function decideRunTransition(state: RunMachineState, command: RunCommand)
         if (approval !== undefined && !hashMatchesRun(approval, command.input)) {
           return rejected("approval_mismatch", `Approval evidence for ${command.runId} does not cover the queued input.`);
         }
+        // T48: a run may only resume against the account-scoped home the
+        // conversation started on — the decider owns the check, not the UI.
+        if (
+          command.input.continuesKey !== undefined &&
+          command.input.continuationKey !== command.input.continuesKey
+        ) {
+          return rejected("input_conflict", `Run ${command.runId} cannot resume: continuation key ${JSON.stringify(command.input.continuationKey)} does not match the conversation's ${JSON.stringify(command.input.continuesKey)}.`);
+        }
         const queued: DelegatedRun = {
           runId: command.runId,
           sandboxId: command.input.sandboxId,
@@ -142,6 +165,8 @@ export function decideRunTransition(state: RunMachineState, command: RunCommand)
           publishPullRequest: command.input.publishPullRequest,
           ...(command.input.queuedBy !== undefined ? { queuedBy: command.input.queuedBy } : {}),
           ...(command.input.route !== undefined ? { route: command.input.route } : {}),
+          ...(command.input.continuationKey !== undefined ? { continuationKey: command.input.continuationKey } : {}),
+          ...(command.input.authAccount !== undefined ? { authAccount: command.input.authAccount } : {}),
           ...(approval !== undefined ? { approval } : {}),
           status: "pending",
           generation: 0,

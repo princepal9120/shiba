@@ -86,6 +86,12 @@ export interface PendingApproval {
    * `route`. Dispatch falls back to it so an old approval keeps its agent.
    */
   harness?: string;
+  /**
+   * T48: the subscription account a subscription-authed harness runs under
+   * (an account NAME, never a credential). Frozen at queue time and hashed
+   * like the rest of the approved input.
+   */
+  authAccount?: string;
   /** Approval kind; absent on records written before email kinds landed — treated as `"run"`. */
   kind?: ApprovalKind;
   /** Frozen email send/delete input for email-kind approvals. */
@@ -125,6 +131,7 @@ export interface CreateApprovalInput {
   publishPullRequest?: boolean;
   route?: ApprovedRoute;
   harness?: string;
+  authAccount?: string;
   kind?: ApprovalKind;
   payload?: JsonValue;
   queuedBy?: string;
@@ -149,6 +156,7 @@ export function createPendingApproval(
       ...(input.publishPullRequest !== undefined ? { publishPullRequest: input.publishPullRequest } : {}),
       ...(input.route !== undefined ? { route: input.route } : {}),
       ...(input.harness !== undefined ? { harness: input.harness } : {}),
+      ...(input.authAccount !== undefined ? { authAccount: input.authAccount } : {}),
       ...(input.kind !== undefined ? { kind: input.kind } : {}),
       ...(input.payload !== undefined ? { payload: input.payload } : {}),
       ...(input.queuedBy !== undefined ? { queuedBy: input.queuedBy } : {}),
@@ -259,6 +267,8 @@ export interface RunInputFields {
   baseBranch: string;
   publishPullRequest: boolean;
   route?: ApprovedRoute;
+  /** T48: which subscription account — part of what the human approved. */
+  authAccount?: string;
 }
 
 /** Key-sorted JSON — the canonical form the input hash covers. */
@@ -290,6 +300,7 @@ export function runInputHash(input: RunInputFields): string {
     baseBranch: input.baseBranch,
     publishPullRequest: input.publishPullRequest,
     ...(input.route !== undefined ? { route: input.route as unknown as JsonValue } : {}),
+    ...(input.authAccount !== undefined ? { authAccount: input.authAccount } : {}),
   });
 }
 

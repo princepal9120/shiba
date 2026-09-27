@@ -16,6 +16,8 @@ Non-secret defaults are in `apps/backend/wrangler.jsonc` and `alchemy.run.ts`. F
 | `GROK_MODEL` | `xai/grok-4.6` | Grok default model; medium reasoning effort |
 | `AGENT_HARNESS` | `opencode` | Deployment fallback; a task can select a harness explicitly |
 | `SLACK_AGENT_HARNESS` | `AGENT_HARNESS`, then `claude-code` | Harness for Slack-originated runs (mentions, DMs, /shiba) |
+| `SHIBA_CLAUDE_SUBSCRIPTION` | unset | Set `1` to enable the opt-in `claude-subscription` harness (below) |
+| `CLAUDE_SUBSCRIPTION_MODEL` | `anthropic-subscription/claude-sonnet-4-6` | `claude-subscription` default model |
 | `RUNTIME` | `sandbox` | Runtime adapter; current default is Cloudflare Sandbox |
 | `INSTANCE_TYPE` | `standard-1` | Configured Cloudflare container size |
 | `REQUIRE_ACCESS` | Wrangler default unset; live Alchemy stages set `1` | Require Access identity at the Worker boundary |
@@ -28,7 +30,11 @@ The current source registry and Dockerfile include five harnesses: `opencode`, `
 
 OpenCode, Claude Code, and Codex provider traffic uses the account-owned AI Gateway path; configure provider credentials there. `AI_GATEWAY_TOKEN` is an optional Worker secret for gateway authentication. Devin is different: its API key is a Worker-side `DEVIN_API_KEY` secret, injected by the egress proxy for Devin hosts and not stored in the container. The dummy container key is not a real credential. Keep keys out of repository files, logs, and task text.
 
-Subscription credentials (such as Claude or ChatGPT consumer subscriptions) are not the configured provider-key path. Use supported API credentials and check the provider and Cloudflare's current terms/configuration. The assistant/model used to edit this repository is independent of these application settings.
+### Claude subscription (opt-in)
+
+Setting `SHIBA_CLAUDE_SUBSCRIPTION=1` registers a second Claude harness, `claude-subscription`, that drives the same `claude` binary against the operator's own subscription credential instead of AI Gateway. To connect an account, run `claude setup-token` on your own machine and store the printed token as a Worker secret — `CLAUDE_SUBSCRIPTION_TOKEN`, or `CLAUDE_SUBSCRIPTION_TOKEN_<ACCOUNT>` for a named account — then drive the lifecycle under `/api/auth/claude-subscription` (begin, verify, clear). Your own Anthropic plan terms apply; this deployment makes no use of anyone else's credential. The token is a deployment secret: it stays outside the sandbox, is attached only at the egress boundary, and appears in no log, command line, or UI response. Signing out (or revoking the token) stops in-flight subscription runs and refuses new ones.
+
+Subscription credentials are not the default provider-key path — API credentials via AI Gateway are. The `claude-subscription` opt-in above is the deliberate exception: it exists for the single-tenant operator driving their own credential, and stays dark unless they set the flag. Check the provider's current terms before enabling it. The assistant/model used to edit this repository is independent of these application settings.
 
 ## Optional secrets
 

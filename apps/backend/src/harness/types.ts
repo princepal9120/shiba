@@ -14,7 +14,15 @@ import type { CodingTaskInput, CodingTaskResult } from "../opencode-input.js";
 import { shellJoin } from "../security.js";
 
 /** Implemented harnesses. Aider was in the original sketch but has no adapter — add it here with one, not before. */
-export type AgentHarnessName = "opencode" | "claude-code" | "codex" | "devin" | "grok" | "cursor" | "antigravity";
+export type AgentHarnessName =
+  | "opencode"
+  | "claude-code"
+  | "claude-subscription"
+  | "codex"
+  | "devin"
+  | "grok"
+  | "cursor"
+  | "antigravity";
 
 /**
  * T43 runtimes a harness can execute under. "sandbox" and the refused
@@ -40,7 +48,37 @@ export const PROVIDER_HOSTS: Record<string, string> = {
   // container still only ever sees the dummy key.
   "opencode-go": "opencode.ai",
   cursor: "api2.cursor.sh",
+  // T48: the subscription path's API host is the same anthropic origin the
+  // gateway path uses — routing differs at the per-run OUTBOUND HANDLER,
+  // not the host. Listed so assertSupportedModel accepts the provider id;
+  // the harness's egressOverrides swap the handler to the token branch.
+  "anthropic-subscription": "api.anthropic.com",
 };
+
+/**
+ * T48/§18.10: a harness that authenticates against an operator-owned
+ * subscription declares `auth` — the admission gate refuses a run whose
+ * T47 auth flow for this instance is not `succeeded`, and sign-out makes
+ * the harness unselectable without touching selection code.
+ */
+export interface HarnessAuthRequirement {
+  /** The T47 instanceId this run's account resolves to (e.g. "claude-sub:default"). */
+  instanceId(input: CodingTaskInput): string;
+}
+
+/**
+ * Per-run egress handler swaps — `setOutboundByHost(host, handler, params)`.
+ * A subscription harness claims its provider hosts' handlers here so the
+ * real credential is attached on the subscription branch, never the
+ * gateway's BYOK path.
+ */
+export interface EgressOverride {
+  host: string;
+  /** Name registered on Sandbox.outboundHandlers. */
+  handler: string;
+  /** Serialized per-run params (e.g. which account's secret). */
+  params?: Record<string, string>;
+}
 
 /** Container env var carrying the dummy key, per provider. */
 export const PROVIDER_KEY_ENV: Record<string, string> = {
@@ -199,6 +237,25 @@ export interface AgentHarness {
    * error events so the run fails honestly instead of pretending success.
    */
   parseEvent(line: string): string | null;
+  /**
+   * T48: subscription-authed harnesses declare the auth instance this run
+   * uses; undefined for API-key harnesses. The admission gate checks the
+   * flow phase before a container starts.
+   */
+  readonly auth?: HarnessAuthRequirement;
+  /**
+   * T48: per-run outbound-handler overrides (subscription providers route
+   * their hosts through the token branch, not the gateway). Applied inside
+   * the egress pin alongside approveHarnessEgress.
+   */
+  egressOverrides?(input: CodingTaskInput): EgressOverride[];
+  /**
+   * T48: the account-scoped continuation identity for this run's home
+   * (e.g. `claude:home:<resolvedConfigDir>`). Computable at mint time from
+   * the account selector alone; persisted on the run record, and the
+   * decider refuses a resume whose key differs.
+   */
+  continuationKey?(input: { authAccount?: string }): string;
   /** Declared capabilities — the runnability gate and UI read these, not the name. */
   capabilities(model?: string): HarnessCapabilities;
   /**

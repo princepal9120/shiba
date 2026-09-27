@@ -114,6 +114,8 @@ Public repositories and diff-only tasks must work without `GITHUB_TOKEN`.
 
 If `publishPullRequest` is true and no token exists, fail before coding with a clear configuration error. If configured, keep the token out of the container. Inject GitHub Git transport authorization through Sandbox HTTPS interception, and call the GitHub pull request API from Worker code. Never put the token in a clone URL, command, process environment, log, or UI response.
 
+An optional opt-in subscription path (`claude-subscription`, dark unless `SHIBA_CLAUDE_SUBSCRIPTION=1`) may drive the Claude Code CLI with the operator's own `claude setup-token` credential stored as the `CLAUDE_SUBSCRIPTION_TOKEN` Worker secret. That traffic bypasses AI Gateway on its own deny-by-default egress branch — the gateway is API-key BYOK and correctly refuses it. The same rule applies verbatim: the token never enters the container, which gets a placeholder credentials file under `CLAUDE_CONFIG_DIR` instead.
+
 ## Dashboard
 
 Replace the marketing-only page with a functional dashboard.

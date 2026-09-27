@@ -169,6 +169,7 @@ One image ships five CLIs; a run selects exactly one.
 |---|---|---|---|
 | `opencode` | `opencode` | `google/gemini-3.5-flash-lite` | AI Gateway BYOK |
 | `claude-code` | `claude` | `anthropic/claude-sonnet-4-6` | AI Gateway BYOK |
+| `claude-subscription` (opt-in: `SHIBA_CLAUDE_SUBSCRIPTION=1`) | `claude` | `anthropic-subscription/claude-sonnet-4-6` | `CLAUDE_SUBSCRIPTION_TOKEN` secret on a dedicated egress branch — bypasses AI Gateway |
 | `codex` | `codex` | `openai/gpt-5.3-codex` | AI Gateway BYOK |
 | `devin` | `devin` | `devin/swe-2` | `DEVIN_API_KEY` secret |
 | `grok` | `grok` | `xai/grok-4.6` (medium reasoning) | AI Gateway BYOK |

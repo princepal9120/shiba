@@ -19,7 +19,14 @@ const codingTaskInputSchema = z.object({
   sandboxId: z.string().min(1),
   codingModel: z.string().min(1),
   /** Which coding agent runs the task. Validated at approval time, never in the container. */
-  harness: z.enum(["opencode", "claude-code", "codex", "devin", "grok"]).optional(),
+  harness: z.enum(["opencode", "claude-code", "claude-subscription", "codex", "devin", "grok"]).optional(),
+  /**
+   * T48: which subscription account a subscription-authed harness runs
+   * under — maps to `CLAUDE_SUBSCRIPTION_TOKEN` (default) or
+   * `CLAUDE_SUBSCRIPTION_TOKEN_<ACCOUNT>` Worker secrets. Frozen by the
+   * approval hash like every other input field; never the credential.
+   */
+  authAccount: z.string().regex(/^[a-z0-9][a-z0-9-]{0,31}$/).optional(),
   /**
    * The frozen, approval-gated route (connection/model/harness ids only —
    * spec MODEL-CONNECTIONS-ARCHITECTURE.md §4). Validated with

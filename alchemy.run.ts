@@ -241,6 +241,9 @@ export const Worker = Cloudflare.Worker("Worker", {
       "TYPESAFE_API_KEY",
       "AI_GATEWAY_TOKEN",
       "DEVIN_API_KEY",
+      // T48: the operator's `claude setup-token` output; per-account secrets
+      // (CLAUDE_SUBSCRIPTION_TOKEN_<ACCOUNT>) resolve by name at egress.
+      "CLAUDE_SUBSCRIPTION_TOKEN",
     ]),
     // Live deploys fail closed: no Access identity = 401 on the dashboard/API.
     ...(isLiveStage ? { REQUIRE_ACCESS: "1" } : {}),
@@ -250,6 +253,9 @@ export const Worker = Cloudflare.Worker("Worker", {
       "AUTOMATIONS_ENABLED",
       "AGENT_HARNESS",
       "CLAUDE_CODE_MODEL",
+      // T48 opt-ins (§18.10): absent = the subscription harness is dark.
+      "SHIBA_CLAUDE_SUBSCRIPTION",
+      "CLAUDE_SUBSCRIPTION_MODEL",
       "CODEX_MODEL",
       "DEVIN_MODEL",
       "GROK_MODEL",

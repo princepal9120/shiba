@@ -1,6 +1,7 @@
 /** Harness registry (PLAN.md T22). Selection is by name, default OpenCode. */
 import { antigravityHarness } from "./antigravity.js";
 import { claudeCodeHarness } from "./claude-code.js";
+import { claudeSubscriptionHarness } from "./claude-subscription.js";
 import { codexHarness } from "./codex.js";
 import { cursorHarness } from "./cursor.js";
 import { devinHarness } from "./devin.js";
@@ -11,6 +12,7 @@ import { GIT_EGRESS_HOSTS, type AgentHarness, type AgentHarnessName, type Runtim
 export const HARNESSES: Record<string, AgentHarness> = {
   opencode: opencodeHarness,
   "claude-code": claudeCodeHarness,
+  "claude-subscription": claudeSubscriptionHarness,
   codex: codexHarness,
   devin: devinHarness,
   grok: grokHarness,
@@ -18,12 +20,39 @@ export const HARNESSES: Record<string, AgentHarness> = {
   antigravity: antigravityHarness,
 };
 
-export function resolveHarness(name: string | undefined): AgentHarness {
+/** The env surface the opt-in gate reads. */
+type HarnessGateEnv = { SHIBA_CLAUDE_SUBSCRIPTION?: string } | undefined;
+
+/**
+ * T48: opt-in subscription harnesses are *unregistered* unless the
+ * deployment explicitly enables them — absent the var they are not
+ * resolvable, not cataloged, not selectable (§18.10). The default is
+ * closed: a caller that threads no env cannot select a gated harness.
+ */
+const HARNESS_GATES: Partial<Record<AgentHarnessName, (env: HarnessGateEnv) => boolean>> = {
+  "claude-subscription": (env) => env?.SHIBA_CLAUDE_SUBSCRIPTION === "1",
+};
+
+function harnessEnabled(harness: AgentHarness, env: HarnessGateEnv): boolean {
+  const gate = HARNESS_GATES[harness.name as AgentHarnessName];
+  return gate === undefined || gate(env);
+}
+
+/** Whether a harness sits behind an opt-in flag at all (ignoring whether the flag is set). */
+export function harnessIsGated(harness: AgentHarness): boolean {
+  return HARNESS_GATES[harness.name as AgentHarnessName] !== undefined;
+}
+
+export function resolveHarness(name: string | undefined, env?: HarnessGateEnv): AgentHarness {
   if (name === undefined || name.trim() === "") return opencodeHarness;
   const harness = HARNESSES[name.trim().toLowerCase()];
-  if (!harness) {
+  if (!harness || !harnessEnabled(harness, env)) {
+    const selectable = Object.values(HARNESSES)
+      .filter((entry) => harnessEnabled(entry, env))
+      .map((entry) => entry.name)
+      .join(", ");
     throw new Error(
-      `Unknown agent harness ${JSON.stringify(name)}: expected one of ${Object.keys(HARNESSES).join(", ")}.`,
+      `Unknown agent harness ${JSON.stringify(name)}: expected one of ${selectable}.`,
     );
   }
   // Registered is not runnable: cursor/antigravity have no CLI in the sandbox
@@ -49,16 +78,23 @@ export function harnessRunsOn(harness: AgentHarness, runtime: RuntimeName): bool
  * registered for catalog/type surfaces but declare no runtimes.
  */
 export const SANDBOX_HARNESS_NAMES: readonly AgentHarnessName[] = Object.values(HARNESSES)
-  .filter((harness) => harnessRunsOn(harness, "sandbox"))
+  .filter((harness) => harnessRunsOn(harness, "sandbox") && HARNESS_GATES[harness.name as AgentHarnessName] === undefined)
   .map((harness) => harness.name);
+
+/** Sandbox harnesses for this deployment — the always-on list plus any gated harness the flag enabled. */
+export function sandboxHarnessNames(env: HarnessGateEnv): readonly AgentHarnessName[] {
+  return Object.values(HARNESSES)
+    .filter((harness) => harnessRunsOn(harness, "sandbox") && harnessEnabled(harness, env))
+    .map((harness) => harness.name);
+}
 
 /**
  * The harness for one run: the delegation input wins, then the AGENT_HARNESS
  * deploy default, then OpenCode. Invalid names throw here — before approval —
  * so a bad harness never surfaces as an exec error inside the container.
  */
-export function resolveRunHarness(input: string | undefined, envDefault: string | undefined): AgentHarness {
-  return resolveHarness(input !== undefined && input.trim() !== "" ? input : envDefault);
+export function resolveRunHarness(input: string | undefined, envDefault: string | undefined, env?: HarnessGateEnv): AgentHarness {
+  return resolveHarness(input !== undefined && input.trim() !== "" ? input : envDefault, env);
 }
 
 /**
@@ -71,7 +107,7 @@ export function allowedHostsFor(harness: AgentHarness, model: string): string[] 
 
 export type { AgentHarness, AgentHarnessName };
 
-export const HARNESS_NAMES = ["opencode", "claude-code", "codex", "devin", "grok", "cursor", "antigravity"] as const;
+export const HARNESS_NAMES = ["opencode", "claude-code", "claude-subscription", "codex", "devin", "grok", "cursor", "antigravity"] as const;
 
 /**
  * Per-harness default coding model. The checked-in ids are defaults, not
@@ -82,6 +118,9 @@ export const HARNESS_NAMES = ["opencode", "claude-code", "codex", "devin", "grok
 export const HARNESS_DEFAULT_MODELS: Record<string, string> = {
   opencode: "google/gemini-3.5-flash-lite",
   "claude-code": "anthropic/claude-sonnet-4-6",
+  // Subscription models carry the anthropic-subscription namespace: the
+  // provider prefix is the auth-path distinction, not a different vendor.
+  "claude-subscription": "anthropic-subscription/claude-sonnet-4-6",
   codex: "openai/gpt-5.3-codex",
   // SWE-2 medium is the free tier on Devin Pro; bare "swe-2" is a family
   // name the pinned CLI (3000.10.31) does not resolve, and "swe" is the

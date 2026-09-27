@@ -21,6 +21,8 @@ import {
   setItemStatus,
 } from "../github-project.js";
 import { allowedHostsFor, resolveHarness } from "../harness/index.js";
+import type { EgressOverride } from "../harness/types.js";
+import { assertHarnessAuthorized } from "../auth/index.js";
 import {
   formatAgentResult,
   parseAgentToolInput,
@@ -46,10 +48,17 @@ export async function pinSandboxEgress(
   sandboxId: string,
   repoUrl: string,
   egressHosts?: string[],
+  egressOverrides?: EgressOverride[],
 ): Promise<void> {
   const sandbox = getSandbox(env.Sandbox, sandboxId);
   if (egressHosts && egressHosts.length > 0) {
     await sandbox.approveHarnessEgress(egressHosts);
+  }
+  // T48: per-run handler swaps land inside the same pin — a subscription
+  // harness claims its provider host's handler so the token branch serves
+  // it, never the gateway's API-key path.
+  if (egressOverrides && egressOverrides.length > 0) {
+    await sandbox.approveEgressOverrides(egressOverrides);
   }
   const { owner, repo } = parseGitHubRepoUrl(repoUrl);
   await sandbox.approveRepoScope(`/${owner}/${repo}`);
@@ -68,7 +77,7 @@ function createSlackProgress(env: Env, thread?: CodingTaskInput["slackThread"]):
   );
 }
 
-export function createSandboxOps(env: Env, sandboxId: string, egressHosts?: string[]): SandboxOps {
+export function createSandboxOps(env: Env, sandboxId: string, egressHosts?: string[], egressOverrides?: EgressOverride[]): SandboxOps {
   const sandbox = getSandbox(env.Sandbox, sandboxId);
   return {
     async gitCheckout(repoUrl, opts) {
@@ -77,7 +86,7 @@ export function createSandboxOps(env: Env, sandboxId: string, egressHosts?: stri
       // GitHub credential scoped to this one repo (B6). The pin + clone pair
       // is one retried unit — a half-pinned sandbox must not be reused.
       await withRetry(HARNESS_RETRY, async () => {
-        await pinSandboxEgress(env, sandboxId, repoUrl, egressHosts);
+        await pinSandboxEgress(env, sandboxId, repoUrl, egressHosts, egressOverrides);
         await sandbox.gitCheckout(repoUrl, { branch: opts.branch, targetDir: opts.targetDir });
       });
     },
@@ -235,10 +244,15 @@ export class OpenCodeAgent extends AIChatAgent<Env> {
           // The approval froze the harness (and model) for this run. The
           // deployment default is only the fallback for pre-harness inputs.
           slackProgress = createSlackProgress(this.env, input.slackThread);
-          const harness = resolveHarness(input.harness ?? this.env.AGENT_HARNESS);
+          const harness = resolveHarness(input.harness ?? this.env.AGENT_HARNESS, this.env);
+          // T48: subscription-authed harnesses must have a succeeded auth
+          // flow before a container spins up — assert at the admission seam,
+          // after the harness is resolved, before any sandbox work starts.
+          await assertHarnessAuthorized(this.env, harness, input);
           const adapter = createRuntimeAdapter(resolveRuntimeName(this.env.RUNTIME), harness);
           const hosts = allowedHostsFor(harness, input.codingModel);
-          const ops = createSandboxOps(this.env, input.sandboxId, hosts);
+          const overrides = harness.egressOverrides?.(input);
+          const ops = createSandboxOps(this.env, input.sandboxId, hosts, overrides);
           const result = await adapter.runCodingTask(ops, input, emit, {
             signal,
             signals: runSignals,
