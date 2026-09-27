@@ -124,6 +124,7 @@ export function revalidateCodingRoute(snapshot: ModelConfigSnapshot, route: Appr
  * deployment var; the checked-in default is the floor. `coding` has no
  * Workers AI resolution — it routes through connections.
  */
+/** @public */
 export function resolvePurposeModel(
   policy: PurposePolicy,
   purpose: Exclude<Purpose, "coding" | "intent" | "quality">,
@@ -133,4 +134,5 @@ export function resolvePurposeModel(
 }
 
 /** Harness names the catalog may reference — re-exported for route modules. */
+/** @public */
 export const CODING_HARNESSES: readonly string[] = HARNESS_NAMES;

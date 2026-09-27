@@ -21,7 +21,6 @@ export {
 } from "@shiba/shared";
 export type {
   ApprovalEvidence,
-  ApprovalExecution,
   ApprovalKind,
   CommandReceipt,
   PendingApproval,

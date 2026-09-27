@@ -54,6 +54,7 @@ export const SERVICE_AUTH_MODE: Record<ConnectionService, ConnectionAuthMode> = 
 };
 
 /** Which env secret's *presence* a worker-service-secret connection reports. */
+/** @public */
 export const SERVICE_SECRET_ENV: Partial<Record<ConnectionService, string>> = {
   devin: "DEVIN_API_KEY",
   cursor: "CURSOR_API_KEY",
@@ -80,6 +81,7 @@ export interface Connection {
 }
 
 /** Wire projection: everything a dashboard may see. Contains no secrets. */
+/** @public */
 export function publicConnection(connection: Connection): Connection {
   return { ...connection };
 }
@@ -223,6 +225,7 @@ export function validateConnectionModel(
  * deployment's known-live ids per service (static defaults plus operator
  * additions); ids are validated, never invented here.
  */
+/** @public */
 export function modelOptionsForPurpose(
   connections: Connection[],
   purpose: Purpose,

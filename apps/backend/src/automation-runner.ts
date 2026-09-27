@@ -262,6 +262,3 @@ export async function fireMatchingAutomations(
   return { results, automations: [...next.values()] };
 }
 
-export function envAutomationsEnabled(value: string | undefined): boolean {
-  return automationsEnabled(value);
-}

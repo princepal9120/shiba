@@ -23,10 +23,3 @@ export function appendReceipt(existing: Receipt[] | undefined, receipt: Receipt)
   return next.slice(next.length - MAX_RECEIPTS);
 }
 
-export function receiptsFromProgress(phase: string, message: string, at?: number): Receipt {
-  const kind: ReceiptKind =
-    phase === "clone" || phase === "configure" || phase === "code" || phase === "collect"
-      ? phase
-      : "code";
-  return makeReceipt(kind, message, at);
-}
