@@ -26,8 +26,10 @@ import {
   type HarnessCapabilities,
   type HarnessEvent,
   type VerificationOutcome,
-  verifyRunOutcome,
+  TEST_COMMAND_ALLOWLIST,
+  type VerifyContext,
 } from "./types.js";
+import { verifyRun } from "../exec-allowlist.js";
 
 /** Devin is its own provider namespace: codingModel is "devin/<model-alias>". */
 export const DEVIN_PROVIDERS = ["devin"] as const;
@@ -46,11 +48,6 @@ export class DevinErrorEvent extends Error {
     this.name = "DevinErrorEvent";
     this.detail = detail;
   }
-  /** Deterministic outcome check — gates the completed claim (T43/T46 feed). */
-  async verify(_input: CodingTaskInput, result: CodingTaskResult): Promise<VerificationOutcome> {
-    return verifyRunOutcome(result);
-  }
-
 }
 
 /** First-run banner lines that are noise, not progress. */
@@ -140,12 +137,12 @@ export class DevinHarness implements AgentHarness {
   }
   /** T43 declared capabilities — the gates read this, not the name. */
   capabilities(_model?: string): HarnessCapabilities {
-    return { streamsText: true, emitsToolCalls: false, supportsResume: true, supportsSteering: false, supportsFileAttachments: false, canRunTests: true, supportsConversationRollback: false, supportedRuntimes: ["sandbox"] };
+    return { streamsText: true, emitsToolCalls: false, supportsResume: true, supportsSteering: false, supportsFileAttachments: false, canRunTests: true, execAllowlist: TEST_COMMAND_ALLOWLIST, supportsConversationRollback: false, supportedRuntimes: ["sandbox"] };
   }
 
   /** Deterministic outcome check — gates the completed claim (T43/T46 feed). */
-  async verify(_input: CodingTaskInput, result: CodingTaskResult): Promise<VerificationOutcome> {
-    return verifyRunOutcome(result);
+  async verify(input: CodingTaskInput, result: CodingTaskResult, ctx?: VerifyContext): Promise<VerificationOutcome> {
+    return verifyRun(this, input, result, ctx);
   }
 
 }

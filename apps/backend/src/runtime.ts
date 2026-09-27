@@ -209,11 +209,32 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
       };
       // T43 verify gate — load-bearing: an exit-0 run with an empty diff is NOT
       // completed. Deterministic evidence only; this feeds T46's proof gate.
-      const verification = await this.harness.verify(input, completed);
+      // T45: declared verifyCommands run through the scoped executor — each
+      // command is allowlisted Worker-side and reported as a progress receipt.
+      const verification = await this.harness.verify(input, completed, {
+        ops: { exec: (command, runOpts) => ops.exec(command, runOpts) },
+        workdir,
+        signal: opts?.signal,
+        onReceipt: async (receipt) => {
+          const note =
+            receipt.outcome === "refused"
+              ? "refused by allowlist"
+              : receipt.outcome === "timeout"
+                ? "timed out"
+                : `exit ${receipt.exitCode}`;
+          await emit({
+            phase: "collect",
+            message: `verify: ${receipt.argv.join(" ")} -> ${note}.`,
+            fraction: 0.95,
+          });
+        },
+      });
       if (!verification.ok) {
-        return failureResult(`Verification failed: ${verification.reason}`, run.exitCode, stderrTail, signals);
+        // The check list rides along on the error envelope too — a failed
+        // gate must name its failing checks, not just "Verification failed".
+        return { ...failureResult(`Verification failed: ${verification.reason}`, run.exitCode, stderrTail, signals), verification };
       }
-      return completed;
+      return { ...completed, verification };
     } catch (error) {
       return failureResult(`Change collection failed: ${shortError(error)}`, run.exitCode, stderrTail, signals);
     }

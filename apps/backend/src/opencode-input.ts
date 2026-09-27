@@ -11,6 +11,9 @@ import { parseGitHubRepoUrl } from "./security.js";
 export const TOOL_INPUT_MARKER = "SHIBA_AI_COWORKER_CODING_TASK_JSON";
 export const RESULT_MARKER = "SHIBA_AI_COWORKER_CODING_RESULT_JSON";
 
+/** T45: cap on caller-declared verify commands — one test suite, not a shell session. */
+export const VERIFY_MAX_COMMANDS = 5;
+
 const codingTaskInputSchema = z.object({
   repoUrl: z.string().min(1),
   task: z.string().min(1),
@@ -37,6 +40,13 @@ const codingTaskInputSchema = z.object({
       threadTs: z.string().min(1),
     })
     .optional(),
+  /**
+   * T45 verify commands — argv arrays, never shell strings. Declared by
+   * the caller (approval-gated like the rest of the envelope), executed
+   * through the scoped executor (src/exec-allowlist.ts) during verify.
+   * Anything outside the harness's declared execAllowlist is refused.
+   */
+  verifyCommands: z.array(z.array(z.string().min(1)).min(1)).max(VERIFY_MAX_COMMANDS).optional(),
 });
 
 const codingTaskInputWithRouteSchema = codingTaskInputSchema.superRefine((input, ctx) => {
@@ -75,6 +85,25 @@ const codingTaskResultSchema = z.object({
    * The sandbox preview URL itself is ephemeral and never leaves the worker.
    */
   screenshotUrl: z.string().optional(),
+  /**
+   * T45 verify verdict — the check list the gate ran, carried on the
+   * envelope so the orchestrator/UI records evidence, not a scrape.
+   */
+  verification: z
+    .object({
+      ok: z.boolean(),
+      reason: z.string().optional(),
+      checks: z
+        .array(
+          z.object({
+            name: z.string(),
+            ok: z.boolean(),
+            detail: z.string().optional(),
+          }),
+        )
+        .optional(),
+    })
+    .optional(),
   /**
    * T42 typed run signals, in emission order. The orchestrator persists
    * them on the run row so a waiter reads the milestone it needs instead

@@ -23,8 +23,9 @@ import {
   type HarnessCapabilities,
   type HarnessEvent,
   type VerificationOutcome,
-  verifyRunOutcome,
+  type VerifyContext,
 } from "./types.js";
+import { verifyRun } from "../exec-allowlist.js";
 
 export const CURSOR_PROVIDERS = ["cursor"] as const;
 
@@ -39,11 +40,6 @@ export class CursorErrorEvent extends Error {
     this.name = "CursorErrorEvent";
     this.detail = detail;
   }
-  /** Deterministic outcome check — gates the completed claim (T43/T46 feed). */
-  async verify(_input: CodingTaskInput, result: CodingTaskResult): Promise<VerificationOutcome> {
-    return verifyRunOutcome(result);
-  }
-
 }
 
 export class CursorEventError extends Error {}
@@ -109,12 +105,12 @@ export class CursorHarness implements AgentHarness {
   }
   /** T43 declared capabilities — the gates read this, not the name. */
   capabilities(_model?: string): HarnessCapabilities {
-    return { streamsText: true, emitsToolCalls: true, supportsResume: false, supportsSteering: false, supportsFileAttachments: false, canRunTests: false, supportsConversationRollback: false, supportedRuntimes: [] };
+    return { streamsText: true, emitsToolCalls: true, supportsResume: false, supportsSteering: false, supportsFileAttachments: false, canRunTests: false, execAllowlist: [], supportsConversationRollback: false, supportedRuntimes: [] };
   }
 
   /** Deterministic outcome check — gates the completed claim (T43/T46 feed). */
-  async verify(_input: CodingTaskInput, result: CodingTaskResult): Promise<VerificationOutcome> {
-    return verifyRunOutcome(result);
+  async verify(input: CodingTaskInput, result: CodingTaskResult, ctx?: VerifyContext): Promise<VerificationOutcome> {
+    return verifyRun(this, input, result, ctx);
   }
 
 }

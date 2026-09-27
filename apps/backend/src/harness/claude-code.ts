@@ -17,8 +17,10 @@ import {
   type HarnessCapabilities,
   type HarnessEvent,
   type VerificationOutcome,
-  verifyRunOutcome,
+  TEST_COMMAND_ALLOWLIST,
+  type VerifyContext,
 } from "./types.js";
+import { verifyRun } from "../exec-allowlist.js";
 
 export const CLAUDE_CODE_PROVIDERS = ["anthropic"] as const;
 
@@ -30,11 +32,6 @@ export class ClaudeCodeErrorEvent extends Error {
     this.name = "ClaudeCodeErrorEvent";
     this.detail = detail;
   }
-  /** Deterministic outcome check — gates the completed claim (T43/T46 feed). */
-  async verify(_input: CodingTaskInput, result: CodingTaskResult): Promise<VerificationOutcome> {
-    return verifyRunOutcome(result);
-  }
-
 }
 
 export class ClaudeCodeEventError extends Error {}
@@ -148,12 +145,12 @@ export class ClaudeCodeHarness implements AgentHarness {
   }
   /** T43 declared capabilities — the gates read this, not the name. */
   capabilities(_model?: string): HarnessCapabilities {
-    return { streamsText: true, emitsToolCalls: true, supportsResume: true, supportsSteering: false, supportsFileAttachments: false, canRunTests: true, supportsConversationRollback: false, supportedRuntimes: ["sandbox"] };
+    return { streamsText: true, emitsToolCalls: true, supportsResume: true, supportsSteering: false, supportsFileAttachments: false, canRunTests: true, execAllowlist: TEST_COMMAND_ALLOWLIST, supportsConversationRollback: false, supportedRuntimes: ["sandbox"] };
   }
 
   /** Deterministic outcome check — gates the completed claim (T43/T46 feed). */
-  async verify(_input: CodingTaskInput, result: CodingTaskResult): Promise<VerificationOutcome> {
-    return verifyRunOutcome(result);
+  async verify(input: CodingTaskInput, result: CodingTaskResult, ctx?: VerifyContext): Promise<VerificationOutcome> {
+    return verifyRun(this, input, result, ctx);
   }
 
 }

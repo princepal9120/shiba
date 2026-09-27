@@ -123,14 +123,81 @@ export interface HarnessCapabilities {
   supportsFileAttachments: boolean;
   /** The harness can drive a project test command — pairs with T45's executor. */
   canRunTests: boolean;
+  /**
+   * T45 argv-prefix allowlist for the scoped executor — declared here, not
+   * hardcoded per name in the executor. An entry like ["pnpm", "test"]
+   * admits `pnpm test` and `pnpm test --filter x`. Empty = the harness may
+   * declare verifyCommands but none will ever execute.
+   */
+  execAllowlist: readonly (readonly string[])[];
   /** antigravity's documented trap: no conversation rollback — T44's revert refuses first. */
   supportsConversationRollback: boolean;
   maxContextTokens?: number;
   supportedRuntimes: readonly RuntimeName[];
 }
 
+/** One deterministic check inside a verify verdict. */
+export interface VerificationCheck {
+  readonly name: string;
+  readonly ok: boolean;
+  readonly detail?: string;
+}
+
 /** Deterministic verify verdict — load-bearing, unlike the advisory quality score. */
-export type VerificationOutcome = { ok: true } | { ok: false; reason: string };
+export type VerificationOutcome =
+  | { readonly ok: true; readonly checks?: VerificationCheck[] }
+  | { readonly ok: false; readonly reason: string; readonly checks?: VerificationCheck[] };
+
+/**
+ * The shared test-command allowlist runnable harnesses declare through
+ * {@link HarnessCapabilities.execAllowlist} — package-manager test/lint
+ * gates only. Anything not matching a prefix is refused Worker-side,
+ * before exec.
+ */
+export const TEST_COMMAND_ALLOWLIST: readonly (readonly string[])[] = [
+  ["pnpm", "test"],
+  ["pnpm", "run", "test"],
+  ["pnpm", "lint"],
+  ["pnpm", "typecheck"],
+  ["pnpm", "build"],
+  ["npm", "test"],
+  ["npm", "run", "test"],
+  ["npm", "run", "lint"],
+  ["npm", "run", "typecheck"],
+  ["npm", "run", "build"],
+  ["yarn", "test"],
+  ["bun", "test"],
+  ["npx", "vitest"],
+  ["pnpm", "vitest"],
+  ["go", "test"],
+  ["cargo", "test"],
+  ["pytest"],
+];
+
+/** What a single scoped command execution did — the verify receipt. */
+export interface ExecReceipt {
+  readonly argv: readonly string[];
+  readonly outcome: "refused" | "exited" | "timeout";
+  readonly exitCode?: number;
+  readonly durationMs: number;
+  readonly outputTail: string;
+}
+
+/** The exec surface verify commands see — a SandboxOps-shaped runner. */
+export interface ExecCommandRunner {
+  exec(
+    command: string,
+    opts?: { cwd?: string; timeoutMs?: number; signal?: AbortSignal },
+  ): Promise<{ stdout: string; stderr: string; exitCode: number }>;
+}
+
+/** What verify needs beyond the result envelope: sandbox exec + workdir. */
+export interface VerifyContext {
+  readonly ops: ExecCommandRunner;
+  readonly workdir: string;
+  readonly signal?: AbortSignal;
+  onReceipt?(receipt: ExecReceipt): void | Promise<void>;
+}
 
 /**
  * The shared deterministic verify every sandbox harness runs: a completed
@@ -177,5 +244,5 @@ export interface AgentHarness {
    * the adapter refuses a "completed" result verify rejects. Distinct from
    * result-quality.ts (advisory, fail-open); this never calls a model.
    */
-  verify(input: CodingTaskInput, result: CodingTaskResult): Promise<VerificationOutcome>;
+  verify(input: CodingTaskInput, result: CodingTaskResult, ctx?: VerifyContext): Promise<VerificationOutcome>;
 }
