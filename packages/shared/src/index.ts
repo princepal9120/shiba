@@ -17,3 +17,4 @@ export * from "./receipts.js";
 export * from "./run-errors.js";
 export * from "./runs.js";
 export * from "./steering.js";
+export * from "./auth.js";
