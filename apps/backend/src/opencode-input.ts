@@ -4,6 +4,7 @@
  * parseAgentToolInput. The child never scrapes arbitrary prose.
  */
 import { z } from "zod";
+import { RUN_SIGNAL_KINDS } from "@shiba/shared";
 import { isApprovedRoute, type ApprovedRoute } from "./model-connections.js";
 import { parseGitHubRepoUrl } from "./security.js";
 
@@ -74,6 +75,20 @@ const codingTaskResultSchema = z.object({
    * The sandbox preview URL itself is ephemeral and never leaves the worker.
    */
   screenshotUrl: z.string().optional(),
+  /**
+   * T42 typed run signals, in emission order. The orchestrator persists
+   * them on the run row so a waiter reads the milestone it needs instead
+   * of ordering by convention. Partial on a failed run.
+   */
+  signals: z
+    .array(
+      z.object({
+        kind: z.enum(RUN_SIGNAL_KINDS),
+        at: z.number(),
+        detail: z.string().optional(),
+      }),
+    )
+    .optional(),
 });
 
 export type CodingTaskResult = z.infer<typeof codingTaskResultSchema>;

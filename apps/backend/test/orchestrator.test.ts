@@ -137,11 +137,10 @@ describe("orchestrator run routes", () => {
   it("propagates cancellation to the running child execution", async () => {
     const instance = agent();
     mocks.execute.mockImplementation(async (_input, options: { abortSignal?: AbortSignal }) => {
-      // The child hangs like a real container run until its signal aborts.
-      await new Promise((resolve, reject) => {
-        const timer = setTimeout(resolve, 1000);
+      // The child hangs like a real container run until its signal aborts —
+      // T42: no timer fallback; only the abort resolves this promise.
+      await new Promise((_resolve, reject) => {
         options?.abortSignal?.addEventListener("abort", () => {
-          clearTimeout(timer);
           reject(new Error("Run cancelled."));
         });
       });

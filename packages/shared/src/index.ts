@@ -8,6 +8,7 @@ export * from "./approvals.js";
 export * from "./chat.js";
 export * from "./decide.js";
 export * from "./command-receipts.js";
+export * from "./run-signals.js";
 export * from "./mailbox.js";
 export * from "./mcp.js";
 export * from "./memory.js";

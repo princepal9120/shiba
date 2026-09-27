@@ -10,6 +10,7 @@
  * are harness-dispatched (default: OpenCode).
  */
 import type { CodingTaskInput, CodingTaskResult } from "./opencode-input.js";
+import type { RunSignal, RunSignalKind } from "@shiba/shared";
 import { AntigravityErrorEvent } from "./harness/antigravity.js";
 import { ClaudeCodeErrorEvent } from "./harness/claude-code.js";
 import { CodexErrorEvent } from "./harness/codex.js";
@@ -68,7 +69,16 @@ export interface RuntimeAdapter {
     ops: SandboxOps,
     input: CodingTaskInput,
     emit: ProgressEmitter,
-    opts?: { signal?: AbortSignal },
+    opts?: {
+      signal?: AbortSignal;
+      /**
+       * T42 run-signal collector: the adapter appends each milestone it
+       * crosses, in order, and the result envelope carries the same list
+       * back to the orchestrator. Callers that pass no collector still get
+       * `result.signals`.
+       */
+      signals?: RunSignal[];
+    },
   ): Promise<CodingTaskResult>;
 }
 
@@ -89,25 +99,36 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
     ops: SandboxOps,
     input: CodingTaskInput,
     emit: ProgressEmitter,
-    opts?: { signal?: AbortSignal },
+    opts?: { signal?: AbortSignal; signals?: RunSignal[] },
   ): Promise<CodingTaskResult> {
     const workdir = `/workspace/${input.sandboxId}`;
     const config = this.harness.configFile(input, input.sandboxId);
+    // T42: one ordered signal list per attempt — the caller's collector
+    // and the returned result read the same record.
+    const signals = opts?.signals ?? [];
+    const milestone = (kind: RunSignalKind, detail?: string) => {
+      signals.push(detail !== undefined ? { kind, at: Date.now(), detail } : { kind, at: Date.now() });
+    };
 
     throwIfAborted(opts?.signal);
     await emit({ phase: "clone", message: `Cloning ${input.repoUrl} (branch ${input.baseBranch}).`, fraction: 0.05 });
+    // The ops handle being bound is the readiness claim; egress pinning
+    // runs inside this first call as one retried unit with the clone.
+    milestone("sandbox.ready", input.sandboxId);
     try {
       await ops.gitCheckout(input.repoUrl, { branch: input.baseBranch, targetDir: workdir });
+      milestone("clone.complete", input.baseBranch);
     } catch (error) {
-      return failureResult(`Clone failed: ${shortError(error)}`, 0, "");
+      return failureResult(`Clone failed: ${shortError(error)}`, 0, "", signals);
     }
 
     await emit({ phase: "configure", message: `Writing isolated ${this.harness.name} config.`, fraction: 0.15 });
     throwIfAborted(opts?.signal);
     try {
       if (config) await ops.writeFile(config.path, config.contents);
+      milestone("config.written", config?.path ?? "none");
     } catch (error) {
-      return failureResult(`Config write failed: ${shortError(error)}`, 0, "");
+      return failureResult(`Config write failed: ${shortError(error)}`, 0, "", signals);
     }
 
     await emit({ phase: "code", message: `Running ${this.harness.name} headlessly.`, fraction: 0.25 });
@@ -116,6 +137,7 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
     let run: ExecResult;
     const output = streamProgress(this.harness, emit, opts?.signal);
     try {
+      milestone("harness.started", this.harness.name);
       // Only thrown errors are retry candidates: a returned nonzero
       // exitCode is the harness's verdict, not a transient failure.
       run = await withRetry(HARNESS_RETRY, () =>
@@ -130,6 +152,9 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
         }),
         opts?.signal,
       );
+      // The harness process resolved — idle covers clean exits and
+      // nonzero verdicts alike; a thrown error means it never went idle.
+      milestone("harness.idle", `exitCode:${run.exitCode}`);
       await output.finish();
       throwIfAborted(opts?.signal);
     } catch (error) {
@@ -143,9 +168,9 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
         error instanceof CursorErrorEvent ||
         error instanceof AntigravityErrorEvent
       ) {
-        return failureResult(error.message, 0, "");
+        return failureResult(error.message, 0, "", signals);
       }
-      return failureResult(`${this.harness.name} execution failed: ${shortError(error)}`, 0, "");
+      return failureResult(`${this.harness.name} execution failed: ${shortError(error)}`, 0, "", signals);
     }
     const stderrTail = redactSecrets(boundTail(run.stderr, MAX_STDERR_TAIL_CHARS));
     if (run.exitCode !== 0) {
@@ -156,6 +181,7 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
         `${this.harness.name} exited with code ${run.exitCode}.${detail ? ` stderr: ${boundTail(detail, 1500)}` : ""}`,
         run.exitCode,
         stderrTail,
+        signals,
       );
     }
 
@@ -169,6 +195,7 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
         () => collectChanges(ops, workdir, opts?.signal),
         opts?.signal,
       );
+      milestone("collect.complete", `${collection.changedFiles.length} files`);
       await emit({ phase: "collect", message: `Done: ${collection.changedFiles.length} changed files.`, fraction: 1 });
       return {
         status: "completed",
@@ -177,10 +204,11 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
         changedFiles: collection.changedFiles,
         diff: collection.diff,
         files: collection.files,
+        signals,
         summary: summarizeRun(this.harness.name, input, collection.changedFiles, boundTail(run.stdout, MAX_STDOUT_TAIL_CHARS)),
       };
     } catch (error) {
-      return failureResult(`Change collection failed: ${shortError(error)}`, run.exitCode, stderrTail);
+      return failureResult(`Change collection failed: ${shortError(error)}`, run.exitCode, stderrTail, signals);
     }
   }
 }
@@ -210,7 +238,12 @@ export function createRuntimeAdapter(
   return name === "computer" ? new ComputerPreviewAdapter() : new SandboxRuntimeAdapter(harness);
 }
 
-function failureResult(summary: string, exitCode: number, stderrTail: string): CodingTaskResult {
+function failureResult(
+  summary: string,
+  exitCode: number,
+  stderrTail: string,
+  signals?: RunSignal[],
+): CodingTaskResult {
   return {
     status: "error",
     exitCode,
@@ -218,6 +251,9 @@ function failureResult(summary: string, exitCode: number, stderrTail: string): C
     changedFiles: [],
     diff: "",
     files: [],
+    // Partial signals survive a failure — the missing ones name the
+    // phase the run never reached.
+    ...(signals && signals.length > 0 ? { signals } : {}),
     summary: redactSecrets(summary),
   };
 }
