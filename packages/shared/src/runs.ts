@@ -7,6 +7,7 @@
 import type { ApprovedRoute } from "./model.js";
 import type { Receipt } from "./receipts.js";
 import type { RunErrorCode } from "./run-errors.js";
+import type { SteeringNote } from "./steering.js";
 
 /**
  * Worker-vouched agent identity for run/approval reads: only the MCP
@@ -64,6 +65,12 @@ export interface DelegatedRun {
    * Absent on runs that predate route freezing. Never carries credentials.
    */
   route?: ApprovedRoute;
+  /**
+   * T31 mid-run steering notes, oldest-first and bounded (see steering.ts).
+   * Escalations point at the pending approval a steer minted after
+   * cancelling the live run. Absent on runs that predate steering.
+   */
+  steering?: SteeringNote[];
 }
 
 export type RunPatch = {
