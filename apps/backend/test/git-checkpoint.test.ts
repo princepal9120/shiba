@@ -184,4 +184,26 @@ describe("adapter integration", () => {
     // The result still carries the capped tail.
     expect(result.diff.length).toBeLessThanOrEqual(120_040);
   });
+
+  it("T46 gate: a run with no diff and no proof settles error, not completed", async () => {
+    const ops = gitOps({ diffOut: "" });
+    // Overwrite the status answer too: no diff AND no changed files AND no
+    // test evidence is a fake success, not a completed run.
+    const base = ops.exec.bind(ops);
+    ops.exec = async (command, opts) =>
+      command.includes("status")
+        ? { stdout: "", stderr: "", exitCode: 0 }
+        : base(command, opts);
+    const result = await new SandboxRuntimeAdapter().runCodingTask(ops, INPUT, () => {}, {});
+    expect(result.status).toBe("error");
+    expect(result.summary).toContain("Verification failed");
+  });
+
+  it("T46: a docs-only diff (no app, no testCommand) still completes on diff evidence", async () => {
+    const ops = gitOps({ diffOut: "diff --git a/README.md b/README.md\n+docs\n" });
+    const result = await new SandboxRuntimeAdapter().runCodingTask(ops, INPUT, () => {}, {});
+    expect(result.status).toBe("completed");
+    expect(result.testEvidence).toBeUndefined();
+    expect(result.diff).toContain("README.md");
+  });
 });

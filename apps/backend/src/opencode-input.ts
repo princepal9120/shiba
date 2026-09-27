@@ -83,6 +83,18 @@ const codingTaskResultSchema = z.object({
    */
   screenshotUrl: z.string().optional(),
   /**
+   * T46: evidence that a declared testCommand actually ran — command (shell-
+   * joined form), exit code, and a bounded output tail. Rides the envelope so
+   * the PR body quotes the real verification output instead of a summary.
+   */
+  testEvidence: z
+    .object({
+      command: z.string(),
+      exitCode: z.number(),
+      outputTail: z.string(),
+    })
+    .optional(),
+  /**
    * T42 typed run signals, in emission order. The orchestrator persists
    * them on the run row so a waiter reads the milestone it needs instead
    * of ordering by convention. Partial on a failed run.

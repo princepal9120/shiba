@@ -198,6 +198,26 @@ describe("OpenCodeAgent response boundary", () => {
     expect(mocks.publish).toHaveBeenCalledTimes(1);
   });
 
+  it("writes the proof section into the PR body: test tail + honest preview state (T46)", async () => {
+    // No BROWSER/ATTACHMENTS bindings → captureRunPreview fails safe to null:
+    // the body must say so instead of implying a proof link that isn't there,
+    // and must quote the real test output tail, not a summary of it.
+    mocks.run.mockResolvedValue({
+      ...RESULT,
+      testEvidence: {
+        command: "'pnpm' 'test'",
+        exitCode: 0,
+        outputTail: "Test Files  12 passed (12)\n Tests  96 passed",
+      },
+    });
+    await responseFor(agent({ ...INPUT, publishPullRequest: true }, "token"));
+    const body = (mocks.publish.mock.calls[0]?.[0] as { body: string }).body;
+    expect(body).toContain("**Test evidence:** `'pnpm' 'test'` → exit 0");
+    expect(body).toContain("Tests  96 passed");
+    expect(body).toContain("No preview captured");
+    expect(body).not.toMatch(/\[Preview screenshot\]/);
+  });
+
   it("reports a publication error instead of emitting coding success", async () => {
     mocks.publish.mockRejectedValue(new Error("GitHub unavailable"));
     const { result, text } = await responseFor(agent({ ...INPUT, publishPullRequest: true }, "token"));

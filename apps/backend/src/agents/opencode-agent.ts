@@ -324,6 +324,15 @@ export class OpenCodeAgent extends AIChatAgent<Env> {
       changedFiles: result.changedFiles.slice(0, 50).map((path) => this.safeText(path, 1024)),
       diff: this.safeText(result.diff, 20_000),
       files: [],
+      ...(result.testEvidence
+        ? {
+            testEvidence: {
+              command: this.safeText(result.testEvidence.command, 200),
+              exitCode: result.testEvidence.exitCode,
+              outputTail: this.safeText(result.testEvidence.outputTail, 8000),
+            },
+          }
+        : {}),
     };
   }
 
@@ -345,7 +354,22 @@ export class OpenCodeAgent extends AIChatAgent<Env> {
       "",
       `Sandbox: ${input.sandboxId}`,
     ];
+    // T46 proof section: a reviewer verifies from the PR body without reading
+    // the diff line by line. The stored screenshot is the durable proof; the
+    // tokenized exposePort URL is a bearer credential and never leaves the
+    // Worker (T33). When no capture exists (no servable app), the body says
+    // so instead of implying proof that isn't there.
     if (capture?.screenshotUrl) bodyLines.push("", `[Preview screenshot](${capture.screenshotUrl})`);
+    else bodyLines.push("", "No preview captured — this change has no servable app; verify via the diff and test evidence.");
+    if (result.testEvidence) {
+      bodyLines.push(
+        "",
+        `**Test evidence:** \`${this.safeText(result.testEvidence.command, 200)}\` → exit ${result.testEvidence.exitCode}`,
+        "```",
+        this.safeText(result.testEvidence.outputTail, 4000),
+        "```",
+      );
+    }
     // The screenshot link is served by this Worker behind the read-API auth gate.
     const published = await publishFilesAsPullRequest({
       repoUrl: input.repoUrl,
