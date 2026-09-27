@@ -43,6 +43,7 @@ import { handleSandboxRoutes, isValidSandboxId } from "./sandbox-routes.js";
 import { screenshotKeyFor } from "./screenshot.js";
 import { readSetupStatus } from "./setup-status.js";
 import { isPublicRequest } from "./public-routes.js";
+import { handleOAuth, verifyOAuthAccessToken } from "./oauth-mcp.js";
 import { handleWaitlist } from "./waitlist.js";
 import { Waitlist } from "./waitlist-do.js";
 import { ModelConfig } from "./model-config-do.js";
@@ -90,6 +91,18 @@ function isMcpPath(pathname: string): boolean {
   return pathname === "/mcp" || pathname.startsWith("/mcp/");
 }
 
+// T29: the OAuth protocol surface is self-authenticated — each endpoint
+// enforces its own gate (PKCE, client records, owner consent). The sole
+// exception is /oauth/authorize, which must ride the owner's identity
+// check in isAuthenticated rather than being exempted.
+function isOAuthPath(pathname: string): boolean {
+  return pathname === "/.well-known/oauth-authorization-server"
+    || pathname === "/.well-known/oauth-protected-resource"
+    || pathname === "/oauth/register"
+    || pathname === "/oauth/token"
+    || pathname === "/oauth/revoke";
+}
+
 // Startup assertion (VERIFICATION_PLAN.md G2): `assertLiveCodingModel` already
 // enforces the retired-model deny list (see coding-model.ts). Re-running it on
 // every request is pure overhead once a request has proven CODING_MODEL live,
@@ -104,6 +117,9 @@ export function isAuthenticated(request: Request, env: Env): boolean {
   // `/mcp` runs on bearer tokens, not Access identity — the handler itself
   // verifies before any MCP traffic is served.
   if (isMcpPath(pathname)) return true;
+  // T29: OAuth endpoints are self-authenticated; /oauth/authorize is NOT
+  // in this list — owner consent requires the outer identity check.
+  if (isOAuthPath(pathname)) return true;
   if (!env.REQUIRE_ACCESS && !env.ACCESS_AUD) return true; // opt-out for `wrangler dev`
   return getUserId(request) !== null;
 }
@@ -1297,9 +1313,21 @@ async function handleMcp(request: Request, env: Env, _ctx: ExecutionContext): Pr
     return null;
   }
   const token = bearerToken(request);
-  const record = token === null ? null : await verifyToken(env, token);
+  // T29: static `shb_` agent tokens resolve first (the documented owner
+  // path); OAuth `sho_` access tokens resolve to the same TokenRecord
+  // shape so the requireScope→handler→audit gate is byte-identical.
+  const record = token === null
+    ? null
+    : (await verifyToken(env, token) ?? (token.startsWith("sho_") ? await verifyOAuthAccessToken(env, token) : null));
   if (!record) {
-    return Response.json({ error: "Authentication required." }, { status: 401 });
+    // WWW-Authenticate points MCP clients at the protected-resource doc so
+    // OAuth-capable clients discover the flow instead of just dying on 401.
+    return Response.json(
+      { error: "Authentication required." },
+      { status: 401, headers: {
+        "WWW-Authenticate": `Bearer resource_metadata="${url.origin}/.well-known/oauth-protected-resource"`,
+      } },
+    );
   }
   // Any client-supplied copy must go first — only the worker-verified
   // record may reach the MCP handler under this name.
@@ -1474,6 +1502,8 @@ export default {
       if (!isPublicRequest(request) && !isAuthenticated(request, env)) {
         return Response.json({ error: "Authentication required." }, { status: 401 });
       }
+      const oauthResponse = await handleOAuth(request, env, getUserId(request));
+      if (oauthResponse) return oauthResponse;
       const waitlistResponse = await handleWaitlist(request, env);
       if (waitlistResponse) return waitlistResponse;
       if (SIGNATURE_AUTHENTICATED.includes(url.pathname) && request.method !== "POST") {
