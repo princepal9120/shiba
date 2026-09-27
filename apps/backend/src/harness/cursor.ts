@@ -21,6 +21,7 @@ import {
   type AgentHarness,
   type HarnessConfigFile,
   type HarnessCapabilities,
+  type HarnessEvent,
   type VerificationOutcome,
   verifyRunOutcome,
 } from "./types.js";
@@ -48,7 +49,7 @@ export function cursorDriverPath(sandboxId: string): string {
 }
 
 /** Parse one NDJSON line the driver printed. `type:"error"` throws so the run fails honestly. */
-export function parseCursorEvent(line: string): string | null {
+export function parseCursorEvent(line: string): HarnessEvent | null {
   const trimmed = line.trim();
   if (!trimmed) return null;
   let event: unknown;
@@ -66,7 +67,7 @@ export function parseCursorEvent(line: string): string | null {
     throw new CursorErrorEvent(boundTail(detail, 500));
   }
   const text = typeof record.text === "string" ? record.text.trim() : "";
-  return text ? boundTail(text, 500) : null;
+  return text ? { kind: "text", text: boundTail(text, 500) } : null;
 }
 
 export class CursorHarness implements AgentHarness {
@@ -98,7 +99,7 @@ export class CursorHarness implements AgentHarness {
     return ["node", cursorDriverPath(input.sandboxId)];
   }
 
-  parseEvent(line: string): string | null {
+  parseEvent(line: string): HarnessEvent | null {
     return parseCursorEvent(line);
   }
   /** T43 declared capabilities — the gates read this, not the name. */
