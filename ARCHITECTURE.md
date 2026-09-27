@@ -17,7 +17,7 @@ this) · `PLAN.md` §17 (parity roadmap).
 ## 1. The one-paragraph version
 
 A single Cloudflare Worker is both the **API** and the **static host** for the
-React dashboard. Eight **Durable Objects** hold all state — the orchestrator
+React dashboard. Nine **Durable Objects** hold all state — the orchestrator
 conversation, the coding sub-agent, per-run sandbox control, automations,
 mailbox, memory, waitlist, and model config. The MCP gateway is stateless
 (`createMcpHandler` per request), not a DO. Work happens in an
@@ -71,7 +71,7 @@ approves it, and the container's outbound network is allowlisted per run.
 | **Orchestration** | `agents/orchestrator.ts`, `automation-runner.ts` | Plans, exposes `delegate_coding_task`, queues approvals. Never touches a repo. |
 | **Execution** | `agents/opencode-agent.ts`, `harness/*`, `sandbox.ts`, `sandbox/lifecycle.ts` | Clone → exec harness → collect. Exactly one harness per run. |
 | **Egress control** | `egress.ts`, `sandbox.ts` (`allowedHosts`) | Deny-by-default; per-harness host list; TLS interception; scoped GitHub token. |
-| **State** | the eight DO classes | All durable state. No other store is authoritative. |
+| **State** | the nine DO classes | All durable state. No other store is authoritative. |
 | **Presentation** | `apps/frontend` (dashboard), `apps/web` (docs/marketing) | React dashboard; Astro docs. Both served via the Worker's `ASSETS` binding. |
 | **Deploy** | `alchemy.run.ts` (primary), `wrangler.jsonc` (rollback) | Both declare the same stack; wrangler remains a working rollback path. |
 
@@ -100,6 +100,7 @@ approves it, and the container's outbound network is allowlisted per run.
 | `Memory` | banked facts (+ Vectorize embeddings) | v5 |
 | `Waitlist` | signups | v6 |
 | `ModelConfig` | model connections + purpose policy | v7 |
+| `LocalDispatch` | local-runtime dispatch mailbox: pending/claimed/settled run envelopes | v9 |
 
 Migration tag **v4** created `McpGateway`. T29a moved the MCP gateway to a
 stateless `createMcpHandler` server (`mcp-gateway.ts` builds an SDK v2
@@ -158,6 +159,23 @@ invariants as non-negotiable acceptance criteria, not as context.
 Steps **3** and **6** are the load-bearing ones. Everything else is
 replaceable — which is why resumable runs (`PLAN.md` §4) and the parity waves
 can be built without touching them.
+
+**Local lane** (`runtime:"local"`, dark unless `SHIBA_LOCAL_RUNTIME=1`): the
+same intake → gate → approve → dispatch path, but step 5's container is
+replaced by the operator's own machine. `LocalRuntimeAdapter` posts a
+schema-checked envelope (`localRunEnvelopeSchema`) to the `LocalDispatch` DO;
+the operator-run daemon (`scripts/shiba-local-daemon.mjs`) polls
+`POST /api/local/claim` + `POST /api/local/result` behind a `LOCAL_ADAPTER_TOKEN`
+bearer, executes under the same exec/setup allowlists the envelope carries,
+returns receipts + diff, and the Worker runs the identical `harness.verify`
+verdict and PR publish. Chat intake is provably impossible: `queueSlackRun`
+refuses `runtime:"local"` unless the request carries the `X-Shiba-Intake:
+dashboard` voucher that only `handleRuns` stamps (inbound copies are deleted
+first). Capability opt-in: `opencode`, `claude-code`, `codex` declare
+`supportedRuntimes:["sandbox","local"]`; every other harness refuses.
+Provider credentials stay local — the dummy key is dropped from the envelope
+and config bodies reference `${OPENCODE_API_KEY}`-style placeholders resolved
+on the operator side.
 
 ---
 

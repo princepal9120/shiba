@@ -29,6 +29,7 @@ import type {
   RunCommand,
   RunPatch,
   RunStatus,
+  RuntimeSelection,
 } from "@shiba/shared";
 import { appendReceipt, makeReceipt } from "./receipts.js";
 
@@ -61,6 +62,8 @@ export function createRun(args: {
   continuesKey?: string;
   /** T48: subscription account selector — hashed into the approved input. */
   authAccount?: string;
+  /** T51: the approved runtime — "local" dispatches to the operator daemon. */
+  runtime?: RuntimeSelection;
   /** T40: approval evidence stamped at queue time (the resolve path). */
   approval?: ApprovalEvidence;
   now?: number;
@@ -83,6 +86,7 @@ export function createRun(args: {
         ...(args.continuationKey !== undefined ? { continuationKey: args.continuationKey } : {}),
         ...(args.continuesKey !== undefined ? { continuesKey: args.continuesKey } : {}),
         ...(args.authAccount !== undefined ? { authAccount: args.authAccount } : {}),
+        ...(args.runtime !== undefined ? { runtime: args.runtime } : {}),
       },
       ...(args.approval !== undefined ? { approval: args.approval } : {}),
       at: now,
@@ -125,6 +129,7 @@ function commandForStatus(
           publishPullRequest: run.publishPullRequest,
           ...(run.queuedBy !== undefined ? { queuedBy: run.queuedBy } : {}),
           ...(run.route !== undefined ? { route: run.route } : {}),
+          ...(run.runtime !== undefined ? { runtime: run.runtime } : {}),
         },
         at,
       };

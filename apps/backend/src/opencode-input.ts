@@ -4,7 +4,7 @@
  * parseAgentToolInput. The child never scrapes arbitrary prose.
  */
 import { z } from "zod";
-import { RUN_SIGNAL_KINDS } from "@shiba/shared";
+import { RUN_SIGNAL_KINDS, runtimeSelectionSchema } from "@shiba/shared";
 import { isApprovedRoute, type ApprovedRoute } from "./model-connections.js";
 import { parseGitHubRepoUrl } from "./security.js";
 
@@ -51,6 +51,12 @@ const codingTaskInputSchema = z.object({
    * refused or exits nonzero.
    */
   testCommand: z.array(z.string().min(1)).max(8).optional(),
+  /**
+   * T51: the approved runtime. `"local"` runs on the operator's machine
+   * via the dispatch mailbox — admissible only from a dashboard intake
+   * under SHIBA_LOCAL_RUNTIME=1; every chat surface refuses it at intake.
+   */
+  runtime: runtimeSelectionSchema.optional(),
 });
 
 const codingTaskInputWithRouteSchema = codingTaskInputSchema.superRefine((input, ctx) => {

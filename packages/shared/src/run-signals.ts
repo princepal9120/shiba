@@ -20,6 +20,12 @@ export const RUN_SIGNAL_KINDS = [
   "diff.exported",
   "pr.opened",
   "screenshot.captured",
+  // T51: the local runtime's mailbox milestones — dispatch posted, a
+  // daemon claimed it, a result settled. A pending run missing
+  // local.claimed is waiting on an offline daemon, not executing.
+  "local.dispatched",
+  "local.claimed",
+  "local.settled",
 ] as const;
 
 export type RunSignalKind = (typeof RUN_SIGNAL_KINDS)[number];

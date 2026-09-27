@@ -31,10 +31,14 @@ import {
 } from "../opencode-input.js";
 import {
   createRuntimeAdapter,
+  LOCAL_DISPATCH_MESSAGE,
   resolveRuntimeName,
+  type LocalDispatchClient,
   type ProgressEvent,
   type SandboxOps,
 } from "../runtime.js";
+import { LOCAL_RUNTIME_FLAG } from "@shiba/shared";
+import { localDispatchStub } from "../local-dispatch.js";
 import { HARNESS_RETRY, withRetry } from "../harness/retry.js";
 import type { RunSignal } from "@shiba/shared";
 import { boundTail, parseGitHubRepoUrl, redactSecrets } from "../security.js";
@@ -190,6 +194,37 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
+/**
+ * T51: the production LocalDispatchClient — adapter requests ride the
+ * intra-deployment DO stub; the bearer-token front door is for the
+ * operator daemon only, so these calls carry no credential.
+ */
+function workerLocalDispatchClient(env: Env): LocalDispatchClient {
+  const stub = () => localDispatchStub(env);
+  return {
+    async dispatch(envelope) {
+      const res = await stub().fetch(new Request("https://local-dispatch/dispatch", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ envelope }),
+      }));
+      if (!res.ok) throw new Error(`dispatch: ${res.status} ${await res.text()}`);
+    },
+    async status(sandboxId) {
+      const res = await stub().fetch(new Request(`https://local-dispatch/status?sandboxId=${encodeURIComponent(sandboxId)}`));
+      if (!res.ok) throw new Error(`status: ${res.status} ${await res.text()}`);
+      return res.json();
+    },
+    async cancel(sandboxId) {
+      await stub().fetch(new Request("https://local-dispatch/cancel", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sandboxId }),
+      }));
+    },
+  };
+}
+
 export class OpenCodeAgent extends AIChatAgent<Env> {
   override async onChatMessage(
     _onFinish: GenerateTextOnFinishCallback<ToolSet>,
@@ -249,7 +284,22 @@ export class OpenCodeAgent extends AIChatAgent<Env> {
           // flow before a container spins up — assert at the admission seam,
           // after the harness is resolved, before any sandbox work starts.
           await assertHarnessAuthorized(this.env, harness, input);
-          const adapter = createRuntimeAdapter(resolveRuntimeName(this.env.RUNTIME), harness);
+          // T51: the approved input's runtime wins over the deployment's
+          // RUNTIME default. "local" needs both the deployment flag and the
+          // dispatch mailbox; every other surface refused it at intake, and
+          // this is the last place a forged envelope could reach.
+          const runtimeName = input.runtime ?? resolveRuntimeName(this.env.RUNTIME);
+          let adapter;
+          if (runtimeName === "local") {
+            if (this.env[LOCAL_RUNTIME_FLAG] !== "1") {
+              throw new Error(LOCAL_DISPATCH_MESSAGE);
+            }
+            adapter = createRuntimeAdapter("local", harness, {
+              client: workerLocalDispatchClient(this.env),
+            });
+          } else {
+            adapter = createRuntimeAdapter(runtimeName, harness);
+          }
           const hosts = allowedHostsFor(harness, input.codingModel);
           const overrides = harness.egressOverrides?.(input);
           const ops = createSandboxOps(this.env, input.sandboxId, hosts, overrides);

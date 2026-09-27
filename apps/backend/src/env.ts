@@ -31,6 +31,13 @@ export interface Env {
    * across agents (megaplan T8, see `memory-do.ts`).
    */
   Memory: DurableObjectNamespace;
+  /**
+   * T51: the LocalDispatch mailbox DO — the single serialized claim point
+   * between a local runtime dispatch and the operator daemon that runs it.
+   * Optional so a deployment without the local runtime (or a test env
+   * without the binding) never resolves a stub it cannot serve.
+   */
+  LocalDispatch?: DurableObjectNamespace;
   /** Deployment-wide model connection catalog and purpose policy. */
   ModelConfig: DurableObjectNamespace;
   /** Private launch/contributor registrations. */
@@ -110,8 +117,20 @@ export interface Env {
   DISCORD_AGENT_HARNESS?: string;
   /** Optional. Harness for Slack-originated runs; defaults to AGENT_HARNESS, then "claude-code". */
   SLACK_AGENT_HARNESS?: string;
-  /** "sandbox" (default) or "computer" (preview-only refusal). */
+  /** "sandbox" (default), "computer" (preview-only refusal), or "local". */
   RUNTIME?: string;
+  /**
+   * T51 opt-in flag (§18.13): "1" admits `runtime: "local"` at intake and
+   * opens the /api/local daemon surface. Off by default — absent, every
+   * local-runtime request refuses 403 before any approval exists.
+   */
+  SHIBA_LOCAL_RUNTIME?: string;
+  /**
+   * T51 daemon credential: the bearer the operator's `shiba local` daemon
+   * presents on /api/local/claim and /api/local/result. Unset = the
+   * surface refuses every request even when the flag is on.
+   */
+  LOCAL_ADAPTER_TOKEN?: string;
   /**
    * Deploy-time container size. Must match wrangler `containers.instance_type`.
    * lite | basic | standard-1 | standard-2 | standard-3 | standard-4.

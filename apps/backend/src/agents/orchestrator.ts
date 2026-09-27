@@ -12,6 +12,12 @@ import { Effect } from "effect";
 import { z } from "zod";
 import type { Env } from "../env.js";
 import {
+  LOCAL_INTAKE_DASHBOARD,
+  LOCAL_INTAKE_HEADER,
+  LOCAL_RUNTIME_FLAG,
+  runtimeSelectionSchema,
+} from "@shiba/shared";
+import {
   formatAgentToolInput,
   parseAgentResult,
   type CodingTaskInput,
@@ -70,12 +76,13 @@ import {
 } from "../slack-persona.js";
 import { postSlackMessage } from "../slack.js";
 import { extractPullRequestUrl } from "../transcript.js";
-import { HARNESS_DEFAULT_MODELS, allowedHostsFor, resolveHarness } from "../harness/index.js";
+import { HARNESS_DEFAULT_MODELS, allowedHostsFor, harnessRunsOn, resolveHarness } from "../harness/index.js";
 import { describeRoute, isApprovedRoute, type ApprovedRoute } from "../model-connections.js";
 import { readModelConfig, revalidateCodingRoute, resolveCodingRoute } from "../model-policy.js";
 import { OpenCodeAgent } from "./opencode-agent.js";
 import {
   MAX_SESSIONS_PER_USER,
+  isDashboardAgentName,
   sanitizeSessionMetadata,
   sanitizeSessionName,
   validateSessionRecordIntegrity,
@@ -169,6 +176,13 @@ const delegateInputSchema = z.object({
       "The project's test command as argv, e.g. [\"pnpm\",\"test\"]. Runs in the " +
         "sandbox through the scoped exec allowlist; the run only reports " +
         "completed when the command is allowlisted and exits 0.",
+    ),
+  runtime: runtimeSelectionSchema
+    .optional()
+    .describe(
+      "Execution runtime: \"sandbox\" (default) runs in an isolated container; " +
+        "\"local\" runs on the operator's machine through the local daemon. \"local\" " +
+        "is admissible only from the dashboard on a deployment with SHIBA_LOCAL_RUNTIME=1.",
     ),
 });
 
@@ -583,6 +597,17 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       if (!reserved) {
         return "Run is not approved to execute.";
       }
+      // T51 dispatch-side check — the queued record's frozen runtime is what
+      // counts; the intake gate can never be bypassed by a chat-surface tool
+      // call because a `default`/`slack:*` DO fails isDashboardAgentName.
+      if (input.runtime === "local" || reserved.runtime === "local") {
+        if (reserved.runtime !== input.runtime) {
+          return "Approved input does not match this call's runtime.";
+        }
+        if (this.env[LOCAL_RUNTIME_FLAG] !== "1" || !isDashboardAgentName(this.name)) {
+          return "runtime \"local\" requires SHIBA_LOCAL_RUNTIME=1 and a dashboard session.";
+        }
+      }
       parseGitHubRepoUrl(input.repoUrl);
       if (input.publishPullRequest && !this.env.GITHUB_TOKEN) {
         throw new Error(
@@ -833,7 +858,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
    * the pointer via POST /api/approvals. Email-kind approvals freeze a
    * mailbox payload instead of a run input.
    */
-  private async queueSlackRun(input: { repoUrl?: unknown; task?: unknown; baseBranch?: unknown; publishPullRequest?: unknown; harness?: unknown; codingModel?: unknown; connectionId?: unknown; authAccount?: unknown; threadKey?: unknown; kind?: unknown; mailbox?: unknown; payload?: unknown; queuedBy?: unknown; commandId?: unknown }): Promise<Response> {
+  private async queueSlackRun(input: { repoUrl?: unknown; task?: unknown; baseBranch?: unknown; publishPullRequest?: unknown; harness?: unknown; codingModel?: unknown; connectionId?: unknown; authAccount?: unknown; runtime?: unknown; intake?: unknown; threadKey?: unknown; kind?: unknown; mailbox?: unknown; payload?: unknown; queuedBy?: unknown; commandId?: unknown }): Promise<Response> {
     const kind = typeof input.kind === "string" && input.kind.trim() ? input.kind.trim() : "run";
     if (kind === "email_send" || kind === "email_delete") {
       return this.queueEmailApprovalRecord(kind, input);
@@ -894,6 +919,31 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     } catch (error) {
       return Response.json({ error: error instanceof Error ? error.message : "Unsupported model route." }, { status: 400 });
     }
+    // T51 intake boundary — the sharpest edge in the plan. `runtime: "local"`
+    // is admitted only when BOTH hold: the deployment opted in
+    // (SHIBA_LOCAL_RUNTIME=1) AND the request arrived through the Worker's
+    // authenticated /api/runs path, which stamps X-Shiba-Intake: dashboard
+    // after deleting any inbound copy. Slack, email, MCP, and automation
+    // posts never carry that voucher — they refuse here, before an approval
+    // exists. The delegate tool path re-checks the same rule against the DO
+    // name in executeDelegatedTask.
+    const runtimeRaw = typeof input.runtime === "string" ? input.runtime.trim() : "";
+    if (runtimeRaw !== "" && runtimeRaw !== "sandbox" && runtimeRaw !== "local") {
+      return Response.json({ error: `Unknown runtime "${runtimeRaw.slice(0, 40)}": expected "sandbox" or "local".` }, { status: 400 });
+    }
+    const runtime = runtimeRaw === "local" ? ("local" as const) : undefined;
+    if (runtime === "local") {
+      if (this.env[LOCAL_RUNTIME_FLAG] !== "1") {
+        return Response.json({ error: "The local runtime is not enabled on this deployment (SHIBA_LOCAL_RUNTIME=1)." }, { status: 403 });
+      }
+      if (input.intake !== LOCAL_INTAKE_DASHBOARD) {
+        return Response.json({ error: "runtime \"local\" is admitted only through the dashboard." }, { status: 403 });
+      }
+      const localHarness = route !== undefined ? resolveHarness(route.harness, this.env) : undefined;
+      if (localHarness === undefined || !harnessRunsOn(localHarness, "local")) {
+        return Response.json({ error: `Harness "${route?.harness ?? harness ?? "default"}" does not run on the local runtime.` }, { status: 400 });
+      }
+    }
     const approvalId = crypto.randomUUID();
     const threadKey = typeof input.threadKey === "string" && input.threadKey.trim() ? input.threadKey.trim() : "default";
     // Flood guard: pending approvals persist in DO state — an uncapped queue
@@ -918,6 +968,8 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
           ...(typeof input.authAccount === "string" && input.authAccount.trim()
             ? { authAccount: input.authAccount.trim().slice(0, 32) }
             : {}),
+          // T51: the approved runtime rides the hashed frozen input.
+          ...(runtime !== undefined ? { runtime } : {}),
           // Worker-vouched principal (X-Agent-Principal) — never the raw body,
           // so an operator-queued record can't be claimed by an agent token.
           ...(typeof input.queuedBy === "string" && input.queuedBy.trim()
@@ -1212,6 +1264,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       queuedBy: record.queuedBy,
       ...(record.route ? { route: record.route } : {}),
       ...(record.authAccount ? { authAccount: record.authAccount } : {}),
+      ...(record.runtime !== undefined ? { runtime: record.runtime } : {}),
       ...(continuationKey !== undefined ? { continuationKey } : {}),
       // T40: the run carries its approval evidence from birth — who decided,
       // when, and the hash of the exact frozen input they approved.
@@ -1222,6 +1275,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         publishPullRequest: record.publishPullRequest ?? false,
         ...(record.route ? { route: record.route } : {}),
         ...(record.authAccount ? { authAccount: record.authAccount } : {}),
+        ...(record.runtime !== undefined ? { runtime: record.runtime } : {}),
       }),
     });
   }
@@ -1262,6 +1316,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
               ? { harness: record.harness as DelegateInput["harness"] }
               : {}),
           ...(run.authAccount ? { authAccount: run.authAccount } : {}),
+          ...(run.runtime !== undefined ? { runtime: run.runtime } : {}),
         }, { toolCallId: approvalId });
       } catch (error) {
         // delegate.execute can throw before its inner `finish` seam ran;
@@ -1933,8 +1988,14 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         return Response.json({ error: "Request body must be a JSON object." }, { status: 400 });
       }
       // queuedBy comes only from the vouched header — a body field would
-      // let any caller attribute its run to another principal.
-      return this.queueSlackRun({ ...(queueBody as Record<string, unknown>), queuedBy: agentPrincipal ?? undefined });
+      // let any caller attribute its run to another principal. Same for the
+      // T51 intake voucher: only the Worker's /api/runs handler stamps
+      // X-Shiba-Intake: dashboard (after deleting the caller's copy).
+      return this.queueSlackRun({
+        ...(queueBody as Record<string, unknown>),
+        queuedBy: agentPrincipal ?? undefined,
+        intake: request.headers.get(LOCAL_INTAKE_HEADER) ?? undefined,
+      });
     }
     if (request.method !== "GET" && request.method !== "DELETE") {
       return Response.json({ error: "Method not allowed." }, { status: 405 });

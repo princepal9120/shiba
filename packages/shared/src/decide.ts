@@ -19,6 +19,7 @@
  */
 import type { ApprovalEvidence, PendingApproval, RunInputFields } from "./approvals.js";
 import { runInputHash } from "./approvals.js";
+import type { RuntimeSelection } from "./local-runtime.js";
 import type { ApprovedRoute } from "./model.js";
 import { MAX_RECEIPTS } from "./receipts.js";
 import type { Receipt, ReceiptKind } from "./receipts.js";
@@ -50,6 +51,8 @@ export interface QueuedRunInput {
   continuesKey?: string;
   /** T48: subscription account selector — part of the approval-hashed input. */
   authAccount?: string;
+  /** T51: the approved runtime — part of the approval-hashed input. */
+  runtime?: RuntimeSelection;
 }
 
 export type RunCommand =
@@ -124,6 +127,7 @@ function hashMatchesRun(evidence: ApprovalEvidence, run: RunInputFields): boolea
       publishPullRequest: run.publishPullRequest,
       ...(run.route !== undefined ? { route: run.route } : {}),
       ...(run.authAccount !== undefined ? { authAccount: run.authAccount } : {}),
+      ...(run.runtime !== undefined ? { runtime: run.runtime } : {}),
     })
   );
 }
@@ -167,6 +171,7 @@ export function decideRunTransition(state: RunMachineState, command: RunCommand)
           ...(command.input.route !== undefined ? { route: command.input.route } : {}),
           ...(command.input.continuationKey !== undefined ? { continuationKey: command.input.continuationKey } : {}),
           ...(command.input.authAccount !== undefined ? { authAccount: command.input.authAccount } : {}),
+          ...(command.input.runtime !== undefined ? { runtime: command.input.runtime } : {}),
           ...(approval !== undefined ? { approval } : {}),
           status: "pending",
           generation: 0,
@@ -180,7 +185,8 @@ export function decideRunTransition(state: RunMachineState, command: RunCommand)
           run.repoUrl === command.input.repoUrl &&
           run.task === command.input.task &&
           run.baseBranch === command.input.baseBranch &&
-          run.publishPullRequest === command.input.publishPullRequest;
+          run.publishPullRequest === command.input.publishPullRequest &&
+          run.runtime === command.input.runtime;
         if (sameInput) {
           return { events: [{ type: "run.queued", commandId: command.commandId, at, run, replayed: true }] };
         }

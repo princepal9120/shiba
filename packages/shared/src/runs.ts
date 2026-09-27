@@ -5,6 +5,7 @@
  * terminal, and there is no stop/resume.
  */
 import type { ApprovalEvidence } from "./approvals.js";
+import type { RuntimeSelection } from "./local-runtime.js";
 import type { ApprovedRoute } from "./model.js";
 import type { Receipt } from "./receipts.js";
 import type { RunErrorCode } from "./run-errors.js";
@@ -97,6 +98,11 @@ export interface DelegatedRun {
    * never a credential. Dispatch rebuilds the child input from it.
    */
   authAccount?: string;
+  /**
+   * T51: the approved runtime — `"local"` dispatches through the
+   * LocalDispatch mailbox to the operator's daemon; absent = sandbox.
+   */
+  runtime?: RuntimeSelection;
 }
 
 export type RunPatch = {

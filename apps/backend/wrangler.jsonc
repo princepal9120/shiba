@@ -37,7 +37,12 @@
     //   + /api/antigravity/callback (the pasted-redirect OAuth flow). No
     //   secret var — Google tokens live in the container profile.
     //   ANTIGRAVITY_SUBSCRIPTION_MODEL  per-deploy model override
-  },
+    //   SHIBA_LOCAL_RUNTIME=1   admits runtime:"local" at the dashboard
+    //   intake and opens /api/local for the operator daemon (T51).
+    //   LOCAL_ADAPTER_TOKEN     bearer the `shiba local` daemon presents on
+    //   /api/local/* — a Wrangler secret; unset = the surface is dark even
+    //   with the flag on.
+  }, 
   "ai": {
     "binding": "AI",
   },
@@ -62,6 +67,7 @@
       { "name": "Memory", "class_name": "Memory" },
       { "name": "Waitlist", "class_name": "Waitlist" },
       { "name": "ModelConfig", "class_name": "ModelConfig" },
+      { "name": "LocalDispatch", "class_name": "LocalDispatch" },
     ],
   },
   // Email attachment bodies >256KB go here, keyed `emailId/partId`
@@ -112,5 +118,6 @@
     { "tag": "v6", "new_sqlite_classes": ["Waitlist"] },
     { "tag": "v7", "new_sqlite_classes": ["ModelConfig"] },
     { "tag": "v8", "deleted_classes": ["McpGateway"] },
+    { "tag": "v9", "new_sqlite_classes": ["LocalDispatch"] },
   ],
 }

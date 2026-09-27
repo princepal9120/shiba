@@ -149,6 +149,21 @@ export function boundTail(text: string, maxChars: number): string {
 }
 
 /**
+ * Constant-time string equality — for bearer-token compares where
+ * crypto.subtle.timingSafeEqual is not in the runtime's type surface.
+ * Lengths are compared first; a length mismatch rejects before the loop
+ * so no prefix information leaks.
+ */
+export function timingSafeEqualString(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
+/**
  * Verify a GitHub webhook HMAC-SHA256 signature (`sha256=<hex>`) with a
  * timing-safe comparison. Uses WebCrypto so it runs in Workers and Node.
  */
