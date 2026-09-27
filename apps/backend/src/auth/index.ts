@@ -29,6 +29,8 @@ export function authControllerFor<Env extends AuthRegistryEnv>(
   const instanceId = harness.auth.instanceId(input);
   switch (harness.name as AgentHarnessName) {
     case "claude-subscription":
+      // The registry's env is only known to carry AGENT_TOKENS; the
+      // forwarder itself reads the egress fields off the real Env.
       return claudeSubscriptionAuth(env, instanceId, (request, e, ctx) =>
         forwardClaudeSubscription(request, e as EgressEnv, ctx),
       );
