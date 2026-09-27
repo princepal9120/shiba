@@ -12,6 +12,7 @@
 import type { CodingTaskInput, CodingTaskResult } from "./opencode-input.js";
 import { ClaudeCodeErrorEvent } from "./harness/claude-code.js";
 import { CodexErrorEvent } from "./harness/codex.js";
+import { GrokErrorEvent } from "./harness/grok.js";
 import { OpenCodeErrorEvent as OpenCodeErrorEventImpl, opencodeHarness } from "./harness/opencode.js";
 import { HARNESS_RETRY, withRetry } from "./harness/retry.js";
 import type { AgentHarness } from "./harness/types.js";
@@ -99,7 +100,7 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
       return failureResult(`Clone failed: ${shortError(error)}`, 0, "");
     }
 
-    await emit({ phase: "configure", message: "Writing isolated OpenCode config.", fraction: 0.15 });
+    await emit({ phase: "configure", message: `Writing isolated ${this.harness.name} config.`, fraction: 0.15 });
     throwIfAborted(opts?.signal);
     try {
       if (config) await ops.writeFile(config.path, config.contents);
@@ -107,7 +108,7 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
       return failureResult(`Config write failed: ${shortError(error)}`, 0, "");
     }
 
-    await emit({ phase: "code", message: "Running OpenCode headlessly.", fraction: 0.25 });
+    await emit({ phase: "code", message: `Running ${this.harness.name} headlessly.`, fraction: 0.25 });
     throwIfAborted(opts?.signal);
     const argv = this.harness.buildArgv(input, workdir);
     let run: ExecResult;
@@ -135,16 +136,17 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
       if (
         error instanceof OpenCodeErrorEventImpl ||
         error instanceof ClaudeCodeErrorEvent ||
-        error instanceof CodexErrorEvent
+        error instanceof CodexErrorEvent ||
+        error instanceof GrokErrorEvent
       ) {
         return failureResult(error.message, 0, "");
       }
-      return failureResult(`OpenCode execution failed: ${shortError(error)}`, 0, "");
+      return failureResult(`${this.harness.name} execution failed: ${shortError(error)}`, 0, "");
     }
     const stderrTail = redactSecrets(boundTail(run.stderr, MAX_STDERR_TAIL_CHARS));
     if (run.exitCode !== 0) {
       return failureResult(
-        `OpenCode exited with code ${run.exitCode}.`,
+        `${this.harness.name} exited with code ${run.exitCode}.`,
         run.exitCode,
         stderrTail,
       );
@@ -168,7 +170,7 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
         changedFiles: collection.changedFiles,
         diff: collection.diff,
         files: collection.files,
-        summary: summarizeRun(input, collection.changedFiles, boundTail(run.stdout, MAX_STDOUT_TAIL_CHARS)),
+        summary: summarizeRun(this.harness.name, input, collection.changedFiles, boundTail(run.stdout, MAX_STDOUT_TAIL_CHARS)),
       };
     } catch (error) {
       return failureResult(`Change collection failed: ${shortError(error)}`, run.exitCode, stderrTail);
@@ -266,17 +268,18 @@ function streamProgress(harness: AgentHarness, emit: ProgressEmitter, _signal?: 
         buffer = buffer.slice(newline + 1);
         try {
           const text = harness.parseEvent(line);
-          if (text) emitText(`[opencode] ${text}`);
+          if (text) emitText(`[${harness.name}] ${text}`);
         } catch (error) {
           // Error events must propagate so the run fails honestly.
           if (
             error instanceof OpenCodeErrorEventImpl ||
             error instanceof ClaudeCodeErrorEvent ||
-            error instanceof CodexErrorEvent
+            error instanceof CodexErrorEvent ||
+            error instanceof GrokErrorEvent
           ) {
             throw error;
           }
-          emitText("[opencode] malformed event line (redacted).");
+          emitText(`[${harness.name}] malformed event line (redacted).`);
         }
       }
     },
@@ -287,8 +290,8 @@ function streamProgress(harness: AgentHarness, emit: ProgressEmitter, _signal?: 
   };
 }
 
-function summarizeRun(input: CodingTaskInput, changedFiles: string[], stdoutTail: string): string {
-  const header = `OpenCode completed for ${input.repoUrl} (${input.baseBranch}): ${changedFiles.length} changed files.`;
+function summarizeRun(harnessName: string, input: CodingTaskInput, changedFiles: string[], stdoutTail: string): string {
+  const header = `${harnessName} completed for ${input.repoUrl} (${input.baseBranch}): ${changedFiles.length} changed files.`;
   if (changedFiles.length === 0) {
     return `${header} No file changes detected.`;
   }

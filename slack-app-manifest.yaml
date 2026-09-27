@@ -1,16 +1,16 @@
 # Slack app manifest — create the app at https://api.slack.com/apps?new_app=1
 # and choose "From a manifest". Replace YOUR-WORKER with your deployed host
-# (e.g. shiba-ai-coworker.you.workers.dev) before importing.
+# (e.g. shiba.you.workers.dev) before importing.
 display_information:
-  name: shiba-ai-coworker
+  name: shiba
   description: Approval-gated AI software engineer in your own Cloudflare account
   background_color: "#0b0d10"
 features:
   bot_user:
-    display_name: shiba-ai-coworker
+    display_name: shiba
     always_online: true
   slash_commands:
-    - command: /shiba-ai-coworker
+    - command: /shiba
       url: https://YOUR-WORKER.workers.dev/api/slack/command
       description: Queue a coding task for approval
       usage_hint: "https://github.com/owner/repo <task>"

@@ -238,7 +238,7 @@ html[data-theme='dark'] .blog-filter[aria-current='true'] {
 }
 
 .article-head {
-	max-width: 46rem;
+	max-width: 42rem;
 }
 
 .article-kicker {
@@ -310,7 +310,8 @@ html[data-theme='dark'] .blog-filter[aria-current='true'] {
 }
 
 .prose > p:first-child:has(img),
-.prose > p:first-child > img {
+.prose > p:first-child > img,
+.prose > p:first-child {
 	display: none !important;
 }
 
@@ -324,7 +325,9 @@ html[data-theme='dark'] .blog-filter[aria-current='true'] {
 }
 
 @media (min-width: 62rem) {
-	.article-body {
+	/* Two columns only when the TOC rail actually rendered — otherwise the
+	   prose would land in the 16rem track and squeeze. */
+	.article-body:has(.article-toc-col) {
 		grid-template-columns: 16rem minmax(0, 1fr);
 		gap: 56px;
 		align-items: start;
@@ -333,6 +336,16 @@ html[data-theme='dark'] .blog-filter[aria-current='true'] {
 	.article-toc-col {
 		position: sticky;
 		top: 78px;
+	}
+
+	/* Shared editorial column: header, hero, footer and the prev/next rail
+	   all share the prose's left edge and measure, so nothing ragged — the
+	   TOC occupies the left rail alone. */
+	.article-shell:has(.article-toc-col) .article-head,
+	.article-shell:has(.article-toc-col) .article-foot,
+	.article-shell:has(.article-toc-col) .article-next {
+		margin-left: calc(16rem + 56px);
+		max-width: 42rem;
 	}
 }
 

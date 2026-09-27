@@ -117,17 +117,17 @@ const finalSchemas = schema
     <header class="site-header sticky top-0 z-50">
       <div class="shell header-inner">
         <a class="wordmark" href="/" aria-label="Shiba home">
-          <img src="/assets/mascot/pet-logo.png" alt="Shiba Mascot" class="w-7 h-7 bg-white object-contain border border-[#d3d2c8] p-0.5 pixelated" />
+          <img src="/assets/mascot/pet-logo.png" alt="Shiba Mascot" class="w-7 h-7 rounded-full bg-white object-contain border border-[#d3d2c8] p-0.5" />
           <span class="wordmark-name">Shiba</span>
         </a>
         <nav aria-label="Main navigation" class="nav-links">
-          <a href="/why-shiba/" class={path === '/why-shiba/' ? 'nav-link nav-active' : 'nav-link'}><span class="nav-idx">01</span>Why Shiba</a>
-          <a href="/#harnesses" class="nav-link"><span class="nav-idx">02</span>Agents</a>
-          <a href="/docs/costs/" class="nav-link"><span class="nav-idx">03</span>Cost</a>
-          <a href="/blog/" class={path.startsWith('/blog') ? 'nav-link nav-active' : 'nav-link'}><span class="nav-idx">04</span>Journal</a>
-          <a href="/docs/overview/" class={path.startsWith('/docs') ? 'nav-link nav-active' : 'nav-link'}><span class="nav-idx">05</span>Docs</a>
-          <a href="/docs/architecture/" class="nav-link"><span class="nav-idx">06</span>Architecture</a>
-          <a href="/docs/security/" class="nav-link"><span class="nav-idx">07</span>Security</a>
+          <a href="/why-shiba/" class={path === '/why-shiba/' ? 'nav-link nav-active' : 'nav-link'}>Why Shiba</a>
+          <a href="/#harnesses" class="nav-link">Agents</a>
+          <a href="/docs/costs/" class="nav-link">Cost</a>
+          <a href="/blog/" class={path.startsWith('/blog') ? 'nav-link nav-active' : 'nav-link'}>Journal</a>
+          <a href="/docs/overview/" class={path.startsWith('/docs') ? 'nav-link nav-active' : 'nav-link'}>Docs</a>
+          <a href="/docs/architecture/" class="nav-link">Architecture</a>
+          <a href="/docs/security/" class="nav-link">Security</a>
         </nav>
         <div class="nav-actions">
           <button
@@ -144,6 +144,12 @@ const finalSchemas = schema
               <path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
             </svg>
           </button>
+          <a class="nav-gh" href="https://github.com/princepal9120/shiba" target="_blank" rel="noopener noreferrer" aria-label="Shiba on GitHub" id="nav-gh">
+            <svg class="nav-gh-mark" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" />
+            </svg>
+            <span class="nav-gh-count" id="nav-gh-count" hidden>★ <span id="nav-gh-num"></span></span>
+          </a>
           <a class="nav-cta" href="/waitlist/">
             <span class="nav-cta-prompt" aria-hidden="true">▸</span>
             <span>RUN IT ON YOUR REPO</span>
@@ -157,7 +163,7 @@ const finalSchemas = schema
         <div class="grid grid-cols-1 md:grid-cols-4 gap-10 mb-12">
           <div class="md:col-span-2 space-y-4">
             <div class="flex items-center gap-2.5">
-              <img src="/assets/mascot/pet-logo.png" alt="Shiba Mascot" class="w-7 h-7 bg-white object-contain border border-[var(--line-2)] p-0.5 pixelated" />
+              <img src="/assets/mascot/pet-logo.png" alt="Shiba Mascot" class="w-7 h-7 rounded-full bg-white object-contain border border-[var(--line-2)] p-0.5" />
               <span class="wordmark-name text-lg text-[var(--ink)]">Shiba</span>
             </div>
             <p class="text-xs text-[var(--ink-2)] max-w-sm leading-relaxed font-mono">
@@ -216,6 +222,35 @@ const finalSchemas = schema
           localStorage.setItem('shiba-theme', next);
         } catch (_) {}
       });
+
+      // GitHub stars cell: cached in sessionStorage (30 min), silent on failure.
+      var ghLink = document.getElementById('nav-gh');
+      var ghCount = document.getElementById('nav-gh-count');
+      var ghNum = document.getElementById('nav-gh-num');
+      if (ghLink && ghCount && ghNum) {
+        var showStars = function(n: number) {
+          if (!ghLink || !ghCount || !ghNum) return;
+          ghNum.textContent = n >= 1000 ? (Math.round(n / 100) / 10) + 'k' : String(n);
+          ghCount.hidden = false;
+          ghLink.setAttribute('aria-label', 'Shiba on GitHub (' + n + ' stars)');
+        };
+        try {
+          var cached = sessionStorage.getItem('shiba-gh-stars');
+          if (cached) {
+            var c = JSON.parse(cached);
+            if (c && typeof c.n === 'number' && Date.now() - c.t < 1800000) showStars(c.n);
+          }
+        } catch (_) {}
+        fetch('https://api.github.com/repos/princepal9120/shiba', { headers: { Accept: 'application/vnd.github+json' } })
+          .then(function(r) { return r.ok ? r.json() : null; })
+          .then(function(d) {
+            if (d && typeof d.stargazers_count === 'number') {
+              showStars(d.stargazers_count);
+              try { sessionStorage.setItem('shiba-gh-stars', JSON.stringify({ n: d.stargazers_count, t: Date.now() })); } catch (_) {}
+            }
+          })
+          .catch(function() {});
+      }
 
     </script>
   </body>
@@ -335,11 +370,12 @@ const finalSchemas = schema
   .wordmark-name { font-family: 'Instrument Serif', Georgia, serif; font-size: 24px; letter-spacing: -0.01em; color: var(--ink); }
   .nav-links { display: flex; align-items: stretch; justify-content: center; gap: clamp(8px, 1.4vw, 18px); min-width: 0; white-space: nowrap; }
   .nav-link { display: inline-flex; align-items: center; gap: 6px; padding-block: 6px; font-family: 'Geist Mono', monospace; font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; text-decoration: none; color: var(--ink-2); border-bottom: 1px solid transparent; }
-  .nav-idx { font-size: 8px; color: var(--line-2); }
   .nav-active { color: var(--navy); font-weight: 600; }
-  .nav-active .nav-idx { color: var(--navy); }
   .nav-actions { display: flex; align-items: center; gap: 0; flex: none; border: 1px solid var(--line-2); background: var(--card); box-shadow: 2px 2px 0 var(--paper-shadow); }
   .nav-theme-toggle { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 0; border-right: 1px solid var(--line-2); background: transparent; color: var(--ink); cursor: pointer; transition: background 120ms ease; }
+  .nav-gh { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border-right: 1px solid var(--line-2); color: var(--ink); text-decoration: none; font-family: 'Geist Mono', monospace; font-size: 10.5px; letter-spacing: 0.04em; transition: background 120ms ease; }
+  .nav-gh-mark { width: 15px; height: 15px; flex: none; }
+  .nav-gh-count { color: var(--ink-2); }
   .nav-cta { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 12px; background: var(--navy); color: #fff; text-decoration: none; font-family: 'Geist Mono', monospace; font-size: 9.5px; font-weight: 600; letter-spacing: 0.08em; }
   .nav-cta-prompt { font-size: 10px; }
   html[data-theme='dark'] .nav-cta { color: #152335; }
@@ -366,7 +402,8 @@ const finalSchemas = schema
   html[data-theme='dark'] .button:not(.button-outline) { color: #152335; }
   @media (hover: hover) and (pointer: fine) {
     .nav-link:hover, .status-links a:hover { color: var(--navy); }
-    .nav-theme-toggle:hover { background: var(--panel-2); color: var(--navy); }
+    .nav-theme-toggle:hover, .nav-gh:hover { background: var(--panel-2); color: var(--navy); }
+    .nav-gh:hover .nav-gh-count { color: var(--navy); }
     .nav-cta:hover, .button:hover { background: var(--navy-2); border-color: var(--navy-2); }
     .button-outline:hover { background: var(--panel-2); color: var(--navy); border-color: var(--navy-2); }
   }
@@ -377,7 +414,11 @@ const finalSchemas = schema
     .nav-actions { grid-area:actions; justify-self:end; }
     .nav-links { grid-area:links; justify-content:flex-start; overflow-x:auto; padding-bottom:3px; scrollbar-width:thin;
       -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 28px), transparent 100%); mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 28px), transparent 100%); }
-    .nav-idx { display:none; }
+  }
+  /* The GitHub star chip crowds the actions cell on narrow screens; the repo
+     link still lives in the footer. */
+  @media (max-width: 560px) {
+    .nav-gh { display: none; }
   }
   /* Below 400px the two actions cannot share a row with the wordmark at 44px
      touch targets, so the brand row drops the wordmark and keeps the mark. */

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Zuse-style "Violet dusk" dither for blog hero images.
+"""Shiba-style steel-blue dither for blog hero images.
 
-Usage: python3 scripts/zuse-dither.py <input.png> <output.png> [pixel_size]
+Usage: python3 scripts/zuse-dither.py <input.png> <output.png> [pixel_size] [palette]
 
 Downscales, applies a 4x4 Bayer ordered dither, quantizes to the
-Violet-dusk palette, and upscales with nearest neighbour for crisp
+steel-blue palette, and upscales with nearest neighbour for crisp
 retro pixels. Requires numpy + Pillow.
 """
 import sys
@@ -12,12 +12,19 @@ import numpy as np
 from PIL import Image
 
 PALETTES = {
-    # Zuse's exact default palette ("Violet dusk")
+    # Shiba steel-blue blog palette (matching #9cbce2 button and retro terminals)
+    "steel-blue": np.array([
+        [16, 18, 26],     # void
+        [45, 62, 92],     # deep steel slate
+        [156, 188, 226],  # steel blue (#9cbce2)
+        [225, 238, 252],  # crisp ice white
+    ], dtype=np.float32),
+    # Legacy alias pointing to the steel-blue palette
     "violet-dusk": np.array([
-        [15, 13, 24],
-        [61, 47, 91],
-        [124, 99, 169],
-        [217, 201, 239],
+        [16, 18, 26],
+        [45, 62, 92],
+        [156, 188, 226],
+        [225, 238, 252],
     ], dtype=np.float32),
     # Shiba theme tokens (apps/web/src/styles/theme.css), light mode:
     # --paper --card --line --navy --ink
@@ -49,9 +56,9 @@ BAYER_4X4 = np.array([
 
 
 def zuse_dither(input_path, output_path, pixel_size=2, strength=35.0,
-                palette="violet-dusk"):
+                palette="steel-blue"):
     img = Image.open(input_path).convert("RGB")
-    pal = PALETTES[palette]
+    pal = PALETTES.get(palette, PALETTES["steel-blue"])
 
     small_w = max(1, img.width // pixel_size)
     small_h = max(1, img.height // pixel_size)
@@ -75,11 +82,12 @@ def zuse_dither(input_path, output_path, pixel_size=2, strength=35.0,
         (small_w * pixel_size, small_h * pixel_size), Image.Resampling.NEAREST
     )
     out_img.save(output_path)
-    print(f"Generated Zuse-style image: {output_path} (palette={palette})")
+    print(f"Generated Shiba-style image: {output_path} (palette={palette})")
 
 
 if __name__ == "__main__":
     src, dst = sys.argv[1], sys.argv[2]
     px = int(sys.argv[3]) if len(sys.argv) > 3 else 2
-    pal_name = sys.argv[4] if len(sys.argv) > 4 else "violet-dusk"
+    pal_name = sys.argv[4] if len(sys.argv) > 4 else "steel-blue"
     zuse_dither(src, dst, pixel_size=px, palette=pal_name)
+

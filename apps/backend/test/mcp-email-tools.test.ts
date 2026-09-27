@@ -5,13 +5,10 @@ import { describe, expect, it, vi } from "vitest";
 // `mcp-gateway.js` pulls agents/mcp at module load; stub the base class —
 // the registry seam under test never constructs it.
 vi.mock("agents/mcp", () => ({
-  McpAgent: class {
-    static serve(_path: string, _opts?: unknown) {
-      return {
-        fetch: async () => Response.json({ mcp: "served" }, { status: 200 }),
-      };
-    }
-  },
+  createMcpHandler: () => ({
+    fetch: async () => Response.json({ mcp: "served" }, { status: 200 }),
+    notify: {},
+  }),
 }));
 
 // Record queueEmailApproval calls so tests can assert the frozen payload —

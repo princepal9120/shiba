@@ -46,7 +46,7 @@ describe("publishFilesAsPullRequest", () => {
       {
         repoUrl: "https://github.com/owner/repo",
         baseBranch: "main",
-        newBranch: "shiba-ai-coworker/run-abc",
+        newBranch: "shiba/run-abc",
         title: "AI Coworker: fix",
         body: "details",
         files: [
@@ -59,7 +59,7 @@ describe("publishFilesAsPullRequest", () => {
       { fetchImpl: makeFetch(calls) },
     );
     expect(result).toEqual({
-      branch: "shiba-ai-coworker/run-abc",
+      branch: "shiba/run-abc",
       commitSha: "new-commit",
       pullUrl: "https://github.com/owner/repo/pull/7",
       pullNumber: 7,
@@ -182,7 +182,7 @@ describe("publishFilesAsPullRequest", () => {
       {
         repoUrl: "https://github.com/owner/repo",
         baseBranch: "main",
-        newBranch: "shiba-ai-coworker/run-abc",
+        newBranch: "shiba/run-abc",
         title: "AI Coworker: delete",
         body: "details",
         files: [
@@ -222,7 +222,7 @@ describe("publishFilesAsPullRequest", () => {
         {
           repoUrl: "https://github.com/owner/repo",
           baseBranch: "main",
-          newBranch: "shiba-ai-coworker/run-abc",
+          newBranch: "shiba/run-abc",
           title: "t",
           body: "b",
           files: [{ path: "a.ts", content: "x", encoding: "utf8" }],
@@ -231,9 +231,9 @@ describe("publishFilesAsPullRequest", () => {
         },
         { fetchImpl: failingPulls as unknown as typeof fetch },
       ),
-    ).rejects.toThrow(/shiba-ai-coworker\/run-abc was removed/);
+    ).rejects.toThrow(/shiba\/run-abc was removed/);
     const cleanup = calls.find(
-      (call) => call.init?.method === "DELETE" && call.url.includes("/git/refs/heads/shiba-ai-coworker"),
+      (call) => call.init?.method === "DELETE" && call.url.includes("/git/refs/heads/shiba"),
     );
     expect(cleanup).toBeDefined();
   });

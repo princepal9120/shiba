@@ -1,5 +1,5 @@
 {
-  "name": "@shiba-ai-coworker/web",
+  "name": "@shiba/web",
   "version": "0.1.0",
   "private": true,
   "description": "Shiba AI Coworker landing + docs: Astro/Starlight site copied into public/ at build time.",
@@ -8,7 +8,8 @@
     "build": "astro build",
     "check": "astro check",
     "dev": "ASTRO_DEV_BACKGROUND=1 astro dev --port 4321",
-    "preview": "astro preview --port 4321"
+    "preview": "astro preview --port 4321",
+    "typecheck": "astro check"
   },
   "dependencies": {
     "@astrojs/starlight": "^0.42.1",

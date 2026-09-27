@@ -48,7 +48,7 @@ export const GATEWAY_PROVIDERS: Record<string, string> = {
   "generativelanguage.googleapis.com": "google-ai-studio",
   "api.anthropic.com": "anthropic",
   "api.openai.com": "openai",
-  "api.x.ai": "xai",
+  "api.x.ai": "grok",
   // OpenCode Go rides the gateway as a configured custom provider slug
   // (spec MODEL-CONNECTIONS-ARCHITECTURE.md §3). The slug names the gateway
   // custom provider holding the Go API key as BYOK.

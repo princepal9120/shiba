@@ -9,7 +9,7 @@ The latest dated entry in `VERIFICATION.md` (2026-09-24) reports local checks pa
 
 ## Local preparation
 
-Requires Node.js 22.12.0+, pnpm 10+, and a running Docker-compatible engine for the configured container image. In the repository root:
+Requires Node.js 22.13.0+, pnpm 10+, a Cloudflare Workers Paid plan, and a running Docker-compatible engine for the configured container image. Enable Workers, Durable Objects, Containers, Workers AI, KV, R2, D1, Vectorize, and Cloudflare Access for your account before deploying. In the repository root:
 
 ```sh
 pnpm install
@@ -25,7 +25,7 @@ The dry run packages/validates configuration; it does not deploy. `VERIFICATION.
 
 ## First Alchemy deployment
 
-The supported first-deploy path is the interactive bootstrap. It provisions Cloudflare resources and changes your account—this is not a local preview:
+The supported first-deploy path is the interactive bootstrap. It provisions Cloudflare resources and changes your account—this is not a local preview. For API-token authentication, grant the token the permissions required to manage Workers scripts and containers, Durable Objects, KV, R2, D1, Vectorize, and Access applications; OAuth is preferred because it requests scopes through Alchemy.
 
 1. Install dependencies and start a compatible Docker engine (Docker Desktop or OrbStack). The configured Sandbox image needs Docker to build.
 2. From the repository root, run:

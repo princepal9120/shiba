@@ -56,12 +56,12 @@ Four review agents audited the codebase; findings fixed and re-verified:
 
 1. `POST /api/runs` `{repoUrl: octocat/Hello-World, task, baseBranch: master}` → `200`, `approvalId` issued, pending approval persisted on the `default` orchestrator DO.
 2. `POST /api/slack/interact` with a locally HMAC-signed `block_actions` payload (`v0` signature, action `approve`, value `{threadKey:"default", approvalId}`) → `200` ack; allowlist admitted `U_E2E`; the DO resolved the pointer exactly once. **Note: interact resolves the orchestrator DO by `threadKey` — the DO name must match the queue target (`default`), not an arbitrary thread key.**
-3. Approval → `delegate_coding_task` → `OpenCodeAgent` child → real Docker container `workerd-shiba-ai-coworker-Sandbox-*-proxy` up under OrbStack.
+3. Approval → `delegate_coding_task` → `OpenCodeAgent` child → real Docker container `workerd-shiba-Sandbox-*-proxy` up under OrbStack.
 4. HTTPS egress interception ran: `approveRepoScope` installed `githubScoped` for `/octocat/Hello-World`; `git clone` succeeded into `/workspace/run-*`.
 5. `opencode run --format json --model google/gemini-3.5-flash-lite` executed; provider egress was rewritten to AI Gateway `…/default/google-ai-studio` and returned **401 (code 2009, Unauthorized)** — no `AI_GATEWAY_TOKEN` in `.dev.vars` and no BYOK key visible. The error propagated as a structured envelope; run marked `error`; sandbox destroyed.
 
 **Verified live locally:** queue → signed approval → DO dispatch → container spawn → scoped GitHub egress → clone → harness launch → provider egress rewrite → structured error → cleanup.
-**Not verified:** model inference itself (needs `AI_GATEWAY_TOKEN` or a BYOK key in the `default` AI Gateway — the wrangler OAuth token lacks gateway read/write scope, so this is an account-config step, not a code gap).
+**Not verified:** model inference itself (needs `AI_GATEWAY_TOKEN` or a BYOK key in the `default` AI Gateway — the wrangler OAuth token lacks gateway read/write scope, so this is an account-config step, not a code gap). Grok live inference also remains unverified, including its startup `GET /v1/models` and completion `POST /v1/responses` paths through the `grok` AI Gateway provider.
 
 ## Limitations, stated plainly
 
@@ -127,7 +127,7 @@ Factory/Droid-parity surfaces, verified live on `wrangler dev` (:8788):
 Onboarding/deploy-simplicity work, all verified against local `wrangler dev` (:8788) and the test suite:
 
 - **`GET /api/setup/status`** (`src/setup-status.ts`): live booleans for every required binding/secret — Slack (signing secret, bot token, approver count, channel repos), GitHub (token, webhook secret), AI Gateway (token configured + a real reachability probe — observed `unauthorized` locally, matching the 401 seen in the e2e run), Access requirement, model names, automation/TypeSafe flags. No secret values are ever returned.
-- **`slack-app-manifest.yaml`**: import at api.slack.com/apps → "From a manifest" creates the app with the exact scopes, `app_mention` event, `/shiba-ai-coworker` command, and interactivity URL the code expects. Hostname is the only edit.
+- **`slack-app-manifest.yaml`**: import at api.slack.com/apps → "From a manifest" creates the app with the exact scopes, `app_mention` event, `/shiba` command, and interactivity URL the code expects. Hostname is the only edit.
 - **`pnpm setup`** (`scripts/setup.mjs`): one-command bootstrap — wrangler auth check → deploy → per-secret `wrangler secret put` prompts (skippable) → prints manifest + URLs. stdlib-only, no new deps.
 - **OnboardingModal live status**: fetches `/api/setup/status`, auto-checks detected steps ("detected live" badge), merges with the localStorage manual checklist; progress counter counts detected steps.
 - **Slack post-back** (`orchestrator.postToSlackThread`): thread-keyed DO names (`slack:{team}:{channel}:{ts}`) parse back to channel+thread; run start, completion (summary incl. PR link), error, and cancellation post into the originating thread via `chat.postMessage`. Best-effort `waitUntil` — never touches the run record. Non-Slack orchestrators and missing bot token no-op. Covered by two new orchestrator tests (posts to C9/1700.0001; skips `default`).
@@ -197,3 +197,14 @@ And one repo bug that only surfaces at runtime:
 - Added an Access-gated OpenAPI 3.1 contract at `GET /api/email/openapi.json` for the existing mailbox, email, thread, and draft routes. It explicitly documents that `POST /api/drafts/:id/send` queues approval rather than sending.
 - Closed the attachment path: the Inbox links to `GET /api/emails/:id/attachments/:partId`; the Worker resolves the R2 key only from a registered mailbox's attachment manifest and forces a no-store binary download. Tests cover a valid download, a forged part id, a missing object, and an unauthenticated request.
 - Local verification: six focused email test files passed (193 tests); `pnpm typecheck`, `pnpm lint`, `pnpm test` (1174 passed, 6 skipped), `pnpm build` (including docs verification), and `npx wrangler deploy --dry-run --config apps/backend/wrangler.jsonc` all passed. `wrangler dev` served `GET /api/email/openapi.json` with HTTP 200 and the expected `downloadAttachment` operation. No deployment or live Email Routing/Email Sending test was performed; account provisioning and real delivery remain unverified.
+
+# 2026-09-27 — Grok harness; Cursor stays remote; ACP transport dropped
+
+- Verified: `pnpm typecheck` clean, `pnpm lint` clean, `pnpm test` 1183 passed / 3 skipped (74 files), `pnpm build` + docs verify green, `npx wrangler deploy --dry-run --config apps/backend/wrangler.jsonc` green on OrbStack — the image builds with `opencode-ai@1.18.31`, `claude-code@2.1.277`, `codex@0.155.0`, `@xai-official/grok@1.0.41`, Devin `3000.10.31`. No deployment, no live gateway run — Grok's real xAI call remains unverified the same way every harness's does until T10.
+
+- Grok runs headlessly (`--single`, `streaming-json`, `bypassPermissions`) with `grok-4.6` at medium reasoning effort, pinned to the `api.x.ai` forwarder via `GROK_MODELS_BASE_URL`. The dummy `XAI_API_KEY` ships in-container; real key swaps at egress.
+- The shared ACP transport (`acp.ts`) was deleted: its generated driver script failed `node --check`, swallowed `set_model` errors, and auto-allowed permission requests. Grok's native NDJSON stream is parsed directly instead.
+- Cursor remains a remote executor (`worker-service-secret`/`CURSOR_API_KEY`), not a sandbox harness — its `/auth/exchange_user_api_key` exchange stores access/refresh tokens inside the container, which cannot hold the dummy-key invariant. The earlier `harness-accounts` direction (per-user credential import) conflicts with `spec/GOAL.md` and was not built.
+- Review round 2 (opus code-reviewer, `@xai-official/grok@1.0.41` binary docs): fixed the parser to the real flat stream (`text`/`thought`/`tool_call`/`end`/`error`/`max_turns_reached`, not an ACP envelope); `--permission-mode bypassPermissions` (`auto` routes tools through a classifier that can block them); non-`end_turn` stop reasons throw; `grok` added to the `mcp-run-tools` enum and the orchestrator prompt; `GrokErrorEvent` in `HARNESS_ERROR_NAMES`; telemetry/feedback/trace-upload envs off; harness name in all runtime copy.
+- The xAI AI Gateway slug is `grok` (not `xai`); fixed host mapping and tests. Targeted tests cover routing slug, model argv/default, and parser stop validation. Full live gateway inference remains unverified because deployment is prohibited by `spec/GOAL.md`.
+

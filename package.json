@@ -1,18 +1,18 @@
 {
-  "name": "shiba-ai-coworker",
+  "name": "shiba",
   "version": "0.1.0",
   "private": true,
   "description": "Self-hosted Cloudflare Workers app: approval-gated coding tasks delegated to isolated Sandbox containers running OpenCode.",
   "type": "module",
   "scripts": {
     "build": "turbo run build && node scripts/copy-docs.mjs && pnpm run docs:verify",
-    "build:dashboard": "turbo run build --filter=@shiba-ai-coworker/frontend",
+    "build:dashboard": "turbo run build --filter=@shiba/frontend",
     "deploy": "pnpm build && alchemy deploy",
     "deploy:preview": "alchemy plan",
     "deploy:preview:wrangler": "node scripts/plan-deploy.mjs",
     "deploy:destroy": "alchemy destroy",
     "dev": "turbo run dev",
-    "docs:build": "turbo run build --filter=@shiba-ai-coworker/web",
+    "docs:build": "turbo run build --filter=@shiba/web",
     "docs:check": "pnpm -C apps/web check",
     "docs:dev": "pnpm -C apps/web dev",
     "docs:preview": "pnpm -C apps/web preview",
@@ -22,7 +22,7 @@
     "test": "turbo run test",
     "test:ephemeral": "node scripts/ephemeral-stack.mjs --alchemy",
     "test:live": "pnpm -C apps/backend test:live",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "turbo run typecheck"
   },
   "devDependencies": {
     "@effect/platform-bun": "4.0.0-rc.117",
@@ -44,7 +44,7 @@
     "pnpm": ">=10.0.0"
   },
   "packageManager": "pnpm@10.34.4",
-  "homepage": "https://shiba-ai-coworker.pages.dev/",
+  "homepage": "https://shiba-intern.pages.dev/",
   "pnpm": {
     "overrides": {
       "jiti": "2.7.0"

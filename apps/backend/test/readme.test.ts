@@ -66,7 +66,7 @@ describe("README structure (T24 honest-ship contract)", () => {
 
   it("documents the Slack slash command without claiming unbuilt surfaces", () => {
     expect(README).toContain("/api/slack/command");
-    expect(README).toContain("/shiba-ai-coworker");
+    expect(README).toContain("/shiba");
     // Shipped surfaces are named; unproven ones stay labelled unverified.
     expect(README).toContain("/api/slack/events");
     expect(README).toContain("No P3 live workspace verification is claimed");

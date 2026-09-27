@@ -12,9 +12,8 @@
  * custom_id is a pointer: only DISCORD_APPROVERS may press it, and the
  * orchestrator honors it only while the approval is still pending.
  */
+import { buildChatThreadName, buildDecisionData, parseDecisionData } from "@shiba/shared";
 import {
-  buildChatThreadName,
-  buildDecisionData,
   chatApprovalText,
   chatTaskChunks,
   decideChatApproval,
@@ -22,7 +21,6 @@ import {
   discordApi,
   NO_MENTIONS,
   parseChatTaskRequest,
-  parseDecisionData,
   queueChatRun,
   type ResolveOrchestrator,
 } from "./chat-lane.js";
