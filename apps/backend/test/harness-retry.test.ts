@@ -336,8 +336,8 @@ describe("withRetry wired into the runtime adapter", () => {
           if (opencodeCalls === 1) throw new Error("provider returned status 503: overloaded");
           return { stdout: "", stderr: "", exitCode: 0 };
         }
-        if (command.includes("status")) return { stdout: "", stderr: "", exitCode: 0 };
-        if (command.includes("diff")) return { stdout: "", stderr: "", exitCode: 0 };
+        if (command.includes("status")) return { stdout: " M src/a.ts\n", stderr: "", exitCode: 0 };
+        if (command.includes("diff")) return { stdout: "diff --git a/src/a.ts", stderr: "", exitCode: 0 };
         return { stdout: "", stderr: "", exitCode: 0 };
       },
     });
@@ -369,7 +369,7 @@ describe("withRetry wired into the runtime adapter", () => {
         if (command.includes("status")) {
           statusCalls += 1;
           if (statusCalls === 1) throw new Error("provider returned status 503: overloaded");
-          return { stdout: "", stderr: "", exitCode: 0 };
+          return { stdout: " M src/a.ts\n", stderr: "", exitCode: 0 };
         }
         if (command.includes("diff")) return { stdout: "diff --git a/x", stderr: "", exitCode: 0 };
         return { stdout: "", stderr: "", exitCode: 0 };

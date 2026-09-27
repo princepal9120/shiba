@@ -8,7 +8,7 @@
  * Auth/egress: the container gets the dummy GOOGLE_GENERATIVE_AI_API_KEY;
  * the Worker's egress swaps the real key in on generativelanguage.googleapis.com.
  */
-import type { CodingTaskInput } from "../opencode-input.js";
+import type { CodingTaskInput, CodingTaskResult } from "../opencode-input.js";
 import { DUMMY_PROVIDER_KEY } from "../provider-gateway.js";
 import { boundTail } from "../security.js";
 import {
@@ -16,6 +16,9 @@ import {
   PROVIDER_HOSTS,
   PROVIDER_KEY_ENV,
   type AgentHarness,
+  type HarnessCapabilities,
+  type VerificationOutcome,
+  verifyRunOutcome,
 } from "./types.js";
 
 export const ANTIGRAVITY_PROVIDERS = ["google"] as const;
@@ -28,6 +31,11 @@ export class AntigravityErrorEvent extends Error {
     this.name = "AntigravityErrorEvent";
     this.detail = detail;
   }
+  /** Deterministic outcome check — gates the completed claim (T43/T46 feed). */
+  async verify(_input: CodingTaskInput, result: CodingTaskResult): Promise<VerificationOutcome> {
+    return verifyRunOutcome(result);
+  }
+
 }
 
 /** JSON lines surface their text/message field; anything else is plain progress text. */
@@ -92,6 +100,16 @@ export class AntigravityHarness implements AgentHarness {
   parseEvent(line: string): string | null {
     return parseAntigravityEvent(line);
   }
+  /** T43 declared capabilities — the gates read this, not the name. */
+  capabilities(_model?: string): HarnessCapabilities {
+    return { streamsText: true, emitsToolCalls: true, supportsResume: false, supportsSteering: false, supportsFileAttachments: false, canRunTests: false, supportsConversationRollback: false, supportedRuntimes: [] };
+  }
+
+  /** Deterministic outcome check — gates the completed claim (T43/T46 feed). */
+  async verify(_input: CodingTaskInput, result: CodingTaskResult): Promise<VerificationOutcome> {
+    return verifyRunOutcome(result);
+  }
+
 }
 
 /** The CLI takes a bare model id; the `provider/` prefix is ours. */

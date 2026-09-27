@@ -197,7 +197,7 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
       );
       milestone("collect.complete", `${collection.changedFiles.length} files`);
       await emit({ phase: "collect", message: `Done: ${collection.changedFiles.length} changed files.`, fraction: 1 });
-      return {
+      const completed: CodingTaskResult = {
         status: "completed",
         exitCode: 0,
         stderrTail,
@@ -207,6 +207,13 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
         signals,
         summary: summarizeRun(this.harness.name, input, collection.changedFiles, boundTail(run.stdout, MAX_STDOUT_TAIL_CHARS)),
       };
+      // T43 verify gate — load-bearing: an exit-0 run with an empty diff is NOT
+      // completed. Deterministic evidence only; this feeds T46's proof gate.
+      const verification = await this.harness.verify(input, completed);
+      if (!verification.ok) {
+        return failureResult(`Verification failed: ${verification.reason}`, run.exitCode, stderrTail, signals);
+      }
+      return completed;
     } catch (error) {
       return failureResult(`Change collection failed: ${shortError(error)}`, run.exitCode, stderrTail, signals);
     }

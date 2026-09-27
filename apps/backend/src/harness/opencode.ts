@@ -7,7 +7,7 @@
  * and the container env. A second harness (T22) implements AgentHarness
  * beside this one; nothing here is OpenCode-specific by accident.
  */
-import type { CodingTaskInput } from "../opencode-input.js";
+import type { CodingTaskInput, CodingTaskResult } from "../opencode-input.js";
 import { DUMMY_PROVIDER_KEY } from "../provider-gateway.js";
 import { boundTail } from "../security.js";
 import {
@@ -16,6 +16,9 @@ import {
   PROVIDER_KEY_ENV,
   type AgentHarness,
   type HarnessConfigFile,
+  type HarnessCapabilities,
+  type VerificationOutcome,
+  verifyRunOutcome,
 } from "./types.js";
 
 /** OpenCode is multi-provider; the gateway decides which are actually reachable. */
@@ -32,6 +35,11 @@ export class OpenCodeErrorEvent extends Error {
     this.name = "OpenCodeErrorEvent";
     this.detail = detail;
   }
+  /** Deterministic outcome check — gates the completed claim (T43/T46 feed). */
+  async verify(_input: CodingTaskInput, result: CodingTaskResult): Promise<VerificationOutcome> {
+    return verifyRunOutcome(result);
+  }
+
 }
 
 /**
@@ -145,6 +153,16 @@ export class OpenCodeHarness implements AgentHarness {
   parseEvent(line: string): string | null {
     return parseOpencodeEvent(line);
   }
+  /** T43 declared capabilities — the gates read this, not the name. */
+  capabilities(_model?: string): HarnessCapabilities {
+    return { streamsText: true, emitsToolCalls: true, supportsResume: true, supportsSteering: false, supportsFileAttachments: false, canRunTests: true, supportsConversationRollback: false, supportedRuntimes: ["sandbox"] };
+  }
+
+  /** Deterministic outcome check — gates the completed claim (T43/T46 feed). */
+  async verify(_input: CodingTaskInput, result: CodingTaskResult): Promise<VerificationOutcome> {
+    return verifyRunOutcome(result);
+  }
+
 }
 
 export const opencodeHarness = new OpenCodeHarness();

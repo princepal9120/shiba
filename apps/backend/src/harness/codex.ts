@@ -5,7 +5,7 @@
  * credentials are proxied. The container gets the dummy key; the real one is
  * injected at the egress boundary.
  */
-import type { CodingTaskInput } from "../opencode-input.js";
+import type { CodingTaskInput, CodingTaskResult } from "../opencode-input.js";
 import { DUMMY_PROVIDER_KEY } from "../provider-gateway.js";
 import { boundTail } from "../security.js";
 import {
@@ -13,6 +13,9 @@ import {
   PROVIDER_HOSTS,
   PROVIDER_KEY_ENV,
   type AgentHarness,
+  type HarnessCapabilities,
+  type VerificationOutcome,
+  verifyRunOutcome,
 } from "./types.js";
 
 export const CODEX_PROVIDERS = ["openai"] as const;
@@ -24,6 +27,11 @@ export class CodexErrorEvent extends Error {
     this.name = "CodexErrorEvent";
     this.detail = detail;
   }
+  /** Deterministic outcome check — gates the completed claim (T43/T46 feed). */
+  async verify(_input: CodingTaskInput, result: CodingTaskResult): Promise<VerificationOutcome> {
+    return verifyRunOutcome(result);
+  }
+
 }
 
 export class CodexEventError extends Error {}
@@ -101,6 +109,16 @@ export class CodexHarness implements AgentHarness {
   parseEvent(line: string): string | null {
     return parseCodexEvent(line);
   }
+  /** T43 declared capabilities — the gates read this, not the name. */
+  capabilities(_model?: string): HarnessCapabilities {
+    return { streamsText: true, emitsToolCalls: true, supportsResume: true, supportsSteering: false, supportsFileAttachments: false, canRunTests: true, supportsConversationRollback: false, supportedRuntimes: ["sandbox"] };
+  }
+
+  /** Deterministic outcome check — gates the completed claim (T43/T46 feed). */
+  async verify(_input: CodingTaskInput, result: CodingTaskResult): Promise<VerificationOutcome> {
+    return verifyRunOutcome(result);
+  }
+
 }
 
 /** The CLI takes a bare model id; the `provider/` prefix is ours. */

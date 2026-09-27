@@ -6,7 +6,7 @@
  * Max plan credentials on behalf of users (PLAN.md §3). The container gets
  * the dummy key; the real one is injected at the egress boundary.
  */
-import type { CodingTaskInput } from "../opencode-input.js";
+import type { CodingTaskInput, CodingTaskResult } from "../opencode-input.js";
 import { DUMMY_PROVIDER_KEY } from "../provider-gateway.js";
 import { boundTail } from "../security.js";
 import {
@@ -14,6 +14,9 @@ import {
   PROVIDER_HOSTS,
   PROVIDER_KEY_ENV,
   type AgentHarness,
+  type HarnessCapabilities,
+  type VerificationOutcome,
+  verifyRunOutcome,
 } from "./types.js";
 
 export const CLAUDE_CODE_PROVIDERS = ["anthropic"] as const;
@@ -26,6 +29,11 @@ export class ClaudeCodeErrorEvent extends Error {
     this.name = "ClaudeCodeErrorEvent";
     this.detail = detail;
   }
+  /** Deterministic outcome check — gates the completed claim (T43/T46 feed). */
+  async verify(_input: CodingTaskInput, result: CodingTaskResult): Promise<VerificationOutcome> {
+    return verifyRunOutcome(result);
+  }
+
 }
 
 export class ClaudeCodeEventError extends Error {}
@@ -129,6 +137,16 @@ export class ClaudeCodeHarness implements AgentHarness {
   parseEvent(line: string): string | null {
     return parseClaudeCodeEvent(line);
   }
+  /** T43 declared capabilities — the gates read this, not the name. */
+  capabilities(_model?: string): HarnessCapabilities {
+    return { streamsText: true, emitsToolCalls: true, supportsResume: true, supportsSteering: false, supportsFileAttachments: false, canRunTests: true, supportsConversationRollback: false, supportedRuntimes: ["sandbox"] };
+  }
+
+  /** Deterministic outcome check — gates the completed claim (T43/T46 feed). */
+  async verify(_input: CodingTaskInput, result: CodingTaskResult): Promise<VerificationOutcome> {
+    return verifyRunOutcome(result);
+  }
+
 }
 
 /** The CLI takes a bare model id; the `provider/` prefix is ours. */
