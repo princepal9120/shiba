@@ -12,6 +12,9 @@ export const RUN_SIGNAL_KINDS = [
   "harness.started",
   "harness.idle",
   "collect.complete",
+  // T45: every scoped exec invocation is receipted — command, exit, duration.
+  "exec.invoked",
+  "exec.settled",
   "pr.opened",
   "screenshot.captured",
 ] as const;

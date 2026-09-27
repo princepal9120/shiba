@@ -151,6 +151,15 @@ const delegateInputSchema = z.object({
       "Model connection id (conn_*) from the deployment's connection catalog. " +
         "Defaults to the deployment's implicit gateway/secret default.",
     ),
+  testCommand: z
+    .array(z.string().min(1))
+    .max(8)
+    .optional()
+    .describe(
+      "The project's test command as argv, e.g. [\"pnpm\",\"test\"]. Runs in the " +
+        "sandbox through the scoped exec allowlist; the run only reports " +
+        "completed when the command is allowlisted and exits 0.",
+    ),
 });
 
 type DelegateInput = z.infer<typeof delegateInputSchema>;
@@ -588,6 +597,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         harness: resolvedHarness as CodingTaskInput["harness"],
         route,
         ...(slackIds ? { slackThread: { channelId: slackIds.channelId, threadTs: slackIds.threadTs } } : {}),
+        ...(input.testCommand ? { testCommand: input.testCommand } : {}),
       };
       // Chat-originated runs get the outcome back in the thread in the
       // coworker voice; the summary carries the PR link when one was published.

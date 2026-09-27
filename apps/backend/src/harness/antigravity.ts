@@ -31,11 +31,6 @@ export class AntigravityErrorEvent extends Error {
     this.name = "AntigravityErrorEvent";
     this.detail = detail;
   }
-  /** Deterministic outcome check — gates the completed claim (T43/T46 feed). */
-  async verify(_input: CodingTaskInput, result: CodingTaskResult): Promise<VerificationOutcome> {
-    return verifyRunOutcome(result);
-  }
-
 }
 
 /** JSON lines surface their text/message field; anything else is plain progress text. */
@@ -102,12 +97,13 @@ export class AntigravityHarness implements AgentHarness {
   }
   /** T43 declared capabilities — the gates read this, not the name. */
   capabilities(_model?: string): HarnessCapabilities {
-    return { streamsText: true, emitsToolCalls: true, supportsResume: false, supportsSteering: false, supportsFileAttachments: false, canRunTests: false, supportsConversationRollback: false, supportedRuntimes: [] };
+    return { streamsText: true, emitsToolCalls: true, supportsResume: false, supportsSteering: false, supportsFileAttachments: false, canRunTests: false, supportsConversationRollback: false, execAllowlist: [],
+      supportedRuntimes: [] };
   }
 
   /** Deterministic outcome check — gates the completed claim (T43/T46 feed). */
-  async verify(_input: CodingTaskInput, result: CodingTaskResult): Promise<VerificationOutcome> {
-    return verifyRunOutcome(result);
+  async verify(input: CodingTaskInput, result: CodingTaskResult): Promise<VerificationOutcome> {
+    return verifyRunOutcome(input, result, this.capabilities(input.codingModel));
   }
 
 }

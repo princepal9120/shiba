@@ -37,6 +37,13 @@ const codingTaskInputSchema = z.object({
       threadTs: z.string().min(1),
     })
     .optional(),
+  /**
+   * T45: the project's test command as argv (e.g. ["pnpm","test"]). Runs
+   * inside the sandbox through the scoped executor — it must match the
+   * harness's declared execAllowlist, and verify fails the run when it is
+   * refused or exits nonzero.
+   */
+  testCommand: z.array(z.string().min(1)).max(8).optional(),
 });
 
 const codingTaskInputWithRouteSchema = codingTaskInputSchema.superRefine((input, ctx) => {

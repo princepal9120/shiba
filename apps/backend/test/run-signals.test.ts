@@ -65,7 +65,9 @@ function fakeOps(overrides: Partial<SandboxOps> = {}): SandboxOps {
 }
 
 const emit = async () => {};
-const kinds = (signals: RunSignal[]) => signals.map((s) => s.kind);
+// Milestone assertions compare lifecycle kinds only — T45 exec.* receipts
+// interleave between milestones and are asserted separately in exec-allowlist.test.ts.
+const kinds = (signals: RunSignal[]) => signals.map((s) => s.kind).filter((k) => !k.startsWith("exec."));
 
 describe("run-signal producer", () => {
   it("emits the ordered pipeline milestones on a successful run", async () => {
