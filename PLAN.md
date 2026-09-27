@@ -21,7 +21,7 @@
 | **Ceiling** | `standard-4` (4 vCPU / 12 GiB / 20 GB) is Cloudflare's max. Capy goes to 16 vCPU / 128 GB. Heavy builds are out of reach — say so in the README. |
 | **Effort** | P0 ≈ 3h · P1 ≈ 5h · P2 ≈ 5h · P3 ≈ 14h · P4 ≈ 10h · **P5 ≈ 14h** · P6 ≈ 4h → **~55h** |
 | **Rev 4 status** | All of the above is **done except T10** — the live run is now verified locally via `wrangler dev` up to the model call (AI Gateway credential needed); the cloud deploy itself is still blocked on GOAL.md. See §2.0. |
-| **Rev 9 status** | §17 (P7, Roomote parity) is **planned, not started**. ~80% of Roomote's spine already ships; the delta is OAuth MCP, web chat + steering, and screenshot/preview. Recommended scope W0–W3 ≈ 43h. T27 (spec/monorepo contradiction) gates all of it. |
+| **Rev 9 status** | §17 (P7, Roomote parity): **W0 done 2026-09-27** (T27 spec amended, T28 audit clean — see §2.0). ~80% of Roomote's spine already ships; the remaining delta is OAuth MCP, web chat + steering, and screenshot/preview. Recommended scope W1–W3 + T37–T39 ≈ 43h. |
 
 ---
 
@@ -55,9 +55,11 @@
 
 ### 2.0 Status as of rev 8 (2026-09-26)
 
+**Mailbox-scoped cloud-agent pairing (local, 2026-09-26):** the Inbox can assign a mailbox to the exact `/mcp` token principal. All thirteen email tools now restrict listing, direct address access, and ID-based probes to that principal's assigned mailboxes; unassigned mailboxes remain dashboard-only. Sends and deletes still queue human approval. Unit and Worker checks cover this; a live cloud-agent mailbox round trip remains unverified until an account-owned deployment.
+
 **Rev 8 (PR #17):** unified chat lane — Telegram webhook + Discord interactions share `chat-lane.ts` (one orchestrator conversation per chat/channel, approval cards are pointers, server-side approver allowlists) · GitHub Projects v2 board sync on PR publish (best-effort) · model connections + purpose policy + frozen `ApprovedRoute` (approve exactly this route; revalidated at dispatch) · iPhone `/api/trigger` lane (PR #13) · marketing site overhaul. ce-code-review fixes landed: full task text posts in-thread (no blind approval), route shown on the card, outbound chat APIs timeout-bounded, board sync is non-blocking, legacy `harness` approvals still dispatch correctly, dedupe sweep chunked past the 128-key limit, waitlist returns uniform 200.
 
-Baseline: **1178 tests passing across 74 files**, typecheck and lint clean.
+Baseline: **1187 tests passing across 74 files** (count drifts per rev — treat as "all passing", not a contract), typecheck and lint clean.
 
 | Task | State |
 |---|---|
@@ -68,6 +70,8 @@ Baseline: **1178 tests passing across 74 files**, typecheck and lint clean.
 | Marketing site (theme tokens, why-shiba, tooltip/touch/focus fixes) | **Done.** bezalel-style navy/cream tokens, both light/dark; coarse-pointer tap targets. |
 | Grok harness | **Done.** Headless print-mode harness (streaming-json) pinned to the `api.x.ai` forwarder via `GROK_MODELS_BASE_URL`. The shared ACP transport was tried and dropped; Cursor stays a remote executor — its token exchange can't hold the dummy-key invariant. |
 | Connected agent accounts (dashboard) | **Not pursued.** Per-user credential storage conflicts with GOAL.md's credential contract — needs a deliberate spec amendment before any `harness-accounts` work. |
+| T27 spec/monorepo reconcile | **Done (2026-09-27).** Option (a): `spec/GOAL.md` accepts the pnpm+turbo monorepo and enumerates the formerly-forbidden primitives now in use — D1 `AGENT_AUDIT`, KV `AGENT_TOKENS`, R2 `ATTACHMENTS`, Vectorize `MEMORY_VECTORS` — each justified; Queues/Workflows/Hono remain forbidden. |
+| T28 VERIFICATION_PLAN re-audit | **Done (2026-09-27).** G1–G11 re-checked in place: all resolve, including G10 (assets tracked under `apps/web/public/`) and G11 (`capy-theme.css` deleted; per-app postcss/tailwind configs are legitimate). Per-row evidence in `VERIFICATION_PLAN.md` §1. |
 
 ### 2.0 Status as of rev 7 (2026-09-19)
 

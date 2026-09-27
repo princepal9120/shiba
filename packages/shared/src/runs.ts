@@ -49,8 +49,6 @@ export interface DelegatedRun {
   diff?: string;
   /** Published PR, kept apart from `summary` where a long diff would truncate it away. */
   pullUrl?: string;
-  /** Sandbox preview URL captured at run end (T33); null when capture failed or was skipped. */
-  previewUrl?: string | null;
   /** Absolute URL serving the stored preview PNG on this Worker (T33); null when capture failed. */
   screenshotUrl?: string | null;
   receipts?: Receipt[];
@@ -79,7 +77,6 @@ export type RunPatch = {
   errorCode?: RunErrorCode;
   diff?: string;
   pullUrl?: string;
-  previewUrl?: string | null;
   screenshotUrl?: string | null;
   receipts?: Receipt[];
   sandboxId?: string;

@@ -101,11 +101,10 @@ approves it, and the container's outbound network is allowlisted per run.
 | `Waitlist` | signups | v6 |
 | `ModelConfig` | model connections + purpose policy | v7 |
 
-Migration tag **v4** originally created `McpGateway`; T29a moved the MCP
-gateway to a stateless `createMcpHandler` server (`mcp-gateway.ts` builds an
-SDK v2 `McpServer` per request — the same tool registry, scopes and D1 audit
-trail, no DO), so v4 now carries `deleted_classes: ["McpGateway"]` to drop
-the namespace and its (empty — the class held no durable state) storage.
+Migration tag **v4** created `McpGateway`. T29a moved the MCP gateway to a
+stateless `createMcpHandler` server (`mcp-gateway.ts` builds an SDK v2
+`McpServer` per request — same tools, scopes and D1 audit trail, no DO). The
+append-only **v8** migration deletes the now-unused class and namespace.
 
 **Supporting stores** (not DOs): **R2** `ATTACHMENTS` (email bodies >256KB) ·
 **KV** `AGENT_TOKENS` (bearer tokens, keyed `tok_<sha256(raw)>`) · **D1**

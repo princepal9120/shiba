@@ -211,12 +211,10 @@ export class OpenCodeAgent extends AIChatAgent<Env> {
           // is worse than a late commit. The only abort check inside
           // publishResult sits before the first remote write.
           let pullUrl: string | undefined;
-          let previewUrl: string | undefined;
           let screenshotUrl: string | undefined;
           if (result.status === "completed" && input.publishPullRequest) {
             const published = await this.publishResult(input, result, signal);
             pullUrl = published.pullUrl;
-            previewUrl = published.previewUrl;
             screenshotUrl = published.screenshotUrl;
           }
           const safeResult = this.uiResult(result);
@@ -238,7 +236,6 @@ export class OpenCodeAgent extends AIChatAgent<Env> {
           write(formatAgentResult({
             ...safeResult,
             ...(pullUrl ? { pullUrl } : {}),
-            ...(previewUrl ? { previewUrl } : {}),
             ...(screenshotUrl ? { screenshotUrl } : {}),
           }));
           writer.write({ type: "text-end", id });
@@ -283,7 +280,7 @@ export class OpenCodeAgent extends AIChatAgent<Env> {
     input: CodingTaskInput,
     result: CodingTaskResult,
     signal?: AbortSignal,
-  ): Promise<{ pullUrl: string; previewUrl?: string; screenshotUrl?: string }> {
+  ): Promise<{ pullUrl: string; screenshotUrl?: string }> {
     const token = this.env.GITHUB_TOKEN;
     if (!token) throw new Error("publishPullRequest was requested but GITHUB_TOKEN is not configured.");
     signal?.throwIfAborted();
@@ -298,7 +295,7 @@ export class OpenCodeAgent extends AIChatAgent<Env> {
       `Sandbox: ${input.sandboxId}`,
     ];
     if (capture?.screenshotUrl) bodyLines.push("", `[Preview screenshot](${capture.screenshotUrl})`);
-    if (capture?.previewUrl) bodyLines.push(`Preview: ${capture.previewUrl}`);
+    // The screenshot link is served by this Worker behind the read-API auth gate.
     const published = await publishFilesAsPullRequest({
       repoUrl: input.repoUrl,
       baseBranch: input.baseBranch,
@@ -317,7 +314,6 @@ export class OpenCodeAgent extends AIChatAgent<Env> {
     );
     return {
       pullUrl: published.pullUrl,
-      ...(capture?.previewUrl ? { previewUrl: capture.previewUrl } : {}),
       ...(capture?.screenshotUrl ? { screenshotUrl: capture.screenshotUrl } : {}),
     };
   }

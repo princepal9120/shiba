@@ -11,7 +11,6 @@ import { AutomationsView } from "./components/AutomationsView";
 import { AgentsView } from "./components/AgentsView";
 import { MissionsView } from "./components/MissionsView";
 import { GatesView } from "./components/GatesView";
-import { ArchitectureView } from "./components/ArchitectureView";
 import { DashboardView } from "./components/DashboardView";
 import { OnboardingModal, detectSetupSteps } from "./components/OnboardingModal";
 import { SessionsSidebar, type SessionItem } from "./components/SessionsSidebar";
@@ -43,30 +42,50 @@ function isEditableTarget(target: EventTarget | null): boolean {
   );
 }
 
-function useRetainedRuns(refreshToken: number): { runs: RetainedRun[]; error: string | null } {
+function useRetainedRuns(refreshToken: number, sessionId: string, sessionApiAvailable: boolean): { runs: RetainedRun[]; error: string | null } {
   const [runs, setRuns] = useState<RetainedRun[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/runs")
-      .then(async (response) => {
+    let url = sessionApiAvailable
+      ? `/api/runs?session=${encodeURIComponent(sessionId)}`
+      : "/api/runs";
+    const load = async () => {
+      try {
+        let response = await fetch(url);
+        // Backends without session-scoped runs answer 404/405; fall back to the
+        // unscoped list rather than leaving the registry empty. A 404 JSON
+        // {error:"Session not found."} is different — the session itself is
+        // gone, so an unscoped list would show another session's runs.
+        if ((response.status === 404 || response.status === 405) && url !== "/api/runs") {
+          if (await isSessionNotFoundBody(response)) {
+            if (!cancelled) {
+              setRuns([]);
+              setError(null);
+            }
+            return;
+          }
+          url = "/api/runs";
+          response = await fetch(url);
+        }
         if (!response.ok) throw new Error(`Runs request failed: ${response.status}`);
         const body = (await response.json()) as { runs?: RetainedRun[] };
         if (!cancelled) {
           setRuns(Array.isArray(body.runs) ? body.runs : []);
           setError(null);
         }
-      })
-      .catch((fetchError: unknown) => {
+      } catch (fetchError: unknown) {
         if (!cancelled) {
           setError(fetchError instanceof Error ? fetchError.message : String(fetchError));
         }
-      });
+      }
+    };
+    void load();
     return () => {
       cancelled = true;
     };
-  }, [refreshToken]);
+  }, [refreshToken, sessionId, sessionApiAvailable]);
 
   return { runs, error };
 }
@@ -163,6 +182,15 @@ function useAgentPrincipals(refreshToken: number): AgentPrincipal[] {
   return principals;
 }
 
+// A 404 is ambiguous: an older backend answers an unknown route with a bare
+// (often non-JSON) 404, while the current Worker answers a real not-found
+// with JSON {error:"Session not found."}. Only the JSON signal may be treated
+// as a dead session — anything else is a safe "route unsupported" signal.
+async function isSessionNotFoundBody(response: Response): Promise<boolean> {
+  const body = (await response.clone().json().catch(() => null)) as { error?: unknown } | null;
+  return body?.error === "Session not found.";
+}
+
 type IdentityIssue = "signin" | "unreachable" | "error";
 type IdentityResult = { agent: string } | { issue: IdentityIssue; message: string };
 
@@ -254,7 +282,9 @@ export function App(): React.JSX.Element {
   const [mainView, setMainView] = useState<MainView>("tasks");
   const [setupDone, setSetupDone] = useState<number | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
-  const [selectedSessionId, setSelectedSessionId] = useState<string>("live");
+  const [selectedSessionId, setSelectedSessionId] = useState<string>("default");
+  const [sessionApiAvailable, setSessionApiAvailable] = useState(false);
+  const [webSessions, setWebSessions] = useState<{ id: string; name: string; agentName: string; updatedAt: number }[]>([]);
 // Persistent workspace panel removed from tasks view; functionality promoted to standalone views.
   const [mobileSessionsOpen, setMobileSessionsOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -332,8 +362,6 @@ export function App(): React.JSX.Element {
         setMainView("missions");
       } else if (tabParam === "gates" || tabParam === "quality-gates") {
         setMainView("gates");
-      } else if (tabParam === "architecture") {
-        setMainView("architecture");
       }
     }
   }, []);
@@ -382,25 +410,57 @@ export function App(): React.JSX.Element {
     typeof navigator === "undefined" ? true : navigator.onLine,
   );
 
+  const activeWebSession = webSessions.find((session) => session.id === selectedSessionId);
   const agent = useAgent({
     agent: ORCHESTRATOR_AGENT,
     // Until /api/whoami resolves, don't connect at all — the Worker 403s any
     // name that isn't the caller's identity, so a placeholder DO name just
     // produces a 403 burst on every load.
-    name: orchestratorName ?? "identity-pending",
+    name: activeWebSession?.agentName ?? orchestratorName ?? "identity-pending",
     enabled: orchestratorName !== null,
   });
   const chat = useAgentChat({
     agent,
     // Skip the /get-messages prefetch while the DO name is the pending
-    // placeholder — it 403s by design; the hook refetches when name resolves.
-    getInitialMessages: orchestratorName === null ? async () => [] : undefined,
+    // placeholder — it 403s by design. The socket object lags one render
+    // behind orchestratorName (it swaps in an effect), so gate on the name
+    // the hook actually resolves rather than on orchestratorName alone.
+    getInitialMessages: async ({ name, url }) => {
+      if (!url || name !== orchestratorName) return [];
+      const res = await fetch(`${url}/get-messages`, { credentials: "include" });
+      if (!res.ok) return [];
+      const text = await res.text();
+      return text.trim() ? JSON.parse(text) : [];
+    },
     onError: () => {
       submitFailed.current = true;
     },
   });
   const { runsById } = useAgentToolEvents({ agent });
-  const { runs: retainedRuns, error: runsError } = useRetainedRuns(refreshToken);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/sessions", { cache: "no-store" })
+      .then(async (response) => {
+        // Older backends have no sessions API: stay on the implicit default
+        // session and use unscoped run routes instead of erroring.
+        if (response.status === 404 || response.status === 405) {
+          if (!cancelled) setSessionApiAvailable(false);
+          return;
+        }
+        if (!response.ok) throw new Error(`Sessions request failed: ${response.status}`);
+        const body = (await response.json()) as { sessions?: { id: string; name: string; agentName: string; updatedAt: number }[] };
+        if (!cancelled) {
+          setSessionApiAvailable(true);
+          setWebSessions(Array.isArray(body.sessions) ? body.sessions : []);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setNotice(error instanceof Error ? error.message : String(error));
+      });
+    return () => { cancelled = true; };
+  }, [orchestratorName]);
+  const { runs: retainedRuns, error: runsError } = useRetainedRuns(refreshToken, selectedSessionId, sessionApiAvailable);
   const {
     approvals: storedApprovals,
     decided: decidedStoredApprovals,
@@ -668,7 +728,31 @@ export function App(): React.JSX.Element {
     try {
       await chat.clearHistory();
       historyCleared = true;
-      const response = await fetch("/api/runs", { method: "DELETE" });
+      // Session-scoped delete only when the sessions API exists; never fall
+      // back to an unscoped delete for a named session — that would wipe runs
+      // belonging to other sessions.
+      if (!sessionApiAvailable && selectedSessionId !== "default") {
+        setNotice("Conversation history cleared. Run registry is unchanged because this backend does not support session-scoped runs.");
+        return;
+      }
+      const response = await fetch(sessionApiAvailable
+        ? `/api/runs?session=${encodeURIComponent(selectedSessionId)}`
+        : "/api/runs", { method: "DELETE" });
+      if (sessionApiAvailable && (response.status === 404 || response.status === 405)) {
+        // A real "Session not found." means the scoped session is gone — the
+        // API still works; prune the stale item and land on the default
+        // session instead of disabling session scoping globally.
+        if (response.status === 404 && (await isSessionNotFoundBody(response))) {
+          setWebSessions((current) => current.filter((session) => session.id !== selectedSessionId));
+          setSelectedSessionId("default");
+          setNotice("That session no longer exists — it was removed from the list. Conversation history cleared; run registry is unchanged.");
+          refreshRuns();
+          return;
+        }
+        setSessionApiAvailable(false);
+        setNotice("Conversation history cleared. Run registry is unchanged because this backend does not support session-scoped runs.");
+        return;
+      }
       if (!response.ok) throw new Error(`Runs clear failed: ${response.status}`);
       setNotice("Conversation history and run registry cleared.");
       refreshRuns();
@@ -680,12 +764,32 @@ export function App(): React.JSX.Element {
       clearInFlight.current = false;
       setClearing(false);
     }
-  }, [chat, refreshRuns]);
+  }, [chat, refreshRuns, selectedSessionId, sessionApiAvailable]);
 
   const cancelRun = useCallback(
     async (runId: string) => {
       try {
-        const response = await fetch(`/api/runs/${encodeURIComponent(runId)}`, { method: "DELETE" });
+        let url = sessionApiAvailable
+          ? `/api/runs/${encodeURIComponent(runId)}?session=${encodeURIComponent(selectedSessionId)}`
+          : `/api/runs/${encodeURIComponent(runId)}`;
+        let response = await fetch(url, { method: "DELETE" });
+        // Scoped delete targets exactly one run; a backend that doesn't know
+        // the session route can still cancel it unscoped. But a 404 JSON
+        // {error:"Session not found."} means the session itself is gone —
+        // prune it and land on the default session instead of disabling the
+        // sessions API or firing an unscoped delete at another session's run.
+        if ((response.status === 404 || response.status === 405) && sessionApiAvailable) {
+          if (response.status === 404 && (await isSessionNotFoundBody(response))) {
+            setWebSessions((current) => current.filter((session) => session.id !== selectedSessionId));
+            setSelectedSessionId("default");
+            setNotice("That session no longer exists — it was removed from the list.");
+            refreshRuns();
+            return;
+          }
+          setSessionApiAvailable(false);
+          url = `/api/runs/${encodeURIComponent(runId)}`;
+          response = await fetch(url, { method: "DELETE" });
+        }
         if (!response.ok) throw new Error(`Request failed: ${response.status}`);
         setNotice(`Cancellation requested for ${runId}.`);
         refreshRuns();
@@ -693,7 +797,7 @@ export function App(): React.JSX.Element {
         setNotice(`Cancellation could not be requested: ${error instanceof Error ? error.message : String(error)}`);
       }
     },
-    [refreshRuns],
+    [refreshRuns, selectedSessionId, sessionApiAvailable],
   );
 
   // Keyboard shortcut listener: Cmd/Ctrl+Enter submits, Escape closes modals
@@ -797,26 +901,20 @@ export function App(): React.JSX.Element {
     return Array.from(map.values()).sort((a, b) => b.createdAt - a.createdAt);
   }, [retainedRuns, toolRuns, seenAt]);
 
-  // Devin-style session list: the live chat session first, then retained and
-  // in-flight delegated runs newest-first.
+  // Named web sessions are selectable chat contexts; retained delegated runs remain inspectable.
   const sessions = useMemo<SessionItem[]>(() => {
-    const items: SessionItem[] = [
-      {
-        id: "live",
-        title:
-          task.trim() ||
-          (chat.messages.length > 0 ? "Current session" : "New coding task"),
-        repoName: repoUrl.trim() ? parseRepoName(repoUrl) : "no repository",
-        status:
-          pendingApprovals.length > 0
-            ? "waiting-approval"
-            : chat.isStreaming || chat.status === "streaming"
-            ? "running"
-            : "live",
-        updatedAt: Date.now(),
-        live: true,
-      },
-    ];
+    const items: SessionItem[] = webSessions.map((session) => ({
+      id: session.id,
+      title: session.id === "default" && chat.messages.length > 0 ? "Current session" : session.name,
+      repoName: "web chat",
+      status: session.id === selectedSessionId && (chat.isStreaming || chat.status === "streaming") ? "running" : "live",
+      updatedAt: session.updatedAt,
+      live: session.id === selectedSessionId,
+      webSession: true,
+    }));
+    if (!items.some((session) => session.id === "default")) {
+      items.unshift({ id: "default", title: "Default Session", repoName: "web chat", status: "live", updatedAt: 0, live: selectedSessionId === "default", webSession: true });
+    }
     const seen = new Set<string>();
     for (const run of retainedRuns) {
       seen.add(run.runId);
@@ -851,23 +949,84 @@ export function App(): React.JSX.Element {
     retainedRuns,
     toolRuns,
     seenAt,
+    webSessions,
+    selectedSessionId,
   ]);
 
-  // The center pane always shows the live chat session; picking a sidebar
-  // row selects that run inside the workspace panel (VM / Diff / Runs tabs).
-  const liveSession = sessions[0];
+  const liveSession = sessions.find((session) => session.id === selectedSessionId) ?? sessions[0];
 
-  const handleSelectSession = useCallback((id: string) => {
+  const handleSelectSession = useCallback(async (id: string) => {
+    const session = webSessions.find((item) => item.id === id);
+    if (!session && id !== "default") {
+      // A run row is not a chat session: inspect it without disturbing the
+      // selected chat session or its session-scoped run list.
+      setSelectedRunId(id);
+      setMobileSessionsOpen(false);
+      setMainView("vm");
+      return;
+    }
+    if (session && id !== "default") {
+      try {
+        const response = await fetch(`/api/sessions/${encodeURIComponent(id)}/resume`, { method: "POST" });
+        if (response.status === 404 || response.status === 405) {
+          if (response.status === 404 && (await isSessionNotFoundBody(response))) {
+            // Real session-not-found: the API is healthy, this item is stale.
+            // Prune it and land on the default session — don't mark the
+            // sessions API unavailable or select the dead session.
+            setWebSessions((current) => current.filter((item) => item.id !== id));
+            setSelectedSessionId("default");
+            setMobileSessionsOpen(false);
+            setSelectedRunId(null);
+            setMainView("tasks");
+            setNotice("That session no longer exists — it was removed from the list.");
+            return;
+          }
+          // Older backends lack the resume route: degrade to local selection
+          // instead of blocking the switch.
+          setSessionApiAvailable(false);
+        } else if (!response.ok) {
+          throw new Error(`Could not resume session: ${response.status}`);
+        }
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : String(error));
+        return;
+      }
+    }
     setSelectedSessionId(id);
     setMobileSessionsOpen(false);
-    if (id !== "live") {
-      setSelectedRunId(id);
-      setMainView("vm");
-    }
-  }, []);
+    setSelectedRunId(null);
+    setMainView("tasks");
+  }, [webSessions]);
 
-  const handleNewTask = useCallback(() => {
-    setSelectedSessionId("live");
+  const handleNewTask = useCallback(async () => {
+    if (!sessionApiAvailable) {
+      setSelectedSessionId("default");
+      setMobileSessionsOpen(false);
+      setMainView("tasks");
+      window.setTimeout(() => document.querySelector<HTMLTextAreaElement>('[data-testid="task-composer"] textarea')?.focus(), 0);
+      return;
+    }
+    try {
+      const response = await fetch("/api/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (response.status === 404 || response.status === 405) {
+        setSessionApiAvailable(false);
+        setSelectedSessionId("default");
+        setMobileSessionsOpen(false);
+        setMainView("tasks");
+        window.setTimeout(() => document.querySelector<HTMLTextAreaElement>('[data-testid="task-composer"] textarea')?.focus(), 0);
+        return;
+      }
+      if (!response.ok) throw new Error(`Could not create session: ${response.status}`);
+      const body = (await response.json()) as { session: { id: string; name: string; agentName: string; updatedAt: number } };
+      setWebSessions((current) => [body.session, ...current.filter((session) => session.id !== body.session.id)]);
+      setSelectedSessionId(body.session.id);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error));
+    }
     setMobileSessionsOpen(false);
     setMainView("tasks");
     window.setTimeout(() => {
@@ -875,7 +1034,7 @@ export function App(): React.JSX.Element {
         .querySelector<HTMLTextAreaElement>('[data-testid="task-composer"] textarea')
         ?.focus();
     }, 0);
-  }, []);
+  }, [sessionApiAvailable]);
 
   const activeSandboxCount = useMemo(() => {
     return toolRuns.filter((r) => r.status === "running" || r.status === "pending").length +
@@ -1107,7 +1266,7 @@ export function App(): React.JSX.Element {
           <SessionsSidebar
             sessions={sessions}
             agents={agentPrincipals}
-            selectedId={selectedSessionId}
+            selectedId={selectedRunId ?? selectedSessionId}
             onSelect={handleSelectSession}
             onNewTask={handleNewTask}
             connectionLabel={connectionState}
@@ -1138,7 +1297,7 @@ export function App(): React.JSX.Element {
               <SessionsSidebar
                 sessions={sessions}
                 agents={agentPrincipals}
-                selectedId={selectedSessionId}
+                selectedId={selectedRunId ?? selectedSessionId}
                 onSelect={handleSelectSession}
                 onNewTask={handleNewTask}
                 connectionLabel={connectionState}
@@ -1442,7 +1601,7 @@ export function App(): React.JSX.Element {
       ) : mainView === "gates" ? (
         <GatesView />
       ) : (
-        <ArchitectureView />
+        null
       )}
 
       {/* CLEAR HISTORY CONFIRMATION MODAL */}
@@ -1477,6 +1636,7 @@ export function App(): React.JSX.Element {
       <OnboardingModal
         isOpen={showOnboardingModal}
         onClose={() => setShowOnboardingModal(false)}
+        onOpenInbox={() => setMainView("inbox")}
         onSelectStarterTask={(repo, t, h) => {
           setRepoUrl(repo);
           setTask(t);

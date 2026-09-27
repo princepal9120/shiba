@@ -5,6 +5,7 @@
  * container driven by OpenCodeAgent.
  */
 import { Think } from "@cloudflare/think";
+import type { Connection, ConnectionContext } from "agents";
 import { agentTool } from "agents/agent-tools";
 import { tool, type ToolSet } from "ai";
 import { Effect } from "effect";
@@ -30,6 +31,7 @@ import {
   type RunStatus,
 } from "../runs.js";
 import { makeReceipt } from "../receipts.js";
+import { createRunCodeTool } from "../codemode.js";
 import {
   createPendingApproval,
   decidedApprovals,
@@ -70,12 +72,29 @@ import { HARNESS_DEFAULT_MODELS, allowedHostsFor, resolveHarness } from "../harn
 import { describeRoute, isApprovedRoute, type ApprovedRoute } from "../model-connections.js";
 import { readModelConfig, revalidateCodingRoute, resolveCodingRoute } from "../model-policy.js";
 import { OpenCodeAgent } from "./opencode-agent.js";
+import {
+  MAX_SESSIONS_PER_USER,
+  sanitizeSessionMetadata,
+  sanitizeSessionName,
+  validateSessionRecordIntegrity,
+  type WebSessionRecord,
+} from "../web-sessions.js";
+
+/** App-range WebSocket close code sent to sockets of a deleted web session. */
+export const SESSION_DELETED_CLOSE_CODE = 4410;
 
 export interface OrchestratorState {
   runs: DelegatedRun[];
   pendingApprovals?: PendingApproval[];
   /** Leaks recorded before a hibernation still get their destroy retried. */
   leakedContainers?: Record<string, { sandboxId: string; leakedAt: number; error: string }>;
+  webSessions?: WebSessionRecord[];
+  /**
+   * Set by session teardown on a `web:` session DO. The registry tombstone
+   * lives on the base DO and only gates the Worker; this flag is what stops
+   * a request already past that check, or a socket opened before it.
+   */
+  sessionDeletedAt?: number;
 }
 
 /** A classified error lands as its matching terminal status. */
@@ -189,6 +208,50 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     this.setState({ ...this.state, pendingApprovals: next });
   }
 
+  get storedWebSessions(): WebSessionRecord[] {
+    return this.state?.webSessions ?? [];
+  }
+
+  private writeWebSessions(webSessions: WebSessionRecord[]): void {
+    const current = this.state ?? { runs: [] };
+    this.setState({
+      ...current,
+      webSessions,
+    });
+  }
+
+  private get sessionDeleted(): boolean {
+    return this.state?.sessionDeletedAt !== undefined;
+  }
+
+  // `cf_agent_state` frames carry a connection source; server mutations use "server".
+  override validateStateChange(
+    _nextState: OrchestratorState,
+    source: Connection | "server",
+  ): void {
+    if (source !== "server") {
+      throw new Error("Client state writes are not accepted.");
+    }
+  }
+
+  private closeLiveConnections(): void {
+    for (const connection of this.getConnections()) {
+      try {
+        connection.close(SESSION_DELETED_CLOSE_CODE, "Session deleted.");
+      } catch {
+        // Already closing; nothing left to stop.
+      }
+    }
+  }
+
+  override async onConnect(connection: Connection, ctx: ConnectionContext): Promise<void> {
+    if (this.sessionDeleted) {
+      connection.close(SESSION_DELETED_CLOSE_CODE, "Session deleted.");
+      return;
+    }
+    return super.onConnect(connection, ctx);
+  }
+
   override async onStart(): Promise<void> {
     await super.onStart();
     const interrupted = this.approvals
@@ -297,6 +360,10 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       "what will happen (repository, branch, task, whether a pull request is requested).",
       "After the run finishes, report the summary, changed files, and diff to the user.",
       "If the run fails, report the failure honestly with the exit code and error.",
+      "For mailbox/memory/run questions needing more than one lookup, call run_code:",
+      "write an async arrow function that calls codemode.<tool>({...}) directly —",
+      "chain, loop, and filter in code, and return only the fields you need.",
+      "run_code can queue sends/deletes but never approves them; humans decide.",
     ].join(" ");
   }
 
@@ -322,7 +389,10 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         return this.executeDelegatedTask(input, childExecute, options?.toolCallId, options?.abortSignal);
       },
     });
-    return { ...super.getTools(), delegate_coding_task: delegate };
+    const tools: ToolSet = { ...super.getTools(), delegate_coding_task: delegate };
+    const runCode = createRunCodeTool(this.env);
+    if (runCode) tools.run_code = runCode;
+    return tools;
   }
 
   private resolveHarnessAndModel(input: DelegateInput): { harness: string; codingModel: string } {
@@ -390,9 +460,15 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     // A pre-aborted call fails fast with the caller's reason, before the
     // program exists — same synchronous checkpoint as before.
     abortSignal?.throwIfAborted();
+    // A chat turn or approval dispatch that raced session teardown must not
+    // start a sandbox the deleted session can no longer show or cancel.
+    if (this.sessionDeleted) throw new Error("Session deleted.");
     const program = Effect.gen({ self: this }, function* () {
       yield* Effect.promise(() => this.reclaimRuns());
-      yield* Effect.sync(() => abortSignal?.throwIfAborted());
+      yield* Effect.sync(() => {
+        abortSignal?.throwIfAborted();
+        if (this.sessionDeleted) throw new Error("Session deleted.");
+      });
       const runs = this.store.list();
       const callId = toolCallId ?? crypto.randomUUID();
       const runId = `agent-tool:${callId}`;
@@ -545,9 +621,8 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
                     summary: output.slice(0, 4000),
                     diff: parsed?.diff ? parsed.diff.slice(0, 20000) : undefined,
                     pullUrl: parsed.pullUrl,
-                    // T33: preview/screenshot links ride the same envelope; a
-                    // failed capture arrives as absent fields → record stays null.
-                    previewUrl: parsed.previewUrl ?? null,
+                    // T33: the stored screenshot link rides the same envelope;
+                    // a failed capture arrives as an absent field → null.
                     screenshotUrl: parsed.screenshotUrl ?? null,
                   },
                   slackRunCompleted({
@@ -1389,6 +1464,213 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       // execution stamp (including a failed send) is durable state no
       // other surface renders, so the listing returns recent ones.
       decided: decidedApprovals(visible),
+      // Serialized state may contain records written before integrity
+      // validation existed or before validateStateChange rejected client writes.
+      webSessions: this.storedWebSessions
+        .filter(
+          (s) =>
+            validateSessionRecordIntegrity(
+              s,
+              typeof this.name === "string" && this.name ? this.name : undefined,
+            ) === null,
+        )
+        .map((s) => s.agentName),
+    });
+  }
+
+  private async handleInternalWebSessions(request: Request, url: URL): Promise<Response> {
+    if (url.pathname === "/internal/web-sessions") {
+      if (request.method === "GET") {
+        // Sessions marked for deletion are mid-teardown and must not be
+        // listed or admit new work.
+        return Response.json({
+          sessions: this.storedWebSessions.filter((s) => !s.deletingAt),
+        });
+      }
+      if (request.method === "POST") {
+        let body: unknown;
+        try {
+          body = await request.json();
+        } catch {
+          return Response.json({ error: "Invalid JSON." }, { status: 400 });
+        }
+        if (typeof body !== "object" || body === null || !("session" in body)) {
+          return Response.json({ error: "Missing session payload." }, { status: 400 });
+        }
+        const session = (body as { session: WebSessionRecord }).session;
+        const integrityError = validateSessionRecordIntegrity(
+          session,
+          typeof this.name === "string" && this.name ? this.name : undefined,
+        );
+        if (integrityError) {
+          return Response.json({ error: integrityError }, { status: 400 });
+        }
+        if (session.metadata !== undefined) {
+          try {
+            session.metadata = sanitizeSessionMetadata(session.metadata);
+          } catch (err) {
+            return Response.json(
+              { error: err instanceof Error ? err.message : "Invalid metadata." },
+              { status: 400 },
+            );
+          }
+        }
+        const existing = this.storedWebSessions;
+        const index = existing.findIndex((s) => s.id === session.id);
+        if (index === -1 && existing.length >= MAX_SESSIONS_PER_USER) {
+          return Response.json(
+            { error: `Maximum session limit reached (${MAX_SESSIONS_PER_USER}).` },
+            { status: 400 },
+          );
+        }
+        const next = index >= 0
+          ? existing.map((s, i) => (i === index ? session : s))
+          : [...existing, session];
+        this.writeWebSessions(next);
+        return Response.json({ session }, { status: 201 });
+      }
+      return Response.json({ error: "Method not allowed." }, { status: 405 });
+    }
+
+    const resumeMatch = url.pathname.match(/^\/internal\/web-sessions\/([^/]+)\/resume$/);
+    if (resumeMatch) {
+      if (request.method !== "POST") {
+        return Response.json({ error: "Method not allowed." }, { status: 405 });
+      }
+      const sessionId = decodeURIComponent(resumeMatch[1]!);
+      const session = this.storedWebSessions.find((s) => s.id === sessionId);
+      if (!session || session.deletingAt) {
+        return Response.json({ error: "Session not found." }, { status: 404 });
+      }
+      const updated: WebSessionRecord = { ...session, updatedAt: Date.now() };
+      this.writeWebSessions(this.storedWebSessions.map((s) => (s.id === sessionId ? updated : s)));
+      return Response.json({ session: updated, resumed: true });
+    }
+
+    // Tombstone a session before teardown so routing/registry lookups stop
+    // admitting new work, or clear the tombstone to roll back a failed delete.
+    const deletingMatch = url.pathname.match(/^\/internal\/web-sessions\/([^/]+)\/deleting$/);
+    if (deletingMatch) {
+      if (request.method !== "POST") {
+        return Response.json({ error: "Method not allowed." }, { status: 405 });
+      }
+      const sessionId = decodeURIComponent(deletingMatch[1]!);
+      const session = this.storedWebSessions.find((s) => s.id === sessionId);
+      if (!session) {
+        return Response.json({ error: "Session not found." }, { status: 404 });
+      }
+      let body: unknown;
+      try {
+        body = await request.json();
+      } catch {
+        return Response.json({ error: "Invalid JSON." }, { status: 400 });
+      }
+      const deleting = (body as { deleting?: unknown })?.deleting !== false;
+      const updated: WebSessionRecord = deleting
+        ? { ...session, deletingAt: session.deletingAt ?? Date.now() }
+        : { ...session, deletingAt: undefined };
+      this.writeWebSessions(this.storedWebSessions.map((s) => (s.id === sessionId ? updated : s)));
+      return Response.json({ session: updated });
+    }
+
+    const sessionMatch = url.pathname.match(/^\/internal\/web-sessions\/([^/]+)$/);
+    if (sessionMatch) {
+      const sessionId = decodeURIComponent(sessionMatch[1]!);
+      const existing = this.storedWebSessions.find((s) => s.id === sessionId);
+      // `includeDeleting` exists only for the delete flow's retry path; every
+      // other lookup treats tombstoned sessions as gone.
+      const includeDeleting = url.searchParams.get("includeDeleting") === "true";
+      if (!existing || (existing.deletingAt && request.method !== "DELETE" && !includeDeleting)) {
+        return Response.json({ error: "Session not found." }, { status: 404 });
+      }
+      if (request.method === "GET") {
+        return Response.json({ session: existing });
+      }
+      if (request.method === "PATCH") {
+        let body: unknown;
+        try {
+          body = await request.json();
+        } catch {
+          return Response.json({ error: "Invalid JSON." }, { status: 400 });
+        }
+        const patch = (typeof body === "object" && body !== null ? body : {}) as {
+          name?: string;
+          metadata?: Record<string, unknown>;
+        };
+        let sanitizedMeta = existing.metadata;
+        if (patch.metadata !== undefined) {
+          try {
+            sanitizedMeta = sanitizeSessionMetadata(patch.metadata);
+          } catch (err) {
+            return Response.json(
+              { error: err instanceof Error ? err.message : "Invalid metadata." },
+              { status: 400 },
+            );
+          }
+        }
+        const updated: WebSessionRecord = {
+          ...existing,
+          name: patch.name !== undefined ? (sanitizeSessionName(patch.name) || existing.name) : existing.name,
+          metadata: sanitizedMeta,
+          updatedAt: Date.now(),
+        };
+        this.writeWebSessions(this.storedWebSessions.map((s) => (s.id === sessionId ? updated : s)));
+        return Response.json({ session: updated });
+      }
+      if (request.method === "DELETE") {
+        this.writeWebSessions(this.storedWebSessions.filter((s) => s.id !== sessionId));
+        return Response.json({ ok: true, deleted: existing });
+      }
+      return Response.json({ error: "Method not allowed." }, { status: 405 });
+    }
+
+    return Response.json({ error: "Not found." }, { status: 404 });
+  }
+
+  private async handleInternalSessionTeardown(request: Request, url: URL): Promise<Response> {
+    if (request.method !== "POST") {
+      return Response.json({ error: "Method not allowed." }, { status: 405 });
+    }
+    const force = url.searchParams.get("force") === "true";
+    const activeRuns = this.store.list().filter((r) => isActiveStatus(r.status));
+    const pendingApprovals = this.approvals.filter((a) => a.status === "pending");
+    const alreadyDeleted = this.sessionDeleted;
+
+    if (!alreadyDeleted && !force && (activeRuns.length > 0 || pendingApprovals.length > 0)) {
+      return Response.json(
+        {
+          error: "Cannot delete session with active runs or pending approvals.",
+          activeRuns: activeRuns.length,
+          pendingApprovals: pendingApprovals.length,
+        },
+        { status: 409 },
+      );
+    }
+
+    // Persist the flag in the same synchronous step as the busy check, before
+    // any await: no request or socket admitted after this point can queue work.
+    if (!alreadyDeleted) {
+      this.setState({ ...this.state, sessionDeletedAt: Date.now() });
+    }
+    this.closeLiveConnections();
+
+    if (activeRuns.length > 0) {
+      await Promise.all(activeRuns.map((r) => this.cancelRun(r.runId)));
+    }
+    if (pendingApprovals.length > 0) {
+      const now = Date.now();
+      const updated = this.approvals.map((a) =>
+        a.status === "pending"
+          ? { ...a, status: "rejected" as const, decidedAt: now, decidedBy: "system:session-deleted" }
+          : a,
+      );
+      this.writeApprovals(updated);
+    }
+    await this.reclaimRuns();
+    return Response.json({
+      ok: true,
+      activeRunsCancelled: activeRuns.length,
+      approvalsRejected: pendingApprovals.length,
     });
   }
 
@@ -1405,6 +1687,17 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     if (request.method === "POST" && url.pathname === "/internal/sweep-drafts") {
       this.sweepStaleDrafts(true);
       return Response.json({ ok: true });
+    }
+    if (url.pathname.startsWith("/internal/web-sessions")) {
+      return this.handleInternalWebSessions(request, url);
+    }
+    if (url.pathname === "/internal/session-teardown") {
+      return this.handleInternalSessionTeardown(request, url);
+    }
+    // Teardown stays reachable above so a delete can be retried; everything
+    // else on a deleted session is gone, whatever the Worker checked first.
+    if (this.sessionDeleted) {
+      return Response.json({ error: "Session deleted." }, { status: 410 });
     }
     if (url.pathname === "/api/approvals" && request.method === "GET") {
       return this.listApprovals(agentPrincipal);

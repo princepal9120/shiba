@@ -69,10 +69,10 @@ const codingTaskResultSchema = z.object({
    */
   pullUrl: z.string().optional(),
   /**
-   * Preview + screenshot links captured at run end (T33), carried on the
-   * envelope like pullUrl so the parent records them from structured output.
+   * Stored screenshot link captured at run end (T33), carried on the
+   * envelope like pullUrl so the parent records it from structured output.
+   * The sandbox preview URL itself is ephemeral and never leaves the worker.
    */
-  previewUrl: z.string().optional(),
   screenshotUrl: z.string().optional(),
 });
 

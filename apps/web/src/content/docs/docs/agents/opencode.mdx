@@ -64,7 +64,7 @@ Add your provider keys (Google, Anthropic, OpenAI, xAI) to your Cloudflare AI Ga
 In `wrangler.jsonc` or via environment variables:
 
 ```bash
-pnpm wrangler secret put CODING_MODEL # enter "google/gemini-3.5-flash-lite"
+pnpm wrangler secret put CODING_MODEL --config apps/backend/wrangler.jsonc # enter "google/gemini-3.5-flash-lite"
 ```
 
 ## Selecting OpenCode in a Task

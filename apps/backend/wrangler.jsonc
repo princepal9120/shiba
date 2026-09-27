@@ -14,7 +14,7 @@
   "preview_urls": false,
   "vars": {
     "GATEWAY_ID": "default",
-    "ORCHESTRATOR_MODEL": "@cf/meta/llama-3.1-8b-instruct",
+    "ORCHESTRATOR_MODEL": "@cf/zai-org/glm-4.7-flash",
     "CODING_MODEL": "google/gemini-3.5-flash-lite",
     "RUNTIME": "sandbox",
     // Must match containers.instance_type. Cloudbox-style deploy-time size knob.
@@ -27,6 +27,9 @@
   "ai": {
     "binding": "AI",
   },
+  "worker_loaders": [
+    { "binding": "LOADER" },
+  ],
   // Workers Browser Rendering (T33): headless Chromium for post-run preview
   // screenshots. Puppeteer connects via env.BROWSER.
   "browser": {
@@ -94,7 +97,6 @@
     { "tag": "v5", "new_sqlite_classes": ["Memory"] },
     { "tag": "v6", "new_sqlite_classes": ["Waitlist"] },
     { "tag": "v7", "new_sqlite_classes": ["ModelConfig"] },
-    // v4 already applied on existing installs; delete has to be a new tag.
     { "tag": "v8", "deleted_classes": ["McpGateway"] },
   ],
 }

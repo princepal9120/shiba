@@ -7,12 +7,7 @@
  * stop/resume — resumable runs are a real architecture change and were
  * deliberately cut (PLAN.md §4, "Future work").
  */
-import {
-  isActiveStatus,
-  isTerminalStatus,
-  normalizeRun,
-  RUN_DEADLINE_MS,
-} from "@shiba/shared";
+import { isActiveStatus, isTerminalStatus, normalizeRun, RUN_DEADLINE_MS } from "@shiba/shared";
 import type { ApprovedRoute, DelegatedRun, Receipt, RunPatch, RunStatus } from "@shiba/shared";
 import { appendReceipt, makeReceipt } from "./receipts.js";
 
@@ -67,7 +62,6 @@ function applyPatch(run: DelegatedRun, patch: RunPatch | undefined): DelegatedRu
   if (patch.errorCode !== undefined) next.errorCode = patch.errorCode;
   if (patch.diff !== undefined) next.diff = patch.diff;
   if (patch.pullUrl !== undefined) next.pullUrl = patch.pullUrl;
-  if (patch.previewUrl !== undefined) next.previewUrl = patch.previewUrl;
   if (patch.screenshotUrl !== undefined) next.screenshotUrl = patch.screenshotUrl;
   if (patch.receipts !== undefined) next.receipts = patch.receipts;
   if (patch.sandboxId !== undefined) next.sandboxId = patch.sandboxId;

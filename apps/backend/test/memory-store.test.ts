@@ -316,7 +316,12 @@ function send(stub: FakeStub, method: string, path: string, body?: unknown): Pro
 
 async function bank(stub: FakeStub, fact: string, source = "run", extra: Record<string, unknown> = {}) {
   const res = await send(stub, "POST", "/facts", { fact, source, ...extra });
-  return { res, body: (await res.json()) as { fact?: { id: string; ttl?: number | null } } };
+  return {
+    res,
+    body: (await res.json()) as {
+      fact?: { id: string; ttl?: number | null; duplicate_of?: string };
+    },
+  };
 }
 
 describe("Memory DO routes", () => {
@@ -424,10 +429,11 @@ describe("Memory DO routes", () => {
   it("rejects a recall limit above the Vectorize topK ceiling", async () => {
     const h = makeHarness();
     await bank(h.stub("intern"), "alpha");
-    for (const bad of ["101", "5000"]) {
+    // Recall requests metadata, whose Vectorize topK ceiling is 50.
+    for (const bad of ["51", "5000"]) {
       expect((await get(h.registry, `/facts/search?q=x&limit=${bad}`)).status).toBe(400);
     }
-    expect((await get(h.registry, "/facts/search?q=x&limit=100")).status).toBe(200);
+    expect((await get(h.registry, "/facts/search?q=x&limit=50")).status).toBe(200);
   });
 
   it("rejects a malformed list limit uniformly across facts and sessions", async () => {
@@ -782,6 +788,100 @@ describe("Memory DO routes", () => {
     const other = await bank(h.stub("intern"), "the office is on the third floor");
     expect(other.res.status).toBe(201);
     expect((other.body.fact as { duplicate_of?: string }).duplicate_of).toBeUndefined();
+  });
+
+  it("dedupe promotes a durable request over an expiring duplicate", async () => {
+    const h = makeHarness();
+    const soon = Date.now() + 60_000;
+    const first = await bank(h.stub("intern"), "expires soon", "run", { ttl: soon });
+    expect(first.res.status).toBe(201);
+    const originalId = first.body.fact?.id ?? "";
+    expect(h.vectors.get(originalId)?.metadata?.ttl).toBe(soon);
+    // A durable re-bank of the same fact must not answer with a row that
+    // dies in a minute — the surviving fact's ttl promotes to durable.
+    const dup = await bank(h.stub("intern"), "expires soon", "run");
+    expect(dup.res.status).toBe(200);
+    const dupFact = dup.body.fact as { id: string; ttl: number | null; duplicate_of?: string };
+    expect(dupFact.id).toBe(originalId);
+    expect(dupFact.duplicate_of).toBe(originalId);
+    expect(dupFact.ttl).toBeNull();
+    const row = (await (await get(h.stub("intern"), `/facts/${originalId}`)).json()) as {
+      fact: { ttl: number | null };
+    };
+    expect(row.fact.ttl).toBeNull();
+    // The stored metadata was refreshed too — stored-metadata recall must
+    // not keep collecting the hit on the stale deadline.
+    expect(h.vectors.get(originalId)?.metadata?.ttl).toBeUndefined();
+  });
+
+  it("dedupe widens a shorter-lived duplicate to the later deadline", async () => {
+    const h = makeHarness();
+    const soon = Date.now() + 60_000;
+    const later = Date.now() + 3_600_000;
+    const first = await bank(h.stub("intern"), "ttl grows", "run", { ttl: soon });
+    const originalId = first.body.fact?.id ?? "";
+    const dup = await bank(h.stub("intern"), "ttl grows", "run", { ttl: later });
+    expect(dup.res.status).toBe(200);
+    const dupFact = dup.body.fact as { ttl: number | null };
+    expect(dupFact.ttl).toBe(later);
+    expect(h.vectors.get(originalId)?.metadata?.ttl).toBe(later);
+  });
+
+  it("dedupe does not shrink an existing longer-lived fact", async () => {
+    const h = makeHarness();
+    const first = await bank(h.stub("intern"), "already durable", "run");
+    const originalId = first.body.fact?.id ?? "";
+    const soon = Date.now() + 60_000;
+    const dup = await bank(h.stub("intern"), "already durable", "run", { ttl: soon });
+    expect(dup.res.status).toBe(200);
+    expect((dup.body.fact as { ttl: number | null }).ttl).toBeNull();
+    expect(h.vectors.get(originalId)?.metadata?.ttl).toBeUndefined();
+  });
+
+  it("bounds vector metadata under the Vectorize UTF-8 byte limit", async () => {
+    const h = makeHarness();
+    // Multi-byte UTF-8 fact that would push serialized metadata past the
+    // 10 KiB Vectorize limit without truncation.
+    const big = "é".repeat(7_000);
+    const { res, body } = await bank(h.stub("intern"), big, "run");
+    expect(res.status).toBe(201);
+    const id = body.fact?.id ?? "";
+    const meta = h.vectors.get(id)?.metadata;
+    expect(meta).toBeDefined();
+    const bytes = new TextEncoder().encode(JSON.stringify(meta)).length;
+    expect(bytes).toBeLessThanOrEqual(10 * 1024);
+    // Still recallable-from-metadata: agent + fact fields survive.
+    expect(typeof meta?.fact).toBe("string");
+    expect((meta?.fact as string).length).toBeLessThan(big.length);
+    expect(meta?.agent).toBe("intern");
+  });
+
+  it("sweep keeps the longer-lived duplicate, never an expiring over a durable", async () => {
+    const h = makeHarness();
+    h.stub("intern");
+    const db = h.dbs.get("intern");
+    if (!db) throw new Error("intern stub missing");
+    const soon = Date.now() + 3_600_000;
+    // Older-but-expiring first, newer-and-durable second — the durable one
+    // must survive the merge even though it is the later row.
+    db.prepare(
+      `INSERT INTO facts (id, fact, source, embedding_id, created_at, ttl)
+       VALUES ('fact_old', 'duplicate text', 'run', 'fact_old', 1, ?)`,
+    ).run(soon);
+    db.prepare(
+      `INSERT INTO facts (id, fact, source, embedding_id, created_at, ttl)
+       VALUES ('fact_new', 'duplicate text', 'run', 'fact_new', 2, NULL)`,
+    ).run();
+    await send(h.registry, "POST", "/registry", { fact_id: "fact_old", agent: "intern" });
+    await send(h.registry, "POST", "/registry", { fact_id: "fact_new", agent: "intern" });
+    const obj = h.objects.get("intern");
+    await obj?.alarm();
+    const listed = (await (await get(h.stub("intern"), "/facts")).json()) as {
+      facts: Array<{ id: string }>;
+    };
+    expect(listed.facts.map((f) => f.id)).toEqual(["fact_new"]);
+    expect((await get(h.registry, "/facts/fact_old")).status).toBe(404);
+    expect((await get(h.registry, "/facts/fact_new")).status).toBe(200);
   });
 
   it("scopes dedupe to the owning agent — another agent's same text still banks", async () => {

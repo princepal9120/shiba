@@ -275,6 +275,27 @@ export class MemoryStore {
     ).map(rowToFact);
   }
 
+  /**
+   * Extend (or clear, for a durable fact) a row's ttl — the dedupe path
+   * promotes an expiring duplicate when the incoming request asks for a
+   * longer-lived fact. Same validation as `bankFact`; returns the updated
+   * row, or null when the id is gone (expired between the match and here).
+   */
+  setFactTtl(id: string, ttl: number | null): FactRecord | null {
+    if (ttl !== null) {
+      if (!Number.isFinite(ttl)) {
+        throw new InputError("ttl must be a finite epoch-milliseconds deadline.");
+      }
+      if (ttl < 0) {
+        throw new InputError("ttl must not be negative.");
+      }
+    }
+    this.purgeExpiredFacts();
+    this.exec(`UPDATE facts SET ttl = ? WHERE id = ?`, ttl, id);
+    const row = this.exec(`SELECT * FROM facts WHERE id = ?`, id)[0];
+    return row ? rowToFact(row) : null;
+  }
+
   /** Hard delete — returns whether a row was removed. */
   forgetFact(id: string): boolean {
     const rows = this.exec(`DELETE FROM facts WHERE id = ? RETURNING id`, id);

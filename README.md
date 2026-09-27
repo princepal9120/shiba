@@ -53,7 +53,7 @@ At runtime a single Worker serves that directory via `assets.directory` (`apps/b
 
 ## Local quickstart
 
-Requirements: Node.js **22.12.0+**, pnpm **10.0.0+**. A Docker CLI is also required for Wrangler container image packaging; a missing Docker daemon fails even the local dry run.
+Requirements: Node.js **22.13.0+**, pnpm **10.0.0+**. A Docker CLI is also required for Wrangler container image packaging; a missing Docker daemon fails even the local dry run.
 
 ~~~sh
 pnpm install
@@ -128,6 +128,8 @@ claude mcp add --transport http shiba https://<worker-host>/mcp --header "Author
 Tools: `queue_run` (`sandbox:exec`) plus `run_status`, `list_runs`, `list_approvals` (`runs:read`, scoped to records the token's principal queued), and email and memory tools behind their own scopes. `queue_run` only queues — a human approves in the dashboard, on iPhone, or in Slack; there is no approve tool. Details: [/docs/mcp](apps/web/src/content/docs/docs/mcp.md).
 
 The built-in email backend has a documented OpenAPI contract at `GET /api/email/openapi.json` ([email API guide](apps/web/src/content/docs/docs/api.md#email-api)). The Inbox downloads stored attachments through an Access-gated route; sending a draft still requires human approval. This is Shiba's own API, not a Goshen Email `/v1` clone.
+
+To connect a cloud agent to mail, assign its exact `/mcp` token principal in Inbox settings. Email tools then see only that agent's assigned mailboxes; unassigned mailboxes stay dashboard-only. [Pairing guide](apps/web/src/content/docs/docs/mcp.md#pair-a-cloud-agent-with-its-mailbox).
 
 ## Documentation
 
@@ -251,4 +253,4 @@ Cost surfaces include Workers, Workers AI planning inference, Durable Objects, C
 
 ## License
 
-AGPL-3.0-only. See [LICENSE](LICENSE). Earlier MIT-licensed material retains its notice in [LICENSE-MIT-PRIOR](LICENSE-MIT-PRIOR).
+AGPL-3.0-only. See [LICENSE](LICENSE).

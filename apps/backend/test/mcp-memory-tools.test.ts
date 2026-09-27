@@ -220,7 +220,7 @@ describe("registerMemoryTools — validation", () => {
       ["memory_recall", { query: "x", limit: -3 }],
       ["memory_recall", { query: "x", limit: 1.5 }],
       ["memory_recall", { query: "x", limit: "10" }],
-      ["memory_recall", { query: "x", limit: 101 }], // over Vectorize topK ceiling
+      ["memory_recall", { query: "x", limit: 51 }], // over Vectorize metadata topK ceiling
       ["memory_bank", {}], // fact + source required
       ["memory_bank", { fact: "x" }],
       ["memory_bank", { fact: "", source: "run" }],

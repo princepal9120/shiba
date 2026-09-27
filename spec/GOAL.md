@@ -44,7 +44,7 @@ Primitives in use, each justified:
 - **Vectorize `MEMORY_VECTORS`** — 768-dim embeddings for memory recall
 - **turbo** — per-app build/typecheck/test orchestration
 
-Still forbidden without a concrete requirement: Queues, Workflows, Hono (the Worker router stays hand-rolled), and any additional store beyond the nine Durable Objects + the four supporting stores above.
+Still forbidden without a concrete requirement: Queues, Workflows, Hono (the Worker router stays hand-rolled), and any additional store beyond the eight Durable Objects + the four supporting stores above.
 
 Use:
 
