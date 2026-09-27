@@ -564,14 +564,20 @@ for (const [key, value] of env) {
 // (e) Access bypass contract: every ACCESS_BYPASS_PATHS entry must be a
 // path the Worker itself exempts from Access identity — a bypassed edge
 // path that still requires Access identity 401s machine callers, and a
-// signature route missing from the bypass list 403s at the edge.
-const indexPath = resolve(wranglerDir, "src/index.ts");
-let indexText = "";
-try {
-  indexText = stripTsComments(readFileSync(indexPath, "utf8"));
-} catch {
-  drift.push(`cannot read ${indexPath} for the Access bypass check`);
-}
+// signature route missing from the bypass list 403s at the edge. The
+// exemption evidence lives in the entry's auth dispatch: index.ts plus
+// the request-auth module it delegates to.
+const indexText = ["src/index.ts", "src/request-auth.ts", "src/mcp-routes.ts"]
+  .map((rel) => {
+    const p = resolve(wranglerDir, rel);
+    try {
+      return stripTsComments(readFileSync(p, "utf8"));
+    } catch {
+      drift.push(`cannot read ${p} for the Access bypass check`);
+      return "";
+    }
+  })
+  .join("\n");
 const literalsIn = (text, name) => {
   const m = new RegExp(name + "\\s*=\\s*\\[([\\s\\S]*?)\\]").exec(text);
   return m ? [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]) : [];
