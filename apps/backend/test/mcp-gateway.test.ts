@@ -6,9 +6,14 @@ vi.mock("@cloudflare/sandbox", () => ({
   proxyToSandbox: async () => null,
   getSandbox: () => ({ destroy: async () => {} }),
 }));
+const routed = vi.hoisted(() => ({ requests: [] as Request[] }));
 vi.mock("agents/routing", () => ({
   getAgentByName: async () => ({ fetch: async () => new Response("{}", { status: 404 }) }),
-  routeAgentRequest: async () => null,
+  routeAgentRequest: async (request: Request) => {
+    if (new URL(request.url).pathname !== "/agents/coding-orchestrator/default") return null;
+    routed.requests.push(request);
+    return new Response("ok");
+  },
 }));
 vi.mock("@cloudflare/think", () => ({ Think: class {
   onStart() {}
@@ -188,6 +193,48 @@ describe("/mcp route auth", () => {
     // The KV read never happened — that is the entire point of the limiter.
     expect(getSpy).not.toHaveBeenCalled();
     expect(served.requests).toHaveLength(0);
+  });
+
+  it("verifies the bearer and serves MCP when the limiter allows", async () => {
+    const { env, kv } = makeEnv();
+    const { token } = await createToken(
+      env as unknown as AgentTokensEnv,
+      "allowed",
+      ["email:read"],
+    );
+    const getSpy = vi.spyOn(kv, "get");
+    const seenKeys: string[] = [];
+    (env as { MCP_RATE_LIMIT?: RateLimit }).MCP_RATE_LIMIT = {
+      limit: async ({ key }) => {
+        seenKeys.push(key);
+        return { success: true };
+      },
+    };
+    served.requests.length = 0;
+    const response = await worker.fetch(
+      mcpRequest({ "cf-connecting-ip": "203.0.113.7", authorization: `Bearer ${token}` }),
+      env,
+      ctx,
+    );
+    expect(response.status).toBe(200);
+    expect(seenKeys).toEqual(["203.0.113.7"]);
+    expect(getSpy).toHaveBeenCalled();
+    expect(served.requests).toHaveLength(1);
+  });
+
+  it("drops a forged principal before routing a non-MCP request", async () => {
+    const { env } = makeEnv();
+    routed.requests.length = 0;
+    const response = await worker.fetch(
+      new Request("https://worker/agents/coding-orchestrator/default", {
+        headers: { [MCP_PRINCIPAL_HEADER]: "forged" },
+      }),
+      env,
+      ctx,
+    );
+    expect(response.status).toBe(200);
+    expect(routed.requests).toHaveLength(1);
+    expect(routed.requests[0]!.headers.has(MCP_PRINCIPAL_HEADER)).toBe(false);
   });
 
   it("a forged x-shiba-principal header never survives to the handler", async () => {
