@@ -66,9 +66,6 @@ export const ANTIGRAVITY_SUBSCRIPTION_HOSTS = [
   "generativelanguage.googleapis.com",
 ] as const;
 
-// Profile-dir + browser-command helpers live in @shiba/shared
-// (antigravity.ts) — src/auth/ resolves them without importing harness/.
-export { antigravityBrowserCommand, antigravitySubscriptionProfileDir } from "@shiba/shared";
 
 /** The T47 instanceId for an account — stable, never the credential. */
 export function antigravitySubscriptionInstanceId(input: { authAccount?: string }): string {

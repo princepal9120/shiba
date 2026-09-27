@@ -1574,7 +1574,7 @@ async function handleGitHubWebhook(request: Request, env: Env, ctx?: ExecutionCo
           }
         })
         .catch((error: unknown) => {
-          console.error(redactSecrets(error instanceof Error ? error.message : String(error)));
+          console.error(redactSecrets(error instanceof Error ? (error.message) : String(error)));
         }),
     );
   }
@@ -1605,7 +1605,7 @@ export default {
           }
         })
         .catch((error: unknown) => {
-          console.error(redactSecrets(error instanceof Error ? error.message : String(error)));
+          console.error(redactSecrets(error instanceof Error ? (error.message) : String(error)));
         }),
     );
     // Stale-draft sweep: the approvals-poll and restart paths only run it
@@ -1623,7 +1623,7 @@ export default {
           }
         })
         .catch((error: unknown) => {
-          console.error(redactSecrets(error instanceof Error ? error.message : String(error)));
+          console.error(redactSecrets(error instanceof Error ? (error.message) : String(error)));
         }),
     );
     // Retention: audit_log keeps 90 days — pruned here on the same cron
@@ -1818,7 +1818,7 @@ export default {
                 console.error(`automation slack fan-out failed: ${response.status}`);
               }
             } catch (error: unknown) {
-              console.error(redactSecrets(error instanceof Error ? error.message : String(error)));
+              console.error(redactSecrets(error instanceof Error ? (error.message) : String(error)));
             }
           },
         },
@@ -1888,10 +1888,16 @@ export default {
       if (agentResponse) {
         return agentResponse;
       }
+      // An unmatched /api/* path must not fall through to the static site —
+      // assets serves the marketing 404 page, which breaks JSON clients and
+      // deep links like the run-card screenshot URL.
+      if (url.pathname.startsWith("/api/")) {
+        return Response.json({ error: "Not found." }, { status: 404 });
+      }
       return env.ASSETS.fetch(request);
     } catch (error) {
       // The client gets a generic 500; the redacted detail stays in the log.
-      console.error(redactSecrets(error instanceof Error ? error.message : String(error)));
+      console.error(redactSecrets(error instanceof Error ? (error.message) : String(error)));
       return Response.json({ error: "Internal error." }, { status: 500 });
     }
   },

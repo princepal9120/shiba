@@ -608,9 +608,7 @@ function throwIfAborted(signal: AbortSignal | undefined): void {
 }
 
 /** Thrown when a streamed OpenCode event line is malformed. */
-export { OpenCodeEventError } from "./harness/opencode.js";
-export { OpenCodeErrorEvent } from "./harness/opencode.js";
-export { buildOpencodeArgv, buildOpencodeConfig, parseOpencodeEvent } from "./harness/opencode.js";
+export { buildOpencodeArgv, buildOpencodeConfig } from "./harness/opencode.js";
 
 interface OutputStream {
   onData: (stream: "stdout" | "stderr", data: string) => void;

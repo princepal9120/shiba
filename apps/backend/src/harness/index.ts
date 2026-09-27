@@ -116,7 +116,7 @@ export function allowedHostsFor(harness: AgentHarness, model: string): string[] 
   return [...harness.egressHosts(model), ...GIT_EGRESS_HOSTS];
 }
 
-export type { AgentHarness, AgentHarnessName };
+export type { AgentHarness };
 
 export const HARNESS_NAMES = ["opencode", "claude-code", "claude-subscription", "codex", "codex-subscription", "devin", "grok", "cursor", "antigravity", "antigravity-subscription"] as const;
 

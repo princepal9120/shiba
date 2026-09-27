@@ -6,14 +6,6 @@
 export const GITHUB_HOST = "github.com";
 export const MAX_REPO_URL_LENGTH = 2048;
 
-export class ConfigError extends Error {
-  readonly code = "config_error";
-  constructor(message: string) {
-    super(message);
-    this.name = "ConfigError";
-  }
-}
-
 export class InputError extends Error {
   readonly code = "input_error";
   constructor(message: string) {

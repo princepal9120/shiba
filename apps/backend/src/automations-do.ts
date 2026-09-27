@@ -5,7 +5,6 @@
  */
 import { getAgentByName } from "agents/routing";
 import {
-  AUTOMATIONS_DO_NAME,
   fireMatchingAutomations,
   githubWebhookToEvent,
   slackEventToAutomation,
@@ -25,8 +24,6 @@ import {
 import type { Env } from "./env.js";
 import { InputError } from "./security.js";
 import { ORCHESTRATOR_NAME } from "./slack-routes.js";
-
-export { AUTOMATIONS_DO_NAME };
 
 export interface AutomationsState {
   items: Automation[];

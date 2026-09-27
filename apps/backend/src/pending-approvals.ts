@@ -12,7 +12,6 @@ export {
   DECIDED_APPROVALS_LIMIT,
   isApprovalExpired,
   isJsonObject,
-  isJsonValue,
   MAX_COMMAND_RECEIPTS,
   pruneExpiredApprovals,
   putCommandReceipt,
@@ -22,16 +21,9 @@ export {
 } from "@shiba/shared";
 export type {
   ApprovalEvidence,
-  ApprovalExecution,
   ApprovalKind,
-  CommandKind,
   CommandReceipt,
-  CreateApprovalInput,
-  JsonArray,
-  JsonObject,
-  JsonValue,
   PendingApproval,
-  ResolveApprovalInput,
   ResolveResult,
   RunInputFields,
 } from "@shiba/shared";
