@@ -7,7 +7,7 @@ permissions:
   contents: read
 jobs:
   biome-knip:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -23,7 +23,7 @@ jobs:
       # backend exports). max-issues gates regressions while they're triaged.
       - run: pnpm exec knip --reporter compact --max-issues 6
   check:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
