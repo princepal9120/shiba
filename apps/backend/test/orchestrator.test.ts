@@ -316,7 +316,9 @@ describe("orchestrator run routes", () => {
       body: JSON.stringify({ threadKey: "default", approvalId: freshId, approved: true, decidedBy: "U1" }),
     }));
     expect((await approved.json() as { result: string }).result).toBe("approved");
-    expect(mocks.execute).toHaveBeenCalledOnce();
+    // Dispatch rides keepAliveWhile — the approval response returns before the
+    // delegated run starts; wait for the async dispatch instead of racing it.
+    await vi.waitFor(() => { expect(mocks.execute).toHaveBeenCalledOnce(); });
     const calls = mocks.execute.mock.calls as unknown as [[string, { toolCallId: string }]];
     expect(parseAgentToolInput([{ role: "user", text: calls[0]![0]! }])).toMatchObject({ task: "second", baseBranch: "develop", publishPullRequest: true });
   });

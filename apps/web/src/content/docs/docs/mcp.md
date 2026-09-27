@@ -61,6 +61,8 @@ Give the resulting token only to that cloud agent and connect it to `/mcp` as ab
 
 For a first read-only test, grant only `email:read`. Configure Cloudflare Email Routing separately, send a message from another address, and verify it appears both in the Inbox and in the agent's `list_emails` result. Add draft/send scopes later if needed; they still cannot bypass human approval.
 
+The built-in chat agent also calls these tools: its `run_code` tool executes model-written JavaScript in an isolated Worker that dispatches back through this same gateway as the reserved principal `orchestrator-agent` (every scope except `admin:tokens`). To let the chat agent work a mailbox, register the address with **Cloud agent token principal** set to `orchestrator-agent` — no token minting needed. The same scoping rules apply: `orchestrator-agent` sees only mailboxes assigned to it, and sends or deletes still queue for human approval.
+
 The gateway has no approve tool. This MCP tool accepts only repository/task/branch/publish inputs, not a per-run harness or model; queued runs use the deployment's configured defaults (`AGENT_HARNESS`, `CODING_MODEL`, and the selected harness's model default) when approved. Harness implementation and verification status are documented in [Coding Harnesses](/docs/claude-code/). No cloud end-to-end run is recorded; the dated local OpenCode exercise did not reach successful model inference.
 
 Run visibility is per-principal: `run_status`, `list_runs`, and `list_approvals` only return records the calling token's principal queued (`queuedBy` is stamped at intake). Operator surfaces — dashboard, Slack, `/api/runs` with an Access identity — still see everything. Pair `sandbox:exec` with `runs:read` on tokens that queue and poll runs.
