@@ -48,8 +48,8 @@ import { assertHarnessAuthorized } from "../src/auth/index.js";
 import {
   antigravitySubscriptionAuth,
   type AntigravityAuthSandbox,
-} from "../src/auth/antigravity-subscription.js";
-import { AuthFlowError } from "../src/auth/controller.js";
+} from "@shiba/auth";
+import { AuthFlowError } from "@shiba/auth";
 import type { CodingTaskInput } from "../src/opencode-input.js";
 
 const ENABLED = { SHIBA_ANTIGRAVITY_SUBSCRIPTION: "1" };

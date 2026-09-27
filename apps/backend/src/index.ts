@@ -9,11 +9,10 @@ import { listTokens, verifyToken } from "./agent-tokens.js";
 import { OpenCodeAgent } from "./agents/opencode-agent.js";
 import { CodingOrchestrator } from "./agents/orchestrator.js";
 import { AUDIT_RETENTION_MS, listAuditEntries, pruneAuditLog } from "./audit.js";
-import { claudeSubscriptionAuth } from "./auth/claude-subscription.js";
-import { codexSubscriptionAuth } from "./auth/codex-subscription.js";
+import { claudeSubscriptionAuth, codexSubscriptionAuth, AuthFlowError } from "@shiba/auth";
 import { handleAntigravityCallback, handleAntigravitySubscriptionAuth } from "./antigravity.js";
 import { codexSubscriptionInstanceId } from "./harness/codex-subscription.js";
-import { AuthFlowError } from "./auth/controller.js";
+import { forwardClaudeSubscription, forwardCodexSubscription, type EgressEnv } from "./egress.js";
 import { AUTOMATIONS_DO_NAME } from "./automation-runner.js";
 import { Automations } from "./automations-do.js";
 import { parseAutomationWebhookPath } from "./automations.js";
@@ -182,7 +181,9 @@ async function handleClaudeSubscriptionAuth(request: Request, env: Env): Promise
       : {};
   const accountRaw = request.method === "GET" ? url.searchParams.get("account") : body.account;
   const account = typeof accountRaw === "string" && accountRaw.trim() !== "" ? accountRaw.trim() : "default";
-  const controller = claudeSubscriptionAuth(env, `claude-sub:${account}`);
+  const controller = claudeSubscriptionAuth(env, `claude-sub:${account}`, (request, e, ctx) =>
+    forwardClaudeSubscription(request, e as EgressEnv, ctx),
+  );
   const authError = (reason: unknown) =>
     Response.json(
       { error: reason instanceof AuthFlowError ? reason.message : "Auth flow error." },
@@ -226,7 +227,9 @@ async function handleCodexSubscriptionAuth(request: Request, env: Env): Promise<
       : {};
   const accountRaw = request.method === "GET" ? url.searchParams.get("account") : body.account;
   const account = typeof accountRaw === "string" && accountRaw.trim() !== "" ? accountRaw.trim() : "default";
-  const controller = codexSubscriptionAuth(env, codexSubscriptionInstanceId({ authAccount: account }));
+  const controller = codexSubscriptionAuth(env, codexSubscriptionInstanceId({ authAccount: account }), (request, e, ctx) =>
+    forwardCodexSubscription(request, e as EgressEnv, ctx),
+  );
   const authError = (reason: unknown) =>
     Response.json(
       { error: reason instanceof AuthFlowError ? reason.message : "Auth flow error." },
