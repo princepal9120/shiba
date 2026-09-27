@@ -190,3 +190,15 @@ export function assertCodexPrivateEntriesReal(
 export function codexUpdateHomePath(layout: CodexHomeLayout): string {
   return layout.sharedHomePath;
 }
+
+/**
+ * Recover the account name from a `codex-sub:<homeDir>` instanceId — the
+ * shadow dir encodes it (`acc-<name>`); the shared home means "default".
+ * Lives here (not in harness/) so `src/auth/` resolves it without
+ * crossing the `src/auth/ → harness/` dependency rule.
+ */
+export function codexSubscriptionAccountFromInstanceId(instanceId: string): string {
+  const path = instanceId.slice("codex-sub:".length);
+  const base = path.split("/").pop() ?? "";
+  return base.startsWith("acc-") ? base.slice(4) : "default";
+}

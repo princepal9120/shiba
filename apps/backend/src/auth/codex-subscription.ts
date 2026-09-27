@@ -16,7 +16,8 @@
  * branch runs use — and only its verdict sets `succeeded`.
  */
 import type { ProviderAuthController } from "@shiba/shared";
-import { codexSubscriptionAccountFromInstanceId } from "../harness/codex-subscription.js";
+// Pure path math lives in @shiba/shared — this module must not import from harness/.
+import { codexSubscriptionAccountFromInstanceId } from "@shiba/shared";
 import {
   createAuthController,
   type AuthProviderHooks,

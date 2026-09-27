@@ -20,6 +20,8 @@ Non-secret defaults are in `apps/backend/wrangler.jsonc` and `alchemy.run.ts`. F
 | `CLAUDE_SUBSCRIPTION_MODEL` | `anthropic-subscription/claude-sonnet-4-6` | `claude-subscription` default model |
 | `SHIBA_CODEX_SUBSCRIPTION` | unset | Set `1` to enable the opt-in `codex-subscription` harness (below) |
 | `CODEX_SUBSCRIPTION_MODEL` | `openai-subscription/gpt-5.3-codex` | `codex-subscription` default model |
+| `SHIBA_ANTIGRAVITY_SUBSCRIPTION` | unset | Set `1` to enable the opt-in `antigravity-subscription` harness (below) |
+| `ANTIGRAVITY_SUBSCRIPTION_MODEL` | `google-subscription/gemini-3-pro` | `antigravity-subscription` default model |
 | `RUNTIME` | `sandbox` | Runtime adapter; current default is Cloudflare Sandbox |
 | `INSTANCE_TYPE` | `standard-1` | Configured Cloudflare container size |
 | `REQUIRE_ACCESS` | Wrangler default unset; live Alchemy stages set `1` | Require Access identity at the Worker boundary |
@@ -39,6 +41,10 @@ Setting `SHIBA_CLAUDE_SUBSCRIPTION=1` registers a second Claude harness, `claude
 ### Codex subscription (opt-in)
 
 Setting `SHIBA_CODEX_SUBSCRIPTION=1` registers `codex-subscription`, which drives the same `codex` binary against the operator's own ChatGPT subscription instead of AI Gateway. Codex's credential is directory-shaped: run `codex login` on your own machine and store the resulting `~/.codex/auth.json` contents verbatim as a Worker secret — `CODEX_SUBSCRIPTION_AUTH_JSON`, or `CODEX_SUBSCRIPTION_AUTH_JSON_<ACCOUNT>` for a named account — then drive the lifecycle under `/api/auth/codex-subscription` (begin, verify, clear). In the sandbox the run's `CODEX_HOME` is a per-account shadow holding a stub `auth.json` as a real file plus symlinks into the shared home (sessions, caches, the install) — a conversation thread survives an account switch while each account revokes independently. The real tokens never enter the container: the dedicated `chatgpt.com` egress branch attaches `Bearer` + `chatgpt-account-id` at the boundary, token refresh hosts are not admitted (an expired token fails the run honestly — re-store the secret), and the credential appears in no sandbox file, argv, log, or UI response. Your own plan terms apply.
+
+### Antigravity subscription (opt-in)
+
+Setting `SHIBA_ANTIGRAVITY_SUBSCRIPTION=1` registers `antigravity-subscription`, which drives the pinned `agy` ACP server against the operator's own Google subscription. There is no secret to store — the credential never touches the Worker. Connect an account by posting to `/api/auth/antigravity-subscription/begin` (optionally `{"account": "<name>"}`): shiba boots a dedicated auth sandbox, prepares the isolated profile (`0700` dirs, `auth.type=oauth-personal`, ambient Google credentials stripped from the launch environment), starts `agy` there, and returns the Google sign-in URL it prints. Sign in as the operator's own account; the browser lands on a `http://127.0.0.1:…/` redirect that fails in the browser — copy that URL verbatim and POST it to `/api/antigravity/callback` as `{"url": "<pasted>", "account": "<name>"}`. Shiba validates it is the pending flow's exact listener (same origin, same state, exactly one code-or-error) and forwards it into the container unmodified — no proxies, no redirects, no logging of the URL. Finish with `/verify`; signing in is not proof, the capability probe (token materialized in the profile) is. Clear via `/clear` destroys the auth sandbox. Your own plan terms apply.
 
 Subscription credentials are not the default provider-key path — API credentials via AI Gateway are. The `claude-subscription` opt-in above is the deliberate exception: it exists for the single-tenant operator driving their own credential, and stays dark unless they set the flag. Check the provider's current terms before enabling it. The assistant/model used to edit this repository is independent of these application settings.
 

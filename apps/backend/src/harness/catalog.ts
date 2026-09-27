@@ -13,8 +13,13 @@ import type { Env } from "../env.js";
 import { HARNESS_DEFAULT_MODELS, HARNESS_NAMES, sandboxHarnessNames } from "./index.js";
 
 export interface AgentCliCredential {
-  /** ai-gateway-byok = AI Gateway holds the provider key; worker-secret = a Wrangler secret on this deployment. */
-  kind: "ai-gateway-byok" | "worker-secret";
+  /**
+   * ai-gateway-byok = AI Gateway holds the provider key;
+   * worker-secret = a Wrangler secret on this deployment;
+   * oauth-signin = no Worker credential — the in-container agent process
+   * owns an OAuth sign-in (T50 antigravity-subscription).
+   */
+  kind: "ai-gateway-byok" | "worker-secret" | "oauth-signin";
   /** Human-readable credential label, e.g. "DEVIN_API_KEY" or "AI Gateway BYOK (anthropic)". */
   label: string;
   /** true = secret present, false = missing, null = not introspectable (gateway-managed). */
@@ -52,6 +57,7 @@ const CATALOG_META: Record<
   grok: { label: "Grok", binary: "grok", version: "1.0.41", docsUrl: "https://docs.x.ai" },
   cursor: { label: "Cursor", binary: "cursor-agent", version: "0.50.0", docsUrl: "https://docs.cursor.com" },
   antigravity: { label: "Antigravity", binary: "agy", version: "1.0.0", docsUrl: "https://antigravity.google" },
+  "antigravity-subscription": { label: "Antigravity (subscription)", binary: "agy", version: "1.1.1", docsUrl: "https://antigravity.google" },
 };
 
 const GATEWAY_PROVIDER: Record<string, string> = {
@@ -68,7 +74,7 @@ const GATEWAY_PROVIDER: Record<string, string> = {
  * values never leave the Worker.
  */
 export function agentCliCatalog(
-  env: Pick<Env, "DEVIN_API_KEY" | "SHIBA_CLAUDE_SUBSCRIPTION" | "CLAUDE_SUBSCRIPTION_TOKEN" | "SHIBA_CODEX_SUBSCRIPTION" | "CODEX_SUBSCRIPTION_AUTH_JSON">,
+  env: Pick<Env, "DEVIN_API_KEY" | "SHIBA_CLAUDE_SUBSCRIPTION" | "CLAUDE_SUBSCRIPTION_TOKEN" | "SHIBA_CODEX_SUBSCRIPTION" | "CODEX_SUBSCRIPTION_AUTH_JSON" | "SHIBA_ANTIGRAVITY_SUBSCRIPTION">,
 ): AgentCliInfo[] {
   return sandboxHarnessNames(env).map((id) => {
     const meta = CATALOG_META[id];
@@ -94,6 +100,15 @@ export function agentCliCatalog(
                 configured: Boolean(env.CODEX_SUBSCRIPTION_AUTH_JSON),
                 setupHint: "codex login, then npx wrangler secret put CODEX_SUBSCRIPTION_AUTH_JSON < ~/.codex/auth.json",
               }
+            : id === "antigravity-subscription"
+              ? {
+                  // No Worker credential at all — the OAuth tokens live in
+                  // the container profile; `configured` is unknowable here.
+                  kind: "oauth-signin",
+                  label: "Google sign-in (in-container OAuth)",
+                  configured: null,
+                  setupHint: "POST /api/auth/antigravity-subscription/begin, sign in, paste the 127.0.0.1 redirect into /api/antigravity/callback",
+                }
           : {
               kind: "ai-gateway-byok",
               label: `AI Gateway BYOK (${GATEWAY_PROVIDER[id]})`,

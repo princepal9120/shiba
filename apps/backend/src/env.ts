@@ -197,6 +197,16 @@ export interface Env {
   /** T49: per-deploy model override for the codex-subscription harness. */
   CODEX_SUBSCRIPTION_MODEL?: string;
   /**
+   * T50 opt-in flag (§18.12): "1" registers the antigravity-subscription
+   * harness and opens the /api/auth/antigravity-subscription verbs plus the
+   * /api/antigravity/callback route. No credential var exists — Google
+   * OAuth tokens are written by the ACP process into the container
+   * profile, never stored on the Worker.
+   */
+  SHIBA_ANTIGRAVITY_SUBSCRIPTION?: string;
+  /** T50: per-deploy model override for the antigravity-subscription harness. */
+  ANTIGRAVITY_SUBSCRIPTION_MODEL?: string;
+  /**
    * Optional. Devin account API key for the devin harness — injected as a
    * Bearer header by the egress forwarders on api.devin.ai and
    * server.codeium.com. Never sent to containers; the sandboxed CLI holds a

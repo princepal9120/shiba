@@ -27,6 +27,11 @@ export interface AuthSnapshot {
   /** Session that owns this flow; mutating methods refuse anyone else. */
   ownerSessionId: string | null;
   message?: string;
+  /**
+   * T50: the URL the operator must open to sign in — only while `waiting`.
+   * Never present on snapshots for secret-material flows.
+   */
+  authorizationUrl?: string;
   /** Epoch ms the underlying credential is known-good until, if probed. */
   expiresAt?: number;
 }
@@ -49,4 +54,13 @@ export interface ProviderAuthController {
    * a queued or resumed run keeps using a revoked credential.
    */
   clear(ownerSessionId: string): Promise<void>;
+  /**
+   * T50 (pasted-redirect flows only): deliver the operator's pasted
+   * `http://127.0.0.1/...` redirect URL into the flow's pending callback.
+   * Valid only while `waiting`, owner-scoped, single-use per pending
+   * record; the provider validates the URL against the stored
+   * `state`/`redirect_uri` before anything is sent. Delivery is not
+   * authentication — `verify()`'s probe still owns `succeeded`.
+   */
+  deliverCallback?(ownerSessionId: string, callbackUrl: string): Promise<{ message?: string }>;
 }

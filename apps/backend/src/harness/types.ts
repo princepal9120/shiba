@@ -23,7 +23,8 @@ export type AgentHarnessName =
   | "devin"
   | "grok"
   | "cursor"
-  | "antigravity";
+  | "antigravity"
+  | "antigravity-subscription";
 
 /**
  * T43 runtimes a harness can execute under. "sandbox" and the refused
@@ -58,6 +59,11 @@ export const PROVIDER_HOSTS: Record<string, string> = {
   // OpenAI platform API — a different host entirely, so the gateway's
   // api.openai.com BYOK route is never in play and no override needs it.
   "openai-subscription": "chatgpt.com",
+  // T50: Antigravity's in-container ACP process authenticates with OAuth
+  // tokens stored in the profile — no Worker-side credential exists, so
+  // the provider id maps to the same Google host only for model-name
+  // validation; egressHosts returns the full observed Google set.
+  "google-subscription": "generativelanguage.googleapis.com",
 };
 
 /**

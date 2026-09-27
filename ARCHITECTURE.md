@@ -22,7 +22,7 @@ conversation, the coding sub-agent, per-run sandbox control, automations,
 mailbox, memory, waitlist, and model config. The MCP gateway is stateless
 (`createMcpHandler` per request), not a DO. Work happens in an
 **ephemeral Sandbox container** (one per run, destroyed at the end) that clones
-a GitHub repo and executes one of five agent CLIs. Nothing starts until a human
+a GitHub repo and executes one of six agent binaries. Nothing starts until a human
 approves it, and the container's outbound network is allowlisted per run.
 
 ---
@@ -163,7 +163,7 @@ can be built without touching them.
 
 ## 7. Harnesses
 
-One image ships five CLIs; a run selects exactly one.
+One image ships six agent binaries; a run selects exactly one.
 
 | Harness | Binary | Default model | Credential |
 |---|---|---|---|
@@ -172,6 +172,7 @@ One image ships five CLIs; a run selects exactly one.
 | `claude-subscription` (opt-in: `SHIBA_CLAUDE_SUBSCRIPTION=1`) | `claude` | `anthropic-subscription/claude-sonnet-4-6` | `CLAUDE_SUBSCRIPTION_TOKEN` secret on a dedicated egress branch — bypasses AI Gateway |
 | `codex` | `codex` | `openai/gpt-5.3-codex` | AI Gateway BYOK |
 | `codex-subscription` (opt-in: `SHIBA_CODEX_SUBSCRIPTION=1`) | `codex` | `openai-subscription/gpt-5.3-codex` | `CODEX_SUBSCRIPTION_AUTH_JSON` secret (auth.json contents) on a dedicated chatgpt.com egress branch — bypasses AI Gateway; container CODEX_HOME gets a stub auth.json in a per-account shadow overlay |
+| `antigravity-subscription` (opt-in: `SHIBA_ANTIGRAVITY_SUBSCRIPTION=1`) | `agy` (ACP server, pinned in image) | `google-subscription/gemini-3-pro` | In-container OAuth — no Worker credential. `POST /api/auth/antigravity-subscription/begin` boots an auth sandbox that prints the Google URL; the operator signs in and pastes the dead `127.0.0.1` redirect into `POST /api/antigravity/callback`, which forwards it to the container listener. Tokens live only in the per-account profile under `/root/.shiba/antigravity/` |
 | `devin` | `devin` | `devin/swe-2` | `DEVIN_API_KEY` secret |
 | `grok` | `grok` | `xai/grok-4.6` (medium reasoning) | AI Gateway BYOK |
 
