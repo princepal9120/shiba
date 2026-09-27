@@ -6,6 +6,22 @@ on:
 permissions:
   contents: read
 jobs:
+  biome-knip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # biome ci: lint-only for now — formatting is adopted incrementally
+      # (config enables it for `pnpm format`), not retro-applied repo-wide.
+      - run: pnpm exec biome ci --formatter-enabled=false --assist-enabled=false .
+      # Baseline: 6 known findings listed in the PR (utils.ts, 4 unused
+      # backend exports). max-issues gates regressions while they're triaged.
+      - run: pnpm exec knip --reporter compact --max-issues 6
   check:
     runs-on: ubuntu-latest
     steps:
@@ -18,6 +34,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm lint
+      - run: pnpm lint:imports
       - run: pnpm test
       - run: pnpm build
       - run: node scripts/check-alchemy-drift.mjs

@@ -224,7 +224,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-12 text-center bg-[#f6f4ed]">
         <div className="w-16 h-16 rounded-none bg-[#f6f4ed] border border-black/[0.08] flex items-center justify-center mb-4 text-[#0000a8]">
-          <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg aria-hidden="true"  className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
           </svg>
         </div>
@@ -245,7 +245,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
         <div className="flex items-center gap-3 min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-[#0000a8] font-mono text-sm font-semibold flex items-center gap-1.5">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg aria-hidden="true"  className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M12 5l7 7-7 7" />
               </svg>
               VM Inspector
@@ -300,14 +300,14 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
           >
             {copiedLink ? (
               <>
-                <svg className="w-3.5 h-3.5 text-[#15803d]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg aria-hidden="true"  className="w-3.5 h-3.5 text-[#15803d]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
                 <span className="text-[#15803d]">Link Copied!</span>
               </>
             ) : (
               <>
-                <svg className="w-3.5 h-3.5 text-[#0000a8]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg aria-hidden="true"  className="w-3.5 h-3.5 text-[#0000a8]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
                 </svg>
                 <span>Share VM View</span>
@@ -324,7 +324,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
             className="text-xs bg-[#fffef8] hover:bg-[#e0ded5] border border-black/[0.08] text-[#6a6f63] hover:text-[#222320] p-1.5 rounded-none transition-colors"
             title="Refresh VM state"
           >
-            <svg className={`w-4 h-4 ${infoLoading ? "animate-spin text-[#0000a8]" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg aria-hidden="true"  className={`w-4 h-4 ${infoLoading ? "animate-spin text-[#0000a8]" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
           </button>
@@ -335,7 +335,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
       <div className="bg-[#f6f4ed]/70 border-b border-black/[0.08] px-4 lg:px-6 py-2.5 flex flex-wrap items-center justify-between gap-y-2 gap-x-4 text-xs font-mono text-[#6a6f63]">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
           <span className="text-[#222320] font-semibold flex items-center gap-1.5">
-            <svg className="w-3.5 h-3.5 text-[#0000a8]" fill="currentColor" viewBox="0 0 24 24">
+            <svg aria-hidden="true"  className="w-3.5 h-3.5 text-[#0000a8]" fill="currentColor" viewBox="0 0 24 24">
               <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
             </svg>
             {parseRepoName(activeRun.repoUrl)}
@@ -377,7 +377,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
               : "border-transparent text-[#6a6f63] hover:text-[#222320]"
           }`}
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg aria-hidden="true"  className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
           </svg>
           <span>Changes & Diff</span>
@@ -392,7 +392,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
               : "border-transparent text-[#6a6f63] hover:text-[#222320]"
           }`}
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg aria-hidden="true"  className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
           </svg>
           <span>Workspace Files</span>
@@ -407,7 +407,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
               : "border-transparent text-[#6a6f63] hover:text-[#222320]"
           }`}
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg aria-hidden="true"  className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
           <span>Terminal & Exec</span>
@@ -422,7 +422,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
               : "border-transparent text-[#6a6f63] hover:text-[#222320]"
           }`}
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg aria-hidden="true"  className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
           </svg>
@@ -438,7 +438,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
               : "border-transparent text-[#6a6f63] hover:text-[#222320]"
           }`}
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg aria-hidden="true"  className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2z" />
           </svg>
           <span>System & Processes</span>
@@ -532,7 +532,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
                           : "hover:bg-[#e0ded5] text-[#222320]"
                       }`}
                     >
-                      <svg
+                      <svg aria-hidden="true" 
                         className={`w-3.5 h-3.5 shrink-0 ${entry.isDirectory ? "text-[#b45309]" : "text-[#0000a8]"}`}
                         fill="none"
                         viewBox="0 0 24 24"
@@ -734,7 +734,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
             {/* Preview Guide Card */}
             <div className="border border-black/[0.08] bg-[#f6f4ed] rounded-none p-5 flex flex-col gap-3">
               <div className="flex items-center gap-2 text-sm font-semibold text-[#222320]">
-                <svg className="w-5 h-5 text-[#0000a8]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg aria-hidden="true"  className="w-5 h-5 text-[#0000a8]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <span>How Sandbox Web Preview Works</span>
@@ -770,7 +770,7 @@ export function VMInspector({ runs, selectedRunId, onSelectRun }: VMInspectorPro
                 <span className="text-[11px] text-[#0000a8]">Isolated Sandbox Network</span>
               </div>
               <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-[#f6f4ed]">
-                <svg className="w-12 h-12 text-[#0000a8]/50 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg aria-hidden="true"  className="w-12 h-12 text-[#0000a8]/50 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
                 <h4 className="text-sm font-semibold text-[#222320] mb-1">Sandbox Web Application</h4>
