@@ -88,7 +88,9 @@ export async function publishFilesAsPullRequest(
     throw new Error("Nothing to publish: the coding run produced no changed files.");
   }
   const resolved: Required<GitHubDeps> = {
-    fetchImpl: deps.fetchImpl ?? fetch,
+    // workerd's global fetch is illegal to call detached (this !== globalThis),
+    // so the default must keep a bound call rather than the bare reference.
+    fetchImpl: deps.fetchImpl ?? ((input, init) => fetch(input, init)),
     apiBase: deps.apiBase ?? API_BASE,
   };
   const headers = authHeaders(request.token);
