@@ -27,9 +27,9 @@ import {
 } from "./controller.js";
 
 /** The Worker-side egress forwarder shape (implemented by apps/backend/src/egress.ts). */
-export type SubscriptionForwarder<Env> = (
+export type SubscriptionForwarder = (
   request: Request,
-  env: Env,
+  env: unknown,
   ctx?: { params?: unknown },
 ) => Promise<Response>;
 
@@ -57,7 +57,7 @@ interface AuthControllerEnv {
 async function probeClaudeSubscription<Env extends AuthControllerEnv>(
   env: Env,
   instanceId: string,
-  forward: SubscriptionForwarder<Env>,
+  forward: SubscriptionForwarder,
 ): Promise<{ ok: boolean; message?: string }> {
   const account = instanceId.slice("claude-sub:".length);
   if (claudeSubscriptionToken(env, account) === undefined) {
@@ -82,7 +82,7 @@ async function probeClaudeSubscription<Env extends AuthControllerEnv>(
 export function claudeSubscriptionAuth<Env extends AuthControllerEnv>(
   env: Env,
   instanceId: string,
-  forward: SubscriptionForwarder<Env>,
+  forward: SubscriptionForwarder,
 ): ProviderAuthController {
   const hooks: AuthProviderHooks<Env> = {
     probe: (e, id) => probeClaudeSubscription(e, id, forward),

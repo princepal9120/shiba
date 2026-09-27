@@ -181,7 +181,9 @@ async function handleClaudeSubscriptionAuth(request: Request, env: Env): Promise
       : {};
   const accountRaw = request.method === "GET" ? url.searchParams.get("account") : body.account;
   const account = typeof accountRaw === "string" && accountRaw.trim() !== "" ? accountRaw.trim() : "default";
-  const controller = claudeSubscriptionAuth(env, `claude-sub:${account}`, forwardClaudeSubscription);
+  const controller = claudeSubscriptionAuth(env, `claude-sub:${account}`, (request, e, ctx) =>
+    forwardClaudeSubscription(request, e as EgressEnv, ctx),
+  );
   const authError = (reason: unknown) =>
     Response.json(
       { error: reason instanceof AuthFlowError ? reason.message : "Auth flow error." },
