@@ -10,6 +10,9 @@ description: Run the shiba dashboard end-to-end locally and seed Durable Object 
 - node/pnpm availability varies by box: Linux CI images keep node under
   `~/.nvm/versions/node/v24.19.0/bin` (add to PATH); macOS dev boxes already
   have them via homebrew. Check `which node pnpm` first.
+- node/pnpm may not be on PATH. On Linux boxes prefix every command:
+  `export PATH=/home/ubuntu/.nvm/versions/node/v24.19.0/bin:$PATH`
+  (on the macOS machine they're already on PATH via homebrew — check `which node` first).
 - If `node_modules` looks broken: `CI=true pnpm install --shamefully-hoist`
   (transitive `sharp` must be hoisted or `pnpm build` fails — env quirk, not a bug).
 - Root `pnpm dev` = `turbo run dev` = vite :5173 AND backend `wrangler dev :8788`;
@@ -32,14 +35,9 @@ pnpm -C apps/frontend dev  # vite :5173, in one terminal
 pnpm exec wrangler dev --port 8788 --config apps/backend/wrangler.jsonc --enable-containers=false  # worker, in another terminal
 ```
 
-`--enable-containers=false` is REQUIRED on any machine without Docker:
-wrangler.jsonc declares a `containers` image (`apps/backend/Dockerfile`) and
-wrangler 4.x fails startup with "The Docker CLI is needed to build the
-configured image" — the flag skips image prep; DOs/APIs still work, only
-real sandbox/container execution is unavailable (don't click Inspect VM).
-Approval-queue testing works; sandbox execution does not. To test the built
-dashboard instead of Vite, run `pnpm build:dashboard` and serve the Worker
-on :8787.
+`--enable-containers=false` is for machines without Docker; approval-queue
+testing works, but sandbox execution does not. To test the built dashboard
+instead of Vite, run `pnpm build:dashboard` and serve the Worker on :8787.
 
 - Approval-queue endpoints (`POST /api/runs`, `GET /api/approvals`) work fully
   without containers, secrets, or Cloudflare auth — they only write a pending
@@ -53,15 +51,26 @@ on :8787.
     everything else is fine. AI binding is remote-mode but only touched when a
     run actually executes (post-approval).
 - `REQUIRE_ACCESS` is unset → all routes are unauthenticated; identity = `"default"`.
-- Dashboard URL: `http://localhost:5173/app/` under Vite (or `:8787/app/` for
-  the built dashboard; bare `/` 404s in dev — the tryshiba.dev `_redirects`
-  rules are absolute URLs and get skipped locally).
 - Useful checks: `curl localhost:8788/api/whoami` → `{"agent":"default"}`;
   `curl localhost:8788/api/runs` → `{runs:[...]}` (also triggers `reclaimRuns()`).
 - Killing the listener pid alone leaves a zombie — wrangler's supervisor
   respawns workerd, and a half-dead workerd LISTENs but never responds (fetch
   hangs indefinitely; the app's busy state has no timeout). Kill the whole
   tree: `pkill -f "wrangler.js dev"; pkill -f "workerd serve"`.
+pnpm build:dashboard        # emits public/ (bundle must contain new CSS classes)
+npx wrangler dev --port 8787 --config apps/backend/wrangler.jsonc --enable-containers=false
+```
+
+- `--enable-containers=false` is REQUIRED on any machine without Docker:
+  wrangler.jsonc declares a `containers` image (`apps/backend/Dockerfile`) and
+  wrangler 4.x fails startup with "The Docker CLI is needed to build the
+  configured image" — the flag skips image prep; DOs/APIs still work, only
+  real sandbox/container execution is unavailable (don't click Inspect VM).
+- `REQUIRE_ACCESS` is unset → all routes are unauthenticated; identity = `"default"`.
+- Dashboard URL: `http://localhost:8787/app/` (bare `/` 404s in dev — the
+  tryshiba.dev `_redirects` rules are absolute URLs and get skipped locally).
+- Useful checks: `curl localhost:8787/api/whoami` → `{"agent":"default"}`;
+  `curl localhost:8787/api/runs` → `{runs:[...]}` (also triggers `reclaimRuns()`).
 
 ## Seeding run records without a sandbox
 
@@ -93,6 +102,7 @@ db.prepare("UPDATE cf_agents_state SET state=? WHERE id=\"cf_state_row_id\"").ru
 ```
 
 4. Restart `pnpm exec wrangler dev --port 8788 --config apps/backend/wrangler.jsonc --enable-containers=false`.
+4. Restart `npx wrangler dev --port 8787 --config apps/backend/wrangler.jsonc --enable-containers=false`.
 
 ### Tricks that hit real code paths
 
