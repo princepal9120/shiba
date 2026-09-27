@@ -171,6 +171,7 @@ One image ships five CLIs; a run selects exactly one.
 | `claude-code` | `claude` | `anthropic/claude-sonnet-4-6` | AI Gateway BYOK |
 | `claude-subscription` (opt-in: `SHIBA_CLAUDE_SUBSCRIPTION=1`) | `claude` | `anthropic-subscription/claude-sonnet-4-6` | `CLAUDE_SUBSCRIPTION_TOKEN` secret on a dedicated egress branch — bypasses AI Gateway |
 | `codex` | `codex` | `openai/gpt-5.3-codex` | AI Gateway BYOK |
+| `codex-subscription` (opt-in: `SHIBA_CODEX_SUBSCRIPTION=1`) | `codex` | `openai-subscription/gpt-5.3-codex` | `CODEX_SUBSCRIPTION_AUTH_JSON` secret (auth.json contents) on a dedicated chatgpt.com egress branch — bypasses AI Gateway; container CODEX_HOME gets a stub auth.json in a per-account shadow overlay |
 | `devin` | `devin` | `devin/swe-2` | `DEVIN_API_KEY` secret |
 | `grok` | `grok` | `xai/grok-4.6` (medium reasoning) | AI Gateway BYOK |
 

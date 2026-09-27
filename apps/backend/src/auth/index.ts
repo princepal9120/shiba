@@ -8,6 +8,7 @@ import type { ProviderAuthController } from "@shiba/shared";
 import type { AgentHarness, AgentHarnessName } from "../harness/types.js";
 import type { CodingTaskInput } from "../opencode-input.js";
 import { claudeSubscriptionAuth } from "./claude-subscription.js";
+import { codexSubscriptionAuth } from "./codex-subscription.js";
 
 interface AuthRegistryEnv {
   AGENT_TOKENS: KVNamespace;
@@ -24,6 +25,8 @@ export function authControllerFor<Env extends AuthRegistryEnv>(
   switch (harness.name as AgentHarnessName) {
     case "claude-subscription":
       return claudeSubscriptionAuth(env, instanceId);
+    case "codex-subscription":
+      return codexSubscriptionAuth(env, instanceId);
     default:
       return null;
   }

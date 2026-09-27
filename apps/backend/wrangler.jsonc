@@ -29,6 +29,10 @@
     //   CLAUDE_SUBSCRIPTION_MODEL    per-deploy model override
     //   CLAUDE_SUBSCRIPTION_TOKEN[_<ACCOUNT>]  the operator's `claude
     //   setup-token` output — a Wrangler secret, read only at egress.
+    //   SHIBA_CODEX_SUBSCRIPTION=1   registers the codex-subscription harness
+    //   CODEX_SUBSCRIPTION_MODEL     per-deploy model override
+    //   CODEX_SUBSCRIPTION_AUTH_JSON[_<ACCOUNT>]  the operator's `codex
+    //   login` auth.json contents — a Wrangler secret, read only at egress.
   },
   "ai": {
     "binding": "AI",

@@ -88,7 +88,7 @@ export function shellQuote(arg: string): string {
 }
 
 /** Join argv into one shell command string with every argument quoted. */
-export function shellJoin(argv: string[]): string {
+export function shellJoin(argv: readonly string[]): string {
   return argv.map(shellQuote).join(" ");
 }
 

@@ -116,6 +116,8 @@ If `publishPullRequest` is true and no token exists, fail before coding with a c
 
 An optional opt-in subscription path (`claude-subscription`, dark unless `SHIBA_CLAUDE_SUBSCRIPTION=1`) may drive the Claude Code CLI with the operator's own `claude setup-token` credential stored as the `CLAUDE_SUBSCRIPTION_TOKEN` Worker secret. That traffic bypasses AI Gateway on its own deny-by-default egress branch — the gateway is API-key BYOK and correctly refuses it. The same rule applies verbatim: the token never enters the container, which gets a placeholder credentials file under `CLAUDE_CONFIG_DIR` instead.
 
+The same opt-in pattern covers Codex: `codex-subscription` (dark unless `SHIBA_CODEX_SUBSCRIPTION=1`) drives the `codex` CLI against the operator's own ChatGPT subscription. Codex's credential is directory-shaped — the operator's `codex login` `auth.json` contents live as the `CODEX_SUBSCRIPTION_AUTH_JSON` Worker secret; the container's `CODEX_HOME` is a shadow overlay that holds a stub `auth.json` as a real file (a symlinked one is refused) and symlinks in the shared home's sessions, caches, and install, so a thread survives an account switch while the account key stays the directory holding `auth.json`. Model traffic rides a dedicated deny-by-default `chatgpt.com` egress branch that attaches `Bearer` + `chatgpt-account-id` — never AI Gateway, and the token content appears in no sandbox file, argv, log, or UI response.
+
 ## Dashboard
 
 Replace the marketing-only page with a functional dashboard.

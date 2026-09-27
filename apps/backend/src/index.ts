@@ -10,6 +10,8 @@ import { OpenCodeAgent } from "./agents/opencode-agent.js";
 import { CodingOrchestrator } from "./agents/orchestrator.js";
 import { AUDIT_RETENTION_MS, listAuditEntries, pruneAuditLog } from "./audit.js";
 import { claudeSubscriptionAuth } from "./auth/claude-subscription.js";
+import { codexSubscriptionAuth } from "./auth/codex-subscription.js";
+import { codexSubscriptionInstanceId } from "./harness/codex-subscription.js";
 import { AuthFlowError } from "./auth/controller.js";
 import { AUTOMATIONS_DO_NAME } from "./automation-runner.js";
 import { Automations } from "./automations-do.js";
@@ -164,6 +166,50 @@ async function handleClaudeSubscriptionAuth(request: Request, env: Env): Promise
   const accountRaw = request.method === "GET" ? url.searchParams.get("account") : body.account;
   const account = typeof accountRaw === "string" && accountRaw.trim() !== "" ? accountRaw.trim() : "default";
   const controller = claudeSubscriptionAuth(env, `claude-sub:${account}`);
+  const authError = (reason: unknown) =>
+    Response.json(
+      { error: reason instanceof AuthFlowError ? reason.message : "Auth flow error." },
+      { status: 400 },
+    );
+  try {
+    if (request.method === "GET" && sub === "") {
+      return Response.json({ snapshot: await controller.snapshot() });
+    }
+    if (request.method === "POST" && sub === "begin") {
+      return Response.json({ snapshot: await controller.begin(ownerSessionId) });
+    }
+    if (request.method === "POST" && sub === "verify") {
+      return Response.json({ snapshot: await controller.verify(ownerSessionId) });
+    }
+    if (request.method === "POST" && sub === "clear") {
+      return Response.json({ snapshot: await controller.clear(ownerSessionId) });
+    }
+  } catch (error) {
+    return authError(error);
+  }
+  return Response.json({ error: "Not found." }, { status: 404 });
+}
+
+/**
+ * T49: operator surface for the codex-subscription auth flow (T47
+ * controller). Same verbs as claude-subscription; the instanceId keys on
+ * the auth.json-holding directory (`codex-sub:<effectiveHomePath>`) so a
+ * named account's `clear` revokes only its shadow overlay, never the
+ * shared CODEX_HOME or a sibling account (§18.11).
+ *   GET  /api/auth/codex-subscription?account=<name>  → snapshot
+ *   POST /api/auth/codex-subscription/begin|verify|clear  → {account}
+ */
+async function handleCodexSubscriptionAuth(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  const sub = url.pathname.slice("/api/auth/codex-subscription".length).replace(/^\/+|\/+$/g, "");
+  const ownerSessionId = getUserId(request) ?? "default";
+  const body =
+    request.method === "POST"
+      ? ((await request.json().catch(() => ({}))) as { account?: unknown })
+      : {};
+  const accountRaw = request.method === "GET" ? url.searchParams.get("account") : body.account;
+  const account = typeof accountRaw === "string" && accountRaw.trim() !== "" ? accountRaw.trim() : "default";
+  const controller = codexSubscriptionAuth(env, codexSubscriptionInstanceId({ authAccount: account }));
   const authError = (reason: unknown) =>
     Response.json(
       { error: reason instanceof AuthFlowError ? reason.message : "Auth flow error." },
@@ -1594,6 +1640,13 @@ export default {
           return Response.json({ error: "Not found." }, { status: 404 });
         }
         return handleClaudeSubscriptionAuth(request, env);
+      }
+      // Dark unless SHIBA_CODEX_SUBSCRIPTION=1 (§18.11).
+      if (url.pathname === "/api/auth/codex-subscription" || url.pathname.startsWith("/api/auth/codex-subscription/")) {
+        if (env.SHIBA_CODEX_SUBSCRIPTION !== "1") {
+          return Response.json({ error: "Not found." }, { status: 404 });
+        }
+        return handleCodexSubscriptionAuth(request, env);
       }
       const mcpResponse = await handleMcp(
         request,

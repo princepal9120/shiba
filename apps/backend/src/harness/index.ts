@@ -3,6 +3,7 @@ import { antigravityHarness } from "./antigravity.js";
 import { claudeCodeHarness } from "./claude-code.js";
 import { claudeSubscriptionHarness } from "./claude-subscription.js";
 import { codexHarness } from "./codex.js";
+import { codexSubscriptionHarness } from "./codex-subscription.js";
 import { cursorHarness } from "./cursor.js";
 import { devinHarness } from "./devin.js";
 import { grokHarness } from "./grok.js";
@@ -14,6 +15,7 @@ export const HARNESSES: Record<string, AgentHarness> = {
   "claude-code": claudeCodeHarness,
   "claude-subscription": claudeSubscriptionHarness,
   codex: codexHarness,
+  "codex-subscription": codexSubscriptionHarness,
   devin: devinHarness,
   grok: grokHarness,
   cursor: cursorHarness,
@@ -21,7 +23,7 @@ export const HARNESSES: Record<string, AgentHarness> = {
 };
 
 /** The env surface the opt-in gate reads. */
-type HarnessGateEnv = { SHIBA_CLAUDE_SUBSCRIPTION?: string } | undefined;
+type HarnessGateEnv = { SHIBA_CLAUDE_SUBSCRIPTION?: string; SHIBA_CODEX_SUBSCRIPTION?: string } | undefined;
 
 /**
  * T48: opt-in subscription harnesses are *unregistered* unless the
@@ -31,6 +33,7 @@ type HarnessGateEnv = { SHIBA_CLAUDE_SUBSCRIPTION?: string } | undefined;
  */
 const HARNESS_GATES: Partial<Record<AgentHarnessName, (env: HarnessGateEnv) => boolean>> = {
   "claude-subscription": (env) => env?.SHIBA_CLAUDE_SUBSCRIPTION === "1",
+  "codex-subscription": (env) => env?.SHIBA_CODEX_SUBSCRIPTION === "1",
 };
 
 function harnessEnabled(harness: AgentHarness, env: HarnessGateEnv): boolean {
@@ -107,7 +110,7 @@ export function allowedHostsFor(harness: AgentHarness, model: string): string[] 
 
 export type { AgentHarness, AgentHarnessName };
 
-export const HARNESS_NAMES = ["opencode", "claude-code", "claude-subscription", "codex", "devin", "grok", "cursor", "antigravity"] as const;
+export const HARNESS_NAMES = ["opencode", "claude-code", "claude-subscription", "codex", "codex-subscription", "devin", "grok", "cursor", "antigravity"] as const;
 
 /**
  * Per-harness default coding model. The checked-in ids are defaults, not
@@ -122,6 +125,9 @@ export const HARNESS_DEFAULT_MODELS: Record<string, string> = {
   // provider prefix is the auth-path distinction, not a different vendor.
   "claude-subscription": "anthropic-subscription/claude-sonnet-4-6",
   codex: "openai/gpt-5.3-codex",
+  // ChatGPT-subscription models carry the openai-subscription namespace:
+  // the provider prefix is the auth-path distinction, not a different vendor.
+  "codex-subscription": "openai-subscription/gpt-5.3-codex",
   // SWE-2 medium is the free tier on Devin Pro; bare "swe-2" is a family
   // name the pinned CLI (3000.10.31) does not resolve, and "swe" is the
   // family alias.

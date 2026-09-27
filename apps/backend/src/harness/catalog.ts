@@ -47,6 +47,7 @@ const CATALOG_META: Record<
   "claude-code": { label: "Claude Code", binary: "claude", version: "2.1.277", docsUrl: "https://docs.anthropic.com/en/docs/claude-code" },
   "claude-subscription": { label: "Claude Code (subscription)", binary: "claude", version: "2.1.277", docsUrl: "https://docs.anthropic.com/en/docs/claude-code" },
   codex: { label: "Codex", binary: "codex", version: "0.155.0", docsUrl: "https://github.com/openai/codex" },
+  "codex-subscription": { label: "Codex (subscription)", binary: "codex", version: "0.155.0", docsUrl: "https://github.com/openai/codex" },
   devin: { label: "Devin", binary: "devin", version: "3000.10.31", docsUrl: "https://cli.devin.ai/docs" },
   grok: { label: "Grok", binary: "grok", version: "1.0.41", docsUrl: "https://docs.x.ai" },
   cursor: { label: "Cursor", binary: "cursor-agent", version: "0.50.0", docsUrl: "https://docs.cursor.com" },
@@ -67,7 +68,7 @@ const GATEWAY_PROVIDER: Record<string, string> = {
  * values never leave the Worker.
  */
 export function agentCliCatalog(
-  env: Pick<Env, "DEVIN_API_KEY" | "SHIBA_CLAUDE_SUBSCRIPTION" | "CLAUDE_SUBSCRIPTION_TOKEN">,
+  env: Pick<Env, "DEVIN_API_KEY" | "SHIBA_CLAUDE_SUBSCRIPTION" | "CLAUDE_SUBSCRIPTION_TOKEN" | "SHIBA_CODEX_SUBSCRIPTION" | "CODEX_SUBSCRIPTION_AUTH_JSON">,
 ): AgentCliInfo[] {
   return sandboxHarnessNames(env).map((id) => {
     const meta = CATALOG_META[id];
@@ -86,6 +87,13 @@ export function agentCliCatalog(
               configured: Boolean(env.CLAUDE_SUBSCRIPTION_TOKEN),
               setupHint: "claude setup-token, then npx wrangler secret put CLAUDE_SUBSCRIPTION_TOKEN",
             }
+          : id === "codex-subscription"
+            ? {
+                kind: "worker-secret",
+                label: "CODEX_SUBSCRIPTION_AUTH_JSON",
+                configured: Boolean(env.CODEX_SUBSCRIPTION_AUTH_JSON),
+                setupHint: "codex login, then npx wrangler secret put CODEX_SUBSCRIPTION_AUTH_JSON < ~/.codex/auth.json",
+              }
           : {
               kind: "ai-gateway-byok",
               label: `AI Gateway BYOK (${GATEWAY_PROVIDER[id]})`,
