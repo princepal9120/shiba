@@ -49,8 +49,8 @@ export const HARNESS_NAMES = ["opencode", "claude-code", "codex", "devin", "grok
 /**
  * Per-harness default coding model. The checked-in ids are defaults, not
  * availability guarantees — model ids retire (see configuration.md).
- * Overridable per deploy via CODING_MODEL / CLAUDE_CODE_MODEL / CODEX_MODEL
- * and per run via the delegate tool's codingModel input.
+ * Overridable per deploy via CODING_MODEL / CLAUDE_CODE_MODEL / CODEX_MODEL /
+ * DEVIN_MODEL / GROK_MODEL and per run via the delegate tool's codingModel input.
  */
 export const HARNESS_DEFAULT_MODELS: Record<string, string> = {
   opencode: "google/gemini-3.5-flash-lite",

@@ -14,5 +14,20 @@ export default tseslint.config(
       "@typescript-eslint/no-explicit-any": "off",
     },
   },
+  // Cross-app imports are allowed only for SSR assertions inside tests;
+  // src/ of any app must never import another app's files.
+  {
+    files: ["apps/*/src/**"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            { group: ["../../../*", "../../../../*", "../../../../../*"], message: "No cross-app imports in src/ — shared types live in @shiba/shared." },
+          ],
+        },
+      ],
+    },
+  },
 );
 

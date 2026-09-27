@@ -5,41 +5,17 @@
  * DO paths the Slack lane already uses. Every request only queues a pending
  * approval; nothing here starts a container.
  */
+import { parseChatThreadName } from "@shiba/shared";
+import type { ChatPlatform, ChatTaskRequest } from "@shiba/shared";
 import { getAgentByName } from "agents/routing";
 import type { Env } from "./env.js";
 import { extractGitHubRepoUrl, parseChannelRepoMap } from "./slack-context.js";
-
-export type ChatPlatform = "telegram" | "discord";
 
 export const TELEGRAM_API = "https://api.telegram.org";
 export const DISCORD_API = "https://discord.com/api/v10";
 
 /** Empty allow-list: task text echoed into a message can never ping anyone. */
 export const NO_MENTIONS = { parse: [] as string[] };
-
-// Telegram group chat ids are negative; Discord ids are numeric snowflakes.
-const CONVERSATION_ID = /^-?\d{1,24}$/;
-const THREAD_NAME = /^(telegram|discord):(-?\d{1,24})$/;
-const DECISION_DATA = /^(approve|reject):([0-9a-f-]{36})$/;
-
-export function buildChatThreadName(platform: ChatPlatform, conversationId: string): string {
-  const id = conversationId.trim();
-  if (!CONVERSATION_ID.test(id)) {
-    throw new Error(`Cannot name a ${platform} conversation: id "${id}" is malformed.`);
-  }
-  return `${platform}:${id}`;
-}
-
-export function parseChatThreadName(name: string): { platform: ChatPlatform; conversationId: string } | null {
-  const match = THREAD_NAME.exec(name);
-  if (!match) return null;
-  return { platform: match[1] as ChatPlatform, conversationId: match[2]! };
-}
-
-export interface ChatTaskRequest {
-  repoUrl: string;
-  task: string;
-}
 
 /**
  * Split request text into repository and task. The repository is the first
@@ -65,22 +41,6 @@ export function parseChatTaskRequest(input: {
     return { error: `Describe the task after the repository URL. ${input.usage}` };
   }
   return { repoUrl, task };
-}
-
-export interface ChatDecision {
-  approved: boolean;
-  approvalId: string;
-}
-
-/** Button payload: a pointer, not a capability. Fits Telegram's 64-byte callback_data. */
-export function buildDecisionData(approved: boolean, approvalId: string): string {
-  return `${approved ? "approve" : "reject"}:${approvalId}`;
-}
-
-export function parseDecisionData(value: string): ChatDecision | null {
-  const match = DECISION_DATA.exec(value);
-  if (!match) return null;
-  return { approved: match[1] === "approve", approvalId: match[2]! };
 }
 
 // Discord caps a message at 2000 chars; oversized tasks post as follow-up

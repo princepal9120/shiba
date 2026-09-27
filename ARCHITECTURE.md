@@ -1,4 +1,4 @@
-# Architecture — shiba-ai-coworker
+# Architecture — shiba
 
 **Purpose:** one high-level map of how the system is put together, so a new
 reader can navigate it without reading 80 files. Derived from the deployed
@@ -17,11 +17,12 @@ this) · `PLAN.md` §17 (parity roadmap).
 ## 1. The one-paragraph version
 
 A single Cloudflare Worker is both the **API** and the **static host** for the
-React dashboard. Nine **Durable Objects** hold all state — the orchestrator
+React dashboard. Eight **Durable Objects** hold all state — the orchestrator
 conversation, the coding sub-agent, per-run sandbox control, automations,
-mailbox, memory, MCP gateway, waitlist, and model config. Work happens in an
+mailbox, memory, waitlist, and model config. The MCP gateway is stateless
+(`createMcpHandler` per request), not a DO. Work happens in an
 **ephemeral Sandbox container** (one per run, destroyed at the end) that clones
-a GitHub repo and executes one of six agent CLIs. Nothing starts until a human
+a GitHub repo and executes one of five agent CLIs. Nothing starts until a human
 approves it, and the container's outbound network is allowlisted per run.
 
 ---
@@ -46,8 +47,7 @@ approves it, and the container's outbound network is allowlisted per run.
    │  Sandbox             container lifecycle per run                       │
    │  Automations         cron/webhook/event triggers, budget, kill switch  │
    │  Mailbox             inbound email       Memory  banked facts          │
-   │  McpGateway          MCP server + scopes/audit  ModelConfig  conns    │
-   │  Waitlist            signups                                             │
+   │  ModelConfig         model conns         Waitlist  signups             │
    └──────────────────────────────┬─────────────────────────────────────────┘
                                           ▼  delegate_coding_task (approved)
    ┌─────────────────── Sandbox container — ephemeral, 1 per run ──────────┐
@@ -71,7 +71,7 @@ approves it, and the container's outbound network is allowlisted per run.
 | **Orchestration** | `agents/orchestrator.ts`, `automation-runner.ts` | Plans, exposes `delegate_coding_task`, queues approvals. Never touches a repo. |
 | **Execution** | `agents/opencode-agent.ts`, `harness/*`, `sandbox.ts`, `sandbox/lifecycle.ts` | Clone → exec harness → collect. Exactly one harness per run. |
 | **Egress control** | `egress.ts`, `sandbox.ts` (`allowedHosts`) | Deny-by-default; per-harness host list; TLS interception; scoped GitHub token. |
-| **State** | the nine DO classes | All durable state. No other store is authoritative. |
+| **State** | the eight DO classes | All durable state. No other store is authoritative. |
 | **Presentation** | `apps/frontend` (dashboard), `apps/web` (docs/marketing) | React dashboard; Astro docs. Both served via the Worker's `ASSETS` binding. |
 | **Deploy** | `alchemy.run.ts` (primary), `wrangler.jsonc` (rollback) | Both declare the same stack; wrangler remains a working rollback path. |
 
@@ -97,10 +97,14 @@ approves it, and the container's outbound network is allowlisted per run.
 | `Sandbox` | container lifecycle for one run | v1 |
 | `Automations` | automation records, dedupe, daily budget | v2 |
 | `Mailbox` | inbound email | v3 |
-| `McpGateway` | MCP tool registry, scopes, audit trail | v4 |
 | `Memory` | banked facts (+ Vectorize embeddings) | v5 |
 | `Waitlist` | signups | v6 |
 | `ModelConfig` | model connections + purpose policy | v7 |
+
+Migration tag **v4** created `McpGateway`. T29a moved the MCP gateway to a
+stateless `createMcpHandler` server (`mcp-gateway.ts` builds an SDK v2
+`McpServer` per request — same tools, scopes and D1 audit trail, no DO). The
+append-only **v8** migration deletes the now-unused class and namespace.
 
 **Supporting stores** (not DOs): **R2** `ATTACHMENTS` (email bodies >256KB) ·
 **KV** `AGENT_TOKENS` (bearer tokens, keyed `tok_<sha256(raw)>`) · **D1**
@@ -159,31 +163,34 @@ can be built without touching them.
 
 ## 7. Harnesses
 
-One image ships all six CLIs; a run selects exactly one.
+One image ships five CLIs; a run selects exactly one.
 
 | Harness | Binary | Default model | Credential |
 |---|---|---|---|
 | `opencode` | `opencode` | `google/gemini-3.5-flash-lite` | AI Gateway BYOK |
 | `claude-code` | `claude` | `anthropic/claude-sonnet-4-6` | AI Gateway BYOK |
 | `codex` | `codex` | `openai/gpt-5.3-codex` | AI Gateway BYOK |
-| `cursor` | `cursor-agent` | `cursor/claude-4-5-sonnet` | AI Gateway BYOK |
 | `devin` | `devin` | `devin/swe-2` | `DEVIN_API_KEY` secret |
-| `grok` | `grok` | `xai/grok-4` | AI Gateway BYOK |
+| `grok` | `grok` | `xai/grok-4.6` (medium reasoning) | AI Gateway BYOK |
 
 Defaults live in `harness/index.ts` (`HARNESS_DEFAULT_MODELS`) and are
-overridable per deploy (`CODING_MODEL`, `CLAUDE_CODE_MODEL`, `CODEX_MODEL`) and
-per run via the delegate tool's `codingModel` input. They are defaults, **not
+overridable per deploy (`CODING_MODEL`, `CLAUDE_CODE_MODEL`, `CODEX_MODEL`,
+`DEVIN_MODEL`, `GROK_MODEL`) and per run via the delegate tool's
+`codingModel` input. They are defaults, **not
 availability guarantees** — model ids retire, and `coding-model.ts` asserts the
 configured model is not on the retired deny-list at first request.
 
 Versions are pinned in the Dockerfile and mirrored in `harness/catalog.ts` —
 **bump both** (T26). Selection is per run, defaulting to the deploy-time
 `AGENT_HARNESS`; an invalid harness throws *before* approval, never as an exec
-error inside the container. `harness/acp.ts` is a shared ACP transport, so the
-Cursor/Grok adapters are support shims rather than bespoke argv/stream parsers.
+error inside the container. Grok runs its verified headless print mode
+(`--single` + `streaming-json`) pinned to the `api.x.ai` forwarder via
+`GROK_MODELS_BASE_URL`; the shared ACP transport was tried and dropped.
+Cursor stays a remote-executor connection — its API-key→token exchange
+stores tokens in the container and cannot hold the dummy-key invariant.
 
 **Caveat carried from `PLAN.md` §2.0:** only OpenCode has completed a live run.
-The other five are unit-tested against their documented stream formats.
+The other four are unit-tested against their documented stream formats.
 
 ---
 
@@ -235,7 +242,7 @@ Not bugs — deliberate or inherited, recorded so they are not rediscovered:
 | the request pipeline | `apps/backend/src/index.ts` → `agents/orchestrator.ts` |
 | how a run executes | `agents/opencode-agent.ts` → `harness/index.ts` → `harness/types.ts` |
 | the security boundary | `egress.ts`, `sandbox.ts`, `security.ts` |
-| state and persistence | the nine `*-do.ts` / agent classes in §4 |
+| state and persistence | the eight `*-do.ts` / agent classes in §4 |
 | every ingress surface | `slack-routes.ts`, `chat-lane.ts`, `telegram.ts`, `discord.ts`, `email-handler.ts` |
 | what is planned and why | `PLAN.md` (§17 for parity roadmap, §4 for what was cut and why) |
 

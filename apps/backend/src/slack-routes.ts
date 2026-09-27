@@ -1,6 +1,6 @@
 /**
  * Slack slash-command route. Verifies the Slack HMAC signature, parses
- * `/shiba-ai-coworker <github-repo-url> <task>`, queues an orchestrator run, and
+ * `/shiba <github-repo-url> <task>`, queues an orchestrator run, and
  * returns an ephemeral "Task queued" reply.
  *
  * Signature verification itself lives in src/slack.ts (Agent 7); this
@@ -14,7 +14,7 @@ import { buildSlackRunPayload, resolveSlackHarness } from "./slack-thread.js";
 import { verifySlackRequest } from "./slack.js";
 
 export const SLACK_COMMAND_PATH = "/api/slack/command";
-export const SLASH_COMMAND = "/shiba-ai-coworker";
+export const SLASH_COMMAND = "/shiba";
 
 /** One shared orchestrator conversation; queue and approvals both resolve on it. */
 export const ORCHESTRATOR_NAME = "default";
@@ -57,11 +57,11 @@ export function parseSlackCommand(text: string): ParsedSlackCommand {
     rest.push(token);
   }
   if (!repoUrl) {
-    throw new Error("Usage: /shiba-ai-coworker <github-repo-url> <task>. Include a https://github.com/owner/repo URL.");
+    throw new Error("Usage: /shiba <github-repo-url> <task>. Include a https://github.com/owner/repo URL.");
   }
   const task = rest.join(" ").trim();
   if (!task) {
-    throw new Error("Usage: /shiba-ai-coworker <github-repo-url> <task>. Describe the task after the URL.");
+    throw new Error("Usage: /shiba <github-repo-url> <task>. Describe the task after the URL.");
   }
   return { repoUrl, task };
 }

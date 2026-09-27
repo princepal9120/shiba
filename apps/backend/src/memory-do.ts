@@ -48,8 +48,11 @@ const ROUTE_PREFIX = "/internal/memory";
 const EMBEDDING_MODEL = "@cf/baai/bge-base-en-v1.5" as const;
 const EMBEDDING_DIMS = 768;
 
-/** Vectorize's documented `topK` ceiling (no values/metadata requested). */
-const MAX_RECALL_TOP_K = 100;
+/**
+ * Vectorize's `topK` ceiling when `returnMetadata` is true — recall always
+ * requests metadata, so the looser 100-value plain-query cap does not apply.
+ */
+const MAX_RECALL_TOP_K = 50;
 
 /**
  * Merged-listing fan-out ceiling — each registered agent costs one
@@ -94,6 +97,41 @@ type FactMetadata = Record<string, string | number | boolean | string[]> & {
   ttl?: number | null;
 };
 
+/**
+ * Vectorize rejects a vector write whose serialized metadata exceeds its
+ * documented 10 KiB byte budget — a near-cap fact (MAX_FACT_CHARS of
+ * multi-byte UTF-8) plus agent/source fields can cross it, and the upsert
+ * would 500 the bank. `fact` is the only unbounded field, so it truncates
+ * by measured UTF-8 bytes to leave headroom for the small fixed fields
+ * below; a still-oversized payload falls back to `agent` only, which keeps
+ * the scoped-recall filter working and lets the row join answer the hit.
+ */
+const MAX_METADATA_BYTES = 10 * 1024;
+const METADATA_BUDGET_RESERVE = 2 * 1024;
+const METADATA_TRUNCATED_FLAG = "…";
+
+function metadataBytes(meta: FactMetadata): number {
+  return new TextEncoder().encode(JSON.stringify(meta)).length;
+}
+
+function truncateUtf8(text: string, maxBytes: number): string {
+  if (new TextEncoder().encode(text).length <= maxBytes) {
+    return text;
+  }
+  const flagBytes = new TextEncoder().encode(METADATA_TRUNCATED_FLAG).length;
+  let lo = 0;
+  let hi = text.length;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (new TextEncoder().encode(text.slice(0, mid)).length <= maxBytes - flagBytes) {
+      lo = mid;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return `${text.slice(0, lo)}${METADATA_TRUNCATED_FLAG}`;
+}
+
 function factMetadata(agent: string, fact: FactRecord): FactMetadata {
   const m: FactMetadata = {
     agent,
@@ -103,7 +141,36 @@ function factMetadata(agent: string, fact: FactRecord): FactMetadata {
   };
   // null ttl means "no expiry" — omit rather than storing a non-serialisable null
   if (fact.ttl !== null && fact.ttl !== undefined) m.ttl = fact.ttl;
-  return m;
+  if (metadataBytes(m) <= MAX_METADATA_BYTES) {
+    return m;
+  }
+  m.fact = truncateUtf8(fact.fact, MAX_FACT_CHARS - METADATA_BUDGET_RESERVE);
+  if (metadataBytes(m) <= MAX_METADATA_BYTES) {
+    return m;
+  }
+  console.warn(
+    `memory_metadata_fallback ${JSON.stringify({ agent, factId: fact.id })}`,
+  );
+  // Still oversized (a pathological source/agent): degrade to the filter
+  // field — the hit stops being recallable-from-metadata and joins back to
+  // the fact row like a pre-metadata vector.
+  return { agent };
+}
+
+/**
+ * Whether `next` strictly outlives `current` on the ttl axis — null is
+ * durable (never expires) and outlives every deadline.
+ */
+export function outlivesTtl(
+  next: number | null | undefined,
+  current: number | null | undefined,
+): boolean {
+  const n = next ?? null;
+  const c = current ?? null;
+  if (n === null) {
+    return c !== null;
+  }
+  return c !== null && n > c;
 }
 
 /** A metadata payload complete enough to answer recall without a join. */
@@ -519,20 +586,38 @@ export class Memory {
       return;
     }
     const vectors = await this.embedMany(facts.map((f) => f.fact));
-    const kept: number[][] = [];
+    const kept: Array<{ fact: FactRecord; vector: number[] }> = [];
     for (const [index, fact] of facts.entries()) {
       const vector = vectors[index]!;
-      const isDupe = kept.some(
-        (other) => cosineSimilarity(vector, other) >= DEDUPE_THRESHOLD,
+      const dupeIndex = kept.findIndex(
+        (other) => cosineSimilarity(vector, other.vector) >= DEDUPE_THRESHOLD,
       );
-      if (isDupe) {
-        if (this.store.forgetFact(fact.id)) {
-          await this.deleteVector(fact.id);
-          await this.dropRegistryEntry(fact.id);
-        }
+      if (dupeIndex === -1) {
+        kept.push({ fact, vector });
         continue;
       }
-      kept.push(vector);
+      const dupe = kept[dupeIndex]!;
+      // Longest-lived wins: a durable duplicate must never die to an
+      // expiring one (and a later deadline beats an earlier), even when the
+      // longer-lived row is newer. `outlivesTtl` is strict — equal ttls
+      // keep the older fact like before.
+      const survivor = outlivesTtl(fact.ttl, dupe.fact.ttl) ? { fact, vector } : dupe;
+      const merged = survivor.fact.id === fact.id ? dupe.fact : fact;
+      kept[dupeIndex] = survivor;
+      if (this.store.forgetFact(merged.id)) {
+        await this.deleteVector(merged.id);
+        await this.dropRegistryEntry(merged.id);
+      }
+      if (survivor.fact.id === fact.id) {
+        // The survivor's stored metadata predates the merge — rewrite it so
+        // stored-metadata recall keeps answering the hit.
+        await this.upsertVector(
+          survivor.fact.id,
+          this.agent,
+          survivor.vector,
+          factMetadata(this.agent, survivor.fact),
+        );
+      }
     }
   }
 
@@ -598,8 +683,38 @@ export class Memory {
       const nearest = matches.matches[0];
       if (nearest !== undefined && nearest.score >= DEDUPE_THRESHOLD) {
         await this.collectPurged(this.store.purgeExpiredFacts());
-        const existing = this.store.getFact(nearest.id);
+        let existing = this.store.getFact(nearest.id);
         if (existing !== null) {
+          // Durability wins over idempotence: when the incoming request
+          // asks for a longer-lived fact than the duplicate carries
+          // (durable vs expiring, or a later deadline), the surviving row
+          // must not expire early — promote its ttl and refresh the vector
+          // metadata so stored-metadata recall stops collecting it as dead.
+          if (outlivesTtl(ttl, existing.ttl)) {
+            existing = this.store.setFactTtl(existing.id, ttl) ?? existing;
+            try {
+              const prior = await this.env.MEMORY_VECTORS.getByIds([existing.id]);
+              // VectorFloatArray isn't a plain number[] — copy it into one.
+              const values =
+                prior[0]?.values !== undefined ? Array.from(prior[0].values) : vector;
+              await this.upsertVector(
+                existing.id,
+                this.agent,
+                values,
+                factMetadata(this.agent, existing),
+              );
+            } catch (error) {
+              // Metadata refresh is best-effort: worst case is an expired
+              // hit collected early in stored-metadata recall, which the
+              // owning stub's own expiry path already tolerates.
+              console.warn(
+                `memory_dedupe_ttl_metadata_refresh_failed ${JSON.stringify({
+                  factId: existing.id,
+                  error: error instanceof Error ? error.message : String(error),
+                })}`,
+              );
+            }
+          }
           return json(
             { fact: { ...factJson(existing, this.agent), duplicate_of: existing.id } },
             { status: 200 },

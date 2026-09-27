@@ -9,7 +9,12 @@ vi.mock("agents/routing", () => ({
   },
   routeAgentRequest: async () => null,
 }));
-vi.mock("agents/mcp", () => ({ McpAgent: class {} }));
+vi.mock("agents/mcp", () => ({
+  createMcpHandler: () => ({
+    fetch: async () => Response.json({ mcp: "served" }, { status: 200 }),
+    notify: {},
+  }),
+}));
 vi.mock("@cloudflare/think", () => ({
   Think: class {
     onStart() {}

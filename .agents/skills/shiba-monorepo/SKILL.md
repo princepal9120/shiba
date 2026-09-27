@@ -1,7 +1,7 @@
 ---
 name: shiba-monorepo
 description: |
-  Repo-specific monorepo guidance for shiba-ai-coworker. Covers the three-app
+  Repo-specific monorepo guidance for shiba. Covers the three-app
   workspace (backend Worker, frontend dashboard, web docs), the turbo task
   graph, the dual deploy path (alchemy.run.ts primary, wrangler.jsonc rollback),
   what may cross an app boundary, and where a new capability belongs.
@@ -13,7 +13,7 @@ metadata:
   version: 1.0.0
 ---
 
-# shiba-ai-coworker monorepo
+# shiba monorepo
 
 Read `ARCHITECTURE.md` first for the system map. This skill covers **how this
 repo is laid out and the rules that keep it coherent.**

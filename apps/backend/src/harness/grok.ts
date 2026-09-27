@@ -70,10 +70,9 @@ export function parseGrokEvent(line: string): string | null {
     case "max_turns_reached":
       throw new GrokErrorEvent("Grok hit its turn cap without finishing.");
     case "end": {
-      // end_turn is the only clean stop; refusal, max_tokens,
-      // max_turn_requests and cancelled all mean the task did not finish.
+      // Refusal, token/turn limits, and cancellation all mean the task did not finish.
       const reason = typeof record.stopReason === "string" ? record.stopReason : "";
-      if (reason !== "end_turn") {
+      if (reason.replace(/_/g, "").toLowerCase() !== "endturn") {
         throw new GrokErrorEvent(`Grok stopped before finishing: ${reason}.`);
       }
       return null;

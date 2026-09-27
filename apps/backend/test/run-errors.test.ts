@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { OpenCodeErrorEvent } from "../src/harness/opencode.js";
 import { CodexErrorEvent } from "../src/harness/codex.js";
+import { GrokErrorEvent } from "../src/harness/grok.js";
 import {
   classifyExecutorError,
   classifyRunError,
@@ -61,6 +62,7 @@ describe("classifyRunError", () => {
 
   it("maps harness errors without a status to executor_failed", () => {
     expect(classifyRunError(new OpenCodeErrorEvent("model exploded")).code).toBe("executor_failed");
+    expect(classifyRunError(new GrokErrorEvent("model rejected")).code).toBe("executor_failed");
   });
 
   it("maps abort errors to cancelled", () => {

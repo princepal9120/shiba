@@ -25,16 +25,26 @@ A user must be able to:
 9. Watch a Cloudflare Agent delegate the task to an isolated Cloudflare Sandbox container.
 10. See OpenCode progress, changed files, and a unified diff.
 11. Optionally request a branch and pull request when a GitHub token is configured.
-12. Optionally configure a Slack app: mention @shiba-ai-coworker in any thread to start a task. The bot posts an approval card in-thread before any container starts; only SLACK_APPROVERS can approve from Slack.
-13. Use the /shiba-ai-coworker slash command to start a task from Slack without an existing thread.
+12. Optionally configure a Slack app: mention @shiba in any thread to start a task. The bot posts an approval card in-thread before any container starts; only SLACK_APPROVERS can approve from Slack.
+13. Use the /shiba slash command to start a task from Slack without an existing thread.
 14. Create automations with schedule (cron), GitHub event, Slack, webhook, or manual triggers. Each automation has an optional run_when plain-language condition (evaluated by TypeSafe Noul when TYPESAFE_API_KEY is set, else Workers AI). Automated runs require approval by default; opt-in unattended mode is available only for pull-request-only mutations on an explicit repo allowlist.
 
-The dashboard is one inbound surface of two. Slack (`@shiba-ai-coworker` mentions and `/shiba-ai-coworker`) is a supported entry point: thread prose is turned into structured `delegate_coding_task` by the orchestrator LLM. Prose never crosses the child boundary (`parseAgentToolInput`). The mention → card → approve → run flow gates on two settings: `SLACK_CHANNEL_REPOS` maps a channel to its repository so a mention resolves `repoUrl` without the user typing one, and `SLACK_APPROVERS` gates who may approve the card; an empty approver list means nobody can approve from Slack, and a channel missing from the map means the task must state the repository explicitly.
+The dashboard is one inbound surface of two. Slack (`@shiba` mentions and `/shiba`) is a supported entry point: thread prose is turned into structured `delegate_coding_task` by the orchestrator LLM. Prose never crosses the child boundary (`parseAgentToolInput`). The mention → card → approve → run flow gates on two settings: `SLACK_CHANNEL_REPOS` maps a channel to its repository so a mention resolves `repoUrl` without the user typing one, and `SLACK_APPROVERS` gates who may approve the card; an empty approver list means nobody can approve from Slack, and a channel missing from the map means the task must state the repository explicitly.
 
 
 ## Required architecture
 
-Keep the smallest working architecture. Do not add D1, KV, Queues, R2, Workflows, Hono, or a monorepo unless a concrete requirement needs one.
+Keep the smallest working architecture. The repository is a pnpm+turbo monorepo (`apps/{backend,frontend,web}` + `alchemy.run.ts`) — adopted because backend (Worker), frontend (React dashboard), and web (Astro docs) have separate build pipelines, and turbo caching keeps the root gate fast. This supersedes the earlier no-monorepo line.
+
+Primitives in use, each justified:
+
+- **D1 `AGENT_AUDIT`** — MCP tool-call audit trail (hash of args, never args) needed by the approval/security model
+- **KV `AGENT_TOKENS`** — hashed bearer tokens for `/mcp` auth
+- **R2 `ATTACHMENTS`** — email bodies >256KB that cannot live in DO storage
+- **Vectorize `MEMORY_VECTORS`** — 768-dim embeddings for memory recall
+- **turbo** — per-app build/typecheck/test orchestration
+
+Still forbidden without a concrete requirement: Queues, Workflows, Hono (the Worker router stays hand-rolled), and any additional store beyond the eight Durable Objects + the four supporting stores above.
 
 Use:
 

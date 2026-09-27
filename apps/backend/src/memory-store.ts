@@ -14,6 +14,7 @@
  * rows already carry their `agent` column, so the global table answers
  * `GET /sessions` (optionally `?agent=`) with a single local query.
  */
+import type { FactRecord, FactRegistryEntry, SessionRecord } from "@shiba/shared";
 import { InputError } from "./security.js";
 
 // ---------------------------------------------------------------------------
@@ -80,33 +81,8 @@ export const MEMORY_SCHEMA = {
 // Records
 // ---------------------------------------------------------------------------
 
-export interface FactRecord {
-  id: string;
-  fact: string;
-  /** Provenance tag — run / email / manual (free-form, rendered as a badge). */
-  source: string;
-  /** Vectorize vector id (same as `id` once the embedding lands), or null. */
-  embedding_id: string | null;
-  /** Epoch milliseconds. */
-  created_at: number;
-  /** Epoch-milliseconds expiry; null = durable. Purged lazily on read. */
-  ttl: number | null;
-}
-
-export interface SessionRecord {
-  id: string;
-  agent: string;
-  /** Epoch milliseconds. */
-  started_at: number;
-  summary: string;
-}
-
-/** One global-registry row — the fact id → owning agent mapping. */
-export interface FactRegistryEntry {
-  fact_id: string;
-  agent: string;
-  created_at: number;
-}
+// Wire records live in @shiba/shared — re-exported for existing imports.
+export type { FactRecord, FactRegistryEntry, SessionRecord } from "@shiba/shared";
 
 // ---------------------------------------------------------------------------
 // Input shapes
@@ -297,6 +273,27 @@ export class MemoryStore {
       `SELECT * FROM facts ORDER BY created_at DESC LIMIT ?`,
       clampLimit(filter.limit),
     ).map(rowToFact);
+  }
+
+  /**
+   * Extend (or clear, for a durable fact) a row's ttl — the dedupe path
+   * promotes an expiring duplicate when the incoming request asks for a
+   * longer-lived fact. Same validation as `bankFact`; returns the updated
+   * row, or null when the id is gone (expired between the match and here).
+   */
+  setFactTtl(id: string, ttl: number | null): FactRecord | null {
+    if (ttl !== null) {
+      if (!Number.isFinite(ttl)) {
+        throw new InputError("ttl must be a finite epoch-milliseconds deadline.");
+      }
+      if (ttl < 0) {
+        throw new InputError("ttl must not be negative.");
+      }
+    }
+    this.purgeExpiredFacts();
+    this.exec(`UPDATE facts SET ttl = ? WHERE id = ?`, ttl, id);
+    const row = this.exec(`SELECT * FROM facts WHERE id = ?`, id)[0];
+    return row ? rowToFact(row) : null;
   }
 
   /** Hard delete — returns whether a row was removed. */

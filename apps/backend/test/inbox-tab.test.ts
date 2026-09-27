@@ -44,11 +44,9 @@ vi.mock("@cloudflare/think", () => ({
 vi.mock("agents/agent-tools", () => ({ agentTool: () => ({ execute: vi.fn() }) }));
 vi.mock("../src/agents/opencode-agent.js", () => ({ OpenCodeAgent: class {} }));
 vi.mock("agents/mcp", () => ({
-  McpAgent: class {
-    static serve() {
-      return { fetch: async () => Response.json({ mcp: "served" }) };
-    }
-  },
+  createMcpHandler: () => ({
+    fetch: async () => Response.json({ mcp: "served" }),
+  }),
 }));
 
 // The approval seam is a stub until T7 lands the real bridge — capture calls
@@ -69,6 +67,7 @@ vi.mock("../src/email-approvals.js", () => ({
 
 import worker from "../src/index.js";
 import type { Env } from "../src/env.js";
+import { createWebSession } from "../src/web-sessions.js";
 import { InboxTab, replyAddress, replyMailbox } from "../../frontend/src/components/InboxTab";
 import { MemoryTab } from "../../frontend/src/components/MemoryTab";
 
@@ -790,6 +789,9 @@ describe("dashboard approval routes", () => {
     kind: "email_send",
     payload: { to_addr: "person@example.com", mailbox: "agent-a@shiba.dev" },
   };
+  // Each DO touched, with the path: the caller's DO is first read for its
+  // web-session registry, then every orchestrator is probed for approvals.
+  const probes = () => orchestratorCalls.calls.map((c) => `${c.name} ${new URL(c.url).pathname}`);
 
   it("GET /api/approvals merges the caller's orchestrator with the default one", async () => {
     orchestratorCalls.calls.length = 0;
@@ -816,8 +818,12 @@ describe("dashboard approval routes", () => {
       expect(body.approvals.map((a) => a.approvalId).sort()).toEqual(
         ["apv-user-1", "apv-default-1"].sort(),
       );
-      // Both instances were probed, caller first.
-      expect(orchestratorCalls.calls.map((c) => c.name)).toEqual(["dev@example.com", "default"]);
+      // Registry read, then both instances probed, caller first.
+      expect(probes()).toEqual([
+        "dev@example.com /internal/web-sessions",
+        "dev@example.com /api/approvals",
+        "default /api/approvals",
+      ]);
     } finally {
       orchestratorCalls.handlers = {};
     }
@@ -834,7 +840,8 @@ describe("dashboard approval routes", () => {
       expect(response.status).toBe(200);
       const body = (await response.json()) as { approvals: Array<{ approvalId: string }> };
       expect(body.approvals.map((a) => a.approvalId)).toEqual(["apv-default-1"]);
-      expect(orchestratorCalls.calls.map((c) => c.name)).toEqual(["default"]);
+      // Without an identity the caller *is* "default": one registry read, one probe.
+      expect(probes()).toEqual(["default /internal/web-sessions", "default /api/approvals"]);
     } finally {
       orchestratorCalls.handlers = {};
     }
@@ -866,8 +873,12 @@ describe("dashboard approval routes", () => {
       );
       expect(response.status).toBe(200);
       expect((await response.json()) as { result: string }).toEqual({ result: "rejected" });
-      expect(orchestratorCalls.calls.map((c) => c.name)).toEqual(["dev@example.com", "default"]);
-      const decided = JSON.parse(orchestratorCalls.calls[1]!.body!) as {
+      expect(probes()).toEqual([
+        "dev@example.com /internal/web-sessions",
+        "dev@example.com /api/approvals",
+        "default /api/approvals",
+      ]);
+      const decided = JSON.parse(orchestratorCalls.calls[2]!.body!) as {
         decidedBy: string;
         approved: boolean;
         threadKey: string;
@@ -906,7 +917,81 @@ describe("dashboard approval routes", () => {
       // that lives on "default".
       expect(response.status).toBe(200);
       expect((await response.json()) as { result: string }).toEqual({ result: "approved" });
-      expect(orchestratorCalls.calls.map((c) => c.name)).toEqual(["dev@example.com", "default"]);
+      expect(probes()).toEqual([
+        "dev@example.com /internal/web-sessions",
+        "dev@example.com /api/approvals",
+        "default /api/approvals",
+      ]);
+    } finally {
+      orchestratorCalls.handlers = {};
+    }
+  });
+
+  it("GET /api/approvals also probes the caller's registered web sessions", async () => {
+    const session = createWebSession("dev@example.com", { name: "Side" });
+    orchestratorCalls.calls.length = 0;
+    orchestratorCalls.handlers = {
+      "dev@example.com": async (request) =>
+        new URL(request.url).pathname === "/internal/web-sessions"
+          ? Response.json({ sessions: [session] })
+          : Response.json({ approvals: [] }),
+      [session.agentName]: async () =>
+        Response.json({
+          approvals: [{ ...approvalA, approvalId: "apv-session-1", threadKey: session.agentName, kind: "run" }],
+        }),
+      default: async () => Response.json({ approvals: [approvalA] }),
+    };
+    try {
+      const { env } = makeEnvWithTwoMailboxes();
+      const response = await worker.fetch(
+        new Request("https://worker/api/approvals", {
+          headers: { "CF-Access-Authenticated-User-Email": "dev@example.com" },
+        }),
+        env,
+        ctx,
+      );
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as { approvals: Array<{ approvalId: string }> };
+      expect(body.approvals.map((a) => a.approvalId).sort()).toEqual(["apv-default-1", "apv-session-1"]);
+      expect(probes()).toEqual([
+        "dev@example.com /internal/web-sessions",
+        "dev@example.com /api/approvals",
+        `${session.agentName} /api/approvals`,
+        "default /api/approvals",
+      ]);
+    } finally {
+      orchestratorCalls.handlers = {};
+    }
+  });
+
+  it("POST /api/approvals refuses a web-session threadKey the caller does not own or has not registered", async () => {
+    const mine = createWebSession("dev@example.com");
+    const theirs = createWebSession("eve@example.com");
+    orchestratorCalls.handlers = {
+      "dev@example.com": async () => Response.json({ sessions: [] }),
+    };
+    const decide = async (threadKey: string) => {
+      orchestratorCalls.calls.length = 0;
+      const { env } = makeEnvWithTwoMailboxes();
+      return worker.fetch(
+        new Request("https://worker/api/approvals", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "CF-Access-Authenticated-User-Email": "dev@example.com",
+          },
+          body: JSON.stringify({ threadKey, approvalId: "apv-x", approved: true }),
+        }),
+        env,
+        ctx,
+      );
+    };
+    try {
+      expect((await decide(theirs.agentName)).status).toBe(403);
+      // Owned name, but not in the registry (deleted or never minted).
+      expect((await decide(mine.agentName)).status).toBe(404);
+      // Neither refusal reached any orchestrator's decision path.
+      expect(probes()).toEqual(["dev@example.com /internal/web-sessions"]);
     } finally {
       orchestratorCalls.handlers = {};
     }

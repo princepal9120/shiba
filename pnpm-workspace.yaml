@@ -3,6 +3,7 @@ overrides:
 
 packages:
   - apps/*
+  - packages/*
 
 onlyBuiltDependencies:
   - "@mongodb-js/zstd"
