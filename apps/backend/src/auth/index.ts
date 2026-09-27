@@ -10,7 +10,6 @@ import type { ProviderAuthController } from "@shiba/shared";
 import { claudeSubscriptionAuth, codexSubscriptionAuth, antigravitySubscriptionAuth } from "@shiba/auth";
 import type { AgentHarness, AgentHarnessName } from "../harness/types.js";
 import type { CodingTaskInput } from "../opencode-input.js";
-import { antigravitySubscriptionAuth } from "@shiba/auth";
 import { forwardClaudeSubscription, forwardCodexSubscription, type EgressEnv } from "../egress.js";
 
 interface AuthRegistryEnv {
