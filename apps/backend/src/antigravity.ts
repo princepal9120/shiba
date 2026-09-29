@@ -55,13 +55,15 @@ export async function handleAntigravitySubscriptionAuth(
       return Response.json({ snapshot: await controller.snapshot() });
     }
     if (request.method === "POST" && sub === "begin") {
-      return Response.json({ snapshot: await controller.begin(ownerSessionId) });
+      await controller.begin(ownerSessionId);
+      return Response.json({ snapshot: await controller.snapshot() });
     }
     if (request.method === "POST" && sub === "verify") {
       return Response.json({ snapshot: await controller.verify(ownerSessionId) });
     }
     if (request.method === "POST" && sub === "clear") {
-      return Response.json({ snapshot: await controller.clear(ownerSessionId) });
+      await controller.clear(ownerSessionId);
+      return Response.json({ snapshot: await controller.snapshot() });
     }
   } catch (error) {
     return authError(error);
