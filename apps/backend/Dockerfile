@@ -29,6 +29,28 @@ RUN set -eux; \
   rm /tmp/devin.tar.gz; \
   /usr/local/bin/devin --version
 
+# Cursor Agent CLI — checksum-verified, version-pinned like the Devin CLI.
+# The tarball ships dist-package/ (the cursor-agent binary plus its native
+# .node deps); the binary needs its siblings, so the whole package lands in
+# /opt and only a symlink reaches PATH. Version format is Cursor's own
+# date-hash release id, mirrored by harness/catalog.ts. Bump requires the
+# same T10 pass.
+ARG CURSOR_CLI_VERSION=2026.10.01-e373342
+RUN set -eux; \
+  case "$(uname -m)" in \
+    x86_64) a=x64; s=a79726c6e644520e993970be4c45775a6889802b67abe461a677a53219ae28e8;; \
+    aarch64) a=arm64; s=785c5f6bf2a60eb1121e27ed8c14f5ee07ed1b5b6692324f2d9a997238245eb5;; \
+    *) exit 1;; \
+  esac; \
+  curl -sSfL -o /tmp/cursor-agent.tar.gz "https://downloads.cursor.com/lab/${CURSOR_CLI_VERSION}/linux/${a}/agent-cli-package.tar.gz"; \
+  echo "${s}  /tmp/cursor-agent.tar.gz" | sha256sum -c -; \
+  mkdir -p /opt/cursor-agent; \
+  tar -xzf /tmp/cursor-agent.tar.gz -C /opt/cursor-agent; \
+  rm /tmp/cursor-agent.tar.gz; \
+  chmod +x /opt/cursor-agent/dist-package/cursor-agent; \
+  ln -sfn /opt/cursor-agent/dist-package/cursor-agent /usr/local/bin/cursor-agent; \
+  /usr/local/bin/cursor-agent --version
+
 # Antigravity ACP binary — version-pinned like the other harnesses (T50).
 # Google's release archive ships `agy_acp_server.par` + its
 # `localharness_external` helper; both must sit in the same directory.

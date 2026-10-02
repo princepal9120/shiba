@@ -224,3 +224,188 @@ describe("auth flow", () => {
     }
   });
 });
+
+/**
+ * The runnable-harness layer: `SHIBA_DEVIN_SUBSCRIPTION=1` now registers a
+ * real sandbox harness — the connect lane exists so a run can authenticate,
+ * so these tests pin the run-side contract the same way claude-subscription
+ * does.
+ */
+import { devinSubscriptionHarness } from "../src/harness/devin-subscription.js";
+import { Sandbox } from "../src/sandbox.js";
+import { formatAgentToolInput, parseAgentToolInput, type CodingTaskInput } from "../src/opencode-input.js";
+
+describe("run harness registration", () => {
+  const ENABLED = { SHIBA_DEVIN_SUBSCRIPTION: "1" };
+  const SUB_MODEL = "devin-subscription/swe-2-medium";
+  const runInput = (extra: Partial<CodingTaskInput> = {}): CodingTaskInput => ({
+    repoUrl: "https://github.com/acme/widgets",
+    task: "Fix it.",
+    baseBranch: "main",
+    publishPullRequest: false,
+    sandboxId: "run-abcdef12345678",
+    codingModel: SUB_MODEL,
+    ...extra,
+  });
+
+  it("is unregistered without the flag — not selectable, not listed", async () => {
+    const { resolveHarness, SANDBOX_HARNESS_NAMES, sandboxHarnessNames } = await import(
+      "../src/harness/index.js"
+    );
+    const { agentCliCatalog } = await import("../src/harness/catalog.js");
+    expect(() => resolveHarness("devin-subscription")).toThrow(/Unknown agent harness/);
+    expect(() => resolveHarness("devin-subscription", {})).toThrow(/Unknown agent harness/);
+    expect(SANDBOX_HARNESS_NAMES).not.toContain("devin-subscription");
+    expect(agentCliCatalog({}).map((a) => a.id)).not.toContain("devin-subscription");
+    expect(sandboxHarnessNames({})).not.toContain("devin-subscription");
+  });
+
+  it("SHIBA_DEVIN_SUBSCRIPTION=1 registers it everywhere it should appear", async () => {
+    const { resolveHarness, sandboxHarnessNames } = await import("../src/harness/index.js");
+    const { agentCliCatalog } = await import("../src/harness/catalog.js");
+    expect(resolveHarness("devin-subscription", ENABLED).name).toBe("devin-subscription");
+    expect(sandboxHarnessNames(ENABLED)).toContain("devin-subscription");
+    const entry = agentCliCatalog(ENABLED).find((a) => a.id === "devin-subscription");
+    expect(entry).toBeDefined();
+    expect(entry?.credential?.label).toBe("DEVIN_SUBSCRIPTION_TOKEN");
+    expect(entry?.credential?.configured).toBe(false);
+    const configured = agentCliCatalog({ ...ENABLED, DEVIN_SUBSCRIPTION_TOKEN: "key-real" }).find(
+      (a) => a.id === "devin-subscription",
+    );
+    expect(configured?.credential?.configured).toBe(true);
+  });
+
+  it("the task envelope accepts the harness name and freezes authAccount", () => {
+    const input = runInput({ harness: "devin-subscription", authAccount: "work" });
+    const envelope = formatAgentToolInput(input);
+    const parsed = parseAgentToolInput([{ role: "user", text: envelope }]);
+    expect(parsed.harness).toBe("devin-subscription");
+    expect(parsed.authAccount).toBe("work");
+  });
+});
+
+describe("the token never enters the container", () => {
+  it("env() carries XDG_DATA_HOME plus only the dummy key", () => {
+    const env = devinSubscriptionHarness.env(
+      {
+        repoUrl: "https://github.com/acme/widgets",
+        task: "Fix it.",
+        baseBranch: "main",
+        publishPullRequest: false,
+        sandboxId: "run-1",
+        codingModel: "devin-subscription/swe-2-medium",
+      },
+      null,
+    );
+    expect(env.XDG_DATA_HOME).toBe("/workspace/.xdg-data");
+    expect(env.DEVIN_API_KEY).toBe("shiba-dummy-key");
+    for (const value of Object.values(env)) {
+      expect(value).not.toContain("key-real");
+    }
+  });
+
+  it("configFile is a dummy credentials.toml — never a real token", () => {
+    const file = devinSubscriptionHarness.configFile(
+      {
+        repoUrl: "https://github.com/acme/widgets",
+        task: "Fix it.",
+        baseBranch: "main",
+        publishPullRequest: false,
+        sandboxId: "run-1",
+        codingModel: "devin-subscription/swe-2-medium",
+      },
+      "run-1",
+    );
+    expect(file.path).toBe("/workspace/.xdg-data/devin/credentials.toml");
+    expect(file.contents).toContain('windsurf_api_key = "dummy-egress-swapped"');
+    expect(file.contents).toContain('devin_api_url = "https://api.devin.ai"');
+    expect(file.contents).not.toContain("key-real");
+  });
+});
+
+describe("egress isolation", () => {
+  it("egressOverrides pins both Devin hosts to the dedicated handler with the account name", () => {
+    const overrides = devinSubscriptionHarness.egressOverrides!({
+      repoUrl: "https://github.com/acme/widgets",
+      task: "Fix it.",
+      baseBranch: "main",
+      publishPullRequest: false,
+      sandboxId: "run-1",
+      codingModel: "devin-subscription/swe-2-medium",
+      authAccount: "work",
+    });
+    expect(overrides.map((o) => o.host).sort()).toEqual(
+      ["api.devin.ai", "server.codeium.com"].sort(),
+    );
+    for (const o of overrides) {
+      expect(o.handler).toBe("devinSubscription");
+      expect(o.params).toEqual({ account: "work" });
+      expect(JSON.stringify(o.params)).not.toContain("key-real");
+    }
+  });
+
+  it("the named handler is registered on Sandbox.outboundHandlers", () => {
+    expect(Sandbox.outboundHandlers?.devinSubscription).toBe(forwardDevinSubscription);
+  });
+
+  it("egressHosts is the enumerated pair; a gateway model id is refused", () => {
+    expect(devinSubscriptionHarness.egressHosts("devin-subscription/swe-2-medium")).toEqual([
+      "api.devin.ai",
+      "server.codeium.com",
+    ]);
+    expect(() => devinSubscriptionHarness.egressHosts("devin/swe-2-medium")).toThrow(
+      /Unsupported coding model/,
+    );
+    expect(() => devinSubscriptionHarness.egressHosts("anthropic/claude-sonnet-4-6")).toThrow(
+      /Unsupported coding model/,
+    );
+  });
+});
+
+describe("argv + admission", () => {
+  it("buildArgv mirrors the devin harness — bare alias after --model", () => {
+    const argv = devinSubscriptionHarness.buildArgv(
+      {
+        repoUrl: "https://github.com/acme/widgets",
+        task: "Fix it.",
+        baseBranch: "main",
+        publishPullRequest: false,
+        sandboxId: "run-1",
+        codingModel: "devin-subscription/swe-2-medium",
+      },
+      "/workspace/run-1",
+    );
+    expect(argv.slice(0, 4)).toEqual(["devin", "-p", "--model", "swe-2-medium"]);
+    expect(argv).toContain("--permission-mode");
+    expect(argv).toContain("bypass");
+    expect(argv[argv.length - 1]).toBe("Fix it.");
+  });
+
+  it("declares the auth requirement with the account-scoped instanceId", () => {
+    const input = (account?: string): CodingTaskInput => ({
+      repoUrl: "https://github.com/acme/widgets",
+      task: "Fix it.",
+      baseBranch: "main",
+      publishPullRequest: false,
+      sandboxId: "run-1",
+      codingModel: "devin-subscription/swe-2-medium",
+      authAccount: account,
+    });
+    expect(devinSubscriptionHarness.auth?.instanceId(input("work"))).toBe("devin-sub:work");
+    expect(devinSubscriptionHarness.auth?.instanceId(input())).toBe("devin-sub:default");
+  });
+
+  it("a run without a succeeded flow is refused", async () => {
+    const { assertHarnessAuthorized } = await import("../src/auth/index.js");
+    await expect(
+      assertHarnessAuthorized(envWith({ DEVIN_SUBSCRIPTION_TOKEN: "key-real" }), devinSubscriptionHarness, {
+        repoUrl: "https://github.com/acme/widgets",
+        task: "Fix it.",
+        baseBranch: "main",
+        publishPullRequest: false,
+        sandboxId: "run-1",
+        codingModel: "devin-subscription/swe-2-medium",
+      }),
+    ).rejects.toThrow(/no authenticated account/);
+  });
+});

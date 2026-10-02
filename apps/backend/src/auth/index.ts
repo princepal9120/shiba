@@ -7,10 +7,10 @@
  * antigravity) means a module under packages/auth plus one line here.
  */
 import type { ProviderAuthController } from "@shiba/shared";
-import { claudeSubscriptionAuth, codexSubscriptionAuth, antigravitySubscriptionAuth } from "@shiba/auth";
+import { claudeSubscriptionAuth, codexSubscriptionAuth, antigravitySubscriptionAuth, cursorSubscriptionAuth, devinSubscriptionAuth } from "@shiba/auth";
 import type { AgentHarness, AgentHarnessName } from "../harness/types.js";
 import type { CodingTaskInput } from "../opencode-input.js";
-import { forwardClaudeSubscription, forwardCodexSubscription, type EgressEnv } from "../egress.js";
+import { forwardClaudeSubscription, forwardCodexSubscription, forwardCursorSubscription, forwardDevinSubscription, type EgressEnv } from "../egress.js";
 
 interface AuthRegistryEnv {
   AGENT_TOKENS: KVNamespace;
@@ -39,6 +39,14 @@ export function authControllerFor<Env extends AuthRegistryEnv>(
       );
     case "antigravity-subscription":
       return antigravitySubscriptionAuth(env, instanceId);
+    case "cursor-subscription":
+      return cursorSubscriptionAuth(env, instanceId, (request, e, ctx) =>
+        forwardCursorSubscription(request, e as EgressEnv, ctx),
+      );
+    case "devin-subscription":
+      return devinSubscriptionAuth(env, instanceId, (request, e, ctx) =>
+        forwardDevinSubscription(request, e as EgressEnv, ctx),
+      );
     default:
       return null;
   }

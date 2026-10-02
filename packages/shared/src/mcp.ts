@@ -5,7 +5,24 @@
  */
 import { z } from "zod";
 
-export const HARNESS_IDS = ["opencode", "claude-code", "codex", "devin", "grok"] as const;
+/**
+ * Names an external caller may request. Subscription harnesses are included
+ * even though each is flag-gated — resolution stays deny-by-default, so an
+ * unknown or disabled name fails at resolveHarness, not silently in-container.
+ * Bare cursor/antigravity stay excluded: they declare no runtimes.
+ */
+export const HARNESS_IDS = [
+  "opencode",
+  "claude-code",
+  "claude-subscription",
+  "codex",
+  "codex-subscription",
+  "devin",
+  "devin-subscription",
+  "grok",
+  "antigravity-subscription",
+  "cursor-subscription",
+] as const;
 export type HarnessId = (typeof HARNESS_IDS)[number];
 
 export const queueRunInputSchema = z.object({

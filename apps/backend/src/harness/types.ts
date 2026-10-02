@@ -24,7 +24,9 @@ export type AgentHarnessName =
   | "grok"
   | "cursor"
   | "antigravity"
-  | "antigravity-subscription";
+  | "antigravity-subscription"
+  | "cursor-subscription"
+  | "devin-subscription";
 
 /**
  * T43 runtimes a harness can execute under. "sandbox" and the refused
@@ -64,6 +66,11 @@ export const PROVIDER_HOSTS: Record<string, string> = {
   // the provider id maps to the same Google host only for model-name
   // validation; egressHosts returns the full observed Google set.
   "google-subscription": "generativelanguage.googleapis.com",
+  // Cursor/Devin subscriptions authenticate through the same hosts their
+  // BYOK namespaces use — routing differs at the per-run egress handler,
+  // which the harness's egressOverrides swaps to the subscription branch.
+  "cursor-subscription": "api2.cursor.sh",
+  "devin-subscription": "api.devin.ai",
 };
 
 /**
@@ -104,6 +111,9 @@ export const PROVIDER_KEY_ENV: Record<string, string> = {
   // the dummy and the gateway injects the real one at egress.
   "opencode-go": "OPENCODE_GO_API_KEY",
   cursor: "CURSOR_API_KEY",
+  // The Devin CLI reads its key from credentials.toml, not the environment;
+  // the dummy still rides along so a future env-auth path stays covered.
+  "devin-subscription": "DEVIN_API_KEY",
 };
 
 /** Hosts every harness needs regardless of provider. */
