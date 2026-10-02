@@ -64,7 +64,10 @@
     //   LOCAL_ADAPTER_TOKEN     bearer the `shiba local` daemon presents on
     //   /api/local/* — a Wrangler secret; unset = the surface is dark even
     //   with the flag on.
-  }, 
+    //   AGENT_MAILBOX          agent mailbox identity for the MCP
+    //   latest_verification default — unset = dev@tryshiba.dev. Register
+    //   the address in the Inbox and assign it to the agent principal.
+  },
   "ai": {
     "binding": "AI",
   },

@@ -41,7 +41,7 @@ Run `claude mcp list` to confirm that `shiba` connects. A 401 means the token is
 | `run_status` | `runs:read` | Returns one run record by `runId`. |
 | `list_runs` | `runs:read` | Lists run records, newest first (`limit`, default 20). |
 | `list_approvals` | `runs:read` | Lists pending and recently decided run approvals. Email approvals are left out. |
-| `list_mailboxes`, `list_emails`, `get_email`, `get_thread`, `search_emails`, `mark_email_read` | `email:read` | Mailbox reads. |
+| `list_mailboxes`, `list_emails`, `get_email`, `get_thread`, `search_emails`, `mark_email_read`, `extract_otp`, `latest_verification` | `email:read` | Mailbox reads. |
 | `create_draft`, `update_draft`, `draft_reply`, `move_email` | `email:draft` | Draft and organize. |
 | `send_email`, `send_reply` | `email:send` | Queue an email send for human approval. |
 | `delete_email` | `email:delete` | Queue a delete for human approval. |
@@ -62,6 +62,10 @@ Give the resulting token only to that cloud agent and connect it to `/mcp` as ab
 For a first read-only test, grant only `email:read`. Configure Cloudflare Email Routing separately, send a message from another address, and verify it appears both in the Inbox and in the agent's `list_emails` result. Add draft/send scopes later if needed; they still cannot bypass human approval.
 
 The built-in chat agent also calls these tools: its `run_code` tool executes model-written JavaScript in an isolated Worker that dispatches back through this same gateway as the reserved principal `orchestrator-agent` (every scope except `admin:tokens`). To let the chat agent work a mailbox, register the address with **Cloud agent token principal** set to `orchestrator-agent` — no token minting needed. The same scoping rules apply: `orchestrator-agent` sees only mailboxes assigned to it, and sends or deletes still queue for human approval.
+
+### Agent mailbox identity (OTP + magic links)
+
+Two read-only tools serve the sign-in flow: `extract_otp` pulls a one-time code and magic links out of one email by id, and `latest_verification` scans the newest inbound mail for either — its `mailbox` arg defaults to the deployment's agent identity address (`AGENT_MAILBOX`, or `dev@tryshiba.dev` when unset). Register that address in the Inbox and assign it to the agent principal (`orchestrator-agent` for the built-in chat agent, or the token principal of an external agent) and the agent can log into third-party apps end-to-end: it reads the code or link with sender and timestamp attached, while the raw body stays out of the response. Sends still queue for approval.
 
 The gateway has no approve tool. This MCP tool accepts only repository/task/branch/publish inputs, not a per-run harness or model; queued runs use the deployment's configured defaults (`AGENT_HARNESS`, `CODING_MODEL`, and the selected harness's model default) when approved. Harness implementation and verification status are documented in [Coding Harnesses](/docs/claude-code/). No cloud end-to-end run is recorded; the dated local OpenCode exercise did not reach successful model inference.
 

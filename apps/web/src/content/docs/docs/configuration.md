@@ -27,6 +27,7 @@ Non-secret defaults are in `apps/backend/wrangler.jsonc` and `alchemy.run.ts`. F
 | `SHIBA_DEVIN_SUBSCRIPTION` | unset | Set `1` to open the opt-in `devin-subscription` connect lane (below) |
 | `DEVIN_SUBSCRIPTION_MODEL` | `devin/swe-2` | `devin-subscription` model override |
 | `SHIBA_LOCAL_RUNTIME` | unset | Set `1` to enable the opt-in `local` runtime (below) — dashboards can queue runs that execute on an operator machine |
+| `AGENT_MAILBOX` | `dev@tryshiba.dev` | Agent mailbox identity — the address the MCP `latest_verification` tool scans by default for OTP codes and magic sign-in links |
 | `LOCAL_ADAPTER_TOKEN` | unset | Bearer token the operator daemon presents on `/api/local/*`; required for the surface to answer (dark otherwise) |
 | `RUNTIME` | `sandbox` | Runtime adapter; current default is Cloudflare Sandbox |
 | `INSTANCE_TYPE` | `standard-1` | Configured Cloudflare container size |

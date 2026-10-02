@@ -159,7 +159,13 @@ async function registerMailbox(env: Env, address = REGISTERED, agent: string | n
 
 async function addEmail(
   env: Env,
-  over: Partial<Record<"to_addr" | "from_addr" | "subject" | "body_text", string>> = {},
+  over: {
+    to_addr?: string;
+    from_addr?: string;
+    subject?: string;
+    body_text?: string;
+    created_at?: number;
+  } = {},
   address = REGISTERED,
 ): Promise<StoredEmail> {
   const res = await (env.Mailbox.get(env.Mailbox.idFromName(address)) as unknown as FakeStub).fetch(
@@ -172,6 +178,7 @@ async function addEmail(
         to_addr: over.to_addr ?? address,
         subject: over.subject ?? "Quarterly report",
         body_text: over.body_text ?? "Hello.",
+        ...(over.created_at === undefined ? {} : { created_at: over.created_at }),
       }),
     }),
   );
@@ -190,7 +197,7 @@ function makeRegistry(env: Env) {
 }
 
 describe("registerEmailTools — scope map", () => {
-  it("registers all 13 tools with the brief's scope table", () => {
+  it("registers all 15 tools with the brief's scope table", () => {
     const { env } = makeEnv();
     const registry = makeRegistry(env);
     const expected: Record<string, Scope> = {
@@ -199,6 +206,8 @@ describe("registerEmailTools — scope map", () => {
       get_email: "email:read",
       get_thread: "email:read",
       search_emails: "email:read",
+      extract_otp: "email:read",
+      latest_verification: "email:read",
       mark_email_read: "email:read",
       move_email: "email:draft",
       create_draft: "email:draft",
@@ -210,7 +219,7 @@ describe("registerEmailTools — scope map", () => {
     };
     const actual = Object.fromEntries(registry.tools().map((t) => [t.name, t.scope]));
     expect(actual).toEqual(expected);
-    expect(registry.tools()).toHaveLength(13);
+    expect(registry.tools()).toHaveLength(15);
   });
 });
 
@@ -427,6 +436,134 @@ describe("registerEmailTools — read tools", () => {
       const result = await registry.invoke(tool, args, reader);
       expect(result.isError, tool).toBe(true);
     }
+  });
+});
+
+describe("registerEmailTools — verification tools", () => {
+  const AGENT_BOX = "dev@tryshiba.dev";
+
+  it("extract_otp returns code, magic links, sender and timestamp — never the body", async () => {
+    const { env } = makeEnv();
+    const registry = makeRegistry(env);
+    await registerMailbox(env);
+    const email = await addEmail(env, {
+      from_addr: "noreply@saas.example",
+      subject: "Confirm your email",
+      body_text:
+        "Your verification code is 482913 — or open https://app.saas.example/verify?token=zz to finish.",
+    });
+
+    const got = resultData(
+      await registry.invoke("extract_otp", { id: email.id }, reader),
+    );
+    expect(got.mailbox).toBe(REGISTERED);
+    expect(got.email_id).toBe(email.id);
+    expect(got.from_addr).toBe("noreply@saas.example");
+    expect(got.subject).toBe("Confirm your email");
+    expect(got.received_at).toBe(email.created_at);
+    expect(got.code).toBe("482913");
+    expect(got.magic_links).toEqual([
+      { url: "https://app.saas.example/verify?token=zz", anchor_text: null, flags: [] },
+    ]);
+    expect(got.security_notice).toContain("UNTRUSTED");
+    // Extracted fields only — the surrounding body prose stays in the store.
+    expect(JSON.stringify(got)).not.toContain("verification code is");
+    // Read-only: no approval minted, no mutation.
+    expect(queueCalls).toHaveLength(0);
+  });
+
+  it("extract_otp refuses another agent's mail and unknown ids", async () => {
+    const { env } = makeEnv();
+    const registry = makeRegistry(env);
+    await registerMailbox(env, OTHER, "peer");
+    const theirs = await addEmail(env, { body_text: "code is 112233" }, OTHER);
+
+    const theirs_result = await registry.invoke("extract_otp", { id: theirs.id }, reader);
+    expect(theirs_result.isError).toBe(true);
+    const missing = await registry.invoke("extract_otp", { id: "eml-404" }, reader);
+    expect(missing.isError).toBe(true);
+  });
+
+  it("latest_verification scans the configured agent mailbox, newest signal-bearing mail wins", async () => {
+    const { env } = makeEnv();
+    const registry = makeRegistry(env);
+    await registerMailbox(env, AGENT_BOX);
+    await addEmail(env, { subject: "Newsletter", body_text: "No codes here." }, AGENT_BOX);
+    const code = await addEmail(
+      env,
+      {
+        from_addr: "sso@corp.example",
+        subject: "Sign in to Corp",
+        body_text: "Use code 771204 to finish signing in.",
+        created_at: 1_800_000_000_000,
+      },
+      AGENT_BOX,
+    );
+    const link = await addEmail(
+      env,
+      {
+        subject: "Magic sign-in",
+        body_text: `<a href="https://corp.example/magic?t=9">Sign in</a>`,
+        created_at: 1_800_000_100_000,
+      },
+      AGENT_BOX,
+    );
+
+    const got = resultData(await registry.invoke("latest_verification", {}, reader));
+    expect(got.found).toBe(true);
+    expect(got.mailbox).toBe(AGENT_BOX);
+    expect(got.email_id).toBe(link.id);
+    expect(got.magic_links[0].url).toBe("https://corp.example/magic?t=9");
+    expect(got.magic_links[0].anchor_text).toBe("Sign in");
+    expect(got.received_at).toBe(1_800_000_100_000);
+    expect(got.security_notice).toContain("UNTRUSTED");
+
+    // The sender substring filter narrows the scan to one sender's mail.
+    const bySender = resultData(
+      await registry.invoke("latest_verification", { sender: "sso@corp" }, reader),
+    );
+    expect(bySender.email_id).toBe(code.id);
+    expect(bySender.code).toBe("771204");
+
+    // since_ms drops older mail entirely.
+    const stale = resultData(
+      await registry.invoke(
+        "latest_verification",
+        { since_ms: 1_900_000_000_000 },
+        reader,
+      ),
+    );
+    expect(stale.found).toBe(false);
+    expect(stale.mailbox).toBe(AGENT_BOX);
+  });
+
+  it("latest_verification honors an explicit mailbox and the AGENT_MAILBOX override, and refuses unavailable defaults", async () => {
+    const { env } = makeEnv();
+    const registry = makeRegistry(env);
+    await registerMailbox(env); // REGISTERED → scout
+    await registerMailbox(env, AGENT_BOX, "peer"); // the default identity — someone else's
+    await addEmail(env, { body_text: "code: 555000" });
+
+    // The default points at the configured identity — unavailable to this principal.
+    const refused = await registry.invoke("latest_verification", {}, reader);
+    expect(refused.isError).toBe(true);
+    expect((refused.content[0] as { text: string }).text).toContain(AGENT_BOX);
+
+    // An explicit assigned mailbox scans that instead.
+    const got = resultData(
+      await registry.invoke("latest_verification", { mailbox: REGISTERED }, reader),
+    );
+    expect(got.found).toBe(true);
+    expect(got.code).toBe("555000");
+    expect(got.mailbox).toBe(REGISTERED);
+
+    // The env override re-points the default.
+    (env as unknown as { AGENT_MAILBOX?: string }).AGENT_MAILBOX = OTHER;
+    await registerMailbox(env, OTHER);
+    const viaOverride = resultData(await registry.invoke("latest_verification", {}, reader));
+    expect(viaOverride.mailbox).toBe(OTHER);
+    expect(viaOverride.found).toBe(false);
+    expect(viaOverride.scanned).toBe(0);
   });
 });
 

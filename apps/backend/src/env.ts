@@ -148,6 +148,14 @@ export interface Env {
    * screenshot link embedded in published PRs. Empty/unset = capture skipped.
    */
   WORKER_HOSTNAME?: string;
+  /**
+   * Optional. The agent's mailbox identity — the address `latest_verification`
+   * scans when no `mailbox` arg is given, so a run agent can read OTP codes
+   * and magic sign-in links during third-party logins. Default
+   * `dev@tryshiba.dev`; the address must still be registered in the Inbox
+   * and assigned to the calling principal like every other mailbox.
+   */
+  AGENT_MAILBOX?: string;
   /** Optional. Verifies Slack callbacks; unset disables all Slack routes. */
   SLACK_SIGNING_SECRET?: string;
   /** Optional. Comma-separated Slack user ids allowed to approve; unset = nobody. */

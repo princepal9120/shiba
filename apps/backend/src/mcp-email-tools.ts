@@ -1,5 +1,5 @@
 /**
- * Email MCP tools (megaplan task 6): the thirteen-tool agentic-inbox
+ * Email MCP tools (megaplan task 6): the fifteen-tool agentic-inbox
  * surface registered on the gateway's {@link ToolRegistry}.
  *
  * Routing: one `Mailbox` DO stub per registered address owns that
@@ -47,6 +47,7 @@ import {
   ADDRESS_RE,
   DRAFT_UPDATE_STATUSES,
   EMAIL_STATUSES,
+  UNTRUSTED_SECURITY_NOTICE,
   wrapUntrusted,
   type DraftRecord,
   type MailboxRecord,
@@ -54,6 +55,10 @@ import {
   type StoredEmail,
   type ThreadView,
 } from "./mailbox-store.js";
+import {
+  agentMailbox,
+  extractVerificationSignals,
+} from "./mailbox-verification.js";
 import type { ToolRegistry } from "./mcp-gateway.js";
 import { InputError } from "./security.js";
 
@@ -65,6 +70,9 @@ const limitField = z.number().int().min(0).max(MAX_LIMIT).optional();
 const idField = z.string().min(1);
 const mailboxField = z.string().min(1);
 const emailStatusField = z.enum(EMAIL_STATUSES);
+
+/** How far back `latest_verification` reads when no `limit` is given. */
+const DEFAULT_VERIFICATION_SCAN = 25;
 
 /**
  * The same field gates the store applies (`requireAddress` /
@@ -462,6 +470,124 @@ export function registerEmailTools(registry: ToolRegistry, env: Env): void {
       inputSchema: {
         query: z.string().min(1),
         mailbox: mailboxField.optional(),
+        limit: limitField,
+      },
+      annotations: { readOnlyHint: true },
+    },
+  );
+
+  // Verification views carry extracted fields only — a code, flagged
+  // links, sender/timestamp. The body itself stays out so a crafted mail
+  // cannot smuggle instruction prose through the read-only path (the
+  // `security_notice` on the payload keeps the untrusted provenance
+  // explicit for the caller).
+  const verificationView = (
+    mailbox: string,
+    email: StoredEmail,
+  ): Record<string, unknown> => {
+    const signals = extractVerificationSignals(email.body_text, email.body_html);
+    return {
+      mailbox,
+      email_id: email.id,
+      thread_id: email.thread_id,
+      from_addr: email.from_addr,
+      subject: email.subject,
+      received_at: email.created_at,
+      code: signals.code,
+      magic_links: signals.magic_links,
+      security_notice: UNTRUSTED_SECURITY_NOTICE,
+    };
+  };
+
+  const extractOtpSchema = z.object({ id: idField });
+  registry.registerTool(
+    "extract_otp",
+    READ,
+    async (args, ctx) => {
+      const { id } = parseArgs(extractOtpSchema, args);
+      const hit = await findEmail(env, id, ctx.principal.principal);
+      if (hit === null) {
+        throw new InputError(`Email not found: ${id}`);
+      }
+      return jsonResult(verificationView(hit.mailbox, hit.value.email));
+    },
+    {
+      description:
+        "Extract a one-time code and magic sign-in/verification links from one email by id. Read-only: sender, timestamp, code and flagged links — never the body.",
+      inputSchema: { id: idField },
+      annotations: { readOnlyHint: true },
+    },
+  );
+
+  const latestVerificationSchema = z.object({
+    mailbox: mailboxField.optional(),
+    sender: z.string().min(1).optional(),
+    since_ms: z.number().int().min(0).optional(),
+    limit: limitField,
+  });
+  registry.registerTool(
+    "latest_verification",
+    READ,
+    async (args, ctx) => {
+      const { mailbox, sender, since_ms, limit } = parseArgs(
+        latestVerificationSchema,
+        args,
+      );
+      // Default = the deployment's configured agent identity address
+      // (`AGENT_MAILBOX`, dev@tryshiba.dev when unset) — still gated by
+      // the same principal assignment every other tool enforces.
+      const target = mailbox ?? agentMailbox(env);
+      await requireMailbox(env, target, ctx.principal.principal);
+      const scanLimit = limit ?? DEFAULT_VERIFICATION_SCAN;
+      const params = new URLSearchParams({
+        mailbox: target,
+        limit: String(scanLimit),
+      });
+      const body = await stubJson<{ emails: StoredEmail[] }>(
+        env,
+        perMailbox(target),
+        `/emails?${params.toString()}`,
+      );
+      const needle = sender?.toLowerCase();
+      const candidates = (body?.emails ?? []).filter(
+        (email) =>
+          email.direction === "inbound" &&
+          (needle === undefined ||
+            email.from_addr.toLowerCase().includes(needle)) &&
+          (since_ms === undefined || email.created_at >= since_ms),
+      );
+      let scanned = 0;
+      for (const summary of candidates) {
+        scanned += 1;
+        const detail = await stubJson<{ email: StoredEmail }>(
+          env,
+          perMailbox(target),
+          `/emails/${encodeURIComponent(summary.id)}`,
+        );
+        if (detail === null) {
+          continue;
+        }
+        const signals = extractVerificationSignals(
+          detail.email.body_text,
+          detail.email.body_html,
+        );
+        if (signals.code !== null || signals.magic_links.length > 0) {
+          return jsonResult({
+            found: true,
+            scanned,
+            ...verificationView(target, detail.email),
+          });
+        }
+      }
+      return jsonResult({ mailbox: target, found: false, scanned });
+    },
+    {
+      description:
+        "Scan the newest inbound mail for a one-time code or magic sign-in link — the login-code lookup for third-party signups. Defaults to the configured agent mailbox (AGENT_MAILBOX); optional sender substring and since_ms filters. Read-only.",
+      inputSchema: {
+        mailbox: mailboxField.optional(),
+        sender: z.string().min(1).optional(),
+        since_ms: z.number().int().min(0).optional(),
         limit: limitField,
       },
       annotations: { readOnlyHint: true },
