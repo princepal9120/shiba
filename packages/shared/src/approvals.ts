@@ -4,6 +4,7 @@
  */
 import type { RuntimeSelection } from "./local-runtime.js";
 import type { ApprovedRoute } from "./model.js";
+import type { AgentRole } from "./roles.js";
 
 export const APPROVAL_TTL_MS = 30 * 60 * 1000;
 
@@ -99,6 +100,12 @@ export interface PendingApproval {
    * hashed like the rest of the approved input.
    */
   runtime?: RuntimeSelection;
+  /**
+   * T52: the delegation role this run was queued under. The role pin
+   * already resolved into `route` at queue time — this rides along as
+   * frozen provenance so dispatch threads it into the run envelope.
+   */
+  role?: AgentRole;
   /** Approval kind; absent on records written before email kinds landed — treated as `"run"`. */
   kind?: ApprovalKind;
   /** Frozen email send/delete input for email-kind approvals. */
@@ -140,6 +147,7 @@ export interface CreateApprovalInput {
   harness?: string;
   authAccount?: string;
   runtime?: RuntimeSelection;
+  role?: AgentRole;
   kind?: ApprovalKind;
   payload?: JsonValue;
   queuedBy?: string;
@@ -166,6 +174,7 @@ export function createPendingApproval(
       ...(input.harness !== undefined ? { harness: input.harness } : {}),
       ...(input.authAccount !== undefined ? { authAccount: input.authAccount } : {}),
       ...(input.runtime !== undefined ? { runtime: input.runtime } : {}),
+      ...(input.role !== undefined ? { role: input.role } : {}),
       ...(input.kind !== undefined ? { kind: input.kind } : {}),
       ...(input.payload !== undefined ? { payload: input.payload } : {}),
       ...(input.queuedBy !== undefined ? { queuedBy: input.queuedBy } : {}),

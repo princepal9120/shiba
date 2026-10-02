@@ -28,6 +28,8 @@ Non-secret defaults are in `apps/backend/wrangler.jsonc` and `alchemy.run.ts`. F
 | `DEVIN_SUBSCRIPTION_MODEL` | `devin/swe-2` | `devin-subscription` model override |
 | `SHIBA_LOCAL_RUNTIME` | unset | Set `1` to enable the opt-in `local` runtime (below) — dashboards can queue runs that execute on an operator machine |
 | `LOCAL_ADAPTER_TOKEN` | unset | Bearer token the operator daemon presents on `/api/local/*`; required for the surface to answer (dark otherwise) |
+| `ROLE_MODEL_MAP` | unset | JSON map pinning a harness+model per delegation role, e.g. `{"fixer":{"harness":"opencode","model":"opencode-go/deepseek-v3.2"}}` |
+| `ROLE_MODEL__ORCHESTRATOR` / `__EXPLORER` / `__FIXER` / `__REVIEWER` / `__DESIGNER` | unset | Per-role pin as `"harness/model"` or bare `"harness"` — consulted when the map has no entry for that role |
 | `RUNTIME` | `sandbox` | Runtime adapter; current default is Cloudflare Sandbox |
 | `INSTANCE_TYPE` | `standard-1` | Configured Cloudflare container size |
 | `REQUIRE_ACCESS` | Wrangler default unset; live Alchemy stages set `1` | Require Access identity at the Worker boundary; if both `REQUIRE_ACCESS` and `ACCESS_AUD` are unset, only loopback hosts are unauthenticated |

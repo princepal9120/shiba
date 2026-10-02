@@ -18,12 +18,15 @@ import {
   useAgentsDirectory,
   useProviderAuth,
   useSetupStatus,
+  type AgentCliEntry,
   type ProviderAuthLane,
+  type RoleModelWire,
   type SetupStatus,
 } from "../live-status";
 
 type SettingsSectionId =
   | "providers"
+  | "models"
   | "environments"
   | "memory"
   | "guidance"
@@ -32,6 +35,7 @@ type SettingsSectionId =
 
 const SETTINGS_SECTIONS: { id: SettingsSectionId; label: string; blurb: string }[] = [
   { id: "providers", label: "Providers", blurb: "Subscription lanes & agent credentials" },
+  { id: "models", label: "Models", blurb: "Per-role agent routing" },
   { id: "environments", label: "Environments", blurb: "Deployment configuration the Worker proves" },
   { id: "memory", label: "Memory", blurb: "Vectorize long-term semantic memory" },
   { id: "guidance", label: "Agent guidance", blurb: "MCP principals & capability scopes" },
@@ -110,6 +114,117 @@ function ProviderLaneRow({ lane }: { lane: ProviderAuthLane }): JSX.Element {
   );
 }
 
+const ROLE_SOURCE_LABEL: Record<RoleModelWire["source"], string> = {
+  "role-map": "ROLE_MODEL_MAP",
+  "role-env": "ROLE_MODEL__",
+  default: "Deployment default",
+};
+
+/**
+ * One role row of the Models section: a read-only harness picker (the live
+ * /api/agents catalog) plus the model the backend resolved for that role.
+ * Values are env-driven — the row shows where to set them, never a form.
+ */
+function RoleModelRow({
+  row,
+  agents,
+}: {
+  row: RoleModelWire;
+  agents: AgentCliEntry[];
+}): JSX.Element {
+  const roleVar = `ROLE_MODEL__${row.role.toUpperCase()}`;
+  const options =
+    row.harness === "" || agents.some((a) => a.id === row.harness)
+      ? agents
+      : [...agents, { id: row.harness, label: row.harness } as AgentCliEntry];
+  return (
+    <div className="border-b border-[#e0ded5] px-4 py-3 last:border-b-0">
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-[13px] font-semibold text-[#222320]">{row.role}</div>
+        <ToneChip
+          tone={row.error ? "danger" : row.source === "default" ? "neutral" : "navy"}
+          label={row.error ? "Pin error" : row.source === "role-env" ? roleVar : ROLE_SOURCE_LABEL[row.source]}
+        />
+      </div>
+      <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+        <select
+          disabled
+          value={row.harness}
+          aria-label={`${row.role} harness`}
+          className="bg-[#f1efe6] border border-[#e0ded5] rounded-none text-[#222320] px-2.5 py-1.5 text-xs font-medium disabled:opacity-80 disabled:cursor-not-allowed sm:w-56"
+        >
+          {options.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <input
+          readOnly
+          value={row.model}
+          aria-label={`${row.role} model`}
+          spellCheck={false}
+          className="flex-1 bg-[#f1efe6] border border-[#e0ded5] rounded-none text-[#222320] px-2.5 py-1.5 text-xs font-mono read-only:opacity-80"
+        />
+      </div>
+      {row.error ? (
+        <div className="mt-1.5 text-[11px] text-[#b91c1c]">{row.error}</div>
+      ) : null}
+      <div className="mt-1.5 font-mono text-[11px] text-[#6a6f63]">
+        set via ROLE_MODEL_MAP["{row.role}"] or {roleVar}
+      </div>
+    </div>
+  );
+}
+
+function ModelsSection({
+  status,
+  agents,
+}: {
+  status: SetupStatus | undefined;
+  agents: AgentCliEntry[];
+}): JSX.Element {
+  if (!status) {
+    return (
+      <Card>
+        <div className="px-4 py-6 text-center text-xs text-[#6a6f63]">Reading /api/setup/status…</div>
+      </Card>
+    );
+  }
+  const rows = status.models.roles ?? [];
+  return (
+    <>
+      <Card>
+        {rows.length === 0 ? (
+          <div className="px-4 py-6 text-center text-xs text-[#6a6f63]">
+            This deployment doesn't report per-role routing — update the backend.
+          </div>
+        ) : (
+          rows.map((row) => <RoleModelRow key={row.role} row={row} agents={agents} />)
+        )}
+      </Card>
+      <Card>
+        <div className="border-b border-[#e0ded5] px-4 py-2.5 text-[10px] font-mono font-semibold uppercase tracking-[0.12em] text-[#6a6f63]">
+          How to pin a role (wrangler vars / secrets at deploy time)
+        </div>
+        <div className="px-4 py-3 flex flex-col gap-2">
+          <div className="font-mono text-[11px] leading-relaxed text-[#222320] break-all">
+            ROLE_MODEL_MAP={'{"fixer":{"harness":"opencode","model":"opencode-go/deepseek-v3.2"}}'}
+          </div>
+          <div className="font-mono text-[11px] leading-relaxed text-[#222320] break-all">
+            ROLE_MODEL__REVIEWER="claude-subscription/anthropic-subscription/claude-sonnet-4-6"
+          </div>
+          <div className="text-xs text-[#6a6f63]">
+            One JSON map, or a per-role {"<harness>/<provider>/<model>"} var (model optional — the
+            harness's own *_MODEL var, then its catalog default, fills it in). An unpinned role
+            resolves to the deployment default chain (AGENT_HARNESS, then opencode).
+          </div>
+        </div>
+      </Card>
+    </>
+  );
+}
+
 function EnvironmentsSection({ status }: { status: SetupStatus | undefined }): JSX.Element {
   if (!status) {
     return <Card><div className="px-4 py-6 text-center text-xs text-[#6a6f63]">Reading /api/setup/status…</div></Card>;
@@ -170,6 +285,7 @@ export function SettingsView({
   const setup = useSetupStatus();
 
   const status = setup.state.kind === "data" ? setup.state.data : undefined;
+  const agents = directory.state.kind === "data" ? directory.state.data.agents : [];
   const principals = directory.state.kind === "data" ? directory.state.data.principals : undefined;
   const secretCredentials = useMemo(
     () =>
@@ -283,6 +399,17 @@ export function SettingsView({
                     Manage agents & MCP →
                   </button>
                 ) : null}
+              </SectionShell>
+            ) : section === "models" ? (
+              <SectionShell
+                title="Models"
+                description="Which agent CLI + model each delegation role runs — resolved live from ROLE_MODEL_MAP / ROLE_MODEL__* env vars. Read-only: the Worker reports env state; set vars at deploy time."
+              >
+                {setup.state.kind === "error" ? (
+                  <LoadErrorState message={setup.state.message} onRetry={setup.reload} />
+                ) : (
+                  <ModelsSection status={status} agents={agents} />
+                )}
               </SectionShell>
             ) : section === "environments" ? (
               <SectionShell

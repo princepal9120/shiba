@@ -64,6 +64,11 @@
     //   LOCAL_ADAPTER_TOKEN     bearer the `shiba local` daemon presents on
     //   /api/local/* — a Wrangler secret; unset = the surface is dark even
     //   with the flag on.
+    // T52 per-role routing pins (agents/roles.ts) — plain vars, never
+    // secrets; absent = every role resolves through the deployment default:
+    //   ROLE_MODEL_MAP          JSON {"<role>":{"harness":"...","model":"..."}}
+    //   ROLE_MODEL__ORCHESTRATOR / __EXPLORER / __FIXER / __REVIEWER /
+    //   __DESIGNER              "harness/model" or bare "harness" per role
   }, 
   "ai": {
     "binding": "AI",
