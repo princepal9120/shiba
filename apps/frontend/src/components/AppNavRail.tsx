@@ -51,6 +51,7 @@ const NAV_GROUPS: { label: string; items: AppNavView[] }[] = [
   { label: "Workspace", items: ["dashboard", "tasks", "runs", "diff", "approvals", "missions", "automations", "analytics"] },
   { label: "Capabilities", items: ["agents", "inbox", "memory", "integrations"] },
   { label: "Sandbox & Safety", items: ["vm", "gates"] },
+  { label: "System", items: ["settings"] },
 ];
 
 export interface AppNavRailProps {
@@ -286,17 +287,6 @@ export function AppNavRail({
 
       {/* Utility cluster */}
       <div className="mt-auto flex flex-col gap-0.5 pt-3 mt-4 border-t border-[#e0ded5] dark:border-[#3b3d36]">
-        <div className="px-2.5 pb-1 text-[10px] font-mono font-semibold uppercase tracking-[0.12em] text-[#6a6f63] dark:text-[#aaa99f]">
-          System
-        </div>
-        <NavItem
-          label="Settings"
-          active={activeView === "settings"}
-          onClick={() => onNavigate("settings")}
-        >
-          {ICONS.settings}
-        </NavItem>
-
         <NavItem
           label={setupComplete ? "Setup Guide" : `Setup Guide · ${setupDone ?? 0}/${setupTotal}`}
           onClick={onOpenSetup}
