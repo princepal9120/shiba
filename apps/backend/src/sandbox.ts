@@ -8,7 +8,9 @@ import {
   forwardAnthropic,
   forwardClaudeSubscription,
   forwardCodexSubscription,
+  forwardCursorSubscription,
   forwardDevinApi,
+  forwardDevinSubscription,
   forwardDevinInference,
   forwardGitHubScoped,
   forwardGoogle,
@@ -73,7 +75,7 @@ export class Sandbox<Env = WorkerEnv> extends SandboxBase<Env> {
 // maps in module-level registries keyed by class name, so a `static get`
 // override would read correctly but leave runtime dispatch empty.
 /** Named handlers addressable by `setOutboundByHost` at run time. */
-Sandbox.outboundHandlers = { githubScoped: forwardGitHubScoped, claudeSubscription: forwardClaudeSubscription, codexSubscription: forwardCodexSubscription };
+Sandbox.outboundHandlers = { githubScoped: forwardGitHubScoped, claudeSubscription: forwardClaudeSubscription, codexSubscription: forwardCodexSubscription, cursorSubscription: forwardCursorSubscription, devinSubscription: forwardDevinSubscription };
 // github.com defaults to refusal; approveRepoScope swaps in the scoped
 // handler for the one repo a run was approved for (B6). Provider hosts are
 // mapped for every supported harness, but allowedHosts admits only one.

@@ -6,7 +6,9 @@ import { claudeSubscriptionHarness } from "./claude-subscription.js";
 import { codexHarness } from "./codex.js";
 import { codexSubscriptionHarness } from "./codex-subscription.js";
 import { cursorHarness } from "./cursor.js";
+import { cursorSubscriptionHarness } from "./cursor-subscription.js";
 import { devinHarness } from "./devin.js";
+import { devinSubscriptionHarness } from "./devin-subscription.js";
 import { grokHarness } from "./grok.js";
 import { opencodeHarness } from "./opencode.js";
 import { GIT_EGRESS_HOSTS, type AgentHarness, type AgentHarnessName, type RuntimeName } from "./types.js";
@@ -22,6 +24,8 @@ export const HARNESSES: Record<string, AgentHarness> = {
   cursor: cursorHarness,
   antigravity: antigravityHarness,
   "antigravity-subscription": antigravitySubscriptionHarness,
+  "cursor-subscription": cursorSubscriptionHarness,
+  "devin-subscription": devinSubscriptionHarness,
 };
 
 /** The env surface the opt-in gate reads. */
@@ -29,6 +33,8 @@ type HarnessGateEnv = {
   SHIBA_CLAUDE_SUBSCRIPTION?: string;
   SHIBA_CODEX_SUBSCRIPTION?: string;
   SHIBA_ANTIGRAVITY_SUBSCRIPTION?: string;
+  SHIBA_CURSOR_SUBSCRIPTION?: string;
+  SHIBA_DEVIN_SUBSCRIPTION?: string;
 } | undefined;
 
 /**
@@ -42,6 +48,10 @@ const HARNESS_GATES: Partial<Record<AgentHarnessName, (env: HarnessGateEnv) => b
   "codex-subscription": (env) => env?.SHIBA_CODEX_SUBSCRIPTION === "1",
   // T50: the OAuth-in-container flow is opt-in separately (§18.12).
   "antigravity-subscription": (env) => env?.SHIBA_ANTIGRAVITY_SUBSCRIPTION === "1",
+  // Worker-secret subscription keys (CURSOR_SUBSCRIPTION_TOKEN /
+  // DEVIN_SUBSCRIPTION_TOKEN), opt-in like the other subscription harnesses.
+  "cursor-subscription": (env) => env?.SHIBA_CURSOR_SUBSCRIPTION === "1",
+  "devin-subscription": (env) => env?.SHIBA_DEVIN_SUBSCRIPTION === "1",
 };
 
 function harnessEnabled(harness: AgentHarness, env: HarnessGateEnv): boolean {
@@ -118,13 +128,14 @@ export function allowedHostsFor(harness: AgentHarness, model: string): string[] 
 
 export type { AgentHarness };
 
-export const HARNESS_NAMES = ["opencode", "claude-code", "claude-subscription", "codex", "codex-subscription", "devin", "grok", "cursor", "antigravity", "antigravity-subscription"] as const;
+export const HARNESS_NAMES = ["opencode", "claude-code", "claude-subscription", "codex", "codex-subscription", "devin", "grok", "cursor", "antigravity", "antigravity-subscription", "cursor-subscription", "devin-subscription"] as const;
 
 /**
  * Per-harness default coding model. The checked-in ids are defaults, not
  * availability guarantees — model ids retire (see configuration.md).
  * Overridable per deploy via CODING_MODEL / CLAUDE_CODE_MODEL / CODEX_MODEL /
- * DEVIN_MODEL / GROK_MODEL and per run via the delegate tool's codingModel input.
+ * DEVIN_MODEL / GROK_MODEL and the per-harness *_SUBSCRIPTION_MODEL vars, and
+ * per run via the delegate tool's codingModel input.
  */
 export const HARNESS_DEFAULT_MODELS: Record<string, string> = {
   opencode: "google/gemini-3.5-flash-lite",
@@ -146,4 +157,8 @@ export const HARNESS_DEFAULT_MODELS: Record<string, string> = {
   // Subscription models carry the google-subscription namespace: the
   // provider prefix is the auth-path distinction, not a different vendor.
   "antigravity-subscription": "google-subscription/gemini-3-pro",
+  // "auto" is cursor-agent's own model picker — the subscription lane's
+  // sensible default since the operator's plan governs what resolves.
+  "cursor-subscription": "cursor-subscription/auto",
+  "devin-subscription": "devin-subscription/swe-2-medium",
 };

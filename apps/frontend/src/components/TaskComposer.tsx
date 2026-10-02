@@ -22,9 +22,14 @@ export interface TaskComposerProps {
 const HARNESS_OPTIONS: { value: string; label: string; desc: string }[] = [
   { value: "opencode", label: "OpenCode", desc: "Default autonomous coding engine" },
   { value: "claude-code", label: "Claude Code", desc: "Anthropic Claude Code CLI" },
+  { value: "claude-subscription", label: "Claude (subscription)", desc: "Your Claude plan (needs SHIBA_CLAUDE_SUBSCRIPTION)" },
   { value: "codex", label: "Codex", desc: "Codex autonomous CLI agent" },
+  { value: "codex-subscription", label: "Codex (subscription)", desc: "Your ChatGPT plan (needs SHIBA_CODEX_SUBSCRIPTION)" },
   { value: "devin", label: "Devin", desc: "Cognition Devin CLI (needs DEVIN_API_KEY)" },
+  { value: "devin-subscription", label: "Devin (subscription)", desc: "Your Devin plan (needs SHIBA_DEVIN_SUBSCRIPTION)" },
   { value: "grok", label: "Grok", desc: "xAI Grok CLI (AI Gateway BYOK)" },
+  { value: "antigravity-subscription", label: "Antigravity (subscription)", desc: "Your Google plan (needs SHIBA_ANTIGRAVITY_SUBSCRIPTION)" },
+  { value: "cursor-subscription", label: "Cursor (subscription)", desc: "Your Cursor plan (needs SHIBA_CURSOR_SUBSCRIPTION)" },
 ];
 
 export function TaskComposer({

@@ -121,8 +121,11 @@ function stripProvider(model: string): string {
   return slash > 0 ? model.slice(slash + 1) : model;
 }
 
-/** Plain Node CJS, no npm imports — the sandbox image only guarantees `node`. */
-const CURSOR_DRIVER_SOURCE = `const { spawn } = require("node:child_process");
+/**
+ * Plain Node CJS, no npm imports — the sandbox image only guarantees `node`.
+ * Exported for cursor-subscription, which writes the identical driver file.
+ */
+export const CURSOR_DRIVER_SOURCE = `const { spawn } = require("node:child_process");
 
 const emit = (o) => process.stdout.write(JSON.stringify(o) + "\\n");
 const fail = (msg) => { emit({ type: "error", message: String(msg).slice(0, 900) }); process.exit(1); };

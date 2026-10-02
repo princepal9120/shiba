@@ -24,6 +24,9 @@ vi.mock("@cloudflare/sandbox", () => ({
 import { handleSubscriptionAuth } from "../src/auth-routes.js";
 import { forwardCursorSubscription, type EgressEnv } from "../src/egress.js";
 import { cursorSubscriptionSecretName } from "@shiba/auth";
+import { cursorSubscriptionHarness } from "../src/harness/cursor-subscription.js";
+import { Sandbox } from "../src/sandbox.js";
+import { formatAgentToolInput, parseAgentToolInput, type CodingTaskInput } from "../src/opencode-input.js";
 import type { Env } from "../src/env.js";
 
 class FakeKV {
@@ -243,5 +246,163 @@ describe("auth flow", () => {
       const body = (await cleared.json()) as { snapshot: { phase: string } };
       expect(body.snapshot.phase).toBe("cleared");
     }
+  });
+});
+
+/**
+ * The runnable-harness layer: `SHIBA_CURSOR_SUBSCRIPTION=1` now registers a
+ * real sandbox harness — the connect lane exists so a run can authenticate,
+ * so these tests pin the run-side contract the same way claude-subscription
+ * does.
+ */
+describe("run harness registration", () => {
+  const ENABLED = { SHIBA_CURSOR_SUBSCRIPTION: "1" };
+  const SUB_MODEL = "cursor-subscription/claude-4-5-sonnet";
+  const runInput = (extra: Partial<CodingTaskInput> = {}): CodingTaskInput => ({
+    repoUrl: "https://github.com/acme/widgets",
+    task: "Fix it.",
+    baseBranch: "main",
+    publishPullRequest: false,
+    sandboxId: "run-abcdef12345678",
+    codingModel: SUB_MODEL,
+    ...extra,
+  });
+
+  it("is unregistered without the flag — not selectable, not listed", async () => {
+    const { resolveHarness, SANDBOX_HARNESS_NAMES, sandboxHarnessNames } = await import(
+      "../src/harness/index.js"
+    );
+    const { agentCliCatalog } = await import("../src/harness/catalog.js");
+    expect(() => resolveHarness("cursor-subscription")).toThrow(/Unknown agent harness/);
+    expect(() => resolveHarness("cursor-subscription", {})).toThrow(/Unknown agent harness/);
+    expect(SANDBOX_HARNESS_NAMES).not.toContain("cursor-subscription");
+    expect(agentCliCatalog({}).map((a) => a.id)).not.toContain("cursor-subscription");
+    expect(sandboxHarnessNames({})).not.toContain("cursor-subscription");
+  });
+
+  it("SHIBA_CURSOR_SUBSCRIPTION=1 registers it everywhere it should appear", async () => {
+    const { resolveHarness, sandboxHarnessNames } = await import("../src/harness/index.js");
+    const { agentCliCatalog } = await import("../src/harness/catalog.js");
+    expect(resolveHarness("cursor-subscription", ENABLED).name).toBe("cursor-subscription");
+    expect(sandboxHarnessNames(ENABLED)).toContain("cursor-subscription");
+    const entry = agentCliCatalog(ENABLED).find((a) => a.id === "cursor-subscription");
+    expect(entry).toBeDefined();
+    expect(entry?.credential?.label).toBe("CURSOR_SUBSCRIPTION_TOKEN");
+    expect(entry?.credential?.configured).toBe(false);
+    const configured = agentCliCatalog({ ...ENABLED, CURSOR_SUBSCRIPTION_TOKEN: "key-real" }).find(
+      (a) => a.id === "cursor-subscription",
+    );
+    expect(configured?.credential?.configured).toBe(true);
+  });
+
+  it("the task envelope accepts the harness name and freezes authAccount", () => {
+    const input = runInput({ harness: "cursor-subscription", authAccount: "work" });
+    const envelope = formatAgentToolInput(input);
+    const parsed = parseAgentToolInput([{ role: "user", text: envelope }]);
+    expect(parsed.harness).toBe("cursor-subscription");
+    expect(parsed.authAccount).toBe("work");
+  });
+});
+
+describe("the token never enters the container", () => {
+  it("env() carries only the dummy CURSOR_API_KEY", () => {
+    const env = cursorSubscriptionHarness.env({
+      repoUrl: "https://github.com/acme/widgets",
+      task: "Fix it.",
+      baseBranch: "main",
+      publishPullRequest: false,
+      sandboxId: "run-1",
+      codingModel: "cursor-subscription/claude-4-5-sonnet",
+    });
+    expect(env.CURSOR_API_KEY).toBe("shiba-dummy-key");
+    for (const value of Object.values(env)) {
+      expect(value).not.toContain("key-real");
+    }
+  });
+
+  it("configFile embeds the run config in the ACP driver — auto resolves to null model", () => {
+    const file = cursorSubscriptionHarness.configFile(
+      {
+        repoUrl: "https://github.com/acme/widgets",
+        task: "Fix it.",
+        baseBranch: "main",
+        publishPullRequest: false,
+        sandboxId: "run-1",
+        codingModel: "cursor-subscription/auto",
+      },
+      "run-1",
+    );
+    expect(file.path).toBe("/workspace/run-1.cursor-driver.cjs");
+    expect(file.contents).toContain('"model":null');
+    expect(file.contents).toContain('"task":"Fix it."');
+    expect(file.contents).toContain('spawn("cursor-agent"');
+    expect(file.contents).not.toContain("key-real");
+  });
+});
+
+describe("egress isolation", () => {
+  it("egressOverrides pins both Cursor hosts to the dedicated handler with the account name", () => {
+    const overrides = cursorSubscriptionHarness.egressOverrides!({
+      repoUrl: "https://github.com/acme/widgets",
+      task: "Fix it.",
+      baseBranch: "main",
+      publishPullRequest: false,
+      sandboxId: "run-1",
+      codingModel: "cursor-subscription/claude-4-5-sonnet",
+      authAccount: "work",
+    });
+    expect(overrides.map((o) => o.host).sort()).toEqual(["api2.cursor.sh", "repo2.cursor.sh"].sort());
+    for (const o of overrides) {
+      expect(o.handler).toBe("cursorSubscription");
+      expect(o.params).toEqual({ account: "work" });
+      expect(JSON.stringify(o.params)).not.toContain("key-real");
+    }
+  });
+
+  it("the named handler is registered on Sandbox.outboundHandlers", () => {
+    expect(Sandbox.outboundHandlers?.cursorSubscription).toBe(forwardCursorSubscription);
+  });
+
+  it("egressHosts is the enumerated pair; a gateway model id is refused", () => {
+    expect(cursorSubscriptionHarness.egressHosts("cursor-subscription/claude-4-5-sonnet")).toEqual([
+      "api2.cursor.sh",
+      "repo2.cursor.sh",
+    ]);
+    expect(() => cursorSubscriptionHarness.egressHosts("cursor/claude-4-5-sonnet")).toThrow(
+      /Unsupported coding model/,
+    );
+    expect(() => cursorSubscriptionHarness.egressHosts("anthropic/claude-sonnet-4-6")).toThrow(
+      /Unsupported coding model/,
+    );
+  });
+});
+
+describe("admission gate (T47 controller)", () => {
+  it("declares the auth requirement with the account-scoped instanceId", () => {
+    const input = (account?: string): CodingTaskInput => ({
+      repoUrl: "https://github.com/acme/widgets",
+      task: "Fix it.",
+      baseBranch: "main",
+      publishPullRequest: false,
+      sandboxId: "run-1",
+      codingModel: "cursor-subscription/claude-4-5-sonnet",
+      authAccount: account,
+    });
+    expect(cursorSubscriptionHarness.auth?.instanceId(input("work"))).toBe("cursor-sub:work");
+    expect(cursorSubscriptionHarness.auth?.instanceId(input())).toBe("cursor-sub:default");
+  });
+
+  it("a run without a succeeded flow is refused", async () => {
+    const { assertHarnessAuthorized } = await import("../src/auth/index.js");
+    await expect(
+      assertHarnessAuthorized(envWith({ CURSOR_SUBSCRIPTION_TOKEN: "key-real" }), cursorSubscriptionHarness, {
+        repoUrl: "https://github.com/acme/widgets",
+        task: "Fix it.",
+        baseBranch: "main",
+        publishPullRequest: false,
+        sandboxId: "run-1",
+        codingModel: "cursor-subscription/claude-4-5-sonnet",
+      }),
+    ).rejects.toThrow(/no authenticated account/);
   });
 });

@@ -58,6 +58,8 @@ const CATALOG_META: Record<
   cursor: { label: "Cursor", binary: "cursor-agent", version: "0.50.0", docsUrl: "https://docs.cursor.com" },
   antigravity: { label: "Antigravity", binary: "agy", version: "1.0.0", docsUrl: "https://antigravity.google" },
   "antigravity-subscription": { label: "Antigravity (subscription)", binary: "agy", version: "1.1.1", docsUrl: "https://antigravity.google" },
+  "cursor-subscription": { label: "Cursor (subscription)", binary: "cursor-agent", version: "2026.10.01-e373342", docsUrl: "https://docs.cursor.com" },
+  "devin-subscription": { label: "Devin (subscription)", binary: "devin", version: "3000.10.31", docsUrl: "https://cli.devin.ai/docs" },
 };
 
 const GATEWAY_PROVIDER: Record<string, string> = {
@@ -74,7 +76,7 @@ const GATEWAY_PROVIDER: Record<string, string> = {
  * values never leave the Worker.
  */
 export function agentCliCatalog(
-  env: Pick<Env, "DEVIN_API_KEY" | "SHIBA_CLAUDE_SUBSCRIPTION" | "CLAUDE_SUBSCRIPTION_TOKEN" | "SHIBA_CODEX_SUBSCRIPTION" | "CODEX_SUBSCRIPTION_AUTH_JSON" | "SHIBA_ANTIGRAVITY_SUBSCRIPTION">,
+  env: Pick<Env, "DEVIN_API_KEY" | "SHIBA_CLAUDE_SUBSCRIPTION" | "CLAUDE_SUBSCRIPTION_TOKEN" | "SHIBA_CODEX_SUBSCRIPTION" | "CODEX_SUBSCRIPTION_AUTH_JSON" | "SHIBA_ANTIGRAVITY_SUBSCRIPTION" | "SHIBA_CURSOR_SUBSCRIPTION" | "CURSOR_SUBSCRIPTION_TOKEN" | "SHIBA_DEVIN_SUBSCRIPTION" | "DEVIN_SUBSCRIPTION_TOKEN">,
 ): AgentCliInfo[] {
   return sandboxHarnessNames(env).map((id) => {
     const meta = CATALOG_META[id];
@@ -108,6 +110,20 @@ export function agentCliCatalog(
                   label: "Google sign-in (in-container OAuth)",
                   configured: null,
                   setupHint: "POST /api/auth/antigravity-subscription/begin, sign in, paste the 127.0.0.1 redirect into /api/antigravity/callback",
+                }
+            : id === "cursor-subscription"
+              ? {
+                  kind: "worker-secret",
+                  label: "CURSOR_SUBSCRIPTION_TOKEN",
+                  configured: Boolean(env.CURSOR_SUBSCRIPTION_TOKEN),
+                  setupHint: "Cursor Agent API key from cursor.com settings, then npx wrangler secret put CURSOR_SUBSCRIPTION_TOKEN",
+                }
+            : id === "devin-subscription"
+              ? {
+                  kind: "worker-secret",
+                  label: "DEVIN_SUBSCRIPTION_TOKEN",
+                  configured: Boolean(env.DEVIN_SUBSCRIPTION_TOKEN),
+                  setupHint: "devin auth login, then npx wrangler secret put DEVIN_SUBSCRIPTION_TOKEN",
                 }
           : {
               kind: "ai-gateway-byok",
