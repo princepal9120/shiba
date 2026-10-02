@@ -14,8 +14,8 @@ import { getUserId } from "./request-auth.js";
 
 const authError = (reason: unknown) =>
   Response.json(
-    { error: reason instanceof AuthFlowError ? reason.message : "Auth flow error." },
-    { status: 400 },
+    { error: reason instanceof Error ? reason.message : "Auth flow error." },
+    { status: reason instanceof AuthFlowError && reason.reason === "not_owner" ? 403 : 400 },
   );
 
 function accountParam(request: Request, url: URL, body: { account?: unknown }): string {
@@ -50,13 +50,15 @@ async function handleClaudeSubscriptionAuth(request: Request, env: Env): Promise
       return Response.json({ snapshot: await controller.snapshot() });
     }
     if (request.method === "POST" && sub === "begin") {
-      return Response.json({ snapshot: await controller.begin(ownerSessionId) });
+      await controller.begin(ownerSessionId);
+      return Response.json({ snapshot: await controller.snapshot() });
     }
     if (request.method === "POST" && sub === "verify") {
       return Response.json({ snapshot: await controller.verify(ownerSessionId) });
     }
     if (request.method === "POST" && sub === "clear") {
-      return Response.json({ snapshot: await controller.clear(ownerSessionId) });
+      await controller.clear(ownerSessionId);
+      return Response.json({ snapshot: await controller.snapshot() });
     }
   } catch (error) {
     return authError(error);
@@ -90,13 +92,15 @@ async function handleCodexSubscriptionAuth(request: Request, env: Env): Promise<
       return Response.json({ snapshot: await controller.snapshot() });
     }
     if (request.method === "POST" && sub === "begin") {
-      return Response.json({ snapshot: await controller.begin(ownerSessionId) });
+      await controller.begin(ownerSessionId);
+      return Response.json({ snapshot: await controller.snapshot() });
     }
     if (request.method === "POST" && sub === "verify") {
       return Response.json({ snapshot: await controller.verify(ownerSessionId) });
     }
     if (request.method === "POST" && sub === "clear") {
-      return Response.json({ snapshot: await controller.clear(ownerSessionId) });
+      await controller.clear(ownerSessionId);
+      return Response.json({ snapshot: await controller.snapshot() });
     }
   } catch (error) {
     return authError(error);
