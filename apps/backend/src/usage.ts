@@ -7,6 +7,7 @@
  * Groups key on the frozen route's harness, the model's provider part, and
  * the route's declared purpose (the record's role) when present — a run
  * that predates route freezing groups under `null` for those fields.
+ * (T52 role lives on the approval record + run envelope, not DelegatedRun.)
  * Numbers are only ever what harnesses reported; a group field stays absent
  * until some run in it reported that field.
  */

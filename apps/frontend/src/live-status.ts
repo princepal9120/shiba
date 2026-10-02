@@ -14,8 +14,21 @@ export interface SetupStatus {
   github: { token: boolean; webhookSecret: boolean };
   gateway: { id: string; token: boolean; reachable: "yes" | "unauthorized" | "error" | "unknown" };
   access: { required: boolean };
-  models: { orchestrator: string; coding: string; harness: string };
+  models: { orchestrator: string; coding: string; harness: string; roles: RoleModelWire[] };
   automations: { enabled: boolean; typeSafe: boolean };
+}
+
+/**
+ * One `models.roles[]` entry — the backend's RoleModelStatus
+ * (agents/roles.ts) served verbatim. `source` says which env layer the
+ * resolved pair came from; `error` marks a broken pin.
+ */
+export interface RoleModelWire {
+  role: string;
+  source: "role-map" | "role-env" | "default";
+  harness: string;
+  model: string;
+  error?: string;
 }
 
 /**

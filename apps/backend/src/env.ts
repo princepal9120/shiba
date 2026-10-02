@@ -108,6 +108,20 @@ export interface Env {
   DEVIN_MODEL?: string;
   /** Optional default model for the grok harness, e.g. xai/grok-4.6. */
   GROK_MODEL?: string;
+  /**
+   * Optional per-role routing pins (T52, `agents/roles.ts`). A delegation
+   * carrying `role` resolves harness+model from `ROLE_MODEL_MAP` (one JSON
+   * object, e.g. {"fixer":{"harness":"opencode","model":"opencode-go/deepseek-v3.2"}}),
+   * then the role's `ROLE_MODEL__<ROLE>` var ("harness/model" or bare
+   * "harness"), then the deployment defaults. All optional; all read at
+   * intake — a bad pin fails the request before an approval is minted.
+   */
+  ROLE_MODEL_MAP?: string;
+  ROLE_MODEL__ORCHESTRATOR?: string;
+  ROLE_MODEL__EXPLORER?: string;
+  ROLE_MODEL__FIXER?: string;
+  ROLE_MODEL__REVIEWER?: string;
+  ROLE_MODEL__DESIGNER?: string;
   /** Optional kill switch. "false"/"0"/"off" stops every automation firing. */
   AUTOMATIONS_ENABLED?: string;
   /**
@@ -148,6 +162,14 @@ export interface Env {
    * screenshot link embedded in published PRs. Empty/unset = capture skipped.
    */
   WORKER_HOSTNAME?: string;
+  /**
+   * Optional. The agent's mailbox identity — the address `latest_verification`
+   * scans when no `mailbox` arg is given, so a run agent can read OTP codes
+   * and magic sign-in links during third-party logins. Default
+   * `dev@tryshiba.dev`; the address must still be registered in the Inbox
+   * and assigned to the calling principal like every other mailbox.
+   */
+  AGENT_MAILBOX?: string;
   /** Optional. Verifies Slack callbacks; unset disables all Slack routes. */
   SLACK_SIGNING_SECRET?: string;
   /** Optional. Comma-separated Slack user ids allowed to approve; unset = nobody. */

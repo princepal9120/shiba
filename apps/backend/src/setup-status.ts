@@ -4,6 +4,7 @@
  * Booleans only: never echo secret values or names of unrelated vars.
  */
 import type { Env } from "./env.js";
+import { describeRoleModels, type RoleModelStatus } from "./agents/roles.js";
 import { isAccessConfigured } from "./request-auth.js";
 
 export interface SetupStatus {
@@ -16,7 +17,7 @@ export interface SetupStatus {
   github: { token: boolean; webhookSecret: boolean };
   gateway: { id: string; token: boolean; reachable: "yes" | "unauthorized" | "error" | "unknown" };
   access: { required: boolean };
-  models: { orchestrator: string; coding: string; harness: string };
+  models: { orchestrator: string; coding: string; harness: string; roles: RoleModelStatus[] };
   automations: { enabled: boolean; typeSafe: boolean };
 }
 
@@ -58,6 +59,7 @@ export async function readSetupStatus(env: Env, probe = true): Promise<SetupStat
       orchestrator: env.ORCHESTRATOR_MODEL,
       coding: env.CODING_MODEL,
       harness: env.AGENT_HARNESS ?? "opencode",
+      roles: describeRoleModels(env),
     },
     automations: {
       enabled: env.AUTOMATIONS_ENABLED !== "false" && env.AUTOMATIONS_ENABLED !== "0" && env.AUTOMATIONS_ENABLED !== "off",

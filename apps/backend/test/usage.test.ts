@@ -141,6 +141,7 @@ describe("aggregateUsageByDay", () => {
     });
     const codexGroup = today.groups.find((g) => g.harness === "codex");
     expect(codexGroup?.provider).toBe("openai");
+    expect(codexGroup?.role).toBe("coding");
     const routeless = today.groups.find((g) => g.harness === null);
     expect(routeless).toMatchObject({ provider: null, role: null, runs: 1, outputTokens: 3 });
     expect(routeless?.inputTokens).toBeUndefined();

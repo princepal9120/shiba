@@ -365,6 +365,48 @@ And one repo bug that only surfaces at runtime:
 - Tests: +28 across `cursor-subscription.test.ts`/`devin-subscription.test.ts` — flag-off unregistered everywhere, flag-on registration + catalog credential card, envelope schema accepting the names + freezing authAccount, dummy-key invariant, configFile contents (driver embed / credentials.toml), egressOverrides host+handler+account pinning, named-handler registration, gateway-model refusal, instanceId scoping, buildArgv shape, admission-gate refusal without a succeeded flow.
 - Local verification: `pnpm typecheck` clean, `pnpm lint` clean (1 pre-existing warning), `pnpm lint:imports` clean, `pnpm test` green (1597), `pnpm build` green, `pnpm env:load` + `pnpm env:scan` clean.
 - Unverified (credential-gated): live runs need `wrangler secret put CURSOR_SUBSCRIPTION_TOKEN`/`DEVIN_SUBSCRIPTION_TOKEN` + the two `SHIBA_*_SUBSCRIPTION=1` vars + a rebuilt sandbox image (the Dockerfile change bakes cursor-agent in — push a new image tag before cursor-subscription exec works live).
+# 2026-10-02 — per-role model routing (T52)
+
+- `packages/shared/src/roles.ts` — `AGENT_ROLES` (`orchestrator | explorer | fixer | reviewer | designer`), `AgentRole`, `isAgentRole`; the union lives in shared because the approval record, the coding-task envelope, and the dashboard wire projection all carry it. `approvals.ts` gains `role` on `PendingApproval`/`CreateApprovalInput` (frozen provenance like `authAccount`; intentionally outside `runInputHash` — the role's effect is already frozen in `route`).
+- `apps/backend/src/agents/roles.ts` — `resolveRoleModel(env, role)` resolves an operator pin in two env layers: `ROLE_MODEL_MAP` (one JSON object `{"<role>":{"harness":"...","model?":"..."}}`, schema-checked: role keys only, harness required, model optional) then `ROLE_MODEL__<ROLE>` (`"harness/model"` or bare `"harness"`). A model-less pin inherits the harness's `*_MODEL` var then `HARNESS_DEFAULT_MODELS`; an unpinned role returns `null`. Every pin is validated through `resolveHarness` (unknown/gated/non-sandbox throw) + `assertSupportedModel` (unsupported provider / no known API host throws) — failures surface at intake before any approval card. `describeRoleModels(env)` projects all five roles for `/api/setup/status` with `source` (`role-map` | `role-env` | `default`) and per-row `error` instead of throwing.
+- `src/agents/orchestrator.ts` — `resolveHarnessAndModel` consults the role pin first: `rolePick?.harness ?? input.harness ?? AGENT_HARNESS ?? "opencode"` and `rolePick?.model || input.codingModel || perHarnessVar || default` — a pin is authoritative over per-call harness/model when set; `role` joins `delegateInputSchema` (zod enum), the `fullInput` envelope spread, `queueSlackRun` intake (unknown role → 400 before the card), `mintChatGateApproval`, `PendingApproval`, and `dispatchApprovedRun`'s rebuilt input. `opencode-input.ts` carries `role` as a frozen zod enum on the envelope.
+- `src/setup-status.ts` — `models.roles` serves the five resolved rows; `apps/frontend/src/live-status.ts` mirrors the wire shape; `SettingsView` gains a "Models" section (second nav entry) — five rows of disabled harness dropdown (options from the live `/api/agents` catalog) + read-only model field + source chip (`ROLE_MODEL_MAP` / `ROLE_MODEL__<ROLE>` / deployment default) + a how-to-pin card. Env-driven display only; no save path exists or is implied.
+- Deploy plumbing — `env.ts` (+6 optional vars), `alchemy.run.ts` configVars, `wrangler.jsonc` vars comment, `.env.schema` (+6 optional strings, varlock-clean), `configuration.md` table rows. `check-alchemy-drift`/`check-env-types` unaffected (optional vars, comment-only wrangler edit).
+- Tests: `roles.test.ts` (21) — map > per-role var precedence, bare-harness `*_MODEL`→catalog-default fallback, unsupported-provider + unknown/gated-harness + malformed-map rejection, `describeRoleModels` source/error projection, delegate.execute pin-overrides-per-call envelope assertion, unpinned-role default chain, queue→approve→dispatch role threading through `PendingApproval`, unknown-role and broken-pin 400s before any record, envelope round-trip + unknown-role zod rejection.
+- Local verification: `pnpm typecheck` clean, `pnpm lint` clean (warnings are pre-existing baseline), `pnpm lint:imports` clean, `pnpm test` green (1611 passed / 7 skipped), `pnpm build` green (docs:verify included), `pnpm env:load` + `pnpm env:scan` clean.
+- Unverified (credential-gated): a live delegation executed under a role pin (needs a deploy with `ROLE_MODEL_MAP`/`ROLE_MODEL__*` set + provider credentials); the Settings → Models section against a live `/api/setup/status` (verified shape-wise by the wire type + unit-level coverage only).
+
+# 2026-10-02 — bootstrap covers the whole surface
+
+`scripts/setup.mjs` (`pnpm run bootstrap`) now collects every deployed lane: the
+subscription credentials and `SHIBA_*` flags, Telegram/Discord webhook lanes,
+`AGENT_MAILBOX` (the agent's inbound email identity, registered via
+`POST /api/mailboxes` after Email Routing points at the worker), and prints the
+post-deploy checklist — custom domain, Email Routing, mailbox registration,
+Slack/Telegram/Discord wiring, and the proven wrangler fallback for narrow
+`CLOUDFLARE_API_TOKEN` scopes. New `docs/launch` page mirrors it.
+
+- Telegram + Discord env vars were read by the handlers but undeclared — added
+  `TELEGRAM_*`/`DISCORD_*` (secrets + plain vars) to `.env.schema` and to
+  `alchemy.run.ts` `secrets()`/`configVars()` so `.env` binds them like every
+  other lane.
+- `WORKER_HOSTNAME` + `AGENT_MAILBOX` declared in `.env.schema` and bound via
+  `configVars()`.
+
+Local verification: `pnpm env:load` clean (all vars resolve, no warnings),
+`pnpm env:scan` clean, `check-alchemy-drift.mjs` in sync, full gate green.
+Unverified (credential-gated): an actual `pnpm run bootstrap` deploy; Email
+Routing delivery to a registered address; Telegram/Discord webhook handshakes.
+
+# 2026-10-02 — agent mailbox identity
+
+- `apps/backend/src/mailbox-verification.ts` (new) — pure extraction layer: `extractVerificationSignals(body_text, body_html)` returns `{code, magic_links}` — labeled digit patterns ("code is 123456", "123456 is your code"), uppercase token shapes ("code is AB12-CD34"), then a proximity fallback (bare 4–8 digit run within 64 chars of a verification word); magic-link detection classifies `extractLinks` output by URL vocabulary (verify/confirm/token/magic/signin/auth/…) or action anchor text ("Sign in", "Verify"), deduped, capped at 20. `agentMailbox(env)` resolves `AGENT_MAILBOX` → `dev@tryshiba.dev` default.
+- `apps/backend/src/mailbox-store.ts` — `extractLinks` exported (`{url, anchor_text, flags}`) so extraction sees anchor text; `flagLinks` now delegates to it, output byte-identical.
+- `apps/backend/src/mcp-email-tools.ts` — 13 → 15 tools, both `email:read`-scoped and read-only: `extract_otp {id}` returns `{mailbox, email_id, thread_id, from_addr, subject, received_at, code, magic_links, security_notice}` for a single email; `latest_verification {mailbox?, sender?, since_ms?, limit?}` scans newest inbound mail (default 25) in the configured agent mailbox for the first code-or-magic-link hit. Both enforce the same principal-assignment invariant as every other mailbox tool (`requireMailbox` / `findEmail` probe); bodies never leave the store, and `security_notice` keeps untrusted provenance on the payload.
+- `apps/backend/src/env.ts` — `AGENT_MAILBOX?: string` (optional; default lives in `DEFAULT_AGENT_MAILBOX`); plumbed through `.env.schema` (`@type=email`), `alchemy.run.ts` `configVars`, `wrangler.jsonc` vars comments, `.env.example`, and docs (`configuration.md` table, `mcp.md` tools table + identity paragraph).
+- Tests: `mailbox-verification.test.ts` (new — 12 cases: labeled/reversed/token codes, proximity gating, html stripping, link classification + flag passthrough, dedupe, agentMailbox default/override/normalization); `mcp-email-tools.test.ts` — scope map extended to 15, `extract_otp` payload/read-only proof, cross-agent refusal, `latest_verification` default+override+explicit mailbox, newest-wins ordering (pinned `created_at`), sender/since_ms filters, unavailable-default refusal.
+- Local verification: `pnpm typecheck` clean, `pnpm lint` clean, `pnpm lint:imports` clean, `pnpm test` green, `pnpm build` green, `pnpm env:load` + `pnpm env:scan` clean.
+- Unverified (credential-gated): end-to-end mail ingestion into a live `dev@tryshiba.dev` mailbox needs Email Routing + DNS on the deployment; the sandboxed agent reaching `/mcp` inside a run needs a minted token/egress path outside this lane's scope (orchestrator/harness files untouched by design).
 
 # 2026-10-02 — token usage + budget visibility
 
