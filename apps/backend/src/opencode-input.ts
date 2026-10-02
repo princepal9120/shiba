@@ -4,7 +4,7 @@
  * parseAgentToolInput. The child never scrapes arbitrary prose.
  */
 import { z } from "zod";
-import { AGENT_ROLES, RUN_SIGNAL_KINDS, runtimeSelectionSchema } from "@shiba/shared";
+import { AGENT_ROLES, HARNESS_IDS, RUN_SIGNAL_KINDS, runtimeSelectionSchema } from "@shiba/shared";
 import { isApprovedRoute, type ApprovedRoute } from "./model-connections.js";
 import { parseGitHubRepoUrl } from "./security.js";
 
@@ -19,7 +19,7 @@ const codingTaskInputSchema = z.object({
   sandboxId: z.string().min(1),
   codingModel: z.string().min(1),
   /** Which coding agent runs the task. Validated at approval time, never in the container. */
-  harness: z.enum(["opencode", "claude-code", "claude-subscription", "codex", "codex-subscription", "devin", "grok", "antigravity-subscription", "cursor-subscription", "devin-subscription"]).optional(),
+  harness: z.enum(HARNESS_IDS).optional(),
   /**
    * T52: the delegation role this run executes under. The parent resolved
    * harness+model from the operator's role pin before minting this

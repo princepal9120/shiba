@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CodingOrchestrator } from "../src/agents/orchestrator.js";
+import { CodingOrchestrator, delegateInputSchema } from "../src/agents/orchestrator.js";
 import type { OrchestratorState } from "../src/agents/orchestrator.js";
+import { HARNESS_IDS } from "@shiba/shared";
 import { createRun, RUN_DEADLINE_MS, type DelegatedRun } from "../src/runs.js";
 import { formatAgentResult, parseAgentToolInput } from "../src/opencode-input.js";
 import { createPendingApproval, resolvePendingApproval } from "../src/pending-approvals.js";
@@ -461,6 +462,24 @@ describe("slack thread wiring", () => {
     }));
     expect(queued.status).toBe(400);
     expect(instance.state.pendingApprovals ?? []).toHaveLength(0);
+  });
+
+  it.each(HARNESS_IDS)("delegate tool schema accepts harness %s", (harness) => {
+    const parsed = delegateInputSchema.safeParse({
+      repoUrl: "https://github.com/o/r",
+      task: "fix",
+      harness,
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it("delegate tool schema still rejects a bogus harness name", () => {
+    const parsed = delegateInputSchema.safeParse({
+      repoUrl: "https://github.com/o/r",
+      task: "fix",
+      harness: "bogus-agent",
+    });
+    expect(parsed.success).toBe(false);
   });
 });
 

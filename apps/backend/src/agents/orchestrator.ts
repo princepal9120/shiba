@@ -13,6 +13,7 @@ import { z } from "zod";
 import type { Env } from "../env.js";
 import {
   AGENT_ROLES,
+  HARNESS_IDS,
   LOCAL_INTAKE_DASHBOARD,
   LOCAL_INTAKE_HEADER,
   LOCAL_RUNTIME_FLAG,
@@ -127,7 +128,8 @@ function terminalStatusFor(code: RunErrorCode): RunStatus {
       : "error";
 }
 
-const delegateInputSchema = z.object({
+/** Exported for tests — the tool-call surface stays the single caller. */
+export const delegateInputSchema = z.object({
   repoUrl: z.string().describe("HTTPS GitHub repository URL, e.g. https://github.com/owner/repo."),
   task: z.string().describe("The coding task to perform in the repository."),
   baseBranch: z
@@ -141,13 +143,15 @@ const delegateInputSchema = z.object({
     .default(false)
     .describe("Open a pull request with the result. Requires GITHUB_TOKEN."),
   harness: z
-    .enum(["opencode", "claude-code", "claude-subscription", "codex", "devin", "grok"])
+    .enum(HARNESS_IDS)
     .optional()
     .describe(
       "Coding agent harness. Defaults to the deployment's AGENT_HARNESS, else opencode. " +
-        "claude-code needs an anthropic/* model; claude-subscription needs an anthropic-subscription/* model and is only " +
-        "registered on deployments with SHIBA_CLAUDE_SUBSCRIPTION=1; codex needs an openai/* model; " +
-        "devin needs a devin/* model; grok needs an xai/* model.",
+        "API-key harnesses: claude-code needs an anthropic/* model; codex an openai/* model; " +
+        "devin a devin/* model; grok an xai/* model. Subscription harnesses use their " +
+        "<provider>-subscription/* model namespace and are only registered when the matching " +
+        "SHIBA_*_SUBSCRIPTION=1 flag is set (anthropic-subscription, openai-subscription, " +
+        "google-subscription, cursor-subscription, devin-subscription).",
     ),
   role: z
     .enum(AGENT_ROLES)
