@@ -34,7 +34,7 @@ import { handleRuns } from "./runs-routes.js";
 import { handleScreenshot } from "./screenshots-routes.js";
 import { handleWebSessions } from "./sessions-routes.js";
 import { redactSecrets } from "./security.js";
-import { getUserId, isAuthenticated, SIGNATURE_AUTHENTICATED } from "./request-auth.js";
+import { getUserId, isAccessConfigured, isAuthenticated, SIGNATURE_AUTHENTICATED } from "./request-auth.js";
 import { handleSlackInteract } from "./slack-approval.js";
 import { handleSlackEvents } from "./slack-events.js";
 import { handleSlackEvent } from "./slack-mention.js";
@@ -135,7 +135,13 @@ export default {
       }
       const url = new URL(request.url);
       if (!isPublicRequest(request) && !isAuthenticated(request, env)) {
-        return Response.json({ error: "Authentication required." }, { status: 401 });
+        return Response.json(
+          {
+            error: "Authentication required.",
+            ...(!isAccessConfigured(env) ? { code: "access_not_configured" } : {}),
+          },
+          { status: 401 },
+        );
       }
       const oauthResponse = await handleOAuth(request, env, getUserId(request));
       if (oauthResponse) return oauthResponse;

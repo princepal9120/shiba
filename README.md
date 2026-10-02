@@ -95,6 +95,7 @@ Re-deploy after changes with `pnpm run deploy` (build + `alchemy deploy`). Previ
 What a live deploy does, secure by default:
 
 - `REQUIRE_ACCESS=1` is always set on live stages: no verified Access identity means 401 on the dashboard and API.
+- Without `REQUIRE_ACCESS` or `ACCESS_AUD`, only loopback hosts are served; requests to deployed hosts fail closed with 401.
 - With `ACCESS_EMAILS` and `WORKERS_SUBDOMAIN` set, it creates an Access app for the Worker host that allows only those emails, and the Worker verifies the `Cf-Access-Jwt-Assertion` JWT (`ACCESS_AUD`) instead of trusting the identity header.
 - A second Access app **bypasses** the machine callers, which the Worker authenticates itself: `/api/slack/events`, `/api/slack/command`, `/api/slack/interact`, `/api/github/webhook` (HMAC), `/mcp` (bearer token), `/api/automations/*/trigger` (shared secret).
 - Secrets come only from `.env` (see `.env.example`). Alchemy replaces the Worker's secrets on every deploy, so a secret missing from `.env` is removed — don't mix in `wrangler secret put`.
@@ -220,7 +221,7 @@ The computer adapter deliberately refuses execution — `@cloudflare/computer` i
 - Sandbox clone/configure/code/collect flow has unit tests using fakes.
 - Provider traffic interception at the Sandbox egress boundary is implemented in `apps/backend/src/sandbox.ts`; there is no callback route to enable.
 - Phase updates exist; token-level OpenCode JSON event streaming is partially surfaced via `streamProgress`.
-- Per-user orchestrator routing exists (`getUserId` in `apps/backend/src/index.ts`); unauthenticated `/api/runs` returns 401. Full Access JWT verification is not implemented.
+- Per-user orchestrator routing exists (`getUserId` in `apps/backend/src/index.ts`); without Access configuration, non-loopback `/api/runs` requests fail closed with 401. `ACCESS_AUD` enables Access JWT verification.
 - Egress is deny-by-default: `interceptHttps` is on and `allowedHosts` admits only `generativelanguage.googleapis.com`, `github.com`, and `codeload.github.com`, narrowed per run by `approveHarnessEgress` to the selected harness's provider host plus git. The boundary is unit-tested but has not faced a live hostile run — still do not expose untrusted runs publicly on this basis alone.
 - The GitHub credential is scoped to the run's repo: github.com egress is refused until `approveRepoScope` installs a forwarder for the approved `/owner/repo` path, and only GET/HEAD plus POST `git-upload-pack` pass — container pushes are refused even with the token.
 - Cancellation is best-effort; clearing registry/history is not process cancellation or complete Durable Object erasure.

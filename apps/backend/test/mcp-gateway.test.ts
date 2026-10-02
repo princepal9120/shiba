@@ -226,7 +226,7 @@ describe("/mcp route auth", () => {
     const { env } = makeEnv();
     routed.requests.length = 0;
     const response = await worker.fetch(
-      new Request("https://worker/agents/coding-orchestrator/default", {
+      new Request("http://localhost/agents/coding-orchestrator/default", {
         headers: { [MCP_PRINCIPAL_HEADER]: "forged" },
       }),
       env,

@@ -4,6 +4,7 @@
  * Booleans only: never echo secret values or names of unrelated vars.
  */
 import type { Env } from "./env.js";
+import { isAccessConfigured } from "./request-auth.js";
 
 export interface SetupStatus {
   slack: {
@@ -52,7 +53,7 @@ export async function readSetupStatus(env: Env, probe = true): Promise<SetupStat
       token: Boolean(env.AI_GATEWAY_TOKEN),
       reachable: probe ? await probeGateway(env) : "unknown",
     },
-    access: { required: Boolean(env.REQUIRE_ACCESS || env.ACCESS_AUD) },
+    access: { required: isAccessConfigured(env) },
     models: {
       orchestrator: env.ORCHESTRATOR_MODEL,
       coding: env.CODING_MODEL,

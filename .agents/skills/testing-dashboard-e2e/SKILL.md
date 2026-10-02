@@ -50,7 +50,7 @@ instead of Vite, run `pnpm build:dashboard` and serve the Worker on :8787.
   - Vectorize binding warns "not supported" locally — Memory features degrade;
     everything else is fine. AI binding is remote-mode but only touched when a
     run actually executes (post-approval).
-- `REQUIRE_ACCESS` is unset → all routes are unauthenticated; identity = `"default"`.
+- `REQUIRE_ACCESS` is unset → loopback requests are unauthenticated; identity = `"default"`.
 - Useful checks: `curl localhost:8788/api/whoami` → `{"agent":"default"}`;
   `curl localhost:8788/api/runs` → `{runs:[...]}` (also triggers `reclaimRuns()`).
 - Killing the listener pid alone leaves a zombie — wrangler's supervisor
@@ -66,7 +66,7 @@ npx wrangler dev --port 8787 --config apps/backend/wrangler.jsonc --enable-conta
   wrangler 4.x fails startup with "The Docker CLI is needed to build the
   configured image" — the flag skips image prep; DOs/APIs still work, only
   real sandbox/container execution is unavailable (don't click Inspect VM).
-- `REQUIRE_ACCESS` is unset → all routes are unauthenticated; identity = `"default"`.
+- `REQUIRE_ACCESS` is unset → loopback requests are unauthenticated; identity = `"default"`.
 - Dashboard URL: `http://localhost:8787/app/` (bare `/` 404s in dev — the
   tryshiba.dev `_redirects` rules are absolute URLs and get skipped locally).
 - Useful checks: `curl localhost:8787/api/whoami` → `{"agent":"default"}`;

@@ -39,7 +39,7 @@ The supported first-deploy path is the interactive bootstrap. It provisions Clou
 4. Enter the email addresses allowed to sign in (`ACCESS_EMAILS`) and your account’s `workers.dev` subdomain (`WORKERS_SUBDOMAIN`). The script prompts for optional integration secrets; leave unused ones blank. It saves the answers in `.env` with owner-only permissions, builds the app, and runs `npx alchemy deploy`.
 5. Open `https://shiba.<your-subdomain>.workers.dev/app/`, sign in with an allowed email, then check `/api/setup/status` and complete the dashboard’s setup checks.
 
-`ACCESS_EMAILS` and `WORKERS_SUBDOMAIN` are important for a live deployment: they let Alchemy create hostname-scoped Cloudflare Access applications. Live stages set `REQUIRE_ACCESS=1`; if managed Access is not created, the dashboard/API will return 401 unless another Access application already protects the Worker. Do not publish or share the `workers.dev` URL until you have verified the Access policy and machine-callback exceptions. See [Security](/docs/security/).
+`ACCESS_EMAILS` and `WORKERS_SUBDOMAIN` are important for a live deployment: they let Alchemy create hostname-scoped Cloudflare Access applications. Live stages set `REQUIRE_ACCESS=1`. Without `REQUIRE_ACCESS` or `ACCESS_AUD`, only loopback hosts are served; requests to deployed hosts fail closed with 401. Do not publish or share the `workers.dev` URL until you have verified the Access policy and machine-callback exceptions. See [Security](/docs/security/).
 
 ### Manual Alchemy commands
 

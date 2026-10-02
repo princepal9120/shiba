@@ -191,7 +191,7 @@ async function isSessionNotFoundBody(response: Response): Promise<boolean> {
   return body?.error === "Session not found.";
 }
 
-type IdentityIssue = "signin" | "unreachable" | "error";
+type IdentityIssue = "signin" | "unconfigured" | "unreachable" | "error";
 type IdentityResult = { agent: string } | { issue: IdentityIssue; message: string };
 
 async function fetchIdentity(): Promise<IdentityResult> {
@@ -203,8 +203,14 @@ async function fetchIdentity(): Promise<IdentityResult> {
   } catch {
     return { issue: "unreachable", message: "Network error reaching /api/whoami." };
   }
-  if (res.type === "opaqueredirect" || res.status === 401) {
+  if (res.type === "opaqueredirect") {
     return { issue: "signin", message: "Sign-in required." };
+  }
+  if (res.status === 401) {
+    const body = (await res.clone().json().catch(() => null)) as { code?: unknown } | null;
+    return body?.code === "access_not_configured"
+      ? { issue: "unconfigured", message: "Cloudflare Access is not configured." }
+      : { issue: "signin", message: "Sign-in required." };
   }
   // Non-JSON means something other than the Worker answered (static host, dev proxy).
   const body = (await res.json().catch(() => null)) as { agent?: unknown } | null;
@@ -395,7 +401,7 @@ export function App(): React.JSX.Element {
       }
       setIdentityError(result.message);
       setIdentityIssue(result.issue);
-      if (result.issue === "signin") return;
+      if (result.issue === "signin" || result.issue === "unconfigured") return;
       const delay = Math.min(30_000, 1_000 * 2 ** identityFailures.current);
       identityFailures.current += 1;
       timer = window.setTimeout(() => setIdentityAttempt((n) => n + 1), delay);
@@ -1089,7 +1095,8 @@ export function App(): React.JSX.Element {
     },
   ];
 
-  if (identityIssue === "signin") {
+  if (identityIssue === "signin" || identityIssue === "unconfigured") {
+    const accessUnconfigured = identityIssue === "unconfigured";
     return (
       <div className="h-dvh bg-[#f6f4ed] text-[#222320] font-sans flex items-center justify-center p-6 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))]">
         <div className="bg-[#fffef8] border border-[#e0ded5] rounded-none max-w-sm w-full p-6 shadow-[3px_3px_0_var(--paper-shadow)] flex flex-col items-center text-center gap-3">
@@ -1098,17 +1105,30 @@ export function App(): React.JSX.Element {
             alt="Shiba"
             className="size-14 rounded-full bg-white object-contain border border-[#0000a8]/40"
           />
-          <h1 className="text-2xl text-[#222320]">Sign in to continue</h1>
+          <h1 className="text-2xl text-[#222320]">
+            {accessUnconfigured ? "Dashboard access isn't configured" : "Sign in to continue"}
+          </h1>
           <p className="text-sm text-[#6a6f63] leading-relaxed">
-            Your Cloudflare Access session has expired or you are not signed in yet.
+            {accessUnconfigured
+              ? "This deployment has no Cloudflare Access application, so the dashboard is locked. Set ACCESS_EMAILS and WORKERS_SUBDOMAIN and redeploy, or set ACCESS_AUD to an existing Access app's AUD tag."
+              : "Your Cloudflare Access session has expired or you are not signed in yet."}
           </p>
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="mt-1 w-full min-h-11 rounded-none bg-[#0000a8] hover:bg-[#1c1cc8] text-white text-sm font-semibold transition-colors shadow-[2px_2px_0_var(--paper-shadow)] active:scale-[0.98]"
-          >
-            Sign in
-          </button>
+          {accessUnconfigured ? (
+            <a
+              href="/docs/deployment/"
+              className="mt-1 w-full min-h-11 flex items-center justify-center rounded-none bg-[#0000a8] hover:bg-[#1c1cc8] text-white text-sm font-semibold transition-colors shadow-[2px_2px_0_var(--paper-shadow)]"
+            >
+              Deployment documentation
+            </a>
+          ) : (
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="mt-1 w-full min-h-11 rounded-none bg-[#0000a8] hover:bg-[#1c1cc8] text-white text-sm font-semibold transition-colors shadow-[2px_2px_0_var(--paper-shadow)] active:scale-[0.98]"
+            >
+              Sign in
+            </button>
+          )}
         </div>
       </div>
     );

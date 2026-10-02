@@ -248,7 +248,8 @@ export interface Env {
   TRIGGER_TOKEN?: string;
   /**
    * Optional. When set, require Cloudflare Access identity on every path
-   * except SIGNATURE_AUTHENTICATED. Unset for `wrangler dev`.
+   * except authenticated integrations. When both Access settings are unset,
+   * only loopback requests bypass identity checks.
    */
   REQUIRE_ACCESS?: string;
   /**

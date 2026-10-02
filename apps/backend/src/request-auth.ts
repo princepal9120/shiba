@@ -8,6 +8,16 @@ import { parseAutomationWebhookPath } from "./automations.js";
 import type { Env } from "./env.js";
 import { isLocalRuntimePath } from "./local-routes.js";
 
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+export function isLoopbackRequest(request: Request): boolean {
+  const { hostname } = new URL(request.url);
+  return LOOPBACK_HOSTS.has(hostname) || hostname.endsWith(".localhost");
+}
+
+export function isAccessConfigured(env: Env): boolean {
+  return Boolean(env.REQUIRE_ACCESS || env.ACCESS_AUD);
+}
 
 export function getUserId(request: Request): string | null {
   const email = request.headers.get("CF-Access-Authenticated-User-Email");
@@ -59,6 +69,7 @@ export function isAuthenticated(request: Request, env: Env): boolean {
   // `/api/local` self-authenticates with a bearer token — same shape as
   // /mcp, exempt from the Access gate.
   if (isLocalRuntimePath(pathname)) return true;
-  if (!env.REQUIRE_ACCESS && !env.ACCESS_AUD) return true; // opt-out for `wrangler dev`
+  // Without Access configured, only local development hosts bypass identity.
+  if (!isAccessConfigured(env)) return isLoopbackRequest(request);
   return getUserId(request) !== null;
 }

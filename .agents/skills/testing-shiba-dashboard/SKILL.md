@@ -15,6 +15,8 @@ pnpm dev        # vite on :5173; opens /app/
 
 Dashboard lives at `http://localhost:5173/app/` (root `/` redirects there). `/docs/` serves a stub that meta-refreshes back to `/app/` in dev — real docs come from the worker in prod.
 
+With `REQUIRE_ACCESS` unset, only loopback requests are unauthenticated; identity = `"default"`.
+
 ## Expected artifacts when the worker backend is down
 
 Only vite runs in most sessions — the Cloudflare worker (Durable Objects, sandbox API) is NOT up. These are environmental, not bugs:
