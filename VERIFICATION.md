@@ -365,3 +365,25 @@ And one repo bug that only surfaces at runtime:
 - Tests: +28 across `cursor-subscription.test.ts`/`devin-subscription.test.ts` — flag-off unregistered everywhere, flag-on registration + catalog credential card, envelope schema accepting the names + freezing authAccount, dummy-key invariant, configFile contents (driver embed / credentials.toml), egressOverrides host+handler+account pinning, named-handler registration, gateway-model refusal, instanceId scoping, buildArgv shape, admission-gate refusal without a succeeded flow.
 - Local verification: `pnpm typecheck` clean, `pnpm lint` clean (1 pre-existing warning), `pnpm lint:imports` clean, `pnpm test` green (1597), `pnpm build` green, `pnpm env:load` + `pnpm env:scan` clean.
 - Unverified (credential-gated): live runs need `wrangler secret put CURSOR_SUBSCRIPTION_TOKEN`/`DEVIN_SUBSCRIPTION_TOKEN` + the two `SHIBA_*_SUBSCRIPTION=1` vars + a rebuilt sandbox image (the Dockerfile change bakes cursor-agent in — push a new image tag before cursor-subscription exec works live).
+
+# 2026-10-02 — bootstrap covers the whole surface
+
+`scripts/setup.mjs` (`pnpm run bootstrap`) now collects every deployed lane: the
+subscription credentials and `SHIBA_*` flags, Telegram/Discord webhook lanes,
+`AGENT_MAILBOX` (the agent's inbound email identity, registered via
+`POST /api/mailboxes` after Email Routing points at the worker), and prints the
+post-deploy checklist — custom domain, Email Routing, mailbox registration,
+Slack/Telegram/Discord wiring, and the proven wrangler fallback for narrow
+`CLOUDFLARE_API_TOKEN` scopes. New `docs/launch` page mirrors it.
+
+- Telegram + Discord env vars were read by the handlers but undeclared — added
+  `TELEGRAM_*`/`DISCORD_*` (secrets + plain vars) to `.env.schema` and to
+  `alchemy.run.ts` `secrets()`/`configVars()` so `.env` binds them like every
+  other lane.
+- `WORKER_HOSTNAME` + `AGENT_MAILBOX` declared in `.env.schema` and bound via
+  `configVars()`.
+
+Local verification: `pnpm env:load` clean (all vars resolve, no warnings),
+`pnpm env:scan` clean, `check-alchemy-drift.mjs` in sync, full gate green.
+Unverified (credential-gated): an actual `pnpm run bootstrap` deploy; Email
+Routing delivery to a registered address; Telegram/Discord webhook handshakes.
