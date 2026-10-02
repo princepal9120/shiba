@@ -270,6 +270,10 @@ export const Worker = Cloudflare.Worker("Worker", {
       "DEVIN_SUBSCRIPTION_TOKEN",
       // T51: the bearer the `shiba local` daemon presents on /api/local/*.
       "LOCAL_ADAPTER_TOKEN",
+      // Telegram + Discord webhook lanes.
+      "TELEGRAM_BOT_TOKEN",
+      "TELEGRAM_WEBHOOK_SECRET",
+      "DISCORD_PUBLIC_KEY",
     ]),
     // Live deploys fail closed: no Access identity = 401 on the dashboard/API.
     ...(isLiveStage ? { REQUIRE_ACCESS: "1" } : {}),
@@ -303,6 +307,14 @@ export const Worker = Cloudflare.Worker("Worker", {
       // Agent mailbox identity (default dev@tryshiba.dev).
       "AGENT_MAILBOX",
       "MEMORY_ENABLED",
+      "TELEGRAM_APPROVERS",
+      "TELEGRAM_CHAT_REPOS",
+      "TELEGRAM_AGENT_HARNESS",
+      "DISCORD_APPROVERS",
+      "DISCORD_CHANNEL_REPOS",
+      "DISCORD_AGENT_HARNESS",
+      "AGENT_MAILBOX",
+      "WORKER_HOSTNAME",
     ]),
   },
 });

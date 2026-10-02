@@ -366,6 +366,28 @@ And one repo bug that only surfaces at runtime:
 - Local verification: `pnpm typecheck` clean, `pnpm lint` clean (1 pre-existing warning), `pnpm lint:imports` clean, `pnpm test` green (1597), `pnpm build` green, `pnpm env:load` + `pnpm env:scan` clean.
 - Unverified (credential-gated): live runs need `wrangler secret put CURSOR_SUBSCRIPTION_TOKEN`/`DEVIN_SUBSCRIPTION_TOKEN` + the two `SHIBA_*_SUBSCRIPTION=1` vars + a rebuilt sandbox image (the Dockerfile change bakes cursor-agent in — push a new image tag before cursor-subscription exec works live).
 
+# 2026-10-02 — bootstrap covers the whole surface
+
+`scripts/setup.mjs` (`pnpm run bootstrap`) now collects every deployed lane: the
+subscription credentials and `SHIBA_*` flags, Telegram/Discord webhook lanes,
+`AGENT_MAILBOX` (the agent's inbound email identity, registered via
+`POST /api/mailboxes` after Email Routing points at the worker), and prints the
+post-deploy checklist — custom domain, Email Routing, mailbox registration,
+Slack/Telegram/Discord wiring, and the proven wrangler fallback for narrow
+`CLOUDFLARE_API_TOKEN` scopes. New `docs/launch` page mirrors it.
+
+- Telegram + Discord env vars were read by the handlers but undeclared — added
+  `TELEGRAM_*`/`DISCORD_*` (secrets + plain vars) to `.env.schema` and to
+  `alchemy.run.ts` `secrets()`/`configVars()` so `.env` binds them like every
+  other lane.
+- `WORKER_HOSTNAME` + `AGENT_MAILBOX` declared in `.env.schema` and bound via
+  `configVars()`.
+
+Local verification: `pnpm env:load` clean (all vars resolve, no warnings),
+`pnpm env:scan` clean, `check-alchemy-drift.mjs` in sync, full gate green.
+Unverified (credential-gated): an actual `pnpm run bootstrap` deploy; Email
+Routing delivery to a registered address; Telegram/Discord webhook handshakes.
+
 # 2026-10-02 — agent mailbox identity
 
 - `apps/backend/src/mailbox-verification.ts` (new) — pure extraction layer: `extractVerificationSignals(body_text, body_html)` returns `{code, magic_links}` — labeled digit patterns ("code is 123456", "123456 is your code"), uppercase token shapes ("code is AB12-CD34"), then a proximity fallback (bare 4–8 digit run within 64 chars of a verification word); magic-link detection classifies `extractLinks` output by URL vocabulary (verify/confirm/token/magic/signin/auth/…) or action anchor text ("Sign in", "Verify"), deduped, capped at 20. `agentMailbox(env)` resolves `AGENT_MAILBOX` → `dev@tryshiba.dev` default.

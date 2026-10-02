@@ -64,12 +64,49 @@ for (const [name, hint] of [
   ["SLACK_BOT_TOKEN", "Slack bot token xoxb-…"],
   ["SLACK_APPROVERS", "Slack user ids allowed to approve, comma-separated"],
   ["SLACK_CHANNEL_REPOS", "channel→repo map, e.g. C0123=https://github.com/o/r"],
+  ["SLACK_APPROVALS_CHANNEL", "channel id that hosts approval cards"],
   ["GITHUB_WEBHOOK_SECRET", "GitHub webhook secret (automations)"],
   ["TYPESAFE_API_KEY", "TypeSafe key (optional)"],
   ["DEVIN_API_KEY", "Devin API key (optional)"],
+  ["LOCAL_ADAPTER_TOKEN", "bearer for the `shiba local` daemon (optional)"],
+  ["TELEGRAM_BOT_TOKEN", "Telegram bot token from @BotFather (optional)"],
+  ["TELEGRAM_WEBHOOK_SECRET", "Telegram webhook secret_token (optional)"],
+  ["DISCORD_PUBLIC_KEY", "Discord app's Ed25519 public key (optional)"],
 ]) {
   await ask(name, hint);
 }
+
+console.log("\n== Subscription credentials (your paid CLIs — blank = lane stays dark) ==");
+for (const [name, hint] of [
+  ["CLAUDE_SUBSCRIPTION_TOKEN", "`claude setup-token` output"],
+  ["CODEX_SUBSCRIPTION_AUTH_JSON", "`codex login` auth.json contents, verbatim"],
+  ["CURSOR_SUBSCRIPTION_TOKEN", "Cursor Agent API key"],
+  ["DEVIN_SUBSCRIPTION_TOKEN", "Devin API key/session token"],
+]) {
+  await ask(name, hint);
+}
+
+console.log("\n== Feature flags (1 = on, blank = dark; stored as plain vars) ==");
+for (const [name, hint] of [
+  ["SHIBA_CLAUDE_SUBSCRIPTION", "Claude Pro/Max subscription runs"],
+  ["SHIBA_CODEX_SUBSCRIPTION", "ChatGPT/Codex subscription runs"],
+  ["SHIBA_ANTIGRAVITY_SUBSCRIPTION", "Antigravity (Gemini) subscription runs"],
+  ["SHIBA_CURSOR_SUBSCRIPTION", "Cursor subscription connect lane"],
+  ["SHIBA_DEVIN_SUBSCRIPTION", "Devin subscription connect lane"],
+  ["SHIBA_LOCAL_RUNTIME", "allow runs on your local machine via the daemon"],
+  ["AUTOMATIONS_ENABLED", "scheduled automations"],
+  ["MEMORY_ENABLED", "memory subsystem (Vectorize)"],
+  ["AGENT_HARNESS", "default harness: opencode | claude-code | codex | devin | grok | *-subscription", "opencode"],
+  ["TELEGRAM_APPROVERS", "Telegram approver user ids, comma-separated (optional)"],
+  ["TELEGRAM_CHAT_REPOS", "Telegram chat→repo map (optional)"],
+  ["DISCORD_APPROVERS", "Discord approver user ids, comma-separated (optional)"],
+  ["DISCORD_CHANNEL_REPOS", "Discord channel→repo map (optional)"],
+]) {
+  await ask(name, hint);
+}
+
+console.log("\n== Agent mailbox (inbound email identity for runs) ==");
+await ask("AGENT_MAILBOX", "address the agent uses to sign up/receive OTPs", "dev@tryshiba.dev");
 save();
 ok(".env written (mode 600, gitignored) — alchemy.run.ts binds every secret present there");
 rl.close();
@@ -81,18 +118,33 @@ if (run("npx", ["alchemy", "deploy"]).status !== 0) {
   process.exit(1);
 }
 
-const host = env.WORKERS_SUBDOMAIN ? `shiba-ai-coworker.${env.WORKERS_SUBDOMAIN}.workers.dev` : "<worker-host>";
+const host = env.WORKER_HOSTNAME ?? (env.WORKERS_SUBDOMAIN ? `shiba-ai-coworker.${env.WORKERS_SUBDOMAIN}.workers.dev` : "<worker-host>");
 console.log(`
 == Deployed ==
 Dashboard (web + iPhone: open in Safari → Share → Add to Home Screen):
   https://${host}/app/
+Custom domain (optional): CF dashboard → Workers → shiba-ai-coworker →
+  Settings → Domains → Add (e.g. app.tryshiba.dev) — same hostname goes in
+  .env as WORKER_HOSTNAME for next deploy.
 Claude Code (MCP):
   node scripts/mint-token.mjs --agent claude-code --scopes sandbox:exec --host ${host} \\
     --namespace-id <agentTokensNamespace from the deploy output above> --write
   → prints the \`claude mcp add\` line to paste
+Agent mailbox (${env.AGENT_MAILBOX ?? "dev@tryshiba.dev"}):
+  1. CF dashboard → your domain → Email → Email Routing → Custom addresses
+     → create the address → route to Worker "shiba-ai-coworker".
+  2. Register it: curl -X POST https://${host}/api/mailboxes \\
+       -H 'content-type: application/json' \\
+       -d '{"address":"${env.AGENT_MAILBOX ?? "dev@tryshiba.dev"}","label":"agent"}'
+     (send from an allowed Access session — the API is gated).
+  Unregistered recipients are rejected by design — the mailbox must exist first.
 Slack: https://api.slack.com/apps?new_app=1 → From a manifest → slack-app-manifest.yaml
   with YOUR-WORKER.workers.dev replaced by ${host}; then add the signing secret and
   bot token to .env and re-run \`pnpm run bootstrap\`.
+Telegram: @BotFather → /newbot → token into TELEGRAM_BOT_TOKEN, then
+  setWebhook url=https://${host}/api/telegram/webhook secret_token=<TELEGRAM_WEBHOOK_SECRET>.
+Discord: developer portal → app → Public Key into DISCORD_PUBLIC_KEY →
+  Interactions Endpoint https://${host}/api/discord/interactions.
 AI Gateway: add a provider key (BYOK) to gateway "default" in the dashboard.
 Check: https://${host}/api/setup/status (after signing in)
 `);

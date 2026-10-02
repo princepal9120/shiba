@@ -40,6 +40,7 @@ export default defineConfig({
 						{ label: 'Overview', slug: 'docs/overview' },
 						{ label: 'Quickstart', slug: 'docs/getting-started' },
 						{ label: 'End-to-end setup', slug: 'docs/onboarding' },
+						{ label: 'Launch (one-command deploy)', slug: 'docs/launch' },
 					],
 				},
 				{
