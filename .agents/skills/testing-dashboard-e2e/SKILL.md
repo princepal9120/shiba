@@ -32,8 +32,18 @@ Repo layout is `apps/frontend`, `apps/backend`, `apps/web` (not root-level
 
 ```bash
 pnpm -C apps/frontend dev  # vite :5173, in one terminal
-pnpm exec wrangler dev --port 8788 --config apps/backend/wrangler.jsonc --enable-containers=false  # worker, in another terminal
+pnpm exec wrangler dev --port 8788 --config apps/backend/wrangler.jsonc --enable-containers=false --local-upstream localhost  # worker, in another terminal
 ```
+
+- **`--local-upstream localhost` is REQUIRED** since the fb6c64f fail-closed auth
+  gate (Oct 2026): wrangler.jsonc declares `routes` for the app.tryshiba.dev +
+  dashboard.tryshiba.dev custom domains, which makes `wrangler dev` rewrite
+  `request.url` to `http://app.tryshiba.dev/...` inside the worker. That hostname
+  fails `isLoopbackRequest`, so EVERY `/api/*` returns 401
+  `{"error":"Authentication required.","code":"access_not_configured"}` — and the
+  dashboard renders its "Dashboard access isn't configured" gate page. With the
+  flag, request.url stays `http://localhost/...` and loopback auth passes.
+  Verified on wrangler 4.118.0.
 
 `--enable-containers=false` is for machines without Docker; approval-queue
 testing works, but sandbox execution does not. To test the built dashboard
@@ -51,14 +61,17 @@ instead of Vite, run `pnpm build:dashboard` and serve the Worker on :8787.
     everything else is fine. AI binding is remote-mode but only touched when a
     run actually executes (post-approval).
 - `REQUIRE_ACCESS` is unset → loopback requests are unauthenticated; identity = `"default"`.
+  (Only true with `--local-upstream localhost` — see above.)
 - Useful checks: `curl localhost:8788/api/whoami` → `{"agent":"default"}`;
   `curl localhost:8788/api/runs` → `{runs:[...]}` (also triggers `reclaimRuns()`).
 - Killing the listener pid alone leaves a zombie — wrangler's supervisor
   respawns workerd, and a half-dead workerd LISTENs but never responds (fetch
   hangs indefinitely; the app's busy state has no timeout). Kill the whole
   tree: `pkill -f "wrangler.js dev"; pkill -f "workerd serve"`.
+
+```bash
 pnpm build:dashboard        # emits public/ (bundle must contain new CSS classes)
-npx wrangler dev --port 8787 --config apps/backend/wrangler.jsonc --enable-containers=false
+npx wrangler dev --port 8787 --config apps/backend/wrangler.jsonc --enable-containers=false --local-upstream localhost
 ```
 
 - `--enable-containers=false` is REQUIRED on any machine without Docker:
@@ -101,8 +114,8 @@ db.prepare("UPDATE cf_agents_state SET state=? WHERE id=\"cf_state_row_id\"").ru
 '
 ```
 
-4. Restart `pnpm exec wrangler dev --port 8788 --config apps/backend/wrangler.jsonc --enable-containers=false`.
-4. Restart `npx wrangler dev --port 8787 --config apps/backend/wrangler.jsonc --enable-containers=false`.
+4. Restart `pnpm exec wrangler dev --port 8788 --config apps/backend/wrangler.jsonc --enable-containers=false --local-upstream localhost`.
+4. Restart `npx wrangler dev --port 8787 --config apps/backend/wrangler.jsonc --enable-containers=false --local-upstream localhost`.
 
 ### Tricks that hit real code paths
 
@@ -121,6 +134,10 @@ db.prepare("UPDATE cf_agents_state SET state=? WHERE id=\"cf_state_row_id\"").ru
   renders on the **Runs** view (nav rail "Runs" or `?tab=runs`).
 - Chat websocket (`useAgent`) connects to the `default` DO over wrangler dev and
   shows "Connected"; failure here is environmental, not app breakage.
+- New IA surfaces (dc80693): `?view=`/`?tab=` both read —
+  integrations/settings/analytics(+costs) views; "Settings" lives in the rail's
+  bottom SYSTEM cluster (not the grouped lists); "Integrations" is in
+  CAPABILITIES, "Analytics" in WORKSPACE.
 
 ## Verifying errorWire projections (run-errors.ts codes)
 
@@ -139,7 +156,10 @@ unknown (dashboard chips read record.status).
 
 - `browser_console` with ANY `content` string only evaluates the script; the
   page console buffer was unreachable in this environment (bare calls also
-  evaluated — possible tool regression). Verify console cleanliness via
+  evaluated — possible tool regression). It may also refuse outright with
+  "Chrome is not in the foreground" even when Chrome is focused. Verify console
+  cleanliness via the vite dev log instead — vite relays client
+  console.error/console.warn lines as `[vite] (client) [console.*]` — plus
   `performance.getEntriesByType("resource").filter(r=>r.responseStatus>=400)`
   (expect `[]`), `document.readyState`, and full data render instead.
 - Nav-rail/filter clicks land on the wrong view if coordinates are guessed —
