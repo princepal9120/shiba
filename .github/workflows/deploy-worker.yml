@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       stage:
-        description: ALCHEMY_STAGE (empty = live shiba-ai-coworker)
+        description: ALCHEMY_STAGE ('live' = live shiba-ai-coworker; test-* = suffixed stage)
         required: false
-        default: ""
+        default: "live"
       sandbox_image:
         description: Prebuilt registry.cloudflare.com image ref (empty = Docker build)
         required: false
@@ -37,6 +37,9 @@ jobs:
           # worker's GITHUB_TOKEN/GITHUB_WEBHOOK_SECRET bindings aren't
           # mappable here (GitHub forbids repo secrets starting GITHUB_) —
           # stored values persist across deploys once set via wrangler.
+          # CLOUDFLARE_API_TOKEN needs read+write on every resource alchemy
+          # plans (Workers, D1, KV, R2, Vectorize, containers, secrets) or
+          # the plan phase 401s — a deploy-only-scoped token can't diff.
           ACCESS_EMAILS: ${{ secrets.ACCESS_EMAILS }}
           WORKERS_SUBDOMAIN: ${{ secrets.WORKERS_SUBDOMAIN }}
           SLACK_SIGNING_SECRET: ${{ secrets.SLACK_SIGNING_SECRET }}
