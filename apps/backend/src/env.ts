@@ -232,6 +232,37 @@ export interface Env {
   /** T50: per-deploy model override for the antigravity-subscription harness. */
   ANTIGRAVITY_SUBSCRIPTION_MODEL?: string;
   /**
+   * Opt-in flag: "1" opens the /api/auth/cursor-subscription lane.
+   * Absent the surface is dark — 404 as if unregistered.
+   */
+  SHIBA_CURSOR_SUBSCRIPTION?: string;
+  /**
+   * Credential: the operator's Cursor Agent API key (cursor.com settings),
+   * stored as a Wrangler secret and read only by the subscription egress
+   * branch — the container holds a dummy CURSOR_API_KEY, never the token.
+   * Named accounts: CURSOR_SUBSCRIPTION_TOKEN_<ACCOUNT> (resolved by name,
+   * not declared here). Unset means no subscription account is provisioned.
+   */
+  CURSOR_SUBSCRIPTION_TOKEN?: string;
+  /** Per-deploy model override for the cursor-subscription lane. */
+  CURSOR_SUBSCRIPTION_MODEL?: string;
+  /**
+   * Opt-in flag: "1" opens the /api/auth/devin-subscription lane.
+   * Absent the surface is dark — 404 as if unregistered.
+   */
+  SHIBA_DEVIN_SUBSCRIPTION?: string;
+  /**
+   * Credential: the operator's Devin API key/session token, stored as a
+   * Wrangler secret and read only by the subscription egress branch —
+   * the container holds a dummy credentials.toml, never the token.
+   * Named accounts: DEVIN_SUBSCRIPTION_TOKEN_<ACCOUNT> (resolved by name,
+   * not declared here). Distinct from DEVIN_API_KEY, the deployment-wide
+   * credential the plain devin harness uses.
+   */
+  DEVIN_SUBSCRIPTION_TOKEN?: string;
+  /** Per-deploy model override for the devin-subscription lane. */
+  DEVIN_SUBSCRIPTION_MODEL?: string;
+  /**
    * Optional. Devin account API key for the devin harness — injected as a
    * Bearer header by the egress forwarders on api.devin.ai and
    * server.codeium.com. Never sent to containers; the sandboxed CLI holds a

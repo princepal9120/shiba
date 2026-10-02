@@ -22,6 +22,10 @@ Non-secret defaults are in `apps/backend/wrangler.jsonc` and `alchemy.run.ts`. F
 | `CODEX_SUBSCRIPTION_MODEL` | `openai-subscription/gpt-5.3-codex` | `codex-subscription` default model |
 | `SHIBA_ANTIGRAVITY_SUBSCRIPTION` | unset | Set `1` to enable the opt-in `antigravity-subscription` harness (below) |
 | `ANTIGRAVITY_SUBSCRIPTION_MODEL` | `google-subscription/gemini-3-pro` | `antigravity-subscription` default model |
+| `SHIBA_CURSOR_SUBSCRIPTION` | unset | Set `1` to open the opt-in `cursor-subscription` connect lane (below) |
+| `CURSOR_SUBSCRIPTION_MODEL` | `cursor/auto` | `cursor-subscription` model override |
+| `SHIBA_DEVIN_SUBSCRIPTION` | unset | Set `1` to open the opt-in `devin-subscription` connect lane (below) |
+| `DEVIN_SUBSCRIPTION_MODEL` | `devin/swe-2` | `devin-subscription` model override |
 | `SHIBA_LOCAL_RUNTIME` | unset | Set `1` to enable the opt-in `local` runtime (below) — dashboards can queue runs that execute on an operator machine |
 | `LOCAL_ADAPTER_TOKEN` | unset | Bearer token the operator daemon presents on `/api/local/*`; required for the surface to answer (dark otherwise) |
 | `RUNTIME` | `sandbox` | Runtime adapter; current default is Cloudflare Sandbox |
@@ -47,6 +51,14 @@ Setting `SHIBA_CODEX_SUBSCRIPTION=1` registers `codex-subscription`, which drive
 ### Antigravity subscription (opt-in)
 
 Setting `SHIBA_ANTIGRAVITY_SUBSCRIPTION=1` registers `antigravity-subscription`, which drives the pinned `agy` ACP server against the operator's own Google subscription. There is no secret to store — the credential never touches the Worker. Connect an account by posting to `/api/auth/antigravity-subscription/begin` (optionally `{"account": "<name>"}`): shiba boots a dedicated auth sandbox, prepares the isolated profile (`0700` dirs, `auth.type=oauth-personal`, ambient Google credentials stripped from the launch environment), starts `agy` there, and returns the Google sign-in URL it prints. Sign in as the operator's own account; the browser lands on a `http://127.0.0.1:…/` redirect that fails in the browser — copy that URL verbatim and POST it to `/api/antigravity/callback` as `{"url": "<pasted>", "account": "<name>"}`. Shiba validates it is the pending flow's exact listener (same origin, same state, exactly one code-or-error) and forwards it into the container unmodified — no proxies, no redirects, no logging of the URL. Finish with `/verify`; signing in is not proof, the capability probe (token materialized in the profile) is. Clear via `/clear` destroys the auth sandbox. Your own plan terms apply.
+
+### Cursor subscription (opt-in)
+
+Setting `SHIBA_CURSOR_SUBSCRIPTION=1` opens the `cursor-subscription` connect lane, which connects the operator's own Cursor account instead of relying on a container-held `CURSOR_API_KEY`. To connect an account, create a Cursor Agent API key in cursor.com settings and store it as a Worker secret — `CURSOR_SUBSCRIPTION_TOKEN`, or `CURSOR_SUBSCRIPTION_TOKEN_<ACCOUNT>` for a named account — then drive the lifecycle under `/api/auth/cursor-subscription` (begin, verify, clear). The token is a deployment secret: it stays outside the sandbox, is attached only at the egress boundary on the two hosts the CLI calls (`api2.cursor.sh`, `repo2.cursor.sh`), and appears in no log, command line, or UI response. Verification exercises the key on the same wire runs use — the `api2.cursor.sh` credential exchange the CLI itself performs; a 401/403 marks the credential rejected. Signing out stops in-flight subscription runs and refuses new ones. Your own Cursor plan terms apply.
+
+### Devin subscription (opt-in)
+
+Setting `SHIBA_DEVIN_SUBSCRIPTION=1` opens the `devin-subscription` connect lane, which connects the operator's own Devin account credential instead of the deployment-wide `DEVIN_API_KEY`. To connect an account, run `devin auth login` on your own machine and store the resulting API key/session token as a Worker secret — `DEVIN_SUBSCRIPTION_TOKEN`, or `DEVIN_SUBSCRIPTION_TOKEN_<ACCOUNT>` for a named account — then drive the lifecycle under `/api/auth/devin-subscription` (begin, verify, clear). The token stays outside the sandbox and is attached only at the egress boundary (`Bearer` on `api.devin.ai`, the CLI's own `Basic` form on `server.codeium.com`); verification issues `GET /v3/self` through that same branch — a 401/403 marks the credential rejected. Your own Devin plan terms apply.
 
 Subscription credentials are not the default provider-key path — API credentials via AI Gateway are. The `claude-subscription` opt-in above is the deliberate exception: it exists for the single-tenant operator driving their own credential, and stays dark unless they set the flag. Check the provider's current terms before enabling it. The assistant/model used to edit this repository is independent of these application settings.
 

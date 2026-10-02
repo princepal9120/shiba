@@ -63,7 +63,12 @@ function statusChip(configured: boolean | null): JSX.Element {
  * 404 means the deployment has it off — rendered as an unavailable hint,
  * never a broken card.
  */
-type SubscriptionId = "claude-subscription" | "codex-subscription" | "antigravity-subscription";
+type SubscriptionId =
+  | "claude-subscription"
+  | "codex-subscription"
+  | "antigravity-subscription"
+  | "cursor-subscription"
+  | "devin-subscription";
 
 const SUBSCRIPTION_AUTH: Record<
   SubscriptionId,
@@ -122,6 +127,36 @@ const SUBSCRIPTION_AUTH: Record<
       label: "Google sign-in (in-container OAuth)",
       configured: null,
       setupHint: null,
+    },
+  },
+  "cursor-subscription": {
+    apiBase: "/api/auth/cursor-subscription",
+    flag: "SHIBA_CURSOR_SUBSCRIPTION",
+    oauthRedirect: false,
+    label: "Cursor",
+    binary: "cursor-agent",
+    blurb: "Cursor subscription — Agent API key held as a Worker secret.",
+    docsUrl: "https://cursor.com/docs",
+    credential: {
+      kind: "worker-secret",
+      label: "CURSOR_SUBSCRIPTION_TOKEN",
+      configured: null,
+      setupHint: "npx wrangler secret put CURSOR_SUBSCRIPTION_TOKEN",
+    },
+  },
+  "devin-subscription": {
+    apiBase: "/api/auth/devin-subscription",
+    flag: "SHIBA_DEVIN_SUBSCRIPTION",
+    oauthRedirect: false,
+    label: "Devin",
+    binary: "devin",
+    blurb: "Devin subscription — API key/session token held as a Worker secret.",
+    docsUrl: "https://docs.devin.ai",
+    credential: {
+      kind: "worker-secret",
+      label: "DEVIN_SUBSCRIPTION_TOKEN",
+      configured: null,
+      setupHint: "devin auth login, then npx wrangler secret put DEVIN_SUBSCRIPTION_TOKEN",
     },
   },
 };

@@ -265,6 +265,12 @@ export const Worker = Cloudflare.Worker("Worker", {
       // T49: the operator's `codex login` auth.json contents; per-account
       // secrets (CODEX_SUBSCRIPTION_AUTH_JSON_<ACCOUNT>) resolve by name.
       "CODEX_SUBSCRIPTION_AUTH_JSON",
+      // cursor-subscription: the operator's Cursor Agent API key; per-account
+      // secrets (CURSOR_SUBSCRIPTION_TOKEN_<ACCOUNT>) resolve by name.
+      "CURSOR_SUBSCRIPTION_TOKEN",
+      // devin-subscription: the operator's Devin API key/session token;
+      // per-account secrets (DEVIN_SUBSCRIPTION_TOKEN_<ACCOUNT>) resolve by name.
+      "DEVIN_SUBSCRIPTION_TOKEN",
       // T51: the bearer the `shiba local` daemon presents on /api/local/*.
       "LOCAL_ADAPTER_TOKEN",
     ]),
@@ -286,6 +292,11 @@ export const Worker = Cloudflare.Worker("Worker", {
       // credential var exists — OAuth tokens live in the container profile.
       "SHIBA_ANTIGRAVITY_SUBSCRIPTION",
       "ANTIGRAVITY_SUBSCRIPTION_MODEL",
+      // cursor/devin subscription lanes: absent = the auth surface is dark.
+      "SHIBA_CURSOR_SUBSCRIPTION",
+      "CURSOR_SUBSCRIPTION_MODEL",
+      "SHIBA_DEVIN_SUBSCRIPTION",
+      "DEVIN_SUBSCRIPTION_MODEL",
       // T51 opt-in (§18.13): absent = the local runtime is dark.
       "SHIBA_LOCAL_RUNTIME",
       "CODEX_MODEL",
