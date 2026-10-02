@@ -10,9 +10,10 @@
  * are harness-dispatched (default: OpenCode).
  */
 import type { CodingTaskInput, CodingTaskResult } from "./opencode-input.js";
-import type { RunSignal, RunSignalKind } from "@shiba/shared";
+import type { RunSignal, RunSignalKind, RunUsage } from "@shiba/shared";
 import {
   buildLocalRunEnvelope,
+  mergeRunUsage,
   RUN_SIGNAL_KINDS,
   type LocalRunResult,
 } from "@shiba/shared";
@@ -270,9 +271,9 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
         error instanceof AntigravityUsageLimitError ||
         error instanceof AntigravityErrorEvent
       ) {
-        return failureResult(error.message, 0, "", signals);
+        return failureResult(error.message, 0, "", signals, output.usage);
       }
-      return failureResult(`${this.harness.name} execution failed: ${shortError(error)}`, 0, "", signals);
+      return failureResult(`${this.harness.name} execution failed: ${shortError(error)}`, 0, "", signals, output.usage);
     }
     const stderrTail = redactSecrets(boundTail(run.stderr, MAX_STDERR_TAIL_CHARS));
     if (run.exitCode !== 0) {
@@ -284,6 +285,7 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
         run.exitCode,
         stderrTail,
         signals,
+        output.usage,
       );
     }
 
@@ -314,6 +316,8 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
         files: collection.files,
         signals,
         summary: summarizeRun(this.harness.name, input, collection.changedFiles, boundTail(run.stdout, MAX_STDOUT_TAIL_CHARS)),
+        // Only what the harness stream actually reported — never estimated.
+        ...(output.usage !== undefined ? { usage: output.usage } : {}),
       };
       // T45: a declared test command runs scoped after collection — the
       // exec.settled receipt is what T43's verify reads. A refusal is caught
@@ -339,7 +343,7 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
           }
         } catch (error) {
           if (!(error instanceof ScopedExecRefusal)) {
-            return failureResult(`Test command failed to execute: ${shortError(error)}`, run.exitCode, stderrTail, signals);
+            return failureResult(`Test command failed to execute: ${shortError(error)}`, run.exitCode, stderrTail, signals, output.usage);
           }
           // Refused: receipt recorded; verify below reports the real reason.
           await emit({ phase: "collect", message: "Test command refused by the exec allowlist.", fraction: 0.92 });
@@ -350,11 +354,11 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
       // receipt. Deterministic evidence only; this feeds T46's proof gate.
       const verification = await this.harness.verify(input, completed);
       if (!verification.ok) {
-        return failureResult(`Verification failed: ${verification.reason}`, run.exitCode, stderrTail, signals);
+        return failureResult(`Verification failed: ${verification.reason}`, run.exitCode, stderrTail, signals, output.usage);
       }
       return completed;
     } catch (error) {
-      return failureResult(`Change collection failed: ${shortError(error)}`, run.exitCode, stderrTail, signals);
+      return failureResult(`Change collection failed: ${shortError(error)}`, run.exitCode, stderrTail, signals, output.usage);
     }
   }
 }
@@ -581,6 +585,7 @@ function failureResult(
   exitCode: number,
   stderrTail: string,
   signals?: RunSignal[],
+  usage?: RunUsage,
 ): CodingTaskResult {
   return {
     status: "error",
@@ -592,6 +597,8 @@ function failureResult(
     // Partial signals survive a failure — the missing ones name the
     // phase the run never reached.
     ...(signals && signals.length > 0 ? { signals } : {}),
+    // Tokens the harness reported before the failure are real spend.
+    ...(usage !== undefined ? { usage } : {}),
     summary: redactSecrets(summary),
   };
 }
@@ -613,6 +620,9 @@ export { buildOpencodeArgv, buildOpencodeConfig } from "./harness/opencode.js";
 interface OutputStream {
   onData: (stream: "stdout" | "stderr", data: string) => void;
   finish: () => Promise<void>;
+  /** Harness-reported token/cost totals accumulated so far; absent when the
+   * stream never emitted a usage event. */
+  usage: RunUsage | undefined;
 }
 
 /**
@@ -636,9 +646,10 @@ function streamProgress(harness: AgentHarness, emit: ProgressEmitter, _signal?: 
       }),
     );
   };
-  return {
-    onData(stream, data) {
-      if (stream !== "stdout") return;
+  const stream: OutputStream = {
+    usage: undefined,
+    onData(stream_, data) {
+      if (stream_ !== "stdout") return;
       buffer += data;
       for (;;) {
         const newline = buffer.indexOf("\n");
@@ -647,6 +658,14 @@ function streamProgress(harness: AgentHarness, emit: ProgressEmitter, _signal?: 
         buffer = buffer.slice(newline + 1);
         try {
           const event = harness.parseEvent(line);
+          if (event === null || event === undefined) continue;
+          // Usage events carry real reported numbers: per-step deltas sum,
+          // a cumulative report replaces (it already includes the deltas).
+          if (event.kind === "usage") {
+            stream.usage = event.cumulative === true
+              ? { ...event.usage }
+              : mergeRunUsage(stream.usage, event.usage);
+          }
           if (event?.text.trim()) emitText(`[${harness.name}] ${event.text}`);
         } catch (error) {
           // Error events must propagate so the run fails honestly.
@@ -673,6 +692,7 @@ function streamProgress(harness: AgentHarness, emit: ProgressEmitter, _signal?: 
       await pending;
     },
   };
+  return stream;
 }
 
 function summarizeRun(harnessName: string, input: CodingTaskInput, changedFiles: string[], stdoutTail: string): string {

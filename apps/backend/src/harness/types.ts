@@ -10,6 +10,7 @@
  * {@link DUMMY_PROVIDER_KEY} and the real credential is swapped in outside
  * the container by the Worker's egress handler (src/egress.ts).
  */
+import type { RunUsage } from "@shiba/shared";
 import type { CodingTaskInput, CodingTaskResult } from "../opencode-input.js";
 import { shellJoin } from "../security.js";
 
@@ -165,7 +166,27 @@ export type HarnessEvent =
   | { readonly kind: "text"; readonly text: string }
   | { readonly kind: "tool"; readonly name: string; readonly text: string }
   | { readonly kind: "result"; readonly text: string }
+  | {
+      readonly kind: "usage";
+      readonly usage: RunUsage;
+      /**
+       * The report's shape: per-step deltas (opencode `step_finish`) sum
+       * into the run total; run-cumulative blocks (claude `result`,
+       * codex `turn.completed`) already hold the total and replace it.
+       */
+      readonly cumulative?: boolean;
+      readonly text: string;
+    }
   | { readonly kind: "progress"; readonly text: string };
+
+/** Human-readable one-liner for a usage event's `text` slot. */
+export function describeUsage(usage: RunUsage): string {
+  const parts: string[] = [];
+  if (usage.inputTokens !== undefined) parts.push(`${usage.inputTokens.toLocaleString("en-US")} in`);
+  if (usage.outputTokens !== undefined) parts.push(`${usage.outputTokens.toLocaleString("en-US")} out`);
+  if (usage.costUsd !== undefined) parts.push(`$${usage.costUsd.toFixed(4)}`);
+  return parts.length > 0 ? `usage: ${parts.join(" / ")}` : "usage reported";
+}
 
 /**
  * T43 declared capabilities — the interface is the seam: a new harness

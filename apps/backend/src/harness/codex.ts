@@ -10,6 +10,7 @@ import { DUMMY_PROVIDER_KEY } from "../provider-gateway.js";
 import { boundTail } from "../security.js";
 import {
   assertSupportedModel,
+  describeUsage,
   PROVIDER_HOSTS,
   PROVIDER_KEY_ENV,
   type AgentHarness,
@@ -18,6 +19,7 @@ import {
   type VerificationOutcome,
   verifyRunOutcome,
 } from "./types.js";
+import type { RunUsage } from "@shiba/shared";
 
 export const CODEX_PROVIDERS = ["openai"] as const;
 
@@ -63,7 +65,40 @@ export function parseCodexEvent(line: string): HarnessEvent | null {
       ? record.message.trim()
       : "";
   if (text) return { kind: "text", text: boundTail(text, 500) };
+  if (record.type === "turn.completed") {
+    // turn.completed carries the turn's cumulative usage block — the
+    // run's whole token spend in one report.
+    const usage = turnUsage(record.usage);
+    if (usage !== undefined) {
+      return { kind: "usage", cumulative: true, usage, text: describeUsage(usage) };
+    }
+  }
   return { kind: "progress", text: boundTail(summarize(record), 500) };
+}
+
+/**
+ * `input_tokens` excludes cached traffic — fold cached reads/writes into
+ * input; reasoning tokens are output-side. Codex reports no USD figure, so
+ * costUsd stays absent.
+ */
+function turnUsage(usage: unknown): RunUsage | undefined {
+  if (typeof usage !== "object" || usage === null) return undefined;
+  const record = usage as Record<string, unknown>;
+  const num = (key: string): number | undefined =>
+    typeof record[key] === "number" && Number.isFinite(record[key] as number) ? (record[key] as number) : undefined;
+  const input = num("input_tokens");
+  const cached = num("cached_input_tokens");
+  const cacheWrite = num("cache_write_input_tokens");
+  const output = num("output_tokens");
+  const reasoning = num("reasoning_output_tokens");
+  const parsed: RunUsage = {};
+  if (input !== undefined || cached !== undefined || cacheWrite !== undefined) {
+    parsed.inputTokens = (input ?? 0) + (cached ?? 0) + (cacheWrite ?? 0);
+  }
+  if (output !== undefined || reasoning !== undefined) {
+    parsed.outputTokens = (output ?? 0) + (reasoning ?? 0);
+  }
+  return parsed.inputTokens !== undefined || parsed.outputTokens !== undefined ? parsed : undefined;
 }
 
 function summarize(record: Record<string, unknown>): string {
