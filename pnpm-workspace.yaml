@@ -15,3 +15,4 @@ onlyBuiltDependencies:
 patchedDependencies:
   brace-expansion@5.0.12: patches/brace-expansion@5.0.12.patch
   chat@4.40.0: patches/chat@4.40.0.patch
+  ai@7.0.102: patches/ai@7.0.102.patch

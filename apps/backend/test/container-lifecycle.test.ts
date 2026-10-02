@@ -9,7 +9,6 @@ import {
   leakedContainerCount,
   leakedContainers,
   runWithContainer,
-  setLeakPersistence,
   setSandboxHandleResolver,
   setSandboxOpsFactory,
   type ManagedContainer,
@@ -249,33 +248,54 @@ describe("runWithContainer", () => {
     expect(logged).not.toContain("destroy boom");
   });
 
-  it("fires the persistence sink on leak and the forget sink on forgetLeaked", async () => {
+  it("fires the leak hooks passed to the call and forget hooks on forgetLeaked", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     const recorded: string[] = [];
     const forgotten: string[] = [];
-    setLeakPersistence(
-      (leak) => recorded.push(leak.sandboxId),
-      (sandboxId) => forgotten.push(sandboxId),
-    );
-    try {
-      await expect(
-        runWithContainer(
-          {
-            acquire: async () => fakeOps(),
-            release: async () => {
-              throw new Error("destroy boom");
-            },
-            sandboxId: "sbx-leak-durable",
+    await expect(
+      runWithContainer(
+        {
+          acquire: async () => fakeOps(),
+          release: async () => {
+            throw new Error("destroy boom");
           },
-          async () => {},
-        ),
-      ).rejects.toThrow("destroy boom");
-      expect(recorded).toEqual(["sbx-leak-durable"]);
-      forgetLeaked("sbx-leak-durable");
-      expect(forgotten).toEqual(["sbx-leak-durable"]);
-    } finally {
-      setLeakPersistence(() => {}, () => {});
-    }
+          sandboxId: "sbx-leak-durable",
+          hooks: { onLeak: (leak) => recorded.push(leak.sandboxId) },
+        },
+        async () => {},
+      ),
+    ).rejects.toThrow("destroy boom");
+    expect(recorded).toEqual(["sbx-leak-durable"]);
+    forgetLeaked("sbx-leak-durable", { onForget: (sandboxId) => forgotten.push(sandboxId) });
+    expect(forgotten).toEqual(["sbx-leak-durable"]);
+  });
+
+  it("does not fire hooks carried by a different destroy call — leaks stay scoped to their caller", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const otherDoRecorded: string[] = [];
+    // Simulates a second orchestrator DO: its hooks must not fire for this
+    // call's leak even though both share the module-global registry.
+    const otherDoHooks = { onLeak: (leak: { sandboxId: string }) => otherDoRecorded.push(leak.sandboxId) };
+    await expect(
+      runWithContainer(
+        {
+          acquire: async () => fakeOps(),
+          release: async () => {
+            throw new Error("destroy boom");
+          },
+          sandboxId: "sbx-cross-do",
+          hooks: otherDoHooks,
+        },
+        async () => {},
+      ),
+    ).rejects.toThrow("destroy boom");
+    expect(otherDoRecorded).toEqual(["sbx-cross-do"]);
+    // A destroyManagedContainer call without hooks (another DO's path) must
+    // not invoke the first DO's hooks a second time.
+    mocks.destroy.mockRejectedValueOnce(new Error("still down"));
+    await destroyManagedContainer(fakeEnv(), "sbx-cross-do-2");
+    expect(otherDoRecorded).toEqual(["sbx-cross-do"]);
   });
 
   it("task error wins over a release failure, and the leak is still recorded", async () => {

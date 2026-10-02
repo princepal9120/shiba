@@ -59,7 +59,7 @@ import { approvalCardText, buildApprovalBlocks, type ApprovalCardInput } from ".
 import {
   destroyManagedContainer,
   leakedContainers,
-  setLeakPersistence,
+  type LeakHooks,
 } from "../sandbox/lifecycle.js";
 import { runWorkerEffect, toRunFailure, tryRunPromise } from "../effect/runtime.js";
 import { classifyExecutorError, classifyRunError, runErrorWire, toTaggedError, type RunErrorCode, type RunErrorWire } from "../run-errors.js";
@@ -489,7 +489,10 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         "Delegate a coding task to an isolated Cloudflare Sandbox container running OpenCode. " +
         "Requires human approval before anything runs.",
       inputSchema: delegateInputSchema,
-      needsApproval: true,
+      needsApproval: async (input: DelegateInput, options: { toolCallId: string }) => {
+        await this.mintChatGateApproval(input, options.toolCallId);
+        return true;
+      },
       execute: async (input: DelegateInput, options?: { toolCallId?: string; abortSignal?: AbortSignal }) => {
         return this.executeDelegatedTask(input, childExecute, options?.toolCallId, options?.abortSignal);
       },
@@ -582,20 +585,66 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       });
       const callId = toolCallId ?? crypto.randomUUID();
       const runId = `agent-tool:${callId}`;
-      const reserved = this.store.get(runId);
-      const pointer = this.approvals.find((approval) => approval.approvalId === callId);
+      let reserved = this.store.get(runId);
+      let pointer = this.approvals.find((approval) => approval.approvalId === callId);
       if (!reserved && pointer?.status === "approved") {
         return "Run was removed before execution.";
       }
       if (reserved && reserved.status !== "pending") {
         return reserved.summary ?? reserved.error ?? `Run is ${reserved.status}.`;
       }
-      // T40 gate: the only production caller is the /api/approvals resolve
-      // dispatch, which mints the reserved run carrying approval evidence.
-      // An execute with no approved pointer was a latent bypass — refuse it
-      // instead of queueing a run the decider could never legally start.
+      // T40 gate: an execute with no approval trail stays refused. Two
+      // producers legally reach here: the /api/approvals resolve dispatch
+      // (pointer approved, run already reserved) and a chat-gate Approve —
+      // the AI-SDK continuation only calls execute after a human approves,
+      // so a pending pointer minted at gate emission resolves in place.
       if (!reserved) {
-        return "Run is not approved to execute.";
+        if (pointer === undefined || pointer.status !== "pending") {
+          return "Run is not approved to execute.";
+        }
+        if (!canStartRun(this.store.list())) {
+          return "All coding runs are busy. Approve again when a slot frees.";
+        }
+        const gateThreadKey = pointer.threadKey;
+        const resolved = resolvePendingApproval(
+          this.approvals,
+          {
+            threadKey: gateThreadKey,
+            approvalId: callId,
+            approved: true,
+            decidedBy: `chat:${this.name ?? "unknown"}`,
+          },
+          Date.now(),
+        );
+        const record =
+          resolved.result === "approved"
+            ? resolved.approvals.find(
+                (a) => a.approvalId === callId && a.threadKey === gateThreadKey,
+              )
+            : undefined;
+        if (record === undefined) {
+          return "Run is not approved to execute.";
+        }
+        const minted = this.mintApprovedRun(record);
+        // Decision, reserved run, and resolve receipt commit in one write —
+        // the same atomic triple the /api/approvals resolve lands (T41).
+        this.setState({
+          ...this.state,
+          pendingApprovals: resolved.approvals,
+          runs: [...this.store.list(), minted],
+          commandReceipts: this.withCommandReceipt({
+            commandId: `approval:${callId}`,
+            kind: "approval.resolve",
+            outcome: "approved",
+            threadKey: pointer.threadKey,
+            approvalId: callId,
+            runId: minted.runId,
+            dispatched: true,
+            at: Date.now(),
+          }),
+        });
+        reserved = minted;
+        pointer = record;
       }
       // T51 dispatch-side check — the queued record's frozen runtime is what
       // counts; the intake gate can never be bypassed by a chat-surface tool
@@ -1241,6 +1290,41 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
   }
 
   /**
+   * Bridge the AI-SDK approval gate into the durable queue. The gate's
+   * Approve must find a real pendingApprovals record — keyed on the
+   * toolCallId, which is the only id execute receives — or the approved
+   * tool call can never mint its run (the approval evaporates and the
+   * card was a dead end). The pointer freezes the resolved route so the
+   * human approves exactly the connection/model that runs. Called from
+   * needsApproval: idempotent because the SDK re-evaluates it after the
+   * response lands. An inadmissible route throws here, before the card —
+   * the same contract intake holds.
+   */
+  private async mintChatGateApproval(input: DelegateInput, toolCallId: string): Promise<void> {
+    if (this.approvals.some((a) => a.approvalId === toolCallId)) return;
+    // Same flood bound as /api/approvals intake — pending records persist.
+    if (this.approvals.filter((a) => a.status === "pending").length >= 100) return;
+    const { route } = await this.resolveRoute(input);
+    this.setState({
+      ...this.state,
+      pendingApprovals: createPendingApproval(this.approvals, {
+        threadKey: this.name ?? "default",
+        approvalId: toolCallId,
+        repoUrl: input.repoUrl,
+        task: input.task.slice(0, 4000),
+        baseBranch: input.baseBranch,
+        publishPullRequest: input.publishPullRequest,
+        route,
+        ...(typeof input.authAccount === "string" && input.authAccount.trim()
+          ? { authAccount: input.authAccount.trim().slice(0, 32) }
+          : {}),
+        ...(input.runtime !== undefined ? { runtime: input.runtime } : {}),
+        createdAt: Date.now(),
+      }),
+    });
+  }
+
+  /**
    * Mint the run an approved run-kind record points at — shared by the
    * resolve path and the onStart re-drive so both build the identical
    * record (run id, sandbox id, frozen route, and T40 evidence).
@@ -1482,38 +1566,34 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     return run.errorCode ? { ...run, errorWire: runErrorWire(run.errorCode) } : run;
   }
 
-  private leakPersistenceArmed = false;
   /** Mirror the per-isolate leak registry into DO state so hibernation
-   * can't strand a failed destroy — the sink is registered lazily because
-   * subclasses in tests may skip the base constructor. */
-  private armLeakPersistence(): void {
-    if (this.leakPersistenceArmed) return;
-    this.leakPersistenceArmed = true;
-    setLeakPersistence(
-      (leak) =>
+   * can't strand a failed destroy. The hooks travel with each destroy call
+   * — DO instances share the isolate's module globals, so a registered
+   * sink would let another DO's leak write into this one's state. */
+  private leakHooks(): LeakHooks {
+    return {
+      onLeak: (leak) =>
         this.setState({
           ...this.state,
           leakedContainers: { ...this.state?.leakedContainers, [leak.sandboxId]: leak },
         }),
-      (sandboxId) => {
+      onForget: (sandboxId) => {
         if (this.state?.leakedContainers?.[sandboxId] === undefined) return;
         const next = { ...this.state.leakedContainers };
         delete next[sandboxId];
         this.setState({ ...this.state, leakedContainers: next });
       },
-    );
+    };
   }
 
   private async destroySandbox(sandboxId: string): Promise<void> {
     // Release goes through the scoped lifecycle: failures are tracked as
     // leaked containers (warn + registry) instead of only logged.
-    this.armLeakPersistence();
-    await destroyManagedContainer(this.env, sandboxId);
+    await destroyManagedContainer(this.env, sandboxId, this.leakHooks());
   }
 
   /** Public: also the `schedule()` callback armed when a run starts. */
   async reclaimRuns(): Promise<void> {
-    this.armLeakPersistence();
     const { runs, reclaimed } = reclaimStaleRuns(this.store.list(), Date.now());
     if (reclaimed.length > 0) {
       this.setState({ ...this.state, runs });

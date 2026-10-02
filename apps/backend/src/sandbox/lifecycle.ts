@@ -108,20 +108,20 @@ export interface LeakedContainer {
 }
 
 // Per-isolate: a Durable Object hibernation resets this registry. Callers
-// that can persist (the orchestrator DO) should register a sink so a leak
-// recorded before hibernation still gets its destroy retried.
+// that can persist (the orchestrator DO) pass LeakHooks so a leak recorded
+// before hibernation still gets its destroy retried.
 const leakedRegistry = new Map<string, LeakedContainer>();
 let leakedCount = 0;
-let leakSink: ((leak: LeakedContainer) => void) | undefined;
-let forgetSink: ((sandboxId: string) => void) | undefined;
 
-/** Register durable leak/forfeit callbacks (called fire-and-forget). */
-export function setLeakPersistence(
-  onLeak: (leak: LeakedContainer) => void,
-  onForget: (sandboxId: string) => void,
-): void {
-  leakSink = onLeak;
-  forgetSink = onForget;
+/**
+ * Durable leak/forget callbacks for one destroy/release call. DOs share the
+ * isolate's module globals, so the hooks must travel with the call — a
+ * module-global sink lets the last-armed DO's setState fire for another
+ * DO's leak.
+ */
+export interface LeakHooks {
+  readonly onLeak?: (leak: LeakedContainer) => void;
+  readonly onForget?: (sandboxId: string) => void;
 }
 
 /** Total release failures seen since this module loaded. */
@@ -135,17 +135,17 @@ export function leakedContainers(): readonly LeakedContainer[] {
 }
 
 /** Drop the registry entry after a retry-destroy succeeded. */
-export function forgetLeaked(sandboxId: string): void {
+export function forgetLeaked(sandboxId: string, hooks?: LeakHooks): void {
   leakedRegistry.delete(sandboxId);
-  forgetSink?.(sandboxId);
+  hooks?.onForget?.(sandboxId);
 }
 
-function recordLeak(sandboxId: string, error: unknown): void {
+function recordLeak(sandboxId: string, error: unknown, hooks?: LeakHooks): void {
   leakedCount += 1;
   const message = redactSecrets(error instanceof Error ? error.message : String(error));
   const leak = { sandboxId, leakedAt: Date.now(), error: message.slice(0, 2000) };
   leakedRegistry.set(sandboxId, leak);
-  leakSink?.(leak);
+  hooks?.onLeak?.(leak);
 }
 
 /**
@@ -168,6 +168,7 @@ export const acquireContainer = (opts: {
   release: (sandboxId: string) => Promise<void>;
   sandboxId: string;
   signal?: AbortSignal;
+  hooks?: LeakHooks;
 }): Effect.Effect<ManagedContainer, never, Scope.Scope> =>
   Effect.acquireRelease(
     Effect.promise(
@@ -181,7 +182,7 @@ export const acquireContainer = (opts: {
           return;
         }
         container.markLeaked();
-        recordLeak(opts.sandboxId, Cause.squash(exit.cause));
+        recordLeak(opts.sandboxId, Cause.squash(exit.cause), opts.hooks);
         console.error(`Failed to release sandbox container ${opts.sandboxId}`);
         yield* Effect.failCause(exit.cause);
       }),
@@ -210,6 +211,7 @@ export async function runWithContainer<T>(
     release: (sandboxId: string) => Promise<void>;
     sandboxId: string;
     signal?: AbortSignal;
+    hooks?: LeakHooks;
   },
   task: (container: ManagedContainer) => T | Promise<T>,
 ): Promise<T> {
@@ -275,15 +277,19 @@ export function setSandboxHandleResolver(resolver: SandboxHandleResolver | undef
  * through the leak registry (warn + track, never throw) so reclaim/onStart can
  * find leaked containers. A successful destroy clears any stale leak record.
  */
-export async function destroyManagedContainer(env: Env, sandboxId: string): Promise<void> {
+export async function destroyManagedContainer(
+  env: Env,
+  sandboxId: string,
+  hooks?: LeakHooks,
+): Promise<void> {
   try {
     const resolve = sandboxHandleResolver ?? (await import("@cloudflare/sandbox")).getSandbox;
     await resolve(env.Sandbox, sandboxId).destroy();
-    forgetLeaked(sandboxId);
+    forgetLeaked(sandboxId, hooks);
   } catch (error) {
     // Cleanup failure must not overwrite the recorded outcome.
     console.warn(`Failed to destroy sandbox ${sandboxId}: ${redactSecrets(String(error))}`);
-    recordLeak(sandboxId, error);
+    recordLeak(sandboxId, error, hooks);
   }
 }
 
