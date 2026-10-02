@@ -286,6 +286,10 @@ export function App(): React.JSX.Element {
   }, [notice]);
   const [showOnboardingModal, setShowOnboardingModal] = useState(false);
   const [mainView, setMainView] = useState<MainView>("tasks");
+  // Once visited, the mailbox stays mounted (hidden) — its local state
+  // (search text, selected thread, drafts) survives nav switches.
+  const [inboxMounted, setInboxMounted] = useState(mainView === "inbox");
+  if (mainView === "inbox" && !inboxMounted) setInboxMounted(true);
   const [setupDone, setSetupDone] = useState<number | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [selectedSessionId, setSelectedSessionId] = useState<string>("default");
@@ -1263,7 +1267,31 @@ export function App(): React.JSX.Element {
       ) : null}
 
       <div className="flex-1 flex min-w-0 min-h-0">
-      {mainView === "dashboard" ? (
+      {inboxMounted ? (
+        <div
+          className="flex-1 flex flex-col h-full overflow-hidden bg-[#f6f4ed] text-[#222320]"
+          style={mainView === "inbox" ? undefined : { display: "none" }}
+        >
+          <div className="border-b border-[#e0ded5] bg-[#f1efe6] px-4 lg:px-8 py-4 shrink-0 flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-base font-semibold text-[#222320] flex items-center gap-2">
+                <span>Mailbox</span>
+              </h2>
+              <p className="text-xs text-[#6a6f63]">
+                Cloudflare Email Routing, inbound triage, and approval-gated outbound send.
+              </p>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 lg:p-8">
+            <div className="max-w-6xl mx-auto">
+              <InboxTab onOpenApprovals={() => setMainView("approvals")} />
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {mainView === "inbox" ? (
+        null
+      ) : mainView === "dashboard" ? (
         <DashboardView
           runs={retainedRuns}
           pendingApprovals={pendingApprovals}
@@ -1581,24 +1609,6 @@ export function App(): React.JSX.Element {
           orchestratorName={orchestratorName}
           onRefresh={refreshRuns}
         />
-      ) : mainView === "inbox" ? (
-        <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#f6f4ed] text-[#222320]">
-          <div className="border-b border-[#e0ded5] bg-[#f1efe6] px-4 lg:px-8 py-4 shrink-0 flex items-center justify-between gap-4">
-            <div>
-              <h2 className="text-base font-semibold text-[#222320] flex items-center gap-2">
-                <span>Mailbox</span>
-              </h2>
-              <p className="text-xs text-[#6a6f63]">
-                Cloudflare Email Routing, inbound triage, and approval-gated outbound send.
-              </p>
-            </div>
-          </div>
-          <div className="flex-1 overflow-y-auto p-4 lg:p-8">
-            <div className="max-w-6xl mx-auto">
-              <InboxTab onOpenApprovals={() => setMainView("approvals")} />
-            </div>
-          </div>
-        </div>
       ) : mainView === "memory" ? (
         <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#f6f4ed] text-[#222320]">
           <div className="border-b border-[#e0ded5] bg-[#f1efe6] px-4 lg:px-8 py-4 shrink-0 flex items-center justify-between gap-4">
