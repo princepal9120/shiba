@@ -115,7 +115,7 @@ Baseline: **405 tests passing across 32 files**, typecheck and lint clean, `wran
 
 **Two things this rev deliberately did not do.** `registry.npmjs.org` stays off the egress allowlist. (The one-image-per-harness question from §11 is now moot for boot — the single image carries all three CLIs and the dry run verifies them.)
 
-### Already working — stop listing these as TODO
+### Already Working
 
 | Old claim | Reality |
 |---|---|
