@@ -7,10 +7,6 @@
 /app https://app.tryshiba.dev/app/ 301
 /app/ https://app.tryshiba.dev/app/ 301
 /app/* https://app.tryshiba.dev/app/:splat 301
-https://app.tryshiba.dev/ /app/ 302
-https://app.tryshiba.dev/* /app/:splat 302
-https://dashboard.tryshiba.dev/ /app/ 302
-https://dashboard.tryshiba.dev/* /app/:splat 302
 
 # Path aliases for dashboard
 /dashboard https://app.tryshiba.dev/app/ 301
