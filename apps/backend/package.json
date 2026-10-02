@@ -23,7 +23,7 @@
     "@modelcontextprotocol/server": "2.0.0",
     "agents": "0.23.0",
     "ai": "7.0.102",
-    "effect": "4.0.0-rc.117",
+    "effect": "4.0.0",
     "jose": "6.2.12",
     "postal-mime": "2.7.6",
     "zod": "4.3.2"

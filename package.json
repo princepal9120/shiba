@@ -33,14 +33,14 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.14",
-    "@effect/platform-bun": "4.0.0-rc.117",
-    "@effect/platform-node": "4.0.0-rc.117",
+    "@effect/platform-bun": "4.0.0",
+    "@effect/platform-node": "4.0.0",
     "@eslint/js": "^9.39.5",
     "@types/node": "^24.13.6",
 
     "@types/react": "19.2.18",
-    "alchemy": "2.0.0-beta.79",
-    "effect": "4.0.0-rc.117",
+    "alchemy": "2.0.0-beta.80",
+    "effect": "4.0.0",
     "eslint": "^9.39.5",
     "knip": "6.37.0",
     "turbo": "2.10.13",
