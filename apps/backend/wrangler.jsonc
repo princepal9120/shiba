@@ -49,6 +49,16 @@
     //   + /api/antigravity/callback (the pasted-redirect OAuth flow). No
     //   secret var — Google tokens live in the container profile.
     //   ANTIGRAVITY_SUBSCRIPTION_MODEL  per-deploy model override
+    //   SHIBA_CURSOR_SUBSCRIPTION=1  opens the /api/auth/cursor-subscription
+    //   lane.
+    //   CURSOR_SUBSCRIPTION_MODEL    per-deploy model override
+    //   CURSOR_SUBSCRIPTION_TOKEN[_<ACCOUNT>]  the operator's Cursor Agent
+    //   API key — a Wrangler secret, read only at egress.
+    //   SHIBA_DEVIN_SUBSCRIPTION=1   opens the /api/auth/devin-subscription
+    //   lane.
+    //   DEVIN_SUBSCRIPTION_MODEL     per-deploy model override
+    //   DEVIN_SUBSCRIPTION_TOKEN[_<ACCOUNT>]  the operator's Devin API
+    //   key/session token — a Wrangler secret, read only at egress.
     //   SHIBA_LOCAL_RUNTIME=1   admits runtime:"local" at the dashboard
     //   intake and opens /api/local for the operator daemon (T51).
     //   LOCAL_ADAPTER_TOKEN     bearer the `shiba local` daemon presents on

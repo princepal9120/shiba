@@ -11,7 +11,7 @@ import { parseCodexAuthJson } from "@shiba/shared";
 
 export type EgressEnv = Pick<
   WorkerEnv,
-  "AI" | "GATEWAY_ID" | "AI_GATEWAY_TOKEN" | "GITHUB_TOKEN" | "DEVIN_API_KEY" | "CLAUDE_SUBSCRIPTION_TOKEN" | "CODEX_SUBSCRIPTION_AUTH_JSON"
+  "AI" | "GATEWAY_ID" | "AI_GATEWAY_TOKEN" | "GITHUB_TOKEN" | "DEVIN_API_KEY" | "CLAUDE_SUBSCRIPTION_TOKEN" | "CODEX_SUBSCRIPTION_AUTH_JSON" | "CURSOR_SUBSCRIPTION_TOKEN" | "DEVIN_SUBSCRIPTION_TOKEN"
 >;
 
 /**
@@ -242,6 +242,59 @@ export async function forwardCodexSubscription(
 export { parseCodexAuthJson } from "@shiba/shared";
 
 /**
+ * The cursor-subscription egress branch. The container holds only a dummy
+ * CURSOR_API_KEY; the real Cursor Agent API key is attached here as
+ * `Authorization: Bearer <token>` — the scheme Cursor's own API surface
+ * documents (the Cloud Agents API accepts Basic or Bearer; the CLI's
+ * Connect RPCs authenticate the same way). Deny-by-default on the two
+ * hosts the CLI calls — api2.cursor.sh (API plane) and repo2.cursor.sh
+ * (repo/context backend): wrong host/protocol → 403, no secret → 503
+ * (fail closed, never silently forward).
+ */
+export async function forwardCursorSubscription(
+  request: Request,
+  env: EgressEnv,
+  ctx?: OutboundHandlerCtx,
+): Promise<Response> {
+  const params = (ctx?.params ?? {}) as Record<string, unknown>;
+  const account = typeof params.account === "string" && params.account !== "" ? params.account : "default";
+  const secretName =
+    account === "default"
+      ? "CURSOR_SUBSCRIPTION_TOKEN"
+      : `CURSOR_SUBSCRIPTION_TOKEN_${account.toUpperCase().replace(/-/g, "_")}`;
+  const token = (env as Record<string, unknown>)[secretName];
+  const target = new URL(request.url);
+  if (
+    target.protocol !== "https:" ||
+    (target.hostname !== "api2.cursor.sh" && target.hostname !== "repo2.cursor.sh") ||
+    target.username !== "" ||
+    target.password !== ""
+  ) {
+    return new Response("Invalid subscription destination.", { status: 403 });
+  }
+  if (request.method !== "GET" && request.method !== "POST") {
+    return new Response("Method not allowed.", { status: 405 });
+  }
+  if (typeof token !== "string" || token.trim() === "") {
+    return new Response(`${secretName} is not configured on this deployment.`, { status: 503 });
+  }
+  target.search = stripCredentialParams(target.search);
+  const headers = outboundHeaders(request);
+  headers.set("Authorization", `Bearer ${token}`);
+  try {
+    return await fetch(target, {
+      method: request.method,
+      headers,
+      body: request.method === "POST" ? request.body : undefined,
+      redirect: "manual",
+    });
+  } catch {
+    // Fetch errors can embed authenticated request details; never surface them.
+    return new Response("Subscription request failed.", { status: 502 });
+  }
+}
+
+/**
  * Devin CLI is not an AI Gateway provider — it authenticates to Cognition's
  * own backends with an account API key. The container holds a dummy key in
  * credentials.toml; here the real DEVIN_API_KEY replaces whatever
@@ -250,7 +303,7 @@ export { parseCodexAuthJson } from "@shiba/shared";
  * server) shows the CLI sends `Authorization: Basic <key>-<key>` — key
  * doubled — on every Connect RPC, so mirror that scheme exactly.
  */
-async function forwardDevin(request: Request, env: EgressEnv, host: string): Promise<Response> {
+async function forwardDevin(request: Request, env: EgressEnv, host: string, apiKey = env.DEVIN_API_KEY): Promise<Response> {
   const target = new URL(request.url);
   if (target.protocol !== "https:" || target.hostname !== host) {
     return new Response("Invalid Devin destination.", { status: 403 });
@@ -259,7 +312,6 @@ async function forwardDevin(request: Request, env: EgressEnv, host: string): Pro
   target.password = "";
   target.search = stripCredentialParams(target.search);
   const headers = outboundHeaders(request);
-  const apiKey = env.DEVIN_API_KEY;
   if (apiKey) {
     // Verified per-host: api.devin.ai/v3/* takes Bearer (Basic -> 403), while
     // server.codeium.com Connect RPCs take the CLI's own `Basic <key>-<key>`
@@ -290,8 +342,8 @@ async function forwardDevin(request: Request, env: EgressEnv, host: string): Pro
       const upstream = await response.clone().text();
       console.warn(
         `devin egress ${request.method} ${target.pathname} -> ${response.status} ` +
-          `key=${env.DEVIN_API_KEY ? "set" : "missing"} sentAuth=${headers.get("authorization") ? "yes" : "no"} ` +
-          `body=${upstream.slice(0, 300)}`, 
+          `key=${apiKey ? "set" : "missing"} sentAuth=${headers.get("authorization") ? "yes" : "no"} ` +
+          `body=${upstream.slice(0, 300)}`,
       );
     }
     return response;
@@ -448,6 +500,45 @@ export function forwardDevinApi(request: Request, env: EgressEnv): Promise<Respo
 /** server.codeium.com — inference backend Devin Pro accounts talk to. */
 export function forwardDevinInference(request: Request, env: EgressEnv): Promise<Response> {
   return forwardDevin(request, env, "server.codeium.com");
+}
+
+/**
+ * The devin-subscription egress branch: same wire as forwardDevinApi /
+ * forwardDevinInference, but the credential is the operator's
+ * DEVIN_SUBSCRIPTION_TOKEN[_<ACCOUNT>] rather than the deployment-wide
+ * DEVIN_API_KEY — per-host auth schemes are unchanged (Bearer on
+ * api.devin.ai, `Basic <key>-<key>` on server.codeium.com, protobuf body
+ * rewrite). Deny-by-default like every subscription branch: wrong
+ * host/protocol or userinfo → 403, non-GET/POST → 405, no secret → 503.
+ */
+export async function forwardDevinSubscription(
+  request: Request,
+  env: EgressEnv,
+  ctx?: OutboundHandlerCtx,
+): Promise<Response> {
+  const params = (ctx?.params ?? {}) as Record<string, unknown>;
+  const account = typeof params.account === "string" && params.account !== "" ? params.account : "default";
+  const secretName =
+    account === "default"
+      ? "DEVIN_SUBSCRIPTION_TOKEN"
+      : `DEVIN_SUBSCRIPTION_TOKEN_${account.toUpperCase().replace(/-/g, "_")}`;
+  const token = (env as Record<string, unknown>)[secretName];
+  const target = new URL(request.url);
+  if (
+    target.protocol !== "https:" ||
+    (target.hostname !== "api.devin.ai" && target.hostname !== "server.codeium.com") ||
+    target.username !== "" ||
+    target.password !== ""
+  ) {
+    return new Response("Invalid subscription destination.", { status: 403 });
+  }
+  if (request.method !== "GET" && request.method !== "POST") {
+    return new Response("Method not allowed.", { status: 405 });
+  }
+  if (typeof token !== "string" || token.trim() === "") {
+    return new Response(`${secretName} is not configured on this deployment.`, { status: 503 });
+  }
+  return forwardDevin(request, env, target.hostname, token);
 }
 
 async function forwardGitHub(request: Request, env: EgressEnv): Promise<Response> {

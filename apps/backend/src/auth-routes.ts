@@ -5,10 +5,10 @@
  * provisioned via `wrangler secret put`, never through this API. Extracted
  * from index.ts.
  */
-import { claudeSubscriptionAuth, codexSubscriptionAuth, AuthFlowError } from "@shiba/auth";
+import { claudeSubscriptionAuth, codexSubscriptionAuth, cursorSubscriptionAuth, devinSubscriptionAuth, AuthFlowError } from "@shiba/auth";
 import { handleAntigravityCallback, handleAntigravitySubscriptionAuth } from "./antigravity.js";
 import type { Env } from "./env.js";
-import { forwardClaudeSubscription, forwardCodexSubscription, type EgressEnv } from "./egress.js";
+import { forwardClaudeSubscription, forwardCodexSubscription, forwardCursorSubscription, forwardDevinSubscription, type EgressEnv } from "./egress.js";
 import { codexSubscriptionInstanceId } from "./harness/codex-subscription.js";
 import { getUserId } from "./request-auth.js";
 
@@ -109,6 +109,86 @@ async function handleCodexSubscriptionAuth(request: Request, env: Env): Promise<
 }
 
 /**
+ * Operator surface for the cursor-subscription auth flow (T47
+ * controller). Same verbs as claude-subscription; the instanceId keys on
+ * the account (`cursor-sub:<account>`).
+ *   GET  /api/auth/cursor-subscription?account=<name>  → snapshot
+ *   POST /api/auth/cursor-subscription/begin|verify|clear  → {account}
+ */
+async function handleCursorSubscriptionAuth(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  const sub = url.pathname.slice("/api/auth/cursor-subscription".length).replace(/^\/+|\/+$/g, "");
+  const ownerSessionId = getUserId(request) ?? "default";
+  const body =
+    request.method === "POST"
+      ? ((await request.json().catch(() => ({}))) as { account?: unknown })
+      : {};
+  const account = accountParam(request, url, body);
+  const controller = cursorSubscriptionAuth(env, `cursor-sub:${account}`, (request, e, ctx) =>
+    forwardCursorSubscription(request, e as EgressEnv, ctx),
+  );
+  try {
+    if (request.method === "GET" && sub === "") {
+      return Response.json({ snapshot: await controller.snapshot() });
+    }
+    if (request.method === "POST" && sub === "begin") {
+      await controller.begin(ownerSessionId);
+      return Response.json({ snapshot: await controller.snapshot() });
+    }
+    if (request.method === "POST" && sub === "verify") {
+      return Response.json({ snapshot: await controller.verify(ownerSessionId) });
+    }
+    if (request.method === "POST" && sub === "clear") {
+      await controller.clear(ownerSessionId);
+      return Response.json({ snapshot: await controller.snapshot() });
+    }
+  } catch (error) {
+    return authError(error);
+  }
+  return Response.json({ error: "Not found." }, { status: 404 });
+}
+
+/**
+ * Operator surface for the devin-subscription auth flow (T47
+ * controller). Same verbs as claude-subscription; the instanceId keys on
+ * the account (`devin-sub:<account>`).
+ *   GET  /api/auth/devin-subscription?account=<name>  → snapshot
+ *   POST /api/auth/devin-subscription/begin|verify|clear  → {account}
+ */
+async function handleDevinSubscriptionAuth(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  const sub = url.pathname.slice("/api/auth/devin-subscription".length).replace(/^\/+|\/+$/g, "");
+  const ownerSessionId = getUserId(request) ?? "default";
+  const body =
+    request.method === "POST"
+      ? ((await request.json().catch(() => ({}))) as { account?: unknown })
+      : {};
+  const account = accountParam(request, url, body);
+  const controller = devinSubscriptionAuth(env, `devin-sub:${account}`, (request, e, ctx) =>
+    forwardDevinSubscription(request, e as EgressEnv, ctx),
+  );
+  try {
+    if (request.method === "GET" && sub === "") {
+      return Response.json({ snapshot: await controller.snapshot() });
+    }
+    if (request.method === "POST" && sub === "begin") {
+      await controller.begin(ownerSessionId);
+      return Response.json({ snapshot: await controller.snapshot() });
+    }
+    if (request.method === "POST" && sub === "verify") {
+      return Response.json({ snapshot: await controller.verify(ownerSessionId) });
+    }
+    if (request.method === "POST" && sub === "clear") {
+      await controller.clear(ownerSessionId);
+      return Response.json({ snapshot: await controller.snapshot() });
+    }
+  } catch (error) {
+    return authError(error);
+  }
+  return Response.json({ error: "Not found." }, { status: 404 });
+}
+
+/**
  * Dispatch for the subscription-auth surface: `/api/auth/*` flows and the
  * antigravity pasted-redirect callback. Returns null when the path is not
  * in this surface.
@@ -126,6 +206,18 @@ export async function handleSubscriptionAuth(request: Request, env: Env): Promis
       return Response.json({ error: "Not found." }, { status: 404 });
     }
     return handleCodexSubscriptionAuth(request, env);
+  }
+  if (url.pathname === "/api/auth/cursor-subscription" || url.pathname.startsWith("/api/auth/cursor-subscription/")) {
+    if (env.SHIBA_CURSOR_SUBSCRIPTION !== "1") {
+      return Response.json({ error: "Not found." }, { status: 404 });
+    }
+    return handleCursorSubscriptionAuth(request, env);
+  }
+  if (url.pathname === "/api/auth/devin-subscription" || url.pathname.startsWith("/api/auth/devin-subscription/")) {
+    if (env.SHIBA_DEVIN_SUBSCRIPTION !== "1") {
+      return Response.json({ error: "Not found." }, { status: 404 });
+    }
+    return handleDevinSubscriptionAuth(request, env);
   }
   // T50: OAuth sign-in flow + the pasted-redirect callback (§18.12) —
   // handlers live in src/antigravity.ts.

@@ -8,4 +8,6 @@ export * from "./controller.js";
 export * from "./claude-subscription.js";
 export * from "./codex-subscription.js";
 export * from "./antigravity-subscription.js";
+export * from "./cursor-subscription.js";
+export * from "./devin-subscription.js";
 export type { AuthPhase, AuthSnapshot, ProviderAuthController } from "@shiba/shared";
