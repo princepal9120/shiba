@@ -1365,6 +1365,38 @@ const TAG_RE = /<[^<>]*>/g;
 // attributes the anchor regex already captured.
 const BARE_URL_RE = /\b[a-z][a-z0-9+.-]*:\/\/[^\s<>"')]+/gi;
 
+/** A {@link FlaggedLink} plus the anchor text it carried (`<a>` links only). */
+export interface ExtractedLink extends FlaggedLink {
+  /** Tag-stripped anchor text for `<a href>` links; `null` for bare URLs. */
+  anchor_text: string | null;
+}
+
+/**
+ * Extract every link from HTML or plain text, keeping each `<a>` link's
+ * anchor text alongside its {@link LinkFlag}s — action links ("Sign in",
+ * "Verify your account") are unidentifiable from the URL alone.
+ */
+export function extractLinks(content: string): ExtractedLink[] {
+  const links: ExtractedLink[] = [];
+  let text = content;
+  for (const match of content.matchAll(ANCHOR_RE)) {
+    const href = match[1] ?? match[2] ?? match[3] ?? "";
+    const anchorText = (match[4] ?? "").replace(TAG_RE, " ").trim();
+    links.push({
+      url: href,
+      anchor_text: anchorText === "" ? null : anchorText,
+      flags: flagsForUrl(href, anchorText),
+    });
+    text = text.replace(match[0], " ");
+  }
+  text = text.replace(TAG_RE, " ");
+  for (const match of text.matchAll(BARE_URL_RE)) {
+    const raw = match[0].replace(/[.,;:!?]+$/, "");
+    links.push({ url: raw, anchor_text: null, flags: flagsForUrl(raw) });
+  }
+  return links;
+}
+
 /**
  * Extract every link from HTML or plain text and classify each with zero or
  * more {@link LinkFlag}s: `private_ip` (RFC1918/loopback/link-local host),
@@ -1372,20 +1404,7 @@ const BARE_URL_RE = /\b[a-z][a-z0-9+.-]*:\/\/[^\s<>"')]+/gi;
  * (anchor text advertises a different domain than the href).
  */
 export function flagLinks(content: string): FlaggedLink[] {
-  const links: FlaggedLink[] = [];
-  let text = content;
-  for (const match of content.matchAll(ANCHOR_RE)) {
-    const href = match[1] ?? match[2] ?? match[3] ?? "";
-    const anchorText = (match[4] ?? "").replace(TAG_RE, " ").trim();
-    links.push({ url: href, flags: flagsForUrl(href, anchorText) });
-    text = text.replace(match[0], " ");
-  }
-  text = text.replace(TAG_RE, " ");
-  for (const match of text.matchAll(BARE_URL_RE)) {
-    const raw = match[0].replace(/[.,;:!?]+$/, "");
-    links.push({ url: raw, flags: flagsForUrl(raw) });
-  }
-  return links;
+  return extractLinks(content).map(({ url, flags }) => ({ url, flags }));
 }
 
 /**
