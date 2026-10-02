@@ -12,9 +12,11 @@ import { Effect } from "effect";
 import { z } from "zod";
 import type { Env } from "../env.js";
 import {
+  AGENT_ROLES,
   LOCAL_INTAKE_DASHBOARD,
   LOCAL_INTAKE_HEADER,
   LOCAL_RUNTIME_FLAG,
+  isAgentRole,
   runtimeSelectionSchema,
 } from "@shiba/shared";
 import {
@@ -80,6 +82,7 @@ import { HARNESS_DEFAULT_MODELS, allowedHostsFor, harnessRunsOn, resolveHarness 
 import { describeRoute, isApprovedRoute, type ApprovedRoute } from "../model-connections.js";
 import { readModelConfig, revalidateCodingRoute, resolveCodingRoute } from "../model-policy.js";
 import { OpenCodeAgent } from "./opencode-agent.js";
+import { resolveRoleModel } from "./roles.js";
 import {
   MAX_SESSIONS_PER_USER,
   isDashboardAgentName,
@@ -145,6 +148,14 @@ const delegateInputSchema = z.object({
         "claude-code needs an anthropic/* model; claude-subscription needs an anthropic-subscription/* model and is only " +
         "registered on deployments with SHIBA_CLAUDE_SUBSCRIPTION=1; codex needs an openai/* model; " +
         "devin needs a devin/* model; grok needs an xai/* model.",
+    ),
+  role: z
+    .enum(AGENT_ROLES)
+    .optional()
+    .describe(
+      "Delegation role (orchestrator | explorer | fixer | reviewer | designer). " +
+        "When set, the deployment's ROLE_MODEL_MAP / ROLE_MODEL__<ROLE> pin " +
+        "resolves the harness and model before any per-call or deployment default.",
     ),
   authAccount: z
     .string()
@@ -504,7 +515,13 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
   }
 
   private resolveHarnessAndModel(input: DelegateInput): { harness: string; codingModel: string } {
-    const harnessName = input.harness ?? this.env.AGENT_HARNESS?.trim() ?? "opencode";
+    // T52: a delegation carrying `role` resolves through the operator's
+    // role pins (ROLE_MODEL_MAP, then ROLE_MODEL__<ROLE>) before any
+    // per-call or deployment default; an unpinned role falls through to
+    // the chain below unchanged. A pinned role's model is authoritative —
+    // a per-call codingModel cannot override what the operator pinned.
+    const rolePick = input.role !== undefined ? resolveRoleModel(this.env, input.role) : null;
+    const harnessName = rolePick?.harness ?? input.harness ?? this.env.AGENT_HARNESS?.trim() ?? "opencode";
     const harness = resolveHarness(harnessName, this.env);
     const perHarnessVar =
       harness.name === "opencode"
@@ -527,6 +544,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
                 ? this.env.GROK_MODEL?.trim()
                 : this.env.DEVIN_MODEL?.trim();
     const codingModel =
+      rolePick?.model ||
       input.codingModel?.trim() ||
       perHarnessVar ||
       (HARNESS_DEFAULT_MODELS[harness.name] as string);
@@ -693,6 +711,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         ...(slackIds ? { slackThread: { channelId: slackIds.channelId, threadTs: slackIds.threadTs } } : {}),
         ...(input.testCommand ? { testCommand: input.testCommand } : {}),
         ...(input.authAccount ? { authAccount: input.authAccount } : {}),
+        ...(input.role !== undefined ? { role: input.role } : {}),
       };
       // Chat-originated runs get the outcome back in the thread in the
       // coworker voice; the summary carries the PR link when one was published.
@@ -911,7 +930,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
    * the pointer via POST /api/approvals. Email-kind approvals freeze a
    * mailbox payload instead of a run input.
    */
-  private async queueSlackRun(input: { repoUrl?: unknown; task?: unknown; baseBranch?: unknown; publishPullRequest?: unknown; harness?: unknown; codingModel?: unknown; connectionId?: unknown; authAccount?: unknown; runtime?: unknown; intake?: unknown; threadKey?: unknown; kind?: unknown; mailbox?: unknown; payload?: unknown; queuedBy?: unknown; commandId?: unknown }): Promise<Response> {
+  private async queueSlackRun(input: { repoUrl?: unknown; task?: unknown; baseBranch?: unknown; publishPullRequest?: unknown; harness?: unknown; codingModel?: unknown; connectionId?: unknown; authAccount?: unknown; runtime?: unknown; role?: unknown; intake?: unknown; threadKey?: unknown; kind?: unknown; mailbox?: unknown; payload?: unknown; queuedBy?: unknown; commandId?: unknown }): Promise<Response> {
     const kind = typeof input.kind === "string" && input.kind.trim() ? input.kind.trim() : "run";
     if (kind === "email_send" || kind === "email_delete") {
       return this.queueEmailApprovalRecord(kind, input);
@@ -950,6 +969,12 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         return Response.json({ error: error instanceof Error ? error.message : "Unknown agent harness." }, { status: 400 });
       }
     }
+    // T52: the delegation role rides intake like harness/model — a bad
+    // role name fails before the card, never inside a container.
+    const role = typeof input.role === "string" ? input.role.trim() : "";
+    if (role !== "" && !isAgentRole(role)) {
+      return Response.json({ error: `Unknown role "${role.slice(0, 40)}": expected one of ${AGENT_ROLES.join(", ")}.` }, { status: 400 });
+    }
     const publishPullRequest = input.publishPullRequest === true;
     if (publishPullRequest && !this.env.GITHUB_TOKEN) {
       return Response.json({ error: "publishPullRequest was requested but GITHUB_TOKEN is not configured." }, { status: 400 });
@@ -967,6 +992,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         harness: typeof input.harness === "string" && input.harness.trim() ? (input.harness.trim() as DelegateInput["harness"]) : undefined,
         codingModel: typeof input.codingModel === "string" && input.codingModel.trim() ? input.codingModel.trim() : undefined,
         connectionId: typeof input.connectionId === "string" && input.connectionId.trim() ? input.connectionId.trim() : undefined,
+        ...(role !== "" ? { role } : {}),
       });
       route = resolved.route;
     } catch (error) {
@@ -1023,6 +1049,9 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
             : {}),
           // T51: the approved runtime rides the hashed frozen input.
           ...(runtime !== undefined ? { runtime } : {}),
+          // T52: the approved role rides the frozen input — dispatch
+          // threads it back into the run envelope.
+          ...(role !== "" ? { role } : {}),
           // Worker-vouched principal (X-Agent-Principal) — never the raw body,
           // so an operator-queued record can't be claimed by an agent token.
           ...(typeof input.queuedBy === "string" && input.queuedBy.trim()
@@ -1323,6 +1352,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
           ? { authAccount: input.authAccount.trim().slice(0, 32) }
           : {}),
         ...(input.runtime !== undefined ? { runtime: input.runtime } : {}),
+        ...(input.role !== undefined ? { role: input.role } : {}),
         createdAt: Date.now(),
       }),
     });
@@ -1405,6 +1435,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
               : {}),
           ...(run.authAccount ? { authAccount: run.authAccount } : {}),
           ...(run.runtime !== undefined ? { runtime: run.runtime } : {}),
+          ...(record?.role !== undefined ? { role: record.role } : {}),
         }, { toolCallId: approvalId });
       } catch (error) {
         // delegate.execute can throw before its inner `finish` seam ran;

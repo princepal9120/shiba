@@ -67,7 +67,12 @@
     //   AGENT_MAILBOX          agent mailbox identity for the MCP
     //   latest_verification default — unset = dev@tryshiba.dev. Register
     //   the address in the Inbox and assign it to the agent principal.
-  },
+    // T52 per-role routing pins (agents/roles.ts) — plain vars, never
+    // secrets; absent = every role resolves through the deployment default:
+    //   ROLE_MODEL_MAP          JSON {"<role>":{"harness":"...","model":"..."}}
+    //   ROLE_MODEL__ORCHESTRATOR / __EXPLORER / __FIXER / __REVIEWER /
+    //   __DESIGNER              "harness/model" or bare "harness" per role
+  }, 
   "ai": {
     "binding": "AI",
   },

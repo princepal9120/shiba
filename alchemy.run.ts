@@ -303,6 +303,14 @@ export const Worker = Cloudflare.Worker("Worker", {
       "CODEX_MODEL",
       "DEVIN_MODEL",
       "GROK_MODEL",
+      // T52: per-role routing pins (agents/roles.ts) — absent = roles
+      // resolve through the deployment default chain.
+      "ROLE_MODEL_MAP",
+      "ROLE_MODEL__ORCHESTRATOR",
+      "ROLE_MODEL__EXPLORER",
+      "ROLE_MODEL__FIXER",
+      "ROLE_MODEL__REVIEWER",
+      "ROLE_MODEL__DESIGNER",
       "SLACK_APPROVALS_CHANNEL",
       // Agent mailbox identity (default dev@tryshiba.dev).
       "AGENT_MAILBOX",

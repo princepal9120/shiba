@@ -14,6 +14,7 @@ export * from "./mcp.js";
 export * from "./memory.js";
 export * from "./model.js";
 export * from "./receipts.js";
+export * from "./roles.js";
 export * from "./run-errors.js";
 export * from "./runs.js";
 export * from "./steering.js";
