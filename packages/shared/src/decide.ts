@@ -353,6 +353,7 @@ function applyPatch(run: DelegatedRun, patch: RunPatch | undefined): void {
   if (patch.receipts !== undefined) run.receipts = patch.receipts;
   if (patch.sandboxId !== undefined) run.sandboxId = patch.sandboxId;
   if (patch.signals !== undefined) run.signals = patch.signals;
+  if (patch.usage !== undefined) run.usage = patch.usage;
 }
 
 /**

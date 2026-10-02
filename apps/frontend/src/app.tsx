@@ -1653,6 +1653,8 @@ export function App(): React.JSX.Element {
           runs={retainedRuns}
           error={runsError}
           onNavigate={(view) => setMainView(view)}
+          sessionId={selectedSessionId}
+          sessionApiAvailable={sessionApiAvailable}
         />
       ) : (
         null

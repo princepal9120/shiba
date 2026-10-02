@@ -127,6 +127,18 @@ const codingTaskResultSchema = z.object({
       }),
     )
     .optional(),
+  /**
+   * Token/cost usage the harness's event stream reported (T-usage). Rides
+   * the envelope so the parent persists real numbers on the run row; absent
+   * when the harness emitted no usage — never estimated.
+   */
+  usage: z
+    .object({
+      inputTokens: z.number().nonnegative().optional(),
+      outputTokens: z.number().nonnegative().optional(),
+      costUsd: z.number().nonnegative().optional(),
+    })
+    .optional(),
 });
 
 export type CodingTaskResult = z.infer<typeof codingTaskResultSchema>;

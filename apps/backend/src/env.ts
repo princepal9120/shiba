@@ -183,6 +183,8 @@ export interface Env {
    * Unset = the dashboard Approvals surface is their only resolve path.
    */
   SLACK_APPROVALS_CHANNEL?: string;
+  /** Optional. Daily USD budget for the /api/usage report's budget line. */
+  USAGE_BUDGET_USD?: string;
   /** Optional. JSON map `{channelId: "https://github.com/owner/repo"}` for bare mentions. */
   SLACK_CHANNEL_REPOS?: string;
   /** Optional. Telegram bot token from BotFather; unset disables the Telegram route. */

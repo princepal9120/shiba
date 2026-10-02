@@ -13,6 +13,7 @@ import { DUMMY_PROVIDER_KEY } from "../provider-gateway.js";
 import { boundTail } from "../security.js";
 import {
   assertSupportedModel,
+  describeUsage,
   PROVIDER_HOSTS,
   PROVIDER_KEY_ENV,
   type AgentHarness,
@@ -21,6 +22,7 @@ import {
   type VerificationOutcome,
   verifyRunOutcome,
 } from "./types.js";
+import type { RunUsage } from "@shiba/shared";
 
 export const CLAUDE_CODE_PROVIDERS = ["anthropic"] as const;
 
@@ -69,6 +71,9 @@ function claudeCodeEvent(record: Record<string, unknown>): HarnessEvent {
   const message = record.message;
   if (typeof message === "object" && message !== null) {
     const content = (message as { content?: unknown }).content;
+    // Assistant envelopes carry a per-request usage block — a delta the
+    // collector sums. A run dying mid-stream keeps the partial total.
+    const delta = assistantUsage(record.type, message);
     if (Array.isArray(content)) {
       const parts: string[] = [];
       const tools: string[] = [];
@@ -81,20 +86,62 @@ function claudeCodeEvent(record: Record<string, unknown>): HarnessEvent {
           tools.push(block.name);
         }
       }
+      if (delta !== undefined) {
+        return { kind: "usage", cumulative: false, usage: delta, text: boundTail(parts.join(" ").trim(), 500) };
+      }
       if (tools.length > 0) {
         return { kind: "tool", name: tools.join(", "), text: boundTail(parts.join(" ").trim(), 500) };
       }
       if (parts.length > 0) {
         return { kind: "text", text: boundTail(parts.join(" ").trim(), 500) };
       }
+    } else if (delta !== undefined) {
+      return { kind: "usage", cumulative: false, usage: delta, text: describeUsage(delta) };
     }
   }
   if (typeof record.result === "string" && record.result.trim()) {
-    return { kind: "result", text: boundTail(record.result.trim(), 500) };
+    // The result envelope's usage block is the run's authoritative
+    // cumulative total — it supersedes the summed assistant deltas.
+    const usage = resultUsage(record);
+    const text = boundTail(record.result.trim(), 500);
+    return usage !== undefined ? { kind: "usage", cumulative: true, usage, text } : { kind: "result", text };
   }
   const type = typeof record.type === "string" ? record.type : "event";
   const keys = Object.keys(record).filter((key) => key !== "type").slice(0, 6);
   return { kind: "progress", text: boundTail(keys.length ? `${type} (${keys.join(", ")})` : type, 500) };
+}
+
+/** `input_tokens` excludes cache traffic — fold reads/writes into input. */
+function claudeUsageBlock(usage: unknown): RunUsage | undefined {
+  if (typeof usage !== "object" || usage === null) return undefined;
+  const record = usage as Record<string, unknown>;
+  const num = (key: string): number | undefined =>
+    typeof record[key] === "number" && Number.isFinite(record[key] as number) ? (record[key] as number) : undefined;
+  const input = num("input_tokens");
+  const cacheRead = num("cache_read_input_tokens");
+  const cacheWrite = num("cache_creation_input_tokens");
+  const output = num("output_tokens");
+  const parsed: RunUsage = {};
+  if (input !== undefined || cacheRead !== undefined || cacheWrite !== undefined) {
+    parsed.inputTokens = (input ?? 0) + (cacheRead ?? 0) + (cacheWrite ?? 0);
+  }
+  if (output !== undefined) parsed.outputTokens = output;
+  return parsed.inputTokens !== undefined || parsed.outputTokens !== undefined ? parsed : undefined;
+}
+
+function assistantUsage(type: unknown, message: object): RunUsage | undefined {
+  if (type !== "assistant") return undefined;
+  return claudeUsageBlock((message as { usage?: unknown }).usage);
+}
+
+function resultUsage(record: Record<string, unknown>): RunUsage | undefined {
+  const tokens = claudeUsageBlock(record.usage);
+  const cost =
+    typeof record.total_cost_usd === "number" && Number.isFinite(record.total_cost_usd) && record.total_cost_usd >= 0
+      ? record.total_cost_usd
+      : undefined;
+  if (tokens === undefined && cost === undefined) return undefined;
+  return { ...(tokens ?? {}), ...(cost !== undefined ? { costUsd: cost } : {}) };
 }
 
 export class ClaudeCodeHarness implements AgentHarness {

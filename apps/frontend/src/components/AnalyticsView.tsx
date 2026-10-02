@@ -8,6 +8,12 @@ import { useMemo, type JSX } from "react";
 import type { AppNavView } from "./AppNavRail";
 import { LoadErrorState } from "./LoadErrorState";
 import { ToneChip } from "./ToneChip";
+import {
+  useUsageReport,
+  type UsageDayWire,
+  type UsageGroupWire,
+  type UsageReportWire,
+} from "../live-status";
 import type { RetainedRun } from "../types";
 import {
   ERROR_FAMILY_STATUSES,
@@ -102,10 +108,14 @@ export function AnalyticsView({
   runs,
   error,
   onNavigate,
+  sessionId,
+  sessionApiAvailable,
 }: {
   runs: RetainedRun[];
   error?: string | null;
   onNavigate?: (view: AppNavView) => void;
+  sessionId: string;
+  sessionApiAvailable: boolean;
 }): JSX.Element {
   const stats = useMemo(() => {
     const terminal = runs.filter((run) => isTerminal(run.status));
@@ -212,15 +222,7 @@ export function AnalyticsView({
             />
           </div>
 
-          {/* Honest gap: DelegatedRun carries no token or USD fields. */}
-          <section className="rounded-none border border-dashed border-[#d3d2c8] bg-[#fffef8]/60 px-4 py-4">
-            <h3 className="text-xs font-semibold text-[#222320]">Token usage &amp; cost</h3>
-            <p className="mt-1 text-xs leading-relaxed text-[#6a6f63]">
-              Not tracked — run records (<span className="font-mono">DelegatedRun</span>) carry no token counts or
-              USD cost fields. Billing for this deployment is container-seconds at the Cloudflare Containers layer;
-              provider spend lives at AI Gateway, which the Worker does not introspect.
-            </p>
-          </section>
+          <UsageSection sessionId={sessionId} sessionApiAvailable={sessionApiAvailable} />
 
           <section className="rounded-none border border-[#e0ded5] bg-[#fffef8] shadow-[2px_2px_0_var(--paper-shadow)]">
             <header className="flex items-center justify-between gap-3 border-b border-[#e0ded5] px-4 py-2.5">
@@ -320,6 +322,207 @@ export function AnalyticsView({
             Statuses roll up the registry vocabulary — <ToneChip tone="ok" label="completed" /> counts toward the
             success rate; error, aborted, cancelled, and unknown count toward the error family.
           </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Compact token count — an absent field renders "—", never a fabricated zero. */
+function tokenCount(n: number | undefined): string {
+  return n === undefined
+    ? "—"
+    : new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(n);
+}
+
+function usdCost(n: number | undefined): string {
+  if (n === undefined) return "—";
+  return `$${n > 0 && n < 0.01 ? n.toFixed(4) : n.toFixed(2)}`;
+}
+
+function tokenTotalLabel(input: number | undefined, output: number | undefined): string {
+  const parts: string[] = [];
+  if (input !== undefined) parts.push(`${tokenCount(input)} in`);
+  if (output !== undefined) parts.push(`${tokenCount(output)} out`);
+  return parts.length > 0 ? parts.join(" / ") : "—";
+}
+
+/** Sum a day's worth of reports; a field appears only if some day carried it. */
+function usageTotals(days: UsageDayWire[]): { inputTokens?: number; outputTokens?: number; costUsd?: number } {
+  const totals: { inputTokens?: number; outputTokens?: number; costUsd?: number } = {};
+  for (const day of days) {
+    if (day.inputTokens !== undefined) totals.inputTokens = (totals.inputTokens ?? 0) + day.inputTokens;
+    if (day.outputTokens !== undefined) totals.outputTokens = (totals.outputTokens ?? 0) + day.outputTokens;
+    if (day.costUsd !== undefined) totals.costUsd = (totals.costUsd ?? 0) + day.costUsd;
+  }
+  return totals;
+}
+
+/** Merge per-day groups across the window into one row per harness/provider/role. */
+function mergeUsageGroups(days: UsageDayWire[]): UsageGroupWire[] {
+  const merged = new Map<string, UsageGroupWire>();
+  for (const day of days) {
+    for (const group of day.groups) {
+      const key = `${group.harness ?? ""}${group.provider ?? ""}${group.role ?? ""}`;
+      const row = merged.get(key) ?? {
+        harness: group.harness,
+        provider: group.provider,
+        role: group.role,
+        runs: 0,
+      };
+      row.runs += group.runs;
+      if (group.inputTokens !== undefined) row.inputTokens = (row.inputTokens ?? 0) + group.inputTokens;
+      if (group.outputTokens !== undefined) row.outputTokens = (row.outputTokens ?? 0) + group.outputTokens;
+      if (group.costUsd !== undefined) row.costUsd = (row.costUsd ?? 0) + group.costUsd;
+      merged.set(key, row);
+    }
+  }
+  return [...merged.values()].sort((a, b) => (b.inputTokens ?? 0) - (a.inputTokens ?? 0));
+}
+
+/**
+ * Token usage & budget — the daily aggregates `GET /api/usage` computes over
+ * the retained run store. Buckets are UTC days (the wire says so); every
+ * number is only what a harness stream reported, so a run that never emits
+ * usage contributes nothing and a field that no run reported stays "—".
+ */
+function UsageSection({
+  sessionId,
+  sessionApiAvailable,
+}: {
+  sessionId: string;
+  sessionApiAvailable: boolean;
+}): JSX.Element {
+  const usage = useUsageReport(sessionId, sessionApiAvailable);
+  return (
+    <section className="rounded-none border border-[#e0ded5] bg-[#fffef8] shadow-[2px_2px_0_var(--paper-shadow)]">
+      <header className="flex items-center justify-between gap-3 border-b border-[#e0ded5] px-4 py-2.5">
+        <div>
+          <h3 className="text-xs font-semibold text-[#222320]">Token usage &amp; budget</h3>
+          <p className="text-[11px] text-[#6a6f63]">
+            Daily harness-reported usage — UTC buckets over the retained run store.
+          </p>
+        </div>
+        {usage.state.kind === "data" || usage.state.kind === "error" ? (
+          <button
+            type="button"
+            onClick={usage.reload}
+            className="text-[11px] font-mono font-medium text-[#1c1cc8] transition-colors hover:text-[#0000a8]"
+          >
+            Refresh →
+          </button>
+        ) : null}
+      </header>
+      {usage.state.kind === "loading" ? (
+        <div className="px-4 py-6 text-center text-xs text-[#6a6f63]">Loading usage…</div>
+      ) : usage.state.kind === "error" ? (
+        <div className="px-4 py-3">
+          <LoadErrorState message={usage.state.message} onRetry={usage.reload} />
+        </div>
+      ) : (
+        <UsageReportBody report={usage.state.data} />
+      )}
+    </section>
+  );
+}
+
+function UsageReportBody({ report }: { report: UsageReportWire }): JSX.Element {
+  // The backend buckets by UTC day — "today" is the same UTC day.
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const weekStartKey = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const weekDays = report.days.filter((day) => day.date >= weekStartKey);
+  const today = report.days.find((day) => day.date === todayKey);
+  const week = usageTotals(weekDays);
+  const groups = mergeUsageGroups(weekDays);
+  const spentToday = today?.costUsd;
+  const budget = report.budgetUsd;
+  const spentPct =
+    budget !== null && budget > 0 && spentToday !== undefined
+      ? Math.min(100, (spentToday / budget) * 100)
+      : 0;
+
+  if (report.days.length === 0) {
+    return (
+      <div className="px-4 py-6 text-center">
+        <p className="text-xs text-[#6a6f63]">
+          No retained run has reported token usage yet. opencode, claude-code, and codex streams carry it;
+          devin, grok, cursor, and antigravity runs don&apos;t — their runs keep contributing only run counts.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-4 px-4 py-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <MetricCard
+          label="Tokens · today"
+          value={tokenTotalLabel(today?.inputTokens, today?.outputTokens)}
+          sub={today !== undefined ? `${today.runs} run${today.runs === 1 ? "" : "s"} reported` : "Nothing reported today"}
+        />
+        <MetricCard
+          label="Tokens · 7 days"
+          value={tokenTotalLabel(week.inputTokens, week.outputTokens)}
+          sub={`${weekDays.reduce((sum, day) => sum + day.runs, 0)} run${weekDays.reduce((sum, day) => sum + day.runs, 0) === 1 ? "" : "s"} reported`}
+        />
+        <MetricCard
+          label="Cost · today"
+          value={usdCost(today?.costUsd)}
+          sub="Reported by the harness, not estimated"
+        />
+        <MetricCard
+          label="Cost · 7 days"
+          value={usdCost(week.costUsd)}
+          sub="Reported by the harness, not estimated"
+        />
+      </div>
+
+      {budget !== null ? (
+        <div className="rounded-none border border-[#e0ded5] bg-[#f6f4ed] px-4 py-3">
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="text-xs font-semibold text-[#222320]">Daily budget</span>
+            <span className="font-mono text-[11px] text-[#6a6f63]">
+              {spentToday === undefined ? "no spend reported" : usdCost(spentToday)} of {usdCost(budget)}
+            </span>
+          </div>
+          <div className="mt-2 h-2 border border-[#e0ded5] bg-[#e0ded5]/60">
+            <div
+              className={`h-full ${spentToday !== undefined && spentToday > budget ? "bg-[#fb2c36]" : "bg-[#1c1cc8]"}`}
+              style={{ width: `${spentPct}%` }}
+            />
+          </div>
+          <p className="mt-1.5 text-[11px] text-[#6a6f63]">
+            USAGE_BUDGET_USD — today&apos;s reported cost against the configured daily budget.
+          </p>
+        </div>
+      ) : null}
+
+      <div>
+        <p className="text-[10px] font-mono font-semibold uppercase tracking-[0.12em] text-[#6a6f63]">
+          Per harness · last 7 days
+        </p>
+        <div className="mt-2 flex flex-col gap-2">
+          {groups.length === 0 ? (
+            <p className="text-xs text-[#6a6f63]">No usage in the last 7 days.</p>
+          ) : (
+            groups.map((group) => (
+              <div
+                key={`${group.harness ?? ""}/${group.provider ?? ""}/${group.role ?? ""}`}
+                className="flex items-baseline justify-between gap-3 border-b border-[#e0ded5]/60 pb-2 last:border-b-0"
+              >
+                <span className="font-mono text-[11px] text-[#222320]">
+                  {group.harness ?? "not recorded"}
+                  {group.provider !== null ? <span className="text-[#6a6f63]"> · {group.provider}</span> : null}
+                  {group.role !== null ? <span className="text-[#6a6f63]"> · {group.role}</span> : null}
+                </span>
+                <span className="text-right font-mono text-[11px] text-[#6a6f63]">
+                  {tokenTotalLabel(group.inputTokens, group.outputTokens)}
+                  {group.costUsd !== undefined ? ` · ${usdCost(group.costUsd)}` : ""}
+                  {` · ${group.runs} run${group.runs === 1 ? "" : "s"}`}
+                </span>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>

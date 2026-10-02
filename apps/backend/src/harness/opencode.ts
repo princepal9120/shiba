@@ -12,6 +12,7 @@ import { DUMMY_PROVIDER_KEY } from "../provider-gateway.js";
 import { boundTail } from "../security.js";
 import {
   assertSupportedModel,
+  describeUsage,
   PROVIDER_HOSTS,
   PROVIDER_KEY_ENV,
   type AgentHarness,
@@ -21,6 +22,7 @@ import {
   type VerificationOutcome,
   verifyRunOutcome,
 } from "./types.js";
+import type { RunUsage } from "@shiba/shared";
 
 /** OpenCode is multi-provider; the gateway decides which are actually reachable. */
 export const OPENCODE_PROVIDERS = ["google", "anthropic", "openai", "xai", "opencode-go"] as const;
@@ -61,10 +63,47 @@ export function parseOpencodeEvent(line: string): HarnessEvent | null {
     throw new OpenCodeErrorEvent(boundTail(detail, 500));
   }
   const part = record.part ?? record.parts;
+  if (record.type === "step_finish" && typeof part === "object" && part !== null) {
+    const usage = stepFinishUsage(part as Record<string, unknown>);
+    if (usage !== undefined) {
+      return { kind: "usage", usage, text: describeUsage(usage) };
+    }
+  }
   if (typeof part === "string" && part.trim()) {
     return { kind: "text", text: boundTail(part.trim(), 500) };
   }
   return { kind: "progress", text: boundTail(summarizeUnknown(record), 500) };
+}
+
+/**
+ * `step_finish` parts carry the step's token counts and USD cost — a delta,
+ * so the collector sums them. `input` excludes prompt-cache traffic, so
+ * cache reads/writes are folded into inputTokens; reasoning tokens are
+ * output-side. Fields the CLI didn't emit stay absent.
+ */
+function stepFinishUsage(part: Record<string, unknown>): RunUsage | undefined {
+  const tokens = part.tokens;
+  const usage: RunUsage = {};
+  if (typeof tokens === "object" && tokens !== null) {
+    const counts = tokens as Record<string, unknown>;
+    const num = (key: string): number =>
+      typeof counts[key] === "number" && Number.isFinite(counts[key] as number) ? (counts[key] as number) : 0;
+    const cache = typeof counts.cache === "object" && counts.cache !== null
+      ? (counts.cache as Record<string, unknown>)
+      : {};
+    const cacheNum = (key: string): number =>
+      typeof cache[key] === "number" && Number.isFinite(cache[key] as number) ? (cache[key] as number) : 0;
+    const input = num("input") + cacheNum("read") + cacheNum("write");
+    const output = num("output") + num("reasoning");
+    if (input > 0) usage.inputTokens = input;
+    if (output > 0) usage.outputTokens = output;
+  }
+  if (typeof part.cost === "number" && Number.isFinite(part.cost) && part.cost >= 0) {
+    usage.costUsd = part.cost;
+  }
+  return usage.inputTokens !== undefined || usage.outputTokens !== undefined || usage.costUsd !== undefined
+    ? usage
+    : undefined;
 }
 
 function summarizeUnknown(record: Record<string, unknown>): string {

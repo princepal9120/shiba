@@ -6,7 +6,7 @@ import { GrokErrorEvent, grokHarness, parseGrokEvent } from "../src/harness/grok
 import { agentCliCatalog } from "../src/harness/catalog.js";
 import { compatibleHarnesses } from "../src/model-connections.js";
 import { allowedHostsFor, HARNESS_DEFAULT_MODELS, resolveHarness, resolveRunHarness } from "../src/harness/index.js";
-import { opencodeHarness } from "../src/harness/opencode.js";
+import { opencodeHarness, parseOpencodeEvent } from "../src/harness/opencode.js";
 import { providerOf } from "../src/harness/types.js";
 import { createRuntimeAdapter } from "../src/runtime.js";
 import type { CodingTaskInput } from "../src/opencode-input.js";
@@ -229,6 +229,94 @@ describe("codex harness (T22)", () => {
     expect(() => parseCodexEvent(JSON.stringify({ type: "error", message: "boom" }))).toThrow(CodexErrorEvent);
     expect(() => parseCodexEvent("[1,2]")).toThrow(/not an object/);
     expect(parseCodexEvent("")).toBeNull();
+  });
+});
+
+describe("usage reporting — only what a harness stream emits", () => {
+  it("opencode step_finish folds cache+reasoning into a delta and keeps cost", () => {
+    const line = JSON.stringify({
+      type: "step_finish",
+      part: {
+        tokens: { input: 100, output: 40, reasoning: 5, cache: { read: 20, write: 3 } },
+        cost: 0.0042,
+      },
+    });
+    expect(parseOpencodeEvent(line)).toEqual({
+      kind: "usage",
+      usage: { inputTokens: 123, outputTokens: 45, costUsd: 0.0042 },
+      text: "usage: 123 in / 45 out / $0.0042",
+    });
+  });
+
+  it("opencode step_finish without token fields stays progress", () => {
+    const event = parseOpencodeEvent(JSON.stringify({ type: "step_finish", part: { type: "step-finish" } }));
+    expect(event).toEqual({ kind: "progress", text: "step_finish" });
+  });
+
+  it("claude assistant envelopes emit the per-request usage delta alongside the text", () => {
+    const line = JSON.stringify({
+      type: "assistant",
+      message: {
+        content: [{ type: "text", text: "Editing src/a.ts" }],
+        usage: {
+          input_tokens: 10,
+          output_tokens: 4,
+          cache_read_input_tokens: 6,
+          cache_creation_input_tokens: 2,
+        },
+      },
+    });
+    expect(parseClaudeCodeEvent(line)).toEqual({
+      kind: "usage",
+      cumulative: false,
+      usage: { inputTokens: 18, outputTokens: 4 },
+      text: "Editing src/a.ts",
+    });
+  });
+
+  it("claude result envelopes carry the cumulative run usage and USD cost", () => {
+    const line = JSON.stringify({
+      type: "result",
+      result: "done",
+      usage: {
+        input_tokens: 50,
+        output_tokens: 9,
+        cache_read_input_tokens: 10,
+        cache_creation_input_tokens: 5,
+      },
+      total_cost_usd: 0.0123,
+    });
+    expect(parseClaudeCodeEvent(line)).toEqual({
+      kind: "usage",
+      cumulative: true,
+      usage: { inputTokens: 65, outputTokens: 9, costUsd: 0.0123 },
+      text: "done",
+    });
+    // A result without usage still reports as the terminal event.
+    expect(parseClaudeCodeEvent(JSON.stringify({ type: "result", result: "done" })))
+      .toEqual({ kind: "result", text: "done" });
+  });
+
+  it("codex turn.completed carries the turn's cumulative usage block", () => {
+    const line = JSON.stringify({
+      type: "turn.completed",
+      usage: {
+        input_tokens: 300,
+        cached_input_tokens: 40,
+        cache_write_input_tokens: 10,
+        output_tokens: 90,
+        reasoning_output_tokens: 30,
+      },
+    });
+    expect(parseCodexEvent(line)).toEqual({
+      kind: "usage",
+      cumulative: true,
+      usage: { inputTokens: 350, outputTokens: 120 },
+      text: "usage: 350 in / 120 out",
+    });
+    // Without a usage block it stays progress, never fabricated.
+    expect(parseCodexEvent(JSON.stringify({ type: "turn.completed" })))
+      .toEqual({ kind: "progress", text: "turn.completed" });
   });
 });
 

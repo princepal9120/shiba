@@ -31,6 +31,7 @@ import { handleMemory } from "./memory-routes.js";
 import { handleOAuth } from "./oauth-mcp.js";
 import { handleMeta } from "./meta-routes.js";
 import { handleRuns } from "./runs-routes.js";
+import { handleUsage } from "./usage-routes.js";
 import { handleScreenshot } from "./screenshots-routes.js";
 import { handleWebSessions } from "./sessions-routes.js";
 import { redactSecrets } from "./security.js";
@@ -195,6 +196,10 @@ export default {
       const runsResponse = await handleRuns(request, env);
       if (runsResponse) {
         return runsResponse;
+      }
+      const usageResponse = await handleUsage(request, env);
+      if (usageResponse) {
+        return usageResponse;
       }
       const screenshotResponse = await handleScreenshot(request, env);
       if (screenshotResponse) {

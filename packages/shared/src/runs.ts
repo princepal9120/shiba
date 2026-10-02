@@ -103,6 +103,50 @@ export interface DelegatedRun {
    * LocalDispatch mailbox to the operator's daemon; absent = sandbox.
    */
   runtime?: RuntimeSelection;
+  /**
+   * Token/cost usage the harness's event stream actually reported — never
+   * fabricated. Absent when the harness emits no parseable usage (devin,
+   * grok, cursor, antigravity, the local daemon) or the run died before a
+   * usage event. `inputTokens` counts every input-side token the CLI
+   * reported, including prompt-cache reads and writes; `outputTokens`
+   * includes reasoning tokens. `costUsd` is present only when the CLI
+   * prices the run itself.
+   */
+  usage?: RunUsage;
+}
+
+/**
+ * The token/cost numbers one harness-reported usage block carries. Every
+ * field is optional: parsers copy what the CLI emitted and omit the rest,
+ * so a reported cost never implies reported token counts or vice versa.
+ */
+export interface RunUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  costUsd?: number;
+}
+
+/**
+ * Fold a per-step usage delta into the accumulated totals: sums each field
+ * the delta actually reported and leaves untouched fields untouched, so a
+ * field is present iff some report carried it. A run-cumulative report
+ * (e.g. a final result envelope) replaces rather than merges — the caller
+ * knows which form the harness emitted and picks accordingly.
+ */
+export function mergeRunUsage(base: RunUsage | undefined, delta: RunUsage | undefined): RunUsage | undefined {
+  if (base === undefined) return delta === undefined ? undefined : { ...delta };
+  if (delta === undefined) return { ...base };
+  const merged: RunUsage = {};
+  if (base.inputTokens !== undefined || delta.inputTokens !== undefined) {
+    merged.inputTokens = (base.inputTokens ?? 0) + (delta.inputTokens ?? 0);
+  }
+  if (base.outputTokens !== undefined || delta.outputTokens !== undefined) {
+    merged.outputTokens = (base.outputTokens ?? 0) + (delta.outputTokens ?? 0);
+  }
+  if (base.costUsd !== undefined || delta.costUsd !== undefined) {
+    merged.costUsd = (base.costUsd ?? 0) + (delta.costUsd ?? 0);
+  }
+  return merged;
 }
 
 export type RunPatch = {
@@ -116,6 +160,7 @@ export type RunPatch = {
   sandboxId?: string;
   signals?: RunSignal[];
   continuationKey?: string;
+  usage?: RunUsage;
 };
 
 /** Backfills fields persisted runs predate; never rejects a legacy record. */

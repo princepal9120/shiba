@@ -819,6 +819,9 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
                     // T42: the typed milestones ride the same envelope and
                     // land on the row — a waiter reads signals, not clocks.
                     signals: parsed.signals,
+                    // Harness-reported token/cost usage; absent when the
+                    // stream emitted none — never estimated.
+                    usage: parsed.usage,
                   },
                   slackRunCompleted({
                     repoUrl: fullInput.repoUrl,
@@ -871,6 +874,8 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
                 // T42: partial signals survive a failed run — the missing
                 // milestones name the phase it never reached.
                 signals: parsed?.signals,
+                // Tokens the harness reported before failing are real spend.
+                usage: parsed?.usage,
               }, slackRunFailed({
                 repoUrl: fullInput.repoUrl,
                 userMessage: runErrorWire(failure.code).userMessage,

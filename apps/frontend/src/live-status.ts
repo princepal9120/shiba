@@ -230,3 +230,45 @@ export function authPhaseTone(
       return "neutral";
   }
 }
+
+/**
+ * Wire shape of `GET /api/usage` — daily aggregates over the retained run
+ * store plus the deployment's optional daily budget. Every token/cost field
+ * is optional: the backend only reports what harnesses emitted, so an
+ * absent field means "not reported", not zero.
+ */
+export interface UsageGroupWire {
+  harness: string | null;
+  provider: string | null;
+  role: string | null;
+  runs: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  costUsd?: number;
+}
+
+export interface UsageDayWire {
+  date: string;
+  runs: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  costUsd?: number;
+  groups: UsageGroupWire[];
+}
+
+export interface UsageReportWire {
+  generatedAt: number;
+  timezone: string;
+  budgetUsd: number | null;
+  days: UsageDayWire[];
+}
+
+export function useUsageReport(
+  sessionId: string,
+  sessionApiAvailable: boolean,
+): { state: LoadState<UsageReportWire>; reload: () => void } {
+  const path = sessionApiAvailable
+    ? `/api/usage?session=${encodeURIComponent(sessionId)}`
+    : "/api/usage";
+  return useApiJson<UsageReportWire>(path);
+}
