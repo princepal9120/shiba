@@ -160,6 +160,13 @@ export const Worker = Cloudflare.Worker("Worker", {
   // Stable workers.dev stays on; `preview_urls: false` in wrangler terms —
   // version previews are reachable without Access, which is not the gate.
   workersDev: { enabled: true, previewsEnabled: false },
+  // wrangler `routes` parity: app.tryshiba.dev is the public dashboard host
+  // (dashboard + /api same-origin); dashboard.tryshiba.dev aliases it.
+  // Custom domains auto-manage DNS + edge TLS on the tryshiba.dev zone.
+  domain: {
+    name: "app.tryshiba.dev",
+    aliases: ["dashboard.tryshiba.dev"],
+  },
   crons: ["*/5 * * * *"],
   env: {
     GATEWAY_ID: "default",
@@ -170,7 +177,7 @@ export const Worker = Cloudflare.Worker("Worker", {
     INSTANCE_TYPE: "standard-1",
     // Public hostname for preview URLs + absolute screenshot links (T33).
     // Empty = PR screenshot capture disabled.
-    WORKER_HOSTNAME: "",
+    WORKER_HOSTNAME: "app.tryshiba.dev",
 
     AI: Cloudflare.Workers.AI(),
 

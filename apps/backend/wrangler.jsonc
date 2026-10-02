@@ -12,6 +12,14 @@
   // Version preview URLs are reachable without a Cloudflare Access policy;
   // the header-only Worker gate is not authentication on its own.
   "preview_urls": false,
+  // Public dashboard host: app.tryshiba.dev serves the Worker (dashboard +
+  // /api/* same-origin); dashboard.tryshiba.dev aliases it. Custom domains
+  // auto-manage DNS + edge TLS — the tryshiba.dev zone lives on this account.
+  // tryshiba.dev itself stays on Pages (landing + docs).
+  "routes": [
+    { "pattern": "app.tryshiba.dev", "custom_domain": true },
+    { "pattern": "dashboard.tryshiba.dev", "custom_domain": true },
+  ],
   "vars": {
     "GATEWAY_ID": "default",
     "ORCHESTRATOR_MODEL": "@cf/zai-org/glm-4.7-flash",
@@ -22,7 +30,7 @@
     // Public hostname of this Worker (e.g. "shiba.example.com") — used to
     // mint sandbox preview URLs and absolute screenshot links for PRs.
     // Empty = PR screenshot capture disabled (capture fails safe, never fails the run).
-    "WORKER_HOSTNAME": "",
+    "WORKER_HOSTNAME": "app.tryshiba.dev",
     // T48 opt-ins, set per-deploy via `wrangler secret put`/var overrides or
     // the alchemy configVars list (deliberately absent here = feature dark):
     //   SHIBA_CLAUDE_SUBSCRIPTION=1  registers the claude-subscription harness
