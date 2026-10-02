@@ -18,7 +18,10 @@ import { StepTimeline } from "./components/StepTimeline";
 import { DiffView } from "./components/DiffView";
 import { ApprovalsView } from "./components/ApprovalsView";
 import { InboxTab } from "./components/InboxTab";
+import { IntegrationsView } from "./components/IntegrationsView";
 import { MemoryTab } from "./components/MemoryTab";
+import { SettingsView } from "./components/SettingsView";
+import { AnalyticsView } from "./components/AnalyticsView";
 import { TaskComposer } from "./components/TaskComposer";
 import { toast } from "sonner";
 import { AppNavRail, APP_NAV_ITEMS, type AppNavView } from "./components/AppNavRail";
@@ -372,6 +375,12 @@ export function App(): React.JSX.Element {
         setMainView("missions");
       } else if (tabParam === "gates" || tabParam === "quality-gates") {
         setMainView("gates");
+      } else if (tabParam === "integrations") {
+        setMainView("integrations");
+      } else if (tabParam === "settings") {
+        setMainView("settings");
+      } else if (tabParam === "analytics" || tabParam === "costs") {
+        setMainView("analytics");
       }
     }
   }, []);
@@ -1635,6 +1644,16 @@ export function App(): React.JSX.Element {
         <MissionsView />
       ) : mainView === "gates" ? (
         <GatesView onNavigate={(view) => setMainView(view)} />
+      ) : mainView === "integrations" ? (
+        <IntegrationsView onNavigate={(view) => setMainView(view)} />
+      ) : mainView === "settings" ? (
+        <SettingsView onNavigate={(view) => setMainView(view)} />
+      ) : mainView === "analytics" ? (
+        <AnalyticsView
+          runs={retainedRuns}
+          error={runsError}
+          onNavigate={(view) => setMainView(view)}
+        />
       ) : (
         null
       )}
