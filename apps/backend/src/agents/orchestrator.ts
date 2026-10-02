@@ -489,7 +489,10 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         "Delegate a coding task to an isolated Cloudflare Sandbox container running OpenCode. " +
         "Requires human approval before anything runs.",
       inputSchema: delegateInputSchema,
-      needsApproval: true,
+      needsApproval: async (input: DelegateInput, options: { toolCallId: string }) => {
+        await this.mintChatGateApproval(input, options.toolCallId);
+        return true;
+      },
       execute: async (input: DelegateInput, options?: { toolCallId?: string; abortSignal?: AbortSignal }) => {
         return this.executeDelegatedTask(input, childExecute, options?.toolCallId, options?.abortSignal);
       },
@@ -582,20 +585,66 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       });
       const callId = toolCallId ?? crypto.randomUUID();
       const runId = `agent-tool:${callId}`;
-      const reserved = this.store.get(runId);
-      const pointer = this.approvals.find((approval) => approval.approvalId === callId);
+      let reserved = this.store.get(runId);
+      let pointer = this.approvals.find((approval) => approval.approvalId === callId);
       if (!reserved && pointer?.status === "approved") {
         return "Run was removed before execution.";
       }
       if (reserved && reserved.status !== "pending") {
         return reserved.summary ?? reserved.error ?? `Run is ${reserved.status}.`;
       }
-      // T40 gate: the only production caller is the /api/approvals resolve
-      // dispatch, which mints the reserved run carrying approval evidence.
-      // An execute with no approved pointer was a latent bypass — refuse it
-      // instead of queueing a run the decider could never legally start.
+      // T40 gate: an execute with no approval trail stays refused. Two
+      // producers legally reach here: the /api/approvals resolve dispatch
+      // (pointer approved, run already reserved) and a chat-gate Approve —
+      // the AI-SDK continuation only calls execute after a human approves,
+      // so a pending pointer minted at gate emission resolves in place.
       if (!reserved) {
-        return "Run is not approved to execute.";
+        if (pointer === undefined || pointer.status !== "pending") {
+          return "Run is not approved to execute.";
+        }
+        if (!canStartRun(this.store.list())) {
+          return "All coding runs are busy. Approve again when a slot frees.";
+        }
+        const gateThreadKey = pointer.threadKey;
+        const resolved = resolvePendingApproval(
+          this.approvals,
+          {
+            threadKey: gateThreadKey,
+            approvalId: callId,
+            approved: true,
+            decidedBy: `chat:${this.name ?? "unknown"}`,
+          },
+          Date.now(),
+        );
+        const record =
+          resolved.result === "approved"
+            ? resolved.approvals.find(
+                (a) => a.approvalId === callId && a.threadKey === gateThreadKey,
+              )
+            : undefined;
+        if (record === undefined) {
+          return "Run is not approved to execute.";
+        }
+        const minted = this.mintApprovedRun(record);
+        // Decision, reserved run, and resolve receipt commit in one write —
+        // the same atomic triple the /api/approvals resolve lands (T41).
+        this.setState({
+          ...this.state,
+          pendingApprovals: resolved.approvals,
+          runs: [...this.store.list(), minted],
+          commandReceipts: this.withCommandReceipt({
+            commandId: `approval:${callId}`,
+            kind: "approval.resolve",
+            outcome: "approved",
+            threadKey: pointer.threadKey,
+            approvalId: callId,
+            runId: minted.runId,
+            dispatched: true,
+            at: Date.now(),
+          }),
+        });
+        reserved = minted;
+        pointer = record;
       }
       // T51 dispatch-side check — the queued record's frozen runtime is what
       // counts; the intake gate can never be bypassed by a chat-surface tool
@@ -1238,6 +1287,41 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     this.releaseEmailApprovalDrafts(releasable, this.liveApprovalDrafts(now));
     this.sweepStaleDrafts(expiredSends.length > 0);
     return Response.json({ result: result.result satisfies ResolveResult });
+  }
+
+  /**
+   * Bridge the AI-SDK approval gate into the durable queue. The gate's
+   * Approve must find a real pendingApprovals record — keyed on the
+   * toolCallId, which is the only id execute receives — or the approved
+   * tool call can never mint its run (the approval evaporates and the
+   * card was a dead end). The pointer freezes the resolved route so the
+   * human approves exactly the connection/model that runs. Called from
+   * needsApproval: idempotent because the SDK re-evaluates it after the
+   * response lands. An inadmissible route throws here, before the card —
+   * the same contract intake holds.
+   */
+  private async mintChatGateApproval(input: DelegateInput, toolCallId: string): Promise<void> {
+    if (this.approvals.some((a) => a.approvalId === toolCallId)) return;
+    // Same flood bound as /api/approvals intake — pending records persist.
+    if (this.approvals.filter((a) => a.status === "pending").length >= 100) return;
+    const { route } = await this.resolveRoute(input);
+    this.setState({
+      ...this.state,
+      pendingApprovals: createPendingApproval(this.approvals, {
+        threadKey: this.name ?? "default",
+        approvalId: toolCallId,
+        repoUrl: input.repoUrl,
+        task: input.task.slice(0, 4000),
+        baseBranch: input.baseBranch,
+        publishPullRequest: input.publishPullRequest,
+        route,
+        ...(typeof input.authAccount === "string" && input.authAccount.trim()
+          ? { authAccount: input.authAccount.trim().slice(0, 32) }
+          : {}),
+        ...(input.runtime !== undefined ? { runtime: input.runtime } : {}),
+        createdAt: Date.now(),
+      }),
+    });
   }
 
   /**

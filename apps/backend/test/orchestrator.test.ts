@@ -594,3 +594,58 @@ describe("run reliability", () => {
     }
   });
 });
+
+describe("chat approval gate", () => {
+  const INPUT = { repoUrl: "https://github.com/o/r", task: "fix", baseBranch: "main", publishPullRequest: false };
+  type DelegateTool = {
+    needsApproval: (input: unknown, options: { toolCallId: string }) => Promise<boolean>;
+    execute: (input: unknown, options?: unknown) => Promise<unknown>;
+  };
+  const delegateOf = (instance: CodingOrchestrator) =>
+    instance.getTools()["delegate_coding_task"] as unknown as DelegateTool;
+
+  it("mints the durable pointer at gate time so chat Approve can mint its run", async () => {
+    const instance = agent();
+    mocks.execute.mockResolvedValue(formatAgentResult({
+      status: "completed", exitCode: 0, stderrTail: "", changedFiles: [], diff: "", files: [], summary: "done",
+    }));
+    const delegate = delegateOf(instance);
+
+    await expect(delegate.needsApproval(INPUT, { toolCallId: "chat-1" })).resolves.toBe(true);
+    const minted = instance.state.pendingApprovals?.find((a) => a.approvalId === "chat-1");
+    expect(minted?.status).toBe("pending");
+    expect(minted?.route?.modelId).toBeTruthy();
+    // The SDK re-evaluates needsApproval after the response lands — idempotent.
+    await expect(delegate.needsApproval(INPUT, { toolCallId: "chat-1" })).resolves.toBe(true);
+    expect(instance.state.pendingApprovals?.filter((a) => a.approvalId === "chat-1")).toHaveLength(1);
+
+    await delegate.execute(INPUT, { toolCallId: "chat-1" });
+    const pointer = instance.state.pendingApprovals?.find((a) => a.approvalId === "chat-1");
+    expect(pointer?.status).toBe("approved");
+    expect(pointer?.decidedBy).toMatch(/^chat:/);
+    const run = instance.state.runs.find((r) => r.runId === "agent-tool:chat-1");
+    expect(run?.status).toBe("completed");
+    expect(run?.approval?.approvalId).toBe("chat-1");
+    expect(mocks.execute).toHaveBeenCalledOnce();
+  });
+
+  it("still refuses an execute that no gate ever minted", async () => {
+    const instance = agent();
+    const out = await delegateOf(instance).execute(INPUT, { toolCallId: "never-gated" });
+    expect(out).toBe("Run is not approved to execute.");
+    expect(instance.state.runs).toEqual([]);
+    expect(mocks.execute).not.toHaveBeenCalled();
+  });
+
+  it("an inadmissible route fails before the card is minted", async () => {
+    const instance = agent();
+    const delegate = delegateOf(instance);
+    await expect(
+      delegate.needsApproval(
+        { ...INPUT, connectionId: "conn_missing" },
+        { toolCallId: "chat-bad-route" },
+      ),
+    ).rejects.toThrow("Unknown model connection");
+    expect(instance.state.pendingApprovals ?? []).toEqual([]);
+  });
+});
