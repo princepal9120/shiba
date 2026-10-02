@@ -1,13 +1,18 @@
 /docs /docs/overview/ 301
 /docs/ /docs/overview/ 301
 
-# App and Dashboard subdomains redirect to the SPA dashboard
+# The live dashboard is the Worker at app.tryshiba.dev — the static copy
+# under /app/ is a snapshot with no /api/* backend. Send dashboard traffic
+# to the real host; keep /app/ itself serving for deep assets.
+/app https://app.tryshiba.dev/app/ 301
+/app/ https://app.tryshiba.dev/app/ 301
+/app/* https://app.tryshiba.dev/app/:splat 301
 https://app.tryshiba.dev/ /app/ 302
 https://app.tryshiba.dev/* /app/:splat 302
 https://dashboard.tryshiba.dev/ /app/ 302
 https://dashboard.tryshiba.dev/* /app/:splat 302
 
 # Path aliases for dashboard
-/dashboard /app/ 301
-/dashboard/ /app/ 301
-/dashboard/* /app/:splat 301
+/dashboard https://app.tryshiba.dev/app/ 301
+/dashboard/ https://app.tryshiba.dev/app/ 301
+/dashboard/* https://app.tryshiba.dev/app/:splat 301
