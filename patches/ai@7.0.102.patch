@@ -1,0 +1,49 @@
+diff --git a/dist/index.js b/dist/index.js
+index 55442728ebfc5c806c1aa6e9905dd14590ac98e9..6083bbd726ec18d83fad957051e528ff26f17461 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -10167,10 +10167,28 @@ var DefaultStreamTextResult = class {
+         });
+         self.addStream(toolExecutionStepStream);
+         try {
++          // A consumer that only sees this stream (a resumed/reconnected
++          // client rebuilding the message from scratch) needs the resolved
++          // call's full lifecycle before its terminal chunk, or
++          // tool-output-*/tool-approval-* chunks reference a tool invocation
++          // that was never created on this stream.
++          const enqueueResolvedApprovalLifecycle = (toolApproval2) => {
++            for (const part of [
++              toolApproval2.toolCall,
++              // Stream parts nest the full toolCall; the stored model-content
++              // approval parts only carry a flat toolCallId — reshape them or
++              // the UI-boundary reader (part.toolCall.toolCallId) crashes.
++              { ...toolApproval2.approvalRequest, toolCall: toolApproval2.toolCall },
++              { ...toolApproval2.approvalResponse, toolCall: toolApproval2.toolCall }
++            ]) {
++              if (part != null) toolExecutionStepStreamController == null ? void 0 : toolExecutionStepStreamController.enqueue({ ...part });
++            }
++          };
+           for (const toolApproval2 of [
+             ...localDeniedToolApprovals,
+             ...deniedProviderExecutedToolApprovals
+           ]) {
++            enqueueResolvedApprovalLifecycle(toolApproval2);
+             toolExecutionStepStreamController == null ? void 0 : toolExecutionStepStreamController.enqueue({
+               type: "tool-output-denied",
+               toolCallId: toolApproval2.toolCall.toolCallId,
+@@ -10178,6 +10196,7 @@ var DefaultStreamTextResult = class {
+             });
+           }
+           for (const toolApproval2 of invalidToolApprovals) {
++            enqueueResolvedApprovalLifecycle(toolApproval2);
+             toolExecutionStepStreamController == null ? void 0 : toolExecutionStepStreamController.enqueue({
+               type: "tool-error",
+               toolCallId: toolApproval2.toolCall.toolCallId,
+@@ -10192,6 +10211,7 @@ var DefaultStreamTextResult = class {
+           const toolOutputs = [];
+           await Promise.all(
+             localApprovedToolApprovals.map(async (toolApproval2) => {
++              enqueueResolvedApprovalLifecycle(toolApproval2);
+               const result = await executeToolCall({
+                 toolCall: toolApproval2.toolCall,
+                 tools,

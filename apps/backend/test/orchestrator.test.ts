@@ -200,6 +200,18 @@ describe("orchestrator run routes", () => {
     expect(leakedContainers()).toHaveLength(0);
   });
 
+  it("mirrors a failed reclaim-destroy into this DO's state only", async () => {
+    const instance = agent();
+    mocks.destroy.mockRejectedValueOnce(new Error("destroy failed"));
+    await destroyManagedContainer(instance.env, "leaked-sbx");
+    // The reclaim retry fails again — the leak hooks passed with that call
+    // persist it into this DO's state (not a module-global sink that could
+    // write into a sibling DO's state in the same isolate).
+    mocks.destroy.mockRejectedValueOnce(new Error("still down"));
+    await instance.reclaimRuns();
+    expect(instance.state.leakedContainers?.["leaked-sbx"]).toBeDefined();
+  });
+
   it("approve at the concurrency cap stays pending and returns 409, no execution", async () => {
     const instance = agent();
     // Five active runs: one slot past MAX_CONCURRENT_RUNS.

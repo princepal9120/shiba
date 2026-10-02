@@ -59,7 +59,7 @@ import { approvalCardText, buildApprovalBlocks, type ApprovalCardInput } from ".
 import {
   destroyManagedContainer,
   leakedContainers,
-  setLeakPersistence,
+  type LeakHooks,
 } from "../sandbox/lifecycle.js";
 import { runWorkerEffect, toRunFailure, tryRunPromise } from "../effect/runtime.js";
 import { classifyExecutorError, classifyRunError, runErrorWire, toTaggedError, type RunErrorCode, type RunErrorWire } from "../run-errors.js";
@@ -1482,38 +1482,34 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     return run.errorCode ? { ...run, errorWire: runErrorWire(run.errorCode) } : run;
   }
 
-  private leakPersistenceArmed = false;
   /** Mirror the per-isolate leak registry into DO state so hibernation
-   * can't strand a failed destroy — the sink is registered lazily because
-   * subclasses in tests may skip the base constructor. */
-  private armLeakPersistence(): void {
-    if (this.leakPersistenceArmed) return;
-    this.leakPersistenceArmed = true;
-    setLeakPersistence(
-      (leak) =>
+   * can't strand a failed destroy. The hooks travel with each destroy call
+   * — DO instances share the isolate's module globals, so a registered
+   * sink would let another DO's leak write into this one's state. */
+  private leakHooks(): LeakHooks {
+    return {
+      onLeak: (leak) =>
         this.setState({
           ...this.state,
           leakedContainers: { ...this.state?.leakedContainers, [leak.sandboxId]: leak },
         }),
-      (sandboxId) => {
+      onForget: (sandboxId) => {
         if (this.state?.leakedContainers?.[sandboxId] === undefined) return;
         const next = { ...this.state.leakedContainers };
         delete next[sandboxId];
         this.setState({ ...this.state, leakedContainers: next });
       },
-    );
+    };
   }
 
   private async destroySandbox(sandboxId: string): Promise<void> {
     // Release goes through the scoped lifecycle: failures are tracked as
     // leaked containers (warn + registry) instead of only logged.
-    this.armLeakPersistence();
-    await destroyManagedContainer(this.env, sandboxId);
+    await destroyManagedContainer(this.env, sandboxId, this.leakHooks());
   }
 
   /** Public: also the `schedule()` callback armed when a run starts. */
   async reclaimRuns(): Promise<void> {
-    this.armLeakPersistence();
     const { runs, reclaimed } = reclaimStaleRuns(this.store.list(), Date.now());
     if (reclaimed.length > 0) {
       this.setState({ ...this.state, runs });
