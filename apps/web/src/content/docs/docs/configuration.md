@@ -26,7 +26,7 @@ Non-secret defaults are in `apps/backend/wrangler.jsonc` and `alchemy.run.ts`. F
 | `LOCAL_ADAPTER_TOKEN` | unset | Bearer token the operator daemon presents on `/api/local/*`; required for the surface to answer (dark otherwise) |
 | `RUNTIME` | `sandbox` | Runtime adapter; current default is Cloudflare Sandbox |
 | `INSTANCE_TYPE` | `standard-1` | Configured Cloudflare container size |
-| `REQUIRE_ACCESS` | Wrangler default unset; live Alchemy stages set `1` | Require Access identity at the Worker boundary |
+| `REQUIRE_ACCESS` | Wrangler default unset; live Alchemy stages set `1` | Require Access identity at the Worker boundary; if both `REQUIRE_ACCESS` and `ACCESS_AUD` are unset, only loopback hosts are unauthenticated |
 
 Model identifiers are defaults, not availability guarantees. Choose a currently available model for your account. Harness selection is implemented in `apps/backend/src/harness/` and has unit coverage; local OpenCode execution and successful model inference are separate claims (see dated [verification](/docs/readiness/)).
 

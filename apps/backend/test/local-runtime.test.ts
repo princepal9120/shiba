@@ -422,7 +422,7 @@ describe("Worker /api/runs intake stamping", () => {
     const orchestrator = makeOrchestrator({ [LOCAL_RUNTIME_FLAG]: "1" });
     const env = workerEnv(orchestrator);
     const res = await worker.fetch(
-      new Request("https://shiba.test/api/runs?session=11111111-2222-3333-4444-555555555555", {
+      new Request("http://localhost/api/runs?session=11111111-2222-3333-4444-555555555555", {
         method: "POST",
         headers: {
           "content-type": "application/json",

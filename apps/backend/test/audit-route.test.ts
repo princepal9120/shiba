@@ -132,7 +132,7 @@ describe("GET /api/audit", () => {
     const { env, d1 } = makeEnv();
     d1!.rows = [ROW_NEWER, ROW_OLDER];
     const { ctx } = makeCtx();
-    const response = await worker.fetch(new Request("https://worker/api/audit"), env, ctx);
+    const response = await worker.fetch(new Request("http://localhost/api/audit"), env, ctx);
     expect(response.status).toBe(200);
     const select = d1!.calls.find((c) => c.sql.startsWith("SELECT"));
     expect(select).toBeDefined();
@@ -149,7 +149,7 @@ describe("GET /api/audit", () => {
     const { env, d1 } = makeEnv();
     const { ctx } = makeCtx();
     const response = await worker.fetch(
-      new Request("https://worker/api/audit?principal=scout&limit=25"),
+      new Request("http://localhost/api/audit?principal=scout&limit=25"),
       env,
       ctx,
     );
@@ -162,12 +162,12 @@ describe("GET /api/audit", () => {
   it("clamps ?limit= to 200 and falls back on invalid values", async () => {
     const { env, d1 } = makeEnv();
     const { ctx } = makeCtx();
-    await worker.fetch(new Request("https://worker/api/audit?limit=999"), env, ctx);
+    await worker.fetch(new Request("http://localhost/api/audit?limit=999"), env, ctx);
     let select = d1!.calls.filter((c) => c.sql.startsWith("SELECT")).pop();
     expect(select!.params).toEqual([200]);
     for (const bad of ["0", "-5", "abc"]) {
       d1!.calls.length = 0;
-      await worker.fetch(new Request(`https://worker/api/audit?limit=${bad}`), env, ctx);
+      await worker.fetch(new Request(`http://localhost/api/audit?limit=${bad}`), env, ctx);
       select = d1!.calls.filter((c) => c.sql.startsWith("SELECT")).pop();
       expect(select!.params).toEqual([200]);
     }
@@ -177,7 +177,7 @@ describe("GET /api/audit", () => {
     const { env, d1 } = makeEnv();
     const { ctx } = makeCtx();
     const response = await worker.fetch(
-      new Request("https://worker/api/audit", { method: "POST" }),
+      new Request("http://localhost/api/audit", { method: "POST" }),
       env,
       ctx,
     );
@@ -204,12 +204,12 @@ describe("GET /api/audit", () => {
   it("answers 503 while the D1 binding is absent or its queries fail", async () => {
     const missing = makeEnv({ audit: null });
     const { ctx } = makeCtx();
-    const unbound = await worker.fetch(new Request("https://worker/api/audit"), missing.env, ctx);
+    const unbound = await worker.fetch(new Request("http://localhost/api/audit"), missing.env, ctx);
     expect(unbound.status).toBe(503);
 
     const failing = makeEnv();
     failing.d1!.fail = true;
-    const broken = await worker.fetch(new Request("https://worker/api/audit"), failing.env, ctx);
+    const broken = await worker.fetch(new Request("http://localhost/api/audit"), failing.env, ctx);
     expect(broken.status).toBe(503);
   });
 });

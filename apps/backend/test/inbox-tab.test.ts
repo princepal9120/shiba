@@ -199,7 +199,7 @@ function makeEnvWithTwoMailboxes() {
 describe("dashboard inbox routes", () => {
   it("serves an Access-gated OpenAPI contract for the implemented email routes", async () => {
     const { env } = makeEnvWithTwoMailboxes();
-    const response = await worker.fetch(new Request("https://worker/api/email/openapi.json"), env, ctx);
+    const response = await worker.fetch(new Request("http://localhost/api/email/openapi.json"), env, ctx);
     expect(response.status).toBe(200);
     const spec = (await response.json()) as {
       openapi: string;
@@ -220,7 +220,7 @@ describe("dashboard inbox routes", () => {
 
   it("GET /api/mailboxes lists the registered mailboxes from the directory stub", async () => {
     const { env, directory } = makeEnvWithTwoMailboxes();
-    const response = await worker.fetch(new Request("https://worker/api/mailboxes"), env, ctx);
+    const response = await worker.fetch(new Request("http://localhost/api/mailboxes"), env, ctx);
     expect(response.status).toBe(200);
     const body = (await response.json()) as { mailboxes: Array<{ address: string }> };
     expect(body.mailboxes.map((m) => m.address)).toEqual([
@@ -251,7 +251,7 @@ describe("dashboard inbox routes", () => {
     const env = makeEnv({ [DIRECTORY]: directory });
     const payload = JSON.stringify({ address: "agent@shiba.dev", label: "Agent" });
     const response = await worker.fetch(
-      new Request("https://worker/api/mailboxes", { method: "POST", body: payload }),
+      new Request("http://localhost/api/mailboxes", { method: "POST", body: payload }),
       env,
       ctx,
     );
@@ -263,7 +263,7 @@ describe("dashboard inbox routes", () => {
       { method: "POST", match: "/internal/mailbox/mailboxes", body: { error: "address required" }, status: 400 },
     ]);
     const bad = await worker.fetch(
-      new Request("https://worker/api/mailboxes", { method: "POST", body: "{}" }),
+      new Request("http://localhost/api/mailboxes", { method: "POST", body: "{}" }),
       makeEnv({ [DIRECTORY]: rejecting }),
       ctx,
     );
@@ -272,7 +272,7 @@ describe("dashboard inbox routes", () => {
 
   it("GET /api/emails fans out across mailboxes, tags each row, sorts newest first", async () => {
     const { env, stubA, stubB } = makeEnvWithTwoMailboxes();
-    const response = await worker.fetch(new Request("https://worker/api/emails"), env, ctx);
+    const response = await worker.fetch(new Request("http://localhost/api/emails"), env, ctx);
     const body = (await response.json()) as { emails: Array<{ id: string; mailbox: string }> };
     expect(body.emails.map((e) => e.id)).toEqual(["eml-b1", "eml-a1"]);
     expect(body.emails[0]!.mailbox).toBe("agent-b@shiba.dev");
@@ -284,7 +284,7 @@ describe("dashboard inbox routes", () => {
   it("GET /api/emails?mailbox= targets only that mailbox stub", async () => {
     const { env, stubA, stubB } = makeEnvWithTwoMailboxes();
     const response = await worker.fetch(
-      new Request("https://worker/api/emails?mailbox=agent-a@shiba.dev&status=unread"),
+      new Request("http://localhost/api/emails?mailbox=agent-a@shiba.dev&status=unread"),
       env,
       ctx,
     );
@@ -304,7 +304,7 @@ describe("dashboard inbox routes", () => {
       "/api/emails-search?q=hi&mailbox=ghost@shiba.dev",
       "/api/drafts?mailbox=ghost@shiba.dev",
     ]) {
-      const response = await worker.fetch(new Request(`https://worker${path}`), env, ctx);
+      const response = await worker.fetch(new Request(`http://localhost${path}`), env, ctx);
       expect(response.status).toBe(400);
       const body = (await response.json()) as { error: string };
       expect(body.error).toContain("not a registered mailbox");
@@ -313,7 +313,7 @@ describe("dashboard inbox routes", () => {
 
   it("GET /api/emails/:id probes mailboxes until one owns the id", async () => {
     const { env, stubA, stubB } = makeEnvWithTwoMailboxes();
-    const response = await worker.fetch(new Request("https://worker/api/emails/eml-a1"), env, ctx);
+    const response = await worker.fetch(new Request("http://localhost/api/emails/eml-a1"), env, ctx);
     expect(response.status).toBe(200);
     const body = (await response.json()) as { mailbox: string; email: { id: string }; attachments: unknown[] };
     expect(body.mailbox).toBe("agent-a@shiba.dev");
@@ -324,7 +324,7 @@ describe("dashboard inbox routes", () => {
 
   it("GET /api/emails/:id strips internal storage fields from attachments", async () => {
     const { env } = makeEnvWithTwoMailboxes();
-    const response = await worker.fetch(new Request("https://worker/api/emails/eml-a1"), env, ctx);
+    const response = await worker.fetch(new Request("http://localhost/api/emails/eml-a1"), env, ctx);
     const body = (await response.json()) as { attachments: Array<Record<string, unknown>> };
     expect(body.attachments).toEqual([
       { part_id: "p1", filename: "a.pdf", mime_type: "application/pdf", size: 1234 },
@@ -340,7 +340,7 @@ describe("dashboard inbox routes", () => {
     );
     const withBucket = { ...env, ATTACHMENTS: { get } } as unknown as Env;
     const response = await worker.fetch(
-      new Request("https://worker/api/emails/eml-a1/attachments/p1"),
+      new Request("http://localhost/api/emails/eml-a1/attachments/p1"),
       withBucket,
       ctx,
     );
@@ -352,7 +352,7 @@ describe("dashboard inbox routes", () => {
     expect(get).toHaveBeenCalledWith("eml-a1/p1");
 
     const forged = await worker.fetch(
-      new Request("https://worker/api/emails/eml-a1/attachments/other"),
+      new Request("http://localhost/api/emails/eml-a1/attachments/other"),
       withBucket,
       ctx,
     );
@@ -361,7 +361,7 @@ describe("dashboard inbox routes", () => {
 
     get.mockResolvedValueOnce(null);
     const missingBody = await worker.fetch(
-      new Request("https://worker/api/emails/eml-a1/attachments/p1"),
+      new Request("http://localhost/api/emails/eml-a1/attachments/p1"),
       withBucket,
       ctx,
     );
@@ -380,14 +380,14 @@ describe("dashboard inbox routes", () => {
 
   it("GET /api/emails/:id returns 404 when no registered mailbox owns it", async () => {
     const { env } = makeEnvWithTwoMailboxes();
-    const response = await worker.fetch(new Request("https://worker/api/emails/eml-none"), env, ctx);
+    const response = await worker.fetch(new Request("http://localhost/api/emails/eml-none"), env, ctx);
     expect(response.status).toBe(404);
   });
 
   it("POST /api/emails/:id/read marks the email read on its owning mailbox", async () => {
     const { env } = makeEnvWithTwoMailboxes();
     const response = await worker.fetch(
-      new Request("https://worker/api/emails/eml-a1/read", { method: "POST" }),
+      new Request("http://localhost/api/emails/eml-a1/read", { method: "POST" }),
       env,
       ctx,
     );
@@ -399,7 +399,7 @@ describe("dashboard inbox routes", () => {
 
   it("GET /api/threads/:id returns the owning mailbox's thread view", async () => {
     const { env } = makeEnvWithTwoMailboxes();
-    const response = await worker.fetch(new Request("https://worker/api/threads/thr-1"), env, ctx);
+    const response = await worker.fetch(new Request("http://localhost/api/threads/thr-1"), env, ctx);
     expect(response.status).toBe(200);
     const body = (await response.json()) as { mailbox: string; thread: { emails: unknown[] } };
     expect(body.mailbox).toBe("agent-a@shiba.dev");
@@ -408,10 +408,10 @@ describe("dashboard inbox routes", () => {
 
   it("GET /api/emails-search requires q and merges fan-out results", async () => {
     const { env } = makeEnvWithTwoMailboxes();
-    const missing = await worker.fetch(new Request("https://worker/api/emails-search"), env, ctx);
+    const missing = await worker.fetch(new Request("http://localhost/api/emails-search"), env, ctx);
     expect(missing.status).toBe(400);
     const response = await worker.fetch(
-      new Request("https://worker/api/emails-search?q=deploy"),
+      new Request("http://localhost/api/emails-search?q=deploy"),
       env,
       ctx,
     );
@@ -422,7 +422,7 @@ describe("dashboard inbox routes", () => {
 
   it("GET /api/drafts fans out and tags each draft with its mailbox", async () => {
     const { env } = makeEnvWithTwoMailboxes();
-    const response = await worker.fetch(new Request("https://worker/api/drafts"), env, ctx);
+    const response = await worker.fetch(new Request("http://localhost/api/drafts"), env, ctx);
     const body = (await response.json()) as { drafts: Array<{ id: string; mailbox: string }> };
     expect(body.drafts).toHaveLength(1);
     expect(body.drafts[0]!.mailbox).toBe("agent-a@shiba.dev");
@@ -431,7 +431,7 @@ describe("dashboard inbox routes", () => {
   it("POST /api/drafts creates a reply draft only on a registered mailbox", async () => {
     const { env, stubA } = makeEnvWithTwoMailboxes();
     const bad = await worker.fetch(
-      new Request("https://worker/api/drafts", {
+      new Request("http://localhost/api/drafts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mailbox: "nobody@shiba.dev", to_addr: "x@y", subject: "s", body_text: "b" }),
@@ -442,7 +442,7 @@ describe("dashboard inbox routes", () => {
     expect(bad.status).toBe(400);
     stubA.calls.length = 0;
     const response = await worker.fetch(
-      new Request("https://worker/api/drafts", {
+      new Request("http://localhost/api/drafts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -467,7 +467,7 @@ describe("dashboard inbox routes", () => {
     const { env, stubA } = makeEnvWithTwoMailboxes();
     for (const raw of ["{not json", "null", "[1,2]", "\"text\""]) {
       const response = await worker.fetch(
-        new Request("https://worker/api/drafts", {
+        new Request("http://localhost/api/drafts", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: raw,
@@ -483,7 +483,7 @@ describe("dashboard inbox routes", () => {
   it("POST /api/drafts answers the normalized registered mailbox, not the caller's casing", async () => {
     const { env } = makeEnvWithTwoMailboxes();
     const response = await worker.fetch(
-      new Request("https://worker/api/drafts", {
+      new Request("http://localhost/api/drafts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -506,7 +506,7 @@ describe("dashboard inbox routes", () => {
     queuedApprovals.bridgeReady = false;
     const { env, stubA } = makeEnvWithTwoMailboxes();
     const response = await worker.fetch(
-      new Request("https://worker/api/drafts/drf-1/send", { method: "POST" }),
+      new Request("http://localhost/api/drafts/drf-1/send", { method: "POST" }),
       env,
       ctx,
     );
@@ -524,7 +524,7 @@ describe("dashboard inbox routes", () => {
     queuedApprovals.bridgeReady = true;
     const { env, stubA } = makeEnvWithTwoMailboxes();
     const response = await worker.fetch(
-      new Request("https://worker/api/drafts/drf-1/send", { method: "POST" }),
+      new Request("http://localhost/api/drafts/drf-1/send", { method: "POST" }),
       env,
       ctx,
     );
@@ -575,7 +575,7 @@ describe("dashboard inbox routes", () => {
     ]);
     const env = makeEnv({ [DIRECTORY]: directory, "agent-a@shiba.dev": stubA });
     const response = await worker.fetch(
-      new Request("https://worker/api/drafts/drf-1/send", { method: "POST" }),
+      new Request("http://localhost/api/drafts/drf-1/send", { method: "POST" }),
       env,
       ctx,
     );
@@ -600,7 +600,7 @@ describe("dashboard inbox routes", () => {
     ]);
     const env = makeEnv({ [DIRECTORY]: directory, "agent-a@shiba.dev": stubA });
     const response = await worker.fetch(
-      new Request("https://worker/api/drafts/drf-1/send", { method: "POST" }),
+      new Request("http://localhost/api/drafts/drf-1/send", { method: "POST" }),
       env,
       ctx,
     );
@@ -621,7 +621,7 @@ describe("dashboard inbox routes", () => {
     ]);
     const env = makeEnv({ [DIRECTORY]: directory, "agent-a@shiba.dev": stubA });
     const response = await worker.fetch(
-      new Request("https://worker/api/drafts/drf-1/send", { method: "POST" }),
+      new Request("http://localhost/api/drafts/drf-1/send", { method: "POST" }),
       env,
       ctx,
     );
@@ -644,7 +644,7 @@ describe("dashboard inbox routes", () => {
     const env = makeEnv({ [DIRECTORY]: directory, "agent-a@shiba.dev": stubA });
     try {
       const response = await worker.fetch(
-        new Request("https://worker/api/drafts/drf-1/send", { method: "POST" }),
+        new Request("http://localhost/api/drafts/drf-1/send", { method: "POST" }),
         env,
         ctx,
       );
@@ -672,13 +672,13 @@ describe("dashboard inbox routes", () => {
     ]);
     const env = makeEnv({ [DIRECTORY]: directory, "agent-a@shiba.dev": stubA });
     const missing = await worker.fetch(
-      new Request("https://worker/api/drafts/drf-none/send", { method: "POST" }),
+      new Request("http://localhost/api/drafts/drf-none/send", { method: "POST" }),
       env,
       ctx,
     );
     expect(missing.status).toBe(404);
     const sent = await worker.fetch(
-      new Request("https://worker/api/drafts/drf-sent/send", { method: "POST" }),
+      new Request("http://localhost/api/drafts/drf-sent/send", { method: "POST" }),
       env,
       ctx,
     );
@@ -688,13 +688,13 @@ describe("dashboard inbox routes", () => {
 
   it("answers 405 for unsupported methods and 503 when the binding is absent", async () => {
     const { env } = makeEnvWithTwoMailboxes();
-    const post = await worker.fetch(new Request("https://worker/api/emails", { method: "POST" }), env, ctx);
+    const post = await worker.fetch(new Request("http://localhost/api/emails", { method: "POST" }), env, ctx);
     expect(post.status).toBe(405);
-    const getSend = await worker.fetch(new Request("https://worker/api/drafts/drf-1/send"), env, ctx);
+    const getSend = await worker.fetch(new Request("http://localhost/api/drafts/drf-1/send"), env, ctx);
     expect(getSend.status).toBe(405);
     const noMailbox = { Mailbox: undefined } as unknown as Env;
     const unprovisioned = await worker.fetch(
-      new Request("https://worker/api/mailboxes"),
+      new Request("http://localhost/api/mailboxes"),
       noMailbox,
       ctx,
     );
@@ -717,7 +717,7 @@ describe("dashboard memory routes", () => {
 
   it("GET /api/memory/facts proxies the global registry stub", async () => {
     const { env, memoryStub } = memoryEnv();
-    const response = await worker.fetch(new Request("https://worker/api/memory/facts"), env, ctx);
+    const response = await worker.fetch(new Request("http://localhost/api/memory/facts"), env, ctx);
     expect(response.status).toBe(200);
     const body = (await response.json()) as { facts: Array<{ id: string }> };
     expect(body.facts).toHaveLength(1);
@@ -727,7 +727,7 @@ describe("dashboard memory routes", () => {
   it("GET /api/memory/facts?q= routes to recall search with the query", async () => {
     const { env, memoryStub } = memoryEnv();
     const response = await worker.fetch(
-      new Request("https://worker/api/memory/facts?q=package+manager"),
+      new Request("http://localhost/api/memory/facts?q=package+manager"),
       env,
       ctx,
     );
@@ -740,11 +740,11 @@ describe("dashboard memory routes", () => {
 
   it("GET /api/memory/sessions proxies and DELETE /api/memory/facts/:id passes through", async () => {
     const { env, memoryStub } = memoryEnv();
-    const sessions = await worker.fetch(new Request("https://worker/api/memory/sessions"), env, ctx);
+    const sessions = await worker.fetch(new Request("http://localhost/api/memory/sessions"), env, ctx);
     const body = (await sessions.json()) as { sessions: Array<{ id: string }> };
     expect(body.sessions[0]!.id).toBe("ses-1");
     const del = await worker.fetch(
-      new Request("https://worker/api/memory/facts/fact-1", { method: "DELETE" }),
+      new Request("http://localhost/api/memory/facts/fact-1", { method: "DELETE" }),
       env,
       ctx,
     );
@@ -759,7 +759,7 @@ describe("dashboard memory routes", () => {
   it("DELETE /api/memory/facts/:id forwards the encoded segment without double-encoding", async () => {
     const { env, memoryStub } = memoryEnv();
     await worker.fetch(
-      new Request("https://worker/api/memory/facts/my%20fact", { method: "DELETE" }),
+      new Request("http://localhost/api/memory/facts/my%20fact", { method: "DELETE" }),
       env,
       ctx,
     );
@@ -771,7 +771,7 @@ describe("dashboard memory routes", () => {
 
   it("answers 503 while the Memory binding is unprovisioned", async () => {
     const { env } = makeEnvWithTwoMailboxes();
-    const response = await worker.fetch(new Request("https://worker/api/memory/facts"), env, ctx);
+    const response = await worker.fetch(new Request("http://localhost/api/memory/facts"), env, ctx);
     expect(response.status).toBe(503);
     const body = (await response.json()) as { error: string };
     expect(body.error).toContain("not provisioned");
@@ -807,7 +807,7 @@ describe("dashboard approval routes", () => {
     try {
       const { env } = makeEnvWithTwoMailboxes();
       const response = await worker.fetch(
-        new Request("https://worker/api/approvals", {
+        new Request("http://localhost/api/approvals", {
           headers: { "CF-Access-Authenticated-User-Email": "dev@example.com" },
         }),
         env,
@@ -836,7 +836,7 @@ describe("dashboard approval routes", () => {
     };
     try {
       const { env } = makeEnvWithTwoMailboxes();
-      const response = await worker.fetch(new Request("https://worker/api/approvals"), env, ctx);
+      const response = await worker.fetch(new Request("http://localhost/api/approvals"), env, ctx);
       expect(response.status).toBe(200);
       const body = (await response.json()) as { approvals: Array<{ approvalId: string }> };
       expect(body.approvals.map((a) => a.approvalId)).toEqual(["apv-default-1"]);
@@ -856,7 +856,7 @@ describe("dashboard approval routes", () => {
     try {
       const { env } = makeEnvWithTwoMailboxes();
       const response = await worker.fetch(
-        new Request("https://worker/api/approvals", {
+        new Request("http://localhost/api/approvals", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -898,7 +898,7 @@ describe("dashboard approval routes", () => {
     try {
       const { env } = makeEnvWithTwoMailboxes();
       const response = await worker.fetch(
-        new Request("https://worker/api/approvals", {
+        new Request("http://localhost/api/approvals", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -944,7 +944,7 @@ describe("dashboard approval routes", () => {
     try {
       const { env } = makeEnvWithTwoMailboxes();
       const response = await worker.fetch(
-        new Request("https://worker/api/approvals", {
+        new Request("http://localhost/api/approvals", {
           headers: { "CF-Access-Authenticated-User-Email": "dev@example.com" },
         }),
         env,
@@ -974,7 +974,7 @@ describe("dashboard approval routes", () => {
       orchestratorCalls.calls.length = 0;
       const { env } = makeEnvWithTwoMailboxes();
       return worker.fetch(
-        new Request("https://worker/api/approvals", {
+        new Request("http://localhost/api/approvals", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -1000,7 +1000,7 @@ describe("dashboard approval routes", () => {
   it("POST /api/approvals answers 400 on a malformed decision body", async () => {
     const { env } = makeEnvWithTwoMailboxes();
     const response = await worker.fetch(
-      new Request("https://worker/api/approvals", {
+      new Request("http://localhost/api/approvals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ threadKey: "default" }),

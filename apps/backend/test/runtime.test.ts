@@ -645,7 +645,7 @@ describe("per-user orchestrator isolation", () => {
     vi.mocked(getAgentByName).mockResolvedValue({ fetch: stubFetch } as never);
     const worker = (await import("../src/index.js")).default;
     const res = await worker.fetch(
-      new Request("https://example.com/api/runs", {
+      new Request("http://localhost/api/runs", {
         headers: { "CF-Access-Authenticated-User-Email": "alice@example.com" },
       }),
       makeEnv(),
@@ -698,6 +698,16 @@ describe("worker authentication gate (T7)", () => {
     expect(mod.isAuthenticated(new Request("https://example.com/api/runs"), env)).toBe(false);
   });
 
+  it("identifies loopback request hosts", async () => {
+    const { isLoopbackRequest } = await import("../src/request-auth.js");
+    for (const host of ["localhost", "127.0.0.1", "[::1]", "foo.localhost"]) {
+      expect(isLoopbackRequest(new Request(`http://${host}/api/runs`))).toBe(true);
+    }
+    for (const host of ["example.com", "localhost.evil.com", "127.0.0.1.nip.io"]) {
+      expect(isLoopbackRequest(new Request(`http://${host}/api/runs`))).toBe(false);
+    }
+  });
+
   it("with REQUIRE_ACCESS, unauthenticated /api/runs → 401", async () => {
     vi.mocked(proxyToSandbox).mockResolvedValue(null);
     vi.mocked(getAgentByName).mockClear();
@@ -707,10 +717,26 @@ describe("worker authentication gate (T7)", () => {
     expect(getAgentByName).not.toHaveBeenCalled();
   });
 
-  it("without REQUIRE_ACCESS, unauthenticated /api/runs succeeds (wrangler dev opt-out)", async () => {
+  it("without Access config, loopback /api/runs is routed", async () => {
     vi.mocked(proxyToSandbox).mockResolvedValue(null);
     const stubFetch = vi.fn().mockResolvedValue(new Response("routed"));
     vi.mocked(getAgentByName).mockResolvedValue({ fetch: stubFetch } as never);
+    const worker = (await import("../src/index.js")).default;
+    const res = await worker.fetch(
+      new Request("http://localhost:8788/api/runs"),
+      {
+        CodingOrchestrator: {},
+        Sandbox: {},
+        ASSETS: { fetch: async () => new Response("assets") },
+      } as unknown as Env,
+    );
+    expect(res.status).not.toBe(401);
+    expect(await res.text()).toBe("routed");
+  });
+
+  it("without Access config, non-loopback /api/runs fails closed", async () => {
+    vi.mocked(proxyToSandbox).mockResolvedValue(null);
+    vi.mocked(getAgentByName).mockClear();
     const worker = (await import("../src/index.js")).default;
     const res = await worker.fetch(
       new Request("https://example.com/api/runs"),
@@ -720,8 +746,31 @@ describe("worker authentication gate (T7)", () => {
         ASSETS: { fetch: async () => new Response("assets") },
       } as unknown as Env,
     );
-    expect(res.status).not.toBe(401);
-    expect(await res.text()).toBe("routed");
+    expect(res.status).toBe(401);
+    expect(await res.json()).toEqual({
+      error: "Authentication required.",
+      code: "access_not_configured",
+    });
+    expect(getAgentByName).not.toHaveBeenCalled();
+  });
+
+  it("without Access config, a forged identity header does not authenticate a non-loopback host", async () => {
+    vi.mocked(proxyToSandbox).mockResolvedValue(null);
+    vi.mocked(getAgentByName).mockClear();
+    const worker = (await import("../src/index.js")).default;
+    const res = await worker.fetch(
+      new Request("https://example.com/api/runs", {
+        headers: { "CF-Access-Authenticated-User-Email": "alice@example.com" },
+      }),
+      {
+        CodingOrchestrator: {},
+        Sandbox: {},
+        ASSETS: { fetch: async () => new Response("assets") },
+      } as unknown as Env,
+    );
+    expect(res.status).toBe(401);
+    await expect(res.json()).resolves.toMatchObject({ code: "access_not_configured" });
+    expect(getAgentByName).not.toHaveBeenCalled();
   });
 
   it("/api/slack/* is never gated by Access even without a header", async () => {

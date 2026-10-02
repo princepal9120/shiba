@@ -91,7 +91,7 @@ describe("GET /api/agents", () => {
         revoked: true,
       },
     });
-    const response = await worker.fetch(new Request("https://worker/api/agents"), env, ctx);
+    const response = await worker.fetch(new Request("http://localhost/api/agents"), env, ctx);
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
       agents: Array<{ id: string }>;
@@ -107,7 +107,7 @@ describe("GET /api/agents", () => {
 
   it("degrades to an empty principal list when the token store is missing", async () => {
     const env = {} as Env;
-    const response = await worker.fetch(new Request("https://worker/api/agents"), env, ctx);
+    const response = await worker.fetch(new Request("http://localhost/api/agents"), env, ctx);
     expect(response.status).toBe(200);
     const body = (await response.json()) as { agents: unknown[]; principals: unknown[] };
     expect(Array.isArray(body.agents)).toBe(true);
