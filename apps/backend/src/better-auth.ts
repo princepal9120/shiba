@@ -6,7 +6,7 @@
 import {
   handleBetterAuth as handleBetterAuthLane,
   resolveBetterAuthUserId as resolveBetterAuthUserIdLane,
-} from "@shiba/auth";
+} from "@shiba/auth/better-auth";
 import type { Env } from "./env.js";
 import { redactSecrets } from "./security.js";
 
@@ -18,8 +18,8 @@ export {
   ensureBetterAuthSchema,
   isBetterAuthConfigured,
   isBetterAuthPath,
-} from "@shiba/auth";
-export type { BetterAuthLaneEnv } from "@shiba/auth";
+} from "@shiba/auth/better-auth";
+export type { BetterAuthLaneEnv } from "@shiba/auth/better-auth";
 
 export async function handleBetterAuth(
   request: Request,
