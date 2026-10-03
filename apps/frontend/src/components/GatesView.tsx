@@ -62,13 +62,21 @@ const labelClass = "text-[11px] font-semibold text-[#222320]";
  */
 export function GatesView({ onNavigate }: { onNavigate?: (view: AppNavView) => void }): JSX.Element {
   const [repoUrl, setRepoUrl] = useState("");
+  const [testCommand, setTestCommand] = useState("");
   const [extras, setExtras] = useState<Record<string, string>>({});
   const [publishPr, setPublishPr] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notices, setNotices] = useState<Record<string, GateNotice>>({});
   const [repoError, setRepoError] = useState<string | null>(null);
+  const [testCommandError, setTestCommandError] = useState<string | null>(null);
 
   const launch = async (gate: GateDef) => {
+    const testCommandArgv = testCommand.split(/\s+/).filter(Boolean);
+    if (testCommandArgv.length > 8) {
+      setTestCommandError("Use no more than 8 arguments.");
+      return;
+    }
+    setTestCommandError(null);
     const repo = repoUrl.trim();
     if (!REPO_RE.test(repo)) {
       setRepoError("Enter a GitHub repo URL (https://github.com/owner/repo).");
@@ -90,6 +98,7 @@ export function GatesView({ onNavigate }: { onNavigate?: (view: AppNavView) => v
           repoUrl: repo,
           task: gate.task(repo, extra),
           publishPullRequest: publishPr,
+          ...(testCommandArgv.length > 0 ? { testCommand: testCommandArgv } : {}),
         }),
       });
       const body = (await response.json().catch(() => ({}))) as { error?: string; approvalId?: string };
@@ -157,6 +166,29 @@ export function GatesView({ onNavigate }: { onNavigate?: (view: AppNavView) => v
               Each gate below queues a sandbox run against this repo.
             </p>
           )}
+          <div className="flex flex-col gap-1">
+            <label htmlFor="gate-test-command" className={labelClass}>
+              Test command <span className="font-normal text-[#6a6f63]">(optional)</span>
+            </label>
+            <input
+              id="gate-test-command"
+              type="text"
+              aria-invalid={testCommandError !== null}
+              aria-describedby={testCommandError ? "gate-test-command-error" : undefined}
+              value={testCommand}
+              onChange={(e) => {
+                setTestCommand(e.target.value);
+                if (testCommandError) setTestCommandError(null);
+              }}
+              placeholder="pnpm test"
+              className={`${inputClass} ${testCommandError ? "border-[#fb2c36] focus:border-[#fb2c36] focus:ring-[#fb2c36]/30" : ""}`}
+            />
+            {testCommandError ? (
+              <p id="gate-test-command-error" role="alert" className="text-[11px] font-mono text-[#fb2c36]">
+                {testCommandError}
+              </p>
+            ) : null}
+          </div>
         </section>
 
         {/* Step 2 — the gate to queue. */}

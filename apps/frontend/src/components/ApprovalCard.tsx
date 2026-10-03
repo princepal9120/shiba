@@ -14,6 +14,16 @@ export interface ApprovalCardProps {
 }
 
 export function ApprovalCard({ approval, decided, onDecideApproval, agentName }: ApprovalCardProps): JSX.Element {
+  const rawTestCommand =
+    typeof approval.input === "object" && approval.input !== null && !Array.isArray(approval.input)
+      ? (approval.input as Record<string, unknown>)["testCommand"]
+      : undefined;
+  const testCommand =
+    Array.isArray(rawTestCommand) &&
+    rawTestCommand.length > 0 &&
+    rawTestCommand.every((part): part is string => typeof part === "string" && part.length > 0)
+      ? rawTestCommand.join(" ")
+      : undefined;
   return (
     <div className="border border-[#b45309]/60 bg-[#f1efe6] rounded-none shadow-[3px_3px_0_var(--paper-shadow)] overflow-hidden">
       <div className="flex items-center justify-between bg-[#f99c00]/15 border-b border-[#b45309]/40 px-3 py-1.5 min-h-[31px]">
@@ -39,6 +49,12 @@ export function ApprovalCard({ approval, decided, onDecideApproval, agentName }:
 
       {agentName !== undefined ? (
         <p className="text-[10px] font-mono text-[#6a6f63] truncate -mt-1">via {agentName}</p>
+      ) : null}
+
+      {testCommand !== undefined ? (
+        <p className="text-[11px] font-mono text-[#6a6f63]">
+          <span className="font-semibold text-[#222320]">Tests:</span> {testCommand}
+        </p>
       ) : null}
 
       <pre className="whitespace-pre-wrap font-mono text-xs text-[#6a6f63] bg-[#fffef8] p-3 rounded-none border border-[#e0ded5] max-h-56 overflow-auto">
@@ -84,4 +100,3 @@ export function ApprovalCard({ approval, decided, onDecideApproval, agentName }:
     </div>
   );
 }
-

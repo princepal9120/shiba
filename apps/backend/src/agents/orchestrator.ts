@@ -19,6 +19,7 @@ import {
   LOCAL_RUNTIME_FLAG,
   isAgentRole,
   runtimeSelectionSchema,
+  testCommandSchema,
 } from "@shiba/shared";
 import {
   formatAgentToolInput,
@@ -183,9 +184,7 @@ export const delegateInputSchema = z.object({
       "Model connection id (conn_*) from the deployment's connection catalog. " +
         "Defaults to the deployment's implicit gateway/secret default.",
     ),
-  testCommand: z
-    .array(z.string().min(1))
-    .max(8)
+  testCommand: testCommandSchema
     .optional()
     .describe(
       "The project's test command as argv, e.g. [\"pnpm\",\"test\"]. Runs in the " +
@@ -939,8 +938,18 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
    * the pointer via POST /api/approvals. Email-kind approvals freeze a
    * mailbox payload instead of a run input.
    */
-  private async queueSlackRun(input: { repoUrl?: unknown; task?: unknown; baseBranch?: unknown; publishPullRequest?: unknown; harness?: unknown; codingModel?: unknown; connectionId?: unknown; authAccount?: unknown; runtime?: unknown; role?: unknown; intake?: unknown; threadKey?: unknown; kind?: unknown; mailbox?: unknown; payload?: unknown; queuedBy?: unknown; commandId?: unknown }): Promise<Response> {
+  private async queueSlackRun(input: { repoUrl?: unknown; task?: unknown; baseBranch?: unknown; publishPullRequest?: unknown; harness?: unknown; codingModel?: unknown; connectionId?: unknown; authAccount?: unknown; runtime?: unknown; testCommand?: unknown; role?: unknown; intake?: unknown; threadKey?: unknown; kind?: unknown; mailbox?: unknown; payload?: unknown; queuedBy?: unknown; commandId?: unknown }): Promise<Response> {
     const kind = typeof input.kind === "string" && input.kind.trim() ? input.kind.trim() : "run";
+    let testCommand: string[] | undefined;
+    if (input.testCommand !== undefined) {
+      const parsed = testCommandSchema.safeParse(input.testCommand);
+      if (!parsed.success) {
+        return Response.json({ error: "testCommand must be an argv array of 1-8 non-empty strings." }, { status: 400 });
+      }
+      if (parsed.data.length > 0) {
+        testCommand = parsed.data;
+      }
+    }
     if (kind === "email_send" || kind === "email_delete") {
       return this.queueEmailApprovalRecord(kind, input);
     }
@@ -1058,6 +1067,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
             : {}),
           // T51: the approved runtime rides the hashed frozen input.
           ...(runtime !== undefined ? { runtime } : {}),
+          ...(testCommand !== undefined ? { testCommand } : {}),
           // T52: the approved role rides the frozen input — dispatch
           // threads it back into the run envelope.
           ...(role !== "" ? { role } : {}),
@@ -1392,6 +1402,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       ...(record.route ? { route: record.route } : {}),
       ...(record.authAccount ? { authAccount: record.authAccount } : {}),
       ...(record.runtime !== undefined ? { runtime: record.runtime } : {}),
+      ...(record.testCommand !== undefined ? { testCommand: record.testCommand } : {}),
       ...(continuationKey !== undefined ? { continuationKey } : {}),
       // T40: the run carries its approval evidence from birth — who decided,
       // when, and the hash of the exact frozen input they approved.
@@ -1403,6 +1414,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         ...(record.route ? { route: record.route } : {}),
         ...(record.authAccount ? { authAccount: record.authAccount } : {}),
         ...(record.runtime !== undefined ? { runtime: record.runtime } : {}),
+        ...(record.testCommand !== undefined ? { testCommand: record.testCommand } : {}),
       }),
     });
   }
@@ -1444,6 +1456,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
               : {}),
           ...(run.authAccount ? { authAccount: run.authAccount } : {}),
           ...(run.runtime !== undefined ? { runtime: run.runtime } : {}),
+          ...(run.testCommand?.length ? { testCommand: run.testCommand } : {}),
           ...(record?.role !== undefined ? { role: record.role } : {}),
         }, { toolCallId: approvalId });
       } catch (error) {

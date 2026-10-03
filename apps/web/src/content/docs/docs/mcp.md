@@ -37,7 +37,7 @@ Run `claude mcp list` to confirm that `shiba` connects. A 401 means the token is
 
 | Tool | Scope | What it does |
 | --- | --- | --- |
-| `queue_run` | `sandbox:exec` | Queues `{repoUrl, task, baseBranch?, publishPullRequest?}` as a pending approval on the shared `default` orchestrator, the same route as `POST /api/runs`. Returns `approvalId` and `runId` (`agent-tool:<approvalId>`). It never starts a run. |
+| `queue_run` | `sandbox:exec` | Queues `{repoUrl, task, baseBranch?, publishPullRequest?, testCommand?}` as a pending approval on the shared `default` orchestrator, the same route as `POST /api/runs`. Returns `approvalId` and `runId` (`agent-tool:<approvalId>`). It never starts a run. |
 | `run_status` | `runs:read` | Returns one run record by `runId`. |
 | `list_runs` | `runs:read` | Lists run records, newest first (`limit`, default 20). |
 | `list_approvals` | `runs:read` | Lists pending and recently decided run approvals. Email approvals are left out. |
@@ -67,7 +67,7 @@ The built-in chat agent also calls these tools: its `run_code` tool executes mod
 
 Two read-only tools serve the sign-in flow: `extract_otp` pulls a one-time code and magic links out of one email by id, and `latest_verification` scans the newest inbound mail for either — its `mailbox` arg defaults to the deployment's agent identity address (`AGENT_MAILBOX`, or `dev@tryshiba.dev` when unset). Register that address in the Inbox and assign it to the agent principal (`orchestrator-agent` for the built-in chat agent, or the token principal of an external agent) and the agent can log into third-party apps end-to-end: it reads the code or link with sender and timestamp attached, while the raw body stays out of the response. Sends still queue for approval.
 
-The gateway has no approve tool. This MCP tool accepts only repository/task/branch/publish inputs, not a per-run harness or model; queued runs use the deployment's configured defaults (`AGENT_HARNESS`, `CODING_MODEL`, and the selected harness's model default) when approved. Harness implementation and verification status are documented in [Coding Harnesses](/docs/claude-code/). No cloud end-to-end run is recorded; the dated local OpenCode exercise did not reach successful model inference.
+The gateway has no approve tool. This MCP tool accepts repository/task/branch/publish/test-command inputs, not a per-run harness or model; queued runs use the deployment's configured defaults (`AGENT_HARNESS`, `CODING_MODEL`, and the selected harness's model default) when approved. Harness implementation and verification status are documented in [Coding Harnesses](/docs/claude-code/). No cloud end-to-end run is recorded; the dated local OpenCode exercise did not reach successful model inference.
 
 Run visibility is per-principal: `run_status`, `list_runs`, and `list_approvals` only return records the calling token's principal queued (`queuedBy` is stamped at intake). Operator surfaces — dashboard, Slack, `/api/runs` with an Access identity — still see everything. Pair `sandbox:exec` with `runs:read` on tokens that queue and poll runs.
 

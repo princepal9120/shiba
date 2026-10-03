@@ -144,6 +144,7 @@ export function StoredApprovalCard({
       ...(approval.publishPullRequest !== undefined
         ? { publishPullRequest: approval.publishPullRequest }
         : {}),
+      ...(approval.testCommand?.length ? { testCommand: approval.testCommand } : {}),
     } satisfies Record<string, unknown>);
   return (
     <div className="border border-[#e0ded5] border-l-2 border-l-[#b45309] rounded-none bg-[#f6f4ed] p-3">

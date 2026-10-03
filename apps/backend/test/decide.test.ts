@@ -133,6 +133,14 @@ describe("decideRunTransition — queue", () => {
     );
   });
 
+  it("rejects a replay that changes the approved test command", () => {
+    expectError(
+      pendingRun({ testCommand: ["pnpm", "test"] }),
+      queue({ input: { ...INPUT, testCommand: ["pnpm", "lint"] } }),
+      "input_conflict",
+    );
+  });
+
   it("rejects queue evidence whose hash does not cover the queued input", () => {
     expectError(null, queue({ approval: evidence({ inputHash: "deadbeef" }) }), "approval_mismatch");
   });
@@ -448,6 +456,13 @@ describe("approvalEvidenceFor + runInputHash", () => {
     expect(a).toBe(b);
     expect(runInputHash({ ...INPUT, task: "different" })).not.toBe(a);
     expect(runInputHash({ ...INPUT, route: { purpose: "coding", connectionId: null, modelId: "m", harness: "opencode", policyVersion: 1 } })).not.toBe(a);
+  });
+
+  it("hashes a non-empty test command but preserves legacy hashes when absent or empty", () => {
+    const legacy = runInputHash(INPUT);
+    expect(runInputHash({ ...INPUT, testCommand: ["pnpm", "test"] })).not.toBe(legacy);
+    expect(runInputHash({ ...INPUT, testCommand: [] })).toBe(legacy);
+    expect(runInputHash({ ...INPUT, testCommand: undefined })).toBe(legacy);
   });
 
   it("derives evidence from the decided record", () => {

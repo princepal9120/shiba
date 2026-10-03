@@ -111,6 +111,8 @@ export interface ApprovalCardInput extends ApprovalPointer {
   agent?: string;
   /** Coding agent the run will execute — shown so the human approves it too. */
   harness?: string;
+  /** Test command as argv — shown so the human approves it too. */
+  testCommand?: string[];
 }
 
 /**
@@ -144,10 +146,14 @@ function clipTask(task: string): string {
  */
 export function approvalCardText(input: ApprovalCardInput): string {
   const isEmail = input.kind === "email_send" || input.kind === "email_delete";
+  const testCommand = input.testCommand?.length
+    ? `\nTests: ${escapeMrkdwn(input.testCommand.join(" "))}`
+    : "";
   return isEmail
     ? `${escapeMrkdwn(input.agent ?? input.repoUrl)} requests ${escapeMrkdwn(input.task)}`
     : `Approval requested\nRepo: ${escapeMrkdwn(input.repoUrl)}\nTask: ${escapeMrkdwn(clipTask(input.task))}` +
-        (input.harness ? `\nAgent: ${escapeMrkdwn(input.harness)}` : "");
+        (input.harness ? `\nAgent: ${escapeMrkdwn(input.harness)}` : "") +
+        testCommand;
 }
 
 /**
@@ -165,10 +171,14 @@ export function approvalCardText(input: ApprovalCardInput): string {
 export function buildApprovalBlocks(input: ApprovalCardInput): unknown[] {
   const value = buildApprovalValue({ threadKey: input.threadKey, approvalId: input.approvalId });
   const isEmail = input.kind === "email_send" || input.kind === "email_delete";
+  const testCommand = input.testCommand?.length
+    ? `\n*Tests:* ${escapeMrkdwn(input.testCommand.join(" "))}`
+    : "";
   const headline = isEmail
     ? `*${escapeMrkdwn(input.agent ?? input.repoUrl)}* requests ${escapeMrkdwn(input.task)}`
     : `*Approval requested*\n*Repo:* ${escapeMrkdwn(input.repoUrl)}\n*Task:* ${escapeMrkdwn(clipTask(input.task))}` +
-        (input.harness ? `\n*Agent:* ${escapeMrkdwn(input.harness)}` : "");
+        (input.harness ? `\n*Agent:* ${escapeMrkdwn(input.harness)}` : "") +
+        testCommand;
   return [
     {
       type: "section",

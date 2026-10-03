@@ -51,6 +51,7 @@ export function registerRunTools(registry: ToolRegistry, env: Env): void {
           baseBranch: args.baseBranch,
           publishPullRequest: args.publishPullRequest,
           harness: args.harness,
+          testCommand: args.testCommand,
         }),
       }, ctx.principal.principal);
       const approvalId = String(body.approvalId);
