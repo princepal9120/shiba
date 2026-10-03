@@ -250,13 +250,17 @@ describe("dashboard rendering", () => {
     expect(markup).toContain("Runs");
     expect(markup).toContain("Diff");
     expect(markup).toContain("Approvals");
-    expect(markup).toContain("VM");
     expect(markup).toContain("Mailbox");
     expect(markup).toContain("Memory");
     expect(markup).toContain("Automations");
-    expect(markup).toContain("Missions");
-    expect(markup).toContain("Gates");
+    expect(markup).toContain("Providers");
+    expect(markup).toContain("Integrations");
     expect(markup).not.toContain("Architecture");
+    // Deduped surfaces stay deep-link reachable but are out of the nav.
+    expect(markup).not.toContain("Missions &amp; Standing Goals");
+    expect(markup).not.toContain("Review, QA &amp; Security Gates");
+    expect(markup).not.toContain("VM Inspector &amp; Terminals");
+    expect(markup).not.toContain("Usage, Costs &amp; Run Metrics");
   });
 
   it("renders standalone DiffView and ApprovalsView with empty states and zero-trust framing", () => {
