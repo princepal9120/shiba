@@ -100,6 +100,8 @@ export interface PendingApproval {
    * hashed like the rest of the approved input.
    */
   runtime?: RuntimeSelection;
+  /** The test command the human approved, as argv. */
+  testCommand?: string[];
   /**
    * T52: the delegation role this run was queued under. The role pin
    * already resolved into `route` at queue time — this rides along as
@@ -147,6 +149,7 @@ export interface CreateApprovalInput {
   harness?: string;
   authAccount?: string;
   runtime?: RuntimeSelection;
+  testCommand?: string[];
   role?: AgentRole;
   kind?: ApprovalKind;
   payload?: JsonValue;
@@ -174,6 +177,7 @@ export function createPendingApproval(
       ...(input.harness !== undefined ? { harness: input.harness } : {}),
       ...(input.authAccount !== undefined ? { authAccount: input.authAccount } : {}),
       ...(input.runtime !== undefined ? { runtime: input.runtime } : {}),
+      ...(input.testCommand !== undefined ? { testCommand: input.testCommand } : {}),
       ...(input.role !== undefined ? { role: input.role } : {}),
       ...(input.kind !== undefined ? { kind: input.kind } : {}),
       ...(input.payload !== undefined ? { payload: input.payload } : {}),
@@ -289,6 +293,8 @@ export interface RunInputFields {
   authAccount?: string;
   /** T51: which runtime — part of what the human approved. */
   runtime?: RuntimeSelection;
+  /** The test command — part of what the human approved. */
+  testCommand?: string[];
 }
 
 /** Key-sorted JSON — the canonical form the input hash covers. */
@@ -314,6 +320,7 @@ export function stableHash(value: JsonValue): string {
 
 /** FNV-1a over the canonical input — a tamper check, not a credential. */
 export function runInputHash(input: RunInputFields): string {
+  const tc = input.testCommand;
   return stableHash({
     repoUrl: input.repoUrl,
     task: input.task,
@@ -322,6 +329,7 @@ export function runInputHash(input: RunInputFields): string {
     ...(input.route !== undefined ? { route: input.route as unknown as JsonValue } : {}),
     ...(input.authAccount !== undefined ? { authAccount: input.authAccount } : {}),
     ...(input.runtime !== undefined ? { runtime: input.runtime } : {}),
+    ...(tc !== undefined && tc.length > 0 ? { testCommand: tc } : {}),
   });
 }
 

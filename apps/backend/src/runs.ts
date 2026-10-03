@@ -63,6 +63,7 @@ export function createRun(args: {
   authAccount?: string;
   /** T51: the approved runtime — "local" dispatches to the operator daemon. */
   runtime?: RuntimeSelection;
+  testCommand?: string[];
   /** T40: approval evidence stamped at queue time (the resolve path). */
   approval?: ApprovalEvidence;
   now?: number;
@@ -86,6 +87,7 @@ export function createRun(args: {
         ...(args.continuesKey !== undefined ? { continuesKey: args.continuesKey } : {}),
         ...(args.authAccount !== undefined ? { authAccount: args.authAccount } : {}),
         ...(args.runtime !== undefined ? { runtime: args.runtime } : {}),
+        ...(args.testCommand !== undefined ? { testCommand: args.testCommand } : {}),
       },
       ...(args.approval !== undefined ? { approval: args.approval } : {}),
       at: now,
@@ -129,6 +131,7 @@ function commandForStatus(
           ...(run.queuedBy !== undefined ? { queuedBy: run.queuedBy } : {}),
           ...(run.route !== undefined ? { route: run.route } : {}),
           ...(run.runtime !== undefined ? { runtime: run.runtime } : {}),
+          ...(run.testCommand !== undefined ? { testCommand: run.testCommand } : {}),
         },
         at,
       };

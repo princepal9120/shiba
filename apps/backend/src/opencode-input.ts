@@ -4,7 +4,7 @@
  * parseAgentToolInput. The child never scrapes arbitrary prose.
  */
 import { z } from "zod";
-import { AGENT_ROLES, HARNESS_IDS, RUN_SIGNAL_KINDS, runtimeSelectionSchema } from "@shiba/shared";
+import { AGENT_ROLES, HARNESS_IDS, RUN_SIGNAL_KINDS, runtimeSelectionSchema, testCommandSchema } from "@shiba/shared";
 import { isApprovedRoute, type ApprovedRoute } from "./model-connections.js";
 import { parseGitHubRepoUrl } from "./security.js";
 
@@ -56,7 +56,7 @@ const codingTaskInputSchema = z.object({
    * harness's declared execAllowlist, and verify fails the run when it is
    * refused or exits nonzero.
    */
-  testCommand: z.array(z.string().min(1)).max(8).optional(),
+  testCommand: testCommandSchema.optional(),
   /**
    * T51: the approved runtime. `"local"` runs on the operator's machine
    * via the dispatch mailbox — admissible only from a dashboard intake

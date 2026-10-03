@@ -103,6 +103,8 @@ export interface DelegatedRun {
    * LocalDispatch mailbox to the operator's daemon; absent = sandbox.
    */
   runtime?: RuntimeSelection;
+  /** The test command this approval-gated run executes, as argv. */
+  testCommand?: string[];
   /**
    * Token/cost usage the harness's event stream actually reported — never
    * fabricated. Absent when the harness emits no parseable usage (devin,

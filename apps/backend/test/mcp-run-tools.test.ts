@@ -97,6 +97,7 @@ describe("registerRunTools", () => {
         task: "fix the flaky test",
         baseBranch: "dev",
         publishPullRequest: true,
+        testCommand: ["pnpm", "test"],
         kind: "email_send", // must not reach the orchestrator
       },
       agent,
@@ -113,6 +114,7 @@ describe("registerRunTools", () => {
         task: "fix the flaky test",
         baseBranch: "dev",
         publishPullRequest: true,
+        testCommand: ["pnpm", "test"],
         status: "pending",
       }),
     ]);

@@ -53,6 +53,8 @@ export interface QueuedRunInput {
   authAccount?: string;
   /** T51: the approved runtime — part of the approval-hashed input. */
   runtime?: RuntimeSelection;
+  /** The test command — part of the approval-hashed input. */
+  testCommand?: string[];
 }
 
 export type RunCommand =
@@ -128,6 +130,7 @@ function hashMatchesRun(evidence: ApprovalEvidence, run: RunInputFields): boolea
       ...(run.route !== undefined ? { route: run.route } : {}),
       ...(run.authAccount !== undefined ? { authAccount: run.authAccount } : {}),
       ...(run.runtime !== undefined ? { runtime: run.runtime } : {}),
+      ...(run.testCommand !== undefined ? { testCommand: run.testCommand } : {}),
     })
   );
 }
@@ -172,6 +175,7 @@ export function decideRunTransition(state: RunMachineState, command: RunCommand)
           ...(command.input.continuationKey !== undefined ? { continuationKey: command.input.continuationKey } : {}),
           ...(command.input.authAccount !== undefined ? { authAccount: command.input.authAccount } : {}),
           ...(command.input.runtime !== undefined ? { runtime: command.input.runtime } : {}),
+          ...(command.input.testCommand !== undefined ? { testCommand: command.input.testCommand } : {}),
           ...(approval !== undefined ? { approval } : {}),
           status: "pending",
           generation: 0,
@@ -186,7 +190,8 @@ export function decideRunTransition(state: RunMachineState, command: RunCommand)
           run.task === command.input.task &&
           run.baseBranch === command.input.baseBranch &&
           run.publishPullRequest === command.input.publishPullRequest &&
-          run.runtime === command.input.runtime;
+          run.runtime === command.input.runtime &&
+          JSON.stringify(run.testCommand ?? []) === JSON.stringify(command.input.testCommand ?? []);
         if (sameInput) {
           return { events: [{ type: "run.queued", commandId: command.commandId, at, run, replayed: true }] };
         }

@@ -25,6 +25,8 @@ export const HARNESS_IDS = [
 ] as const;
 export type HarnessId = (typeof HARNESS_IDS)[number];
 
+export const testCommandSchema = z.array(z.string().min(1)).max(8);
+
 export const queueRunInputSchema = z.object({
   repoUrl: z.string().describe("HTTPS GitHub repository URL, e.g. https://github.com/owner/repo."),
   task: z.string().describe("The coding task to perform in the repository."),
@@ -37,6 +39,9 @@ export const queueRunInputSchema = z.object({
     .enum(HARNESS_IDS)
     .optional()
     .describe("Coding agent harness. Defaults to the deployment's AGENT_HARNESS."),
+  testCommand: testCommandSchema
+    .optional()
+    .describe("Project test command as an argv array, e.g. [\"pnpm\", \"test\"]."),
 });
 
 export type QueueRunInput = z.infer<typeof queueRunInputSchema>;

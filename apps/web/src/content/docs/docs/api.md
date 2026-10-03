@@ -33,6 +33,7 @@ Cancellation updates state before best-effort destruction. Registry clearing doe
 ## Submit and approve
 
 `POST /api/runs` queues an approval-gated run on the shared orchestrator; it does not start execution before approval. The dashboard also uses the `coding-orchestrator` agent SDK routes under `/agents/`.
+The run request can include an optional `testCommand` argv array (for example, `["pnpm","test"]`); it is frozen with the approval and dispatched only after a human approves.
 
 The delegate_coding_task tool accepts:
 
@@ -42,6 +43,7 @@ The delegate_coding_task tool accepts:
   "task": "Describe a bounded coding task",
   "baseBranch": "main",
   "publishPullRequest": false,
+  "testCommand": ["pnpm", "test"],
   "harness": "opencode",
   "codingModel": "google/gemini-3.5-flash-lite"
 }

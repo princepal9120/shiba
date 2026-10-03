@@ -144,6 +144,7 @@ export function StoredApprovalCard({
       ...(approval.publishPullRequest !== undefined
         ? { publishPullRequest: approval.publishPullRequest }
         : {}),
+      ...(approval.testCommand?.length ? { testCommand: approval.testCommand } : {}),
     } satisfies Record<string, unknown>);
   return (
     <div className="border border-[#e0ded5] border-l-2 border-l-[#b45309] rounded-none bg-[#f6f4ed] p-3">
@@ -159,6 +160,11 @@ export function StoredApprovalCard({
         via {storedApprovalAgent(approval)}
       </p>
       <p className="text-[11px] text-[#222320] font-medium break-words mb-1">{approval.task}</p>
+      {approval.testCommand?.length ? (
+        <p className="text-[11px] font-mono text-[#6a6f63] break-words mb-1">
+          <span className="font-semibold text-[#222320]">Tests:</span> {approval.testCommand.join(" ")}
+        </p>
+      ) : null}
       <pre className="font-mono text-[10px] text-[#6a6f63] bg-[#fffef8] p-2 rounded-none border border-[#e0ded5] whitespace-pre-wrap break-words max-h-32 overflow-auto mb-2">
         {JSON.stringify(frozen, null, 2)}
       </pre>

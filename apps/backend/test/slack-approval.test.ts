@@ -142,6 +142,21 @@ describe("buildApprovalBlocks", () => {
     expect(parseApprovalValue(buttons[0]!.value)).toEqual(pointer);
   });
 
+  it("shows the approved test command and escapes Slack mrkdwn", () => {
+    const input = {
+      repoUrl: "https://github.com/owner/repo",
+      task: "Fix the login bug",
+      threadKey: "default",
+      approvalId: "appr_1",
+      harness: "opencode",
+      testCommand: ["pnpm", "test <@U1> &"],
+    } as Parameters<typeof buildApprovalBlocks>[0] & { testCommand: string[] };
+    const blocks = JSON.stringify(buildApprovalBlocks(input));
+    expect(blocks).toContain("*Agent:* opencode");
+    expect(blocks).toContain("*Tests:* pnpm test &lt;@U1&gt; &amp;");
+    expect(approvalCardText(input)).toContain("Tests: pnpm test &lt;@U1&gt; &amp;");
+  });
+
   it("escapes run-card task text so thread prose cannot ping <!channel>, and fits Slack's section limit", () => {
     const blocks = buildApprovalBlocks({
       repoUrl: "https://github.com/owner/repo",
