@@ -19,6 +19,7 @@ export type AppNavView =
   | "automations"
   | "missions"
   | "gates"
+  | "providers"
   | "integrations"
   | "analytics"
   | "settings";
@@ -35,22 +36,19 @@ export const APP_NAV_ITEMS: AppNavItem[] = [
   { id: "runs", label: "Runs", description: "Run Registry & Workspaces" },
   { id: "diff", label: "Diff", description: "Code Changes & Git Diffs" },
   { id: "approvals", label: "Approvals", description: "Review & Decision Queue" },
-  { id: "vm", label: "VM", description: "VM Inspector & Terminals" },
-  { id: "agents", label: "Agents & MCP", description: "MCP Gateway & Capability Scopes" },
+  { id: "providers", label: "Providers", description: "Connect AI Coding Agents" },
+  { id: "agents", label: "Agents & MCP", description: "MCP Gateway & Agent Tokens" },
   { id: "inbox", label: "Mailbox", description: "Cloudflare Email Routing & Send" },
   { id: "memory", label: "Memory", description: "Vectorize Long-Term Semantic Memory" },
   { id: "automations", label: "Automations", description: "Automations & Triggers" },
-  { id: "missions", label: "Missions", description: "Missions & Standing Goals" },
-  { id: "gates", label: "Gates", description: "Review, QA & Security Gates" },
   { id: "integrations", label: "Integrations", description: "Providers, Channels & Platform Services" },
-  { id: "analytics", label: "Analytics", description: "Usage, Costs & Run Metrics" },
   { id: "settings", label: "Settings", description: "Deployment & Operator Settings" },
 ];
 
 const NAV_GROUPS: { label: string; items: AppNavView[] }[] = [
-  { label: "Workspace", items: ["dashboard", "tasks", "runs", "diff", "approvals", "missions", "automations", "analytics"] },
-  { label: "Capabilities", items: ["agents", "integrations", "inbox", "memory"] },
-  { label: "System", items: ["vm", "gates", "settings"] },
+  { label: "Workspace", items: ["dashboard", "tasks", "runs", "diff", "approvals", "automations"] },
+  { label: "Capabilities", items: ["agents", "providers", "integrations", "inbox", "memory"] },
+  { label: "System", items: ["settings"] },
 ];
 
 export interface AppNavRailProps {
@@ -136,6 +134,11 @@ const ICONS: Record<AppNavView, JSX.Element> = {
   integrations: (
     <svg aria-hidden="true"  className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6.75l-3.75 3.75m0 0a2.625 2.625 0 103.712 3.712 2.625 2.625 0 00-3.712-3.712zm0 0L6.75 13.5m10.5-10.5l3.75 3.75m0 0a2.625 2.625 0 11-3.712 3.712 2.625 2.625 0 013.712-3.712z" />
+    </svg>
+  ),
+  providers: (
+    <svg aria-hidden="true"  className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8 9l3 3-3 3m5-6h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
   ),
   analytics: (

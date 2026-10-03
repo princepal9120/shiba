@@ -10,6 +10,7 @@ import { RunRegistryView } from "./components/RunRegistryView";
 import { AutomationsView } from "./components/AutomationsView";
 import { AgentsView } from "./components/AgentsView";
 import { MissionsView } from "./components/MissionsView";
+import { ProvidersView } from "./components/ProvidersView";
 import { GatesView } from "./components/GatesView";
 import { DashboardView } from "./components/DashboardView";
 import { OnboardingModal, detectSetupSteps } from "./components/OnboardingModal";
@@ -384,6 +385,8 @@ export function App(): React.JSX.Element {
         setMainView("automations");
       } else if (tabParam === "agents") {
         setMainView("agents");
+      } else if (tabParam === "providers") {
+        setMainView("providers");
       } else if (tabParam === "missions") {
         setMainView("missions");
       } else if (tabParam === "gates" || tabParam === "quality-gates") {
@@ -1691,6 +1694,8 @@ export function App(): React.JSX.Element {
         </div>
       ) : mainView === "automations" ? (
         <AutomationsView />
+      ) : mainView === "providers" ? (
+        <ProvidersView />
       ) : mainView === "agents" ? (
         <AgentsView />
       ) : mainView === "missions" ? (
