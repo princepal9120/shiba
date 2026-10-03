@@ -153,22 +153,26 @@ const ICONS: Record<AppNavView, JSX.Element> = {
 
 function NavItem({
   label,
+  subLabel,
   active,
   onClick,
   children,
   badge,
 }: {
   label: string;
+  subLabel?: string;
   active?: boolean;
   onClick: () => void;
   children: React.ReactNode;
   badge?: React.ReactNode;
 }) {
+  const accessibleLabel = subLabel ? `${label} ${subLabel}` : label;
   return (
     <button
       type="button"
       onClick={onClick}
-      aria-label={label}
+      aria-label={accessibleLabel}
+      title={accessibleLabel}
       aria-current={active ? "page" : undefined}
       className={
         "group w-full flex items-center gap-2.5 rounded-none px-2.5 py-1.5 touch:min-h-11 text-[13px] font-medium transition-colors duration-100 " +
@@ -180,7 +184,14 @@ function NavItem({
       <span className={active ? "text-white dark:text-[#152335]" : "text-[#6a6f63] dark:text-[#aaa99f] group-hover:text-[#222320] dark:group-hover:text-[#f4f2ea]"} aria-hidden="true">
         {children}
       </span>
-      <span className="flex-1 text-left truncate">{label}</span>
+      <span className="flex-1 min-w-0 text-left">
+        <span className="block truncate">{label}</span>
+        {subLabel ? (
+          <span className="block truncate text-[11px] font-normal text-[#6a6f63] dark:text-[#aaa99f] group-hover:text-[#222320] dark:group-hover:text-[#f4f2ea]">
+            {subLabel}
+          </span>
+        ) : null}
+      </span>
       {badge}
     </button>
   );
@@ -330,7 +341,8 @@ export function AppNavRail({
 
         {onSignOut ? (
           <NavItem
-            label={accountEmail ? `Sign out ${accountEmail}` : "Sign out"}
+            label="Sign out"
+            subLabel={accountEmail ?? undefined}
             onClick={onSignOut}
           >
             <svg aria-hidden="true" className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>

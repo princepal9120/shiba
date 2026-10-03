@@ -16,7 +16,8 @@
   },
   "dependencies": {
     "@shiba/shared": "workspace:*",
-    "@cloudflare/sandbox": "0.12.9"
+    "@cloudflare/sandbox": "0.12.9",
+    "better-auth": "^1.7.7"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260916.1",

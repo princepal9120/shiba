@@ -76,7 +76,7 @@ export function AuthScreen({ onSignedIn }: { onSignedIn: () => void }): JSX.Elem
                 autoComplete="name"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
-                className="w-full min-h-11 rounded-none border border-[#e0ded5] dark:border-[#3b3d36] bg-white dark:bg-[#191a18] px-3 text-sm font-normal normal-case tracking-normal text-[#222320] dark:text-[#eae8e1] focus:outline-none focus:border-[#0000a8] dark:focus:border-[#9cbce2]"
+                className="w-full min-h-11 rounded-none border border-[#e0ded5] dark:border-[#3b3d36] bg-[#fffef8] dark:bg-[#191a18] px-3 text-sm font-normal normal-case tracking-normal text-[#222320] dark:text-[#eae8e1] focus:outline-none focus:border-[#0000a8] dark:focus:border-[#9cbce2]"
               />
             </label>
           ) : null}
@@ -88,7 +88,7 @@ export function AuthScreen({ onSignedIn }: { onSignedIn: () => void }): JSX.Elem
               autoComplete="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              className="w-full min-h-11 rounded-none border border-[#e0ded5] dark:border-[#3b3d36] bg-white dark:bg-[#191a18] px-3 text-sm font-normal normal-case tracking-normal text-[#222320] dark:text-[#eae8e1] focus:outline-none focus:border-[#0000a8] dark:focus:border-[#9cbce2]"
+              className="w-full min-h-11 rounded-none border border-[#e0ded5] dark:border-[#3b3d36] bg-[#fffef8] dark:bg-[#191a18] px-3 text-sm font-normal normal-case tracking-normal text-[#222320] dark:text-[#eae8e1] focus:outline-none focus:border-[#0000a8] dark:focus:border-[#9cbce2]"
             />
           </label>
           <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-[#6a6f63] dark:text-[#aaa99f]">
@@ -100,7 +100,7 @@ export function AuthScreen({ onSignedIn }: { onSignedIn: () => void }): JSX.Elem
               autoComplete={mode === "signup" ? "new-password" : "current-password"}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="w-full min-h-11 rounded-none border border-[#e0ded5] dark:border-[#3b3d36] bg-white dark:bg-[#191a18] px-3 text-sm font-normal normal-case tracking-normal text-[#222320] dark:text-[#eae8e1] focus:outline-none focus:border-[#0000a8] dark:focus:border-[#9cbce2]"
+              className="w-full min-h-11 rounded-none border border-[#e0ded5] dark:border-[#3b3d36] bg-[#fffef8] dark:bg-[#191a18] px-3 text-sm font-normal normal-case tracking-normal text-[#222320] dark:text-[#eae8e1] focus:outline-none focus:border-[#0000a8] dark:focus:border-[#9cbce2]"
             />
           </label>
           {error ? (
