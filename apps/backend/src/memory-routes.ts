@@ -5,7 +5,7 @@
  */
 import type { Env } from "./env.js";
 import { memoryRegistryStub } from "./memory-do.js";
-import { isAuthenticated } from "./request-auth.js";
+import { isAuthorizedRequest } from "./request-auth.js";
 import { methodNotAllowed } from "./route-utils.js";
 
 const MEMORY_DO_BASE = "https://internal/internal/memory";
@@ -17,7 +17,7 @@ export async function handleMemory(request: Request, env: Env): Promise<Response
   if (pathname !== "/api/memory/facts" && pathname !== "/api/memory/sessions" && factId === undefined) {
     return null;
   }
-  if (!isAuthenticated(request, env)) {
+  if (!(await isAuthorizedRequest(request, env))) {
     return Response.json({ error: "Authentication required." }, { status: 401 });
   }
   if (env.Memory === undefined) {

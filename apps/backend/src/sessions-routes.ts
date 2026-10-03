@@ -5,7 +5,7 @@
  */
 import { getAgentByName } from "agents/routing";
 import type { Env } from "./env.js";
-import { getUserId, isAuthenticated } from "./request-auth.js";
+import { isAuthorizedRequest, resolveUserId } from "./request-auth.js";
 import { redactSecrets } from "./security.js";
 import {
   buildSessionAgentName,
@@ -27,11 +27,11 @@ export async function handleWebSessions(request: Request, env: Env): Promise<Res
   if (!/^\/api\/sessions(?:\/[^/]+(?:\/resume)?)?$/.test(url.pathname)) {
     return null;
   }
-  if (!isAuthenticated(request, env)) {
+  if (!(await isAuthorizedRequest(request, env))) {
     return Response.json({ error: "Authentication required." }, { status: 401 });
   }
 
-  const userId = getUserId(request) ?? "default";
+  const userId = (await resolveUserId(request, env)) ?? "default";
   const stub = await getAgentByName(env.CodingOrchestrator, userId);
 
   // GET /api/sessions — list user's sessions (always includes base session)

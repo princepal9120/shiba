@@ -7,7 +7,8 @@ import { listTokens } from "./agent-tokens.js";
 import emailOpenApi from "./email-openapi.json";
 import type { Env } from "./env.js";
 import { agentCliCatalog } from "./harness/catalog.js";
-import { getUserId } from "./request-auth.js";
+import { isBetterAuthConfigured } from "./better-auth.js";
+import { isAccessConfigured, resolveUserId } from "./request-auth.js";
 import { methodNotAllowed } from "./route-utils.js";
 import { readSetupStatus } from "./setup-status.js";
 
@@ -48,9 +49,19 @@ export async function handleMeta(request: Request, env: Env): Promise<Response |
     if (request.method !== "GET") {
       return Response.json({ error: "Method not allowed." }, { status: 405 });
     }
-    return Response.json({ agent: getUserId(request) ?? "default" }, {
-      headers: { "Cache-Control": "no-store" },
-    });
+    // `auth` tells the dashboard which lane proved this identity so it can
+    // offer the matching affordances (e.g. sign-out only for better-auth).
+    const auth = isAccessConfigured(env)
+      ? "access"
+      : isBetterAuthConfigured(env)
+        ? "better-auth"
+        : "none";
+    return Response.json(
+      { agent: (await resolveUserId(request, env)) ?? "default", auth },
+      {
+        headers: { "Cache-Control": "no-store" },
+      },
+    );
   }
   if (url.pathname === "/api/email/openapi.json") {
     if (request.method !== "GET") return methodNotAllowed();

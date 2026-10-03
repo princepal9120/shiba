@@ -35,7 +35,8 @@ import { handleUsage } from "./usage-routes.js";
 import { handleScreenshot } from "./screenshots-routes.js";
 import { handleWebSessions } from "./sessions-routes.js";
 import { redactSecrets } from "./security.js";
-import { getUserId, isAccessConfigured, isAuthenticated, SIGNATURE_AUTHENTICATED } from "./request-auth.js";
+import { handleBetterAuth, isBetterAuthConfigured } from "./better-auth.js";
+import { getUserId, isAccessConfigured, isAuthenticated, isAuthorizedRequest, resolveUserId, SIGNATURE_AUTHENTICATED } from "./request-auth.js";
 import { handleSlackInteract } from "./slack-approval.js";
 import { handleSlackEvents } from "./slack-events.js";
 import { handleSlackEvent } from "./slack-mention.js";
@@ -58,7 +59,8 @@ import {
 export { Automations, CodingOrchestrator, LocalDispatch, Mailbox, Memory, ModelConfig, OpenCodeAgent, Sandbox, ContainerProxy, Waitlist };
 export { assertLiveCodingModel } from "./coding-model.js";
 // Kept public for consumers that import the auth surface from the entry.
-export { getUserId, isAuthenticated, SIGNATURE_AUTHENTICATED } from "./request-auth.js";
+export { isBetterAuthConfigured } from "./better-auth.js";
+export { getUserId, isAuthenticated, isAuthorizedRequest, resolveUserId, SIGNATURE_AUTHENTICATED } from "./request-auth.js";
 export { handleWebSessions } from "./sessions-routes.js";
 
 // Startup assertion (VERIFICATION_PLAN.md G2): `assertLiveCodingModel` already
@@ -135,16 +137,28 @@ export default {
         request = new Request(request, { headers });
       }
       const url = new URL(request.url);
-      if (!isPublicRequest(request) && !isAuthenticated(request, env)) {
+      // Order: the better-auth lane owns `/api/auth/*` (minus the
+      // subscription-connect paths it shares that prefix with — those stay
+      // gated below), so it is served before the identity gate sees the
+      // request. The gate then composes both identity systems.
+      const betterAuthResponse = await handleBetterAuth(request, env);
+      if (betterAuthResponse) return betterAuthResponse;
+      if (!isPublicRequest(request) && !(await isAuthorizedRequest(request, env))) {
         return Response.json(
           {
             error: "Authentication required.",
-            ...(!isAccessConfigured(env) ? { code: "access_not_configured" } : {}),
+            ...(!isAccessConfigured(env)
+              ? {
+                  code: isBetterAuthConfigured(env)
+                    ? "better_auth"
+                    : "access_not_configured",
+                }
+              : {}),
           },
           { status: 401 },
         );
       }
-      const oauthResponse = await handleOAuth(request, env, getUserId(request));
+      const oauthResponse = await handleOAuth(request, env, await resolveUserId(request, env));
       if (oauthResponse) return oauthResponse;
       const waitlistResponse = await handleWaitlist(request, env);
       if (waitlistResponse) return waitlistResponse;
@@ -296,7 +310,7 @@ export default {
         } catch {
           return Response.json({ error: "Invalid agent name." }, { status: 400 });
         }
-        const currentUserId = getUserId(request) ?? "default";
+        const currentUserId = (await resolveUserId(request, env)) ?? "default";
         if (!isAuthorizedSessionAgent(name, currentUserId)) {
           return Response.json({ error: "Forbidden." }, { status: 403 });
         }

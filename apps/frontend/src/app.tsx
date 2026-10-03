@@ -25,6 +25,8 @@ import { AnalyticsView } from "./components/AnalyticsView";
 import { TaskComposer } from "./components/TaskComposer";
 import { toast } from "sonner";
 import { AppNavRail, APP_NAV_ITEMS, type AppNavView } from "./components/AppNavRail";
+import { AuthScreen } from "./components/AuthScreen";
+import { authClient } from "./auth-client";
 import { CommandMenu, type CommandItem } from "./components/ui/command-menu";
 import { useTheme } from "./components/ThemeProvider";
 import { Tooltip } from "./components/Tooltip";
@@ -195,7 +197,10 @@ async function isSessionNotFoundBody(response: Response): Promise<boolean> {
 }
 
 type IdentityIssue = "signin" | "unconfigured" | "unreachable" | "error";
-type IdentityResult = { agent: string } | { issue: IdentityIssue; message: string };
+type AuthMode = "better-auth" | "access" | "none";
+type IdentityResult =
+  | { agent: string; auth?: AuthMode }
+  | { issue: IdentityIssue; message: string; auth?: AuthMode };
 
 async function fetchIdentity(): Promise<IdentityResult> {
   let res: Response;
@@ -207,22 +212,29 @@ async function fetchIdentity(): Promise<IdentityResult> {
     return { issue: "unreachable", message: "Network error reaching /api/whoami." };
   }
   if (res.type === "opaqueredirect") {
-    return { issue: "signin", message: "Sign-in required." };
+    return { issue: "signin", message: "Sign-in required.", auth: "access" };
   }
   if (res.status === 401) {
     const body = (await res.clone().json().catch(() => null)) as { code?: unknown } | null;
-    return body?.code === "access_not_configured"
-      ? { issue: "unconfigured", message: "Cloudflare Access is not configured." }
+    if (body?.code === "access_not_configured") {
+      return { issue: "unconfigured", message: "Cloudflare Access is not configured." };
+    }
+    return body?.code === "better_auth"
+      ? { issue: "signin", message: "Sign-in required.", auth: "better-auth" }
       : { issue: "signin", message: "Sign-in required." };
   }
   // Non-JSON means something other than the Worker answered (static host, dev proxy).
-  const body = (await res.json().catch(() => null)) as { agent?: unknown } | null;
+  const body = (await res.json().catch(() => null)) as { agent?: unknown; auth?: unknown } | null;
   if (body === null || res.status === 404 || res.status === 502 || res.status === 503 || res.status === 504) {
     return { issue: "unreachable", message: `GET /api/whoami returned ${res.status}.` };
   }
   if (!res.ok) return { issue: "error", message: `GET /api/whoami failed with ${res.status}.` };
+  const auth: AuthMode | undefined =
+    body.auth === "better-auth" || body.auth === "access" || body.auth === "none"
+      ? body.auth
+      : undefined;
   return typeof body.agent === "string" && body.agent !== ""
-    ? { agent: body.agent }
+    ? { agent: body.agent, auth }
     : { issue: "error", message: "The server did not return an agent identity." };
 }
 
@@ -396,10 +408,22 @@ export function App(): React.JSX.Element {
   const [orchestratorName, setOrchestratorName] = useState<string | null>(null);
   const [identityError, setIdentityError] = useState<string | null>(null);
   const [identityIssue, setIdentityIssue] = useState<IdentityIssue | null>(null);
+  // Which auth lane proved (or refused) the identity — drives the login
+  // surface (better-auth form vs Access reload) and the sign-out control.
+  const [authMode, setAuthMode] = useState<AuthMode | null>(null);
   // Bumping this re-runs the whoami check (retry timer, "Retry now", wake-up).
   const [identityAttempt, setIdentityAttempt] = useState(0);
   const identityFailures = useRef(0);
   const retryIdentity = useCallback(() => setIdentityAttempt((n) => n + 1), []);
+  // Better-auth lane sign-out: clears the session cookie, then re-runs
+  // whoami — the 401 that follows lands on AuthScreen again.
+  const handleSignOut = useCallback(async () => {
+    await authClient.signOut().catch(() => {});
+    setOrchestratorName(null);
+    setAuthMode(null);
+    setIdentityIssue("signin");
+    retryIdentity();
+  }, [retryIdentity]);
   useEffect(() => {
     let cancelled = false;
     let timer: number | undefined;
@@ -408,12 +432,14 @@ export function App(): React.JSX.Element {
       if ("agent" in result) {
         identityFailures.current = 0;
         setOrchestratorName(result.agent);
+        setAuthMode(result.auth ?? null);
         setIdentityError(null);
         setIdentityIssue(null);
         return;
       }
       setIdentityError(result.message);
       setIdentityIssue(result.issue);
+      if (result.auth) setAuthMode(result.auth);
       if (result.issue === "signin" || result.issue === "unconfigured") return;
       const delay = Math.min(30_000, 1_000 * 2 ** identityFailures.current);
       identityFailures.current += 1;
@@ -1108,6 +1134,11 @@ export function App(): React.JSX.Element {
     },
   ];
 
+  // Built-in login lane: the Worker 401s with code "better-auth".
+  if (identityIssue === "signin" && authMode === "better-auth") {
+    return <AuthScreen onSignedIn={retryIdentity} />;
+  }
+
   if (identityIssue === "signin" || identityIssue === "unconfigured") {
     const accessUnconfigured = identityIssue === "unconfigured";
     return (
@@ -1171,6 +1202,8 @@ export function App(): React.JSX.Element {
         setupTotal={SETUP_TOTAL_STEPS}
         onOpenSetup={() => setShowOnboardingModal(true)}
         onOpenShortcuts={() => setShowShortcutsModal(true)}
+        accountEmail={authMode === "better-auth" ? orchestratorName : null}
+        onSignOut={authMode === "better-auth" ? handleSignOut : undefined}
       />
 
       {mobileNavOpen ? (
@@ -1203,6 +1236,8 @@ export function App(): React.JSX.Element {
                 setMobileNavOpen(false);
                 setShowShortcutsModal(true);
               }}
+              accountEmail={authMode === "better-auth" ? orchestratorName : null}
+              onSignOut={authMode === "better-auth" ? handleSignOut : undefined}
               onClose={() => setMobileNavOpen(false)}
             />
           </div>

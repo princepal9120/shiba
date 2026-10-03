@@ -270,6 +270,9 @@ export const Worker = Cloudflare.Worker("Worker", {
       "DEVIN_SUBSCRIPTION_TOKEN",
       // T51: the bearer the `shiba local` daemon presents on /api/local/*.
       "LOCAL_ADAPTER_TOKEN",
+      // Built-in dashboard auth signing secret (better-auth.ts): absent =
+      // the lane is dark and the gate falls back to Access/fail-closed.
+      "BETTER_AUTH_SECRET",
       // Telegram + Discord webhook lanes.
       "TELEGRAM_BOT_TOKEN",
       "TELEGRAM_WEBHOOK_SECRET",
@@ -323,6 +326,9 @@ export const Worker = Cloudflare.Worker("Worker", {
       "DISCORD_AGENT_HARNESS",
       "AGENT_MAILBOX",
       "WORKER_HOSTNAME",
+      // Built-in dashboard auth: canonical public URL for cookie scope and
+      // origin checks; unset = each request's own origin.
+      "BETTER_AUTH_URL",
     ]),
   },
 });

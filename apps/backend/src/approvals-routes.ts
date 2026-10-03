@@ -1,7 +1,7 @@
 import { getAgentByName } from "agents/routing";
 import type { Env } from "./env.js";
 import { DECIDED_APPROVALS_LIMIT, type PendingApproval } from "./pending-approvals.js";
-import { getUserId, isAuthenticated } from "./request-auth.js";
+import { isAuthorizedRequest, resolveUserId } from "./request-auth.js";
 import { jsonObjectBody } from "./route-utils.js";
 import { ORCHESTRATOR_NAME } from "./slack-routes.js";
 import {
@@ -29,10 +29,10 @@ export async function handleApprovals(request: Request, env: Env): Promise<Respo
   if (url.pathname !== "/api/approvals") {
     return null;
   }
-  if (!isAuthenticated(request, env)) {
+  if (!(await isAuthorizedRequest(request, env))) {
     return Response.json({ error: "Authentication required." }, { status: 401 });
   }
-  const userId = getUserId(request) ?? ORCHESTRATOR_NAME;
+  const userId = (await resolveUserId(request, env)) ?? ORCHESTRATOR_NAME;
   const userStub = await getAgentByName(env.CodingOrchestrator, userId);
   let sessionAgentNames: string[] = [];
   try {
@@ -95,7 +95,7 @@ export async function handleApprovals(request: Request, env: Env): Promise<Respo
     if (typeof body.threadKey !== "string" || typeof body.approvalId !== "string" || typeof body.approved !== "boolean") {
       return Response.json({ error: "Invalid approval payload." }, { status: 400 });
     }
-    const decidedBy = getUserId(request) ?? "default";
+    const decidedBy = (await resolveUserId(request, env)) ?? "default";
     if (body.threadKey.startsWith(WEB_SESSION_PREFIX)) {
       if (!isAuthorizedSessionAgent(body.threadKey, decidedBy)) {
         return Response.json({ error: "Forbidden." }, { status: 403 });

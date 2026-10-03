@@ -14,6 +14,7 @@ export interface SetupStatus {
   github: { token: boolean; webhookSecret: boolean };
   gateway: { id: string; token: boolean; reachable: "yes" | "unauthorized" | "error" | "unknown" };
   access: { required: boolean };
+  betterAuth: { configured: boolean };
   models: { orchestrator: string; coding: string; harness: string; roles: RoleModelWire[] };
   automations: { enabled: boolean; typeSafe: boolean };
 }

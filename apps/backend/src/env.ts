@@ -312,4 +312,18 @@ export interface Env {
    * verified `Cf-Access-Jwt-Assertion`, and Access is required as with REQUIRE_ACCESS.
    */
   ACCESS_AUD?: string;
+  /**
+   * Optional. Turns on the built-in dashboard auth lane (better-auth.ts):
+   * email+password accounts and signed-cookie sessions served at
+   * /api/auth/*, backed by the AGENT_AUDIT D1 database. The library
+   * requires ≥32 chars — anything shorter is treated as unset and the gate
+   * fails closed as before. Access still takes precedence when configured.
+   */
+  BETTER_AUTH_SECRET?: string;
+  /**
+   * Optional. Canonical public URL of the dashboard (e.g.
+   * `https://app.tryshiba.dev`), used by Better Auth for cookie scope and
+   * origin validation. Unset falls back to each request's own origin.
+   */
+  BETTER_AUTH_URL?: string;
 }
