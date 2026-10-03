@@ -1,6 +1,6 @@
 import { listAuditEntries } from "./audit.js";
 import type { Env } from "./env.js";
-import { isAuthenticated } from "./request-auth.js";
+import { isAuthorizedRequest } from "./request-auth.js";
 import { clampedLimit, MAX_LIST_LIMIT, methodNotAllowed } from "./route-utils.js";
 import { redactSecrets } from "./security.js";
 
@@ -16,7 +16,7 @@ export async function handleAudit(request: Request, env: Env): Promise<Response 
   if (url.pathname !== "/api/audit") {
     return null;
   }
-  if (!isAuthenticated(request, env)) {
+  if (!(await isAuthorizedRequest(request, env))) {
     return Response.json({ error: "Authentication required." }, { status: 401 });
   }
   if (request.method !== "GET") {

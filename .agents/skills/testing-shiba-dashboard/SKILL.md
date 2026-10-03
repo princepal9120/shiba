@@ -68,3 +68,28 @@ All of these work client-side and were verified in a restyle pass:
 - New package deps on recent branches (`@modelcontextprotocol/sdk`, `postal-mime`) need `pnpm install` before `pnpm dev` or vite re-optimizes on first load anyway.
 - To exercise data-driven surfaces without the worker, inject a `window.fetch` wrapper via `browser_console` returning `new Response(JSON.stringify(payload))` for the paths you need and delegating everything else to the saved real fetch. `/api/approvals` + `/api/agents` poll every 10s (app.tsx), so post-load stubs are picked up within ~11s; InboxTab's mailbox fetch runs once at tab mount — inject before the first Inbox visit or hit Refresh for list data. Canned data must carry unique marker strings (e.g. `AAA-UNIQUE-BODY`) so wrong-body/stale-render bugs are unmistakable; delay one response (~1500ms) to force races. Store DOM nodes (`window.__x`) to prove keep-mount via `isConnected`/`closest('div.hidden')`/same-node `===` — pixels alone can't distinguish "state survived" from "fresh mount that happens to look identical".
 - Approvals tab renders TWO different cards: `ApprovalCard` (live chat `PendingApproval` — the only place the green `bg-[#15803d]` Approve button exists; needs a live chat approval, can't be stubbed) and `StoredApprovalCard` (from `/api/approvals` — navy-tint `ACCENT_BUTTON`, stub-able). A pixel check of the chat card's button needs a real run; don't confuse the two when verifying button-style fixes.
+
+## Built-in auth lane (better-auth, PR #78)
+
+The dashboard has a second identity lane behind `BETTER_AUTH_SECRET`: email+password sign-up/sign-in at `/api/auth/*` on the `AGENT_AUDIT` D1 binding. Browser-testing the lane:
+
+1. `printf 'BETTER_AUTH_SECRET=<any ≥32-char string>\n' > apps/backend/.dev.vars` — wrangler only reads `.dev.vars` at startup; restart it after adding.
+2. `pnpm build:dashboard`, then move `public/_redirects` aside — it sends /app/ to prod and loops locally. Restore when done; never commit the removal.
+3. `npx wrangler dev --port 8788 --config apps/backend/wrangler.jsonc --enable-containers=false --local-upstream localhost` — **must be :8788**: vite's `/api` proxy hardcodes `http://localhost:8788`. Other ports only reach the worker's own assets, not the vite dashboard.
+4. `pnpm --filter @shiba/frontend dev` → http://localhost:5173/app/
+
+Resetting the single-account bootstrap: sign-up is bootstrap-only (`user.create.before` 403s once any user row exists) and local D1 persists across restarts in `.wrangler/state`. To re-test first sign-up:
+
+```bash
+npx wrangler d1 execute shiba-audit --local --config apps/backend/wrangler.jsonc \
+  --command 'DELETE FROM "session"; DELETE FROM "account"; DELETE FROM "verification"; DELETE FROM "user";'
+```
+
+Expected behavior / pitfalls:
+
+- Unauthenticated `GET /api/whoami` → `401 {"code":"better_auth"}` → the SPA renders `AuthScreen` (paper-OS card), NOT the Cloudflare Access gate. `code:"access_not_configured"` means the lane did not load (.dev.vars missing/short, or stale wrangler).
+- `/api/auth/<provider>-subscription*` paths are NOT part of the lane — they stay 401-gated. `/api/auth/get-session` unauthenticated → `200 null` (lane-owned, not a bug).
+- Every open browser on :5173 polls `/api/approvals` + `/api/agents` every ~10s — an unauthenticated second browser produces interleaved 401s in the wrangler log that look like flaky auth. Quit other browsers before reading the log.
+- Better-auth's "Base URL is not set" warning is expected without `BETTER_AUTH_URL`; dev origins localhost:5173/8787/8788 are hardcoded in `DEV_ORIGINS` (`apps/backend/src/better-auth.ts`).
+- Success evidence beyond pixels: `wrangler d1 execute shiba-audit --local --command 'SELECT email FROM "user"; SELECT COUNT(*) FROM "session";'` and the request log — `POST /api/auth/sign-up/email 200`, `GET /agents/.../<email> 101` for the chat WebSocket.
+- workerd "internal error; reference=…" lines right after the `101` upgrade are the CodingOrchestrator DO failing to init without model/sandbox creds — environmental in Docker-less dev, not an auth regression.

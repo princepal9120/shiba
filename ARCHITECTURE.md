@@ -31,7 +31,8 @@ approves it, and the container's outbound network is allowlisted per run.
 
 ```
                         ┌───────────── ingress (one Worker) ─────────────┐
-   Dashboard  ────────► │  /api/*  authenticated (Cloudflare Access)     │
+   Dashboard  ────────► │  /api/*  authenticated (Cloudflare Access, or  │
+                       │  built-in email+password lane at /api/auth/*)  │
    Slack / Discord  ──► │  /api/slack/*, /api/discord/*  signature-verified│
    Telegram  ─────────► │  /api/telegram/*  header-secret                 │
    Email  ───────────► │  /api/emails, /api/drafts  provider-verified    │
@@ -138,6 +139,14 @@ existing enforcement point:
    and GitHub, header-secret Telegram/Discord/email, bearer-token `/mcp`, and a
    narrow explicit bypass list. A new ingress surface must add its own
    mechanism, never inherit one.
+
+   The dashboard itself has two interchangeable identity lanes
+   (`better-auth.ts`): the Cloudflare Access email header, or — when
+   `BETTER_AUTH_SECRET` is set — built-in email+password sign-in with
+   signed-cookie sessions served at `/api/auth/*` and accounts stored in
+   the AGENT_AUDIT D1 database. Access wins when both exist; sign-up
+   closes after the first account. With neither configured the gate stays
+   fail-closed — loopback only.
 
 Two stated properties, not accidents:
 

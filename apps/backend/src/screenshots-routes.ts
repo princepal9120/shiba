@@ -1,5 +1,5 @@
 import type { Env } from "./env.js";
-import { isAuthenticated } from "./request-auth.js";
+import { isAuthorizedRequest } from "./request-auth.js";
 import { isValidSandboxId } from "./sandbox-routes.js";
 import { screenshotKeyFor } from "./screenshot.js";
 
@@ -12,7 +12,7 @@ export async function handleScreenshot(request: Request, env: Env): Promise<Resp
   const { pathname } = new URL(request.url);
   const match = /^\/api\/screenshots\/([^/]+)$/.exec(pathname);
   if (!match) return null;
-  if (!isAuthenticated(request, env)) {
+  if (!(await isAuthorizedRequest(request, env))) {
     return Response.json({ error: "Authentication required." }, { status: 401 });
   }
   if (request.method !== "GET") {

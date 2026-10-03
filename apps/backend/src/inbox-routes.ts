@@ -14,7 +14,7 @@ import type {
   StoredEmail,
   ThreadView,
 } from "./mailbox-store.js";
-import { isAuthenticated } from "./request-auth.js";
+import { isAuthorizedRequest } from "./request-auth.js";
 import { clampedLimit, jsonObjectBody, methodNotAllowed } from "./route-utils.js";
 import { InputError, NotFoundError } from "./security.js";
 
@@ -226,7 +226,7 @@ export async function handleInbox(request: Request, env: Env): Promise<Response 
   ) {
     return null;
   }
-  if (!isAuthenticated(request, env)) {
+  if (!(await isAuthorizedRequest(request, env))) {
     return Response.json({ error: "Authentication required." }, { status: 401 });
   }
   if (env.Mailbox === undefined) {

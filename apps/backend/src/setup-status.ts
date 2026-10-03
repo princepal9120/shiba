@@ -5,6 +5,7 @@
  */
 import type { Env } from "./env.js";
 import { describeRoleModels, type RoleModelStatus } from "./agents/roles.js";
+import { isBetterAuthConfigured } from "./better-auth.js";
 import { isAccessConfigured } from "./request-auth.js";
 
 export interface SetupStatus {
@@ -17,6 +18,7 @@ export interface SetupStatus {
   github: { token: boolean; webhookSecret: boolean };
   gateway: { id: string; token: boolean; reachable: "yes" | "unauthorized" | "error" | "unknown" };
   access: { required: boolean };
+  betterAuth: { configured: boolean };
   models: { orchestrator: string; coding: string; harness: string; roles: RoleModelStatus[] };
   automations: { enabled: boolean; typeSafe: boolean };
 }
@@ -55,6 +57,7 @@ export async function readSetupStatus(env: Env, probe = true): Promise<SetupStat
       reachable: probe ? await probeGateway(env) : "unknown",
     },
     access: { required: isAccessConfigured(env) },
+    betterAuth: { configured: isBetterAuthConfigured(env) },
     models: {
       orchestrator: env.ORCHESTRATOR_MODEL,
       coding: env.CODING_MODEL,

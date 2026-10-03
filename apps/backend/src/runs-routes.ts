@@ -6,7 +6,7 @@
 import { getAgentByName } from "agents/routing";
 import { LOCAL_INTAKE_DASHBOARD, LOCAL_INTAKE_HEADER } from "@shiba/shared";
 import type { Env } from "./env.js";
-import { getUserId, isAuthenticated } from "./request-auth.js";
+import { isAuthorizedRequest, resolveUserId } from "./request-auth.js";
 import { ORCHESTRATOR_NAME } from "./slack-routes.js";
 import {
   buildSessionAgentName,
@@ -26,7 +26,7 @@ export async function resolveRunStoreTarget(
   url: URL,
 ): Promise<{ agentName: string } | { error: Response }> {
   // Local development shares the same fallback as the dashboard identity endpoint.
-  const userId = getUserId(request) ?? "default";
+  const userId = (await resolveUserId(request, env)) ?? "default";
   const sessionParam = url.searchParams.get("session") || url.searchParams.get("sessionId");
   if (sessionParam && sessionParam !== DEFAULT_SESSION_ID) {
     if (!isValidSessionId(sessionParam)) {
@@ -52,7 +52,7 @@ export async function handleRuns(request: Request, env: Env): Promise<Response |
   if (!/^\/api\/runs(?:\/[^/]+)?$/.test(url.pathname)) {
     return null;
   }
-  if (!isAuthenticated(request, env)) {
+  if (!(await isAuthorizedRequest(request, env))) {
     return Response.json({ error: "Authentication required." }, { status: 401 });
   }
   if (request.method !== "GET" && request.method !== "DELETE" && request.method !== "POST") {

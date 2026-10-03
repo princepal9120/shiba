@@ -10,7 +10,7 @@ import { handleAntigravityCallback, handleAntigravitySubscriptionAuth } from "./
 import type { Env } from "./env.js";
 import { forwardClaudeSubscription, forwardCodexSubscription, forwardCursorSubscription, forwardDevinSubscription, type EgressEnv } from "./egress.js";
 import { codexSubscriptionInstanceId } from "./harness/codex-subscription.js";
-import { getUserId } from "./request-auth.js";
+import { resolveUserId } from "./request-auth.js";
 
 const authError = (reason: unknown) =>
   Response.json(
@@ -36,7 +36,7 @@ function accountParam(request: Request, url: URL, body: { account?: unknown }): 
 async function handleClaudeSubscriptionAuth(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const sub = url.pathname.slice("/api/auth/claude-subscription".length).replace(/^\/+|\/+$/g, "");
-  const ownerSessionId = getUserId(request) ?? "default";
+  const ownerSessionId = (await resolveUserId(request, env)) ?? "default";
   const body =
     request.method === "POST"
       ? ((await request.json().catch(() => ({}))) as { account?: unknown })
@@ -78,7 +78,7 @@ async function handleClaudeSubscriptionAuth(request: Request, env: Env): Promise
 async function handleCodexSubscriptionAuth(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const sub = url.pathname.slice("/api/auth/codex-subscription".length).replace(/^\/+|\/+$/g, "");
-  const ownerSessionId = getUserId(request) ?? "default";
+  const ownerSessionId = (await resolveUserId(request, env)) ?? "default";
   const body =
     request.method === "POST"
       ? ((await request.json().catch(() => ({}))) as { account?: unknown })
@@ -118,7 +118,7 @@ async function handleCodexSubscriptionAuth(request: Request, env: Env): Promise<
 async function handleCursorSubscriptionAuth(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const sub = url.pathname.slice("/api/auth/cursor-subscription".length).replace(/^\/+|\/+$/g, "");
-  const ownerSessionId = getUserId(request) ?? "default";
+  const ownerSessionId = (await resolveUserId(request, env)) ?? "default";
   const body =
     request.method === "POST"
       ? ((await request.json().catch(() => ({}))) as { account?: unknown })
@@ -158,7 +158,7 @@ async function handleCursorSubscriptionAuth(request: Request, env: Env): Promise
 async function handleDevinSubscriptionAuth(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const sub = url.pathname.slice("/api/auth/devin-subscription".length).replace(/^\/+|\/+$/g, "");
-  const ownerSessionId = getUserId(request) ?? "default";
+  const ownerSessionId = (await resolveUserId(request, env)) ?? "default";
   const body =
     request.method === "POST"
       ? ((await request.json().catch(() => ({}))) as { account?: unknown })
@@ -225,13 +225,13 @@ export async function handleSubscriptionAuth(request: Request, env: Env): Promis
     if (env.SHIBA_ANTIGRAVITY_SUBSCRIPTION !== "1") {
       return Response.json({ error: "Not found." }, { status: 404 });
     }
-    return handleAntigravitySubscriptionAuth(request, env, getUserId(request) ?? "default");
+    return handleAntigravitySubscriptionAuth(request, env, (await resolveUserId(request, env)) ?? "default");
   }
   if (url.pathname === "/api/antigravity/callback") {
     if (env.SHIBA_ANTIGRAVITY_SUBSCRIPTION !== "1") {
       return Response.json({ error: "Not found." }, { status: 404 });
     }
-    return handleAntigravityCallback(request, env, getUserId(request) ?? "default");
+    return handleAntigravityCallback(request, env, (await resolveUserId(request, env)) ?? "default");
   }
   return null;
 }

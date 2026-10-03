@@ -68,6 +68,9 @@ export interface AppNavRailProps {
   variant?: "rail" | "sheet";
   /** Sheet only: renders a close button in the brand row. */
   onClose?: () => void;
+  /** Built-in auth lane: signed-in identity + sign-out affordance. */
+  accountEmail?: string | null;
+  onSignOut?: () => void;
 }
 
 const ICONS: Record<AppNavView, JSX.Element> = {
@@ -150,22 +153,26 @@ const ICONS: Record<AppNavView, JSX.Element> = {
 
 function NavItem({
   label,
+  subLabel,
   active,
   onClick,
   children,
   badge,
 }: {
   label: string;
+  subLabel?: string;
   active?: boolean;
   onClick: () => void;
   children: React.ReactNode;
   badge?: React.ReactNode;
 }) {
+  const accessibleLabel = subLabel ? `${label} ${subLabel}` : label;
   return (
     <button
       type="button"
       onClick={onClick}
-      aria-label={label}
+      aria-label={accessibleLabel}
+      title={accessibleLabel}
       aria-current={active ? "page" : undefined}
       className={
         "group w-full flex items-center gap-2.5 rounded-none px-2.5 py-1.5 touch:min-h-11 text-[13px] font-medium transition-colors duration-100 " +
@@ -177,7 +184,14 @@ function NavItem({
       <span className={active ? "text-white dark:text-[#152335]" : "text-[#6a6f63] dark:text-[#aaa99f] group-hover:text-[#222320] dark:group-hover:text-[#f4f2ea]"} aria-hidden="true">
         {children}
       </span>
-      <span className="flex-1 text-left truncate">{label}</span>
+      <span className="flex-1 min-w-0 text-left">
+        <span className="block truncate">{label}</span>
+        {subLabel ? (
+          <span className="block truncate text-[11px] font-normal text-[#6a6f63] dark:text-[#aaa99f] group-hover:text-[#222320] dark:group-hover:text-[#f4f2ea]">
+            {subLabel}
+          </span>
+        ) : null}
+      </span>
       {badge}
     </button>
   );
@@ -196,6 +210,8 @@ export function AppNavRail({
   onToggleTheme,
   variant = "rail",
   onClose,
+  accountEmail,
+  onSignOut,
 }: AppNavRailProps): JSX.Element {
   const setupComplete = setupDone !== null && setupDone >= setupTotal;
   const setupRemaining =
@@ -322,6 +338,18 @@ export function AppNavRail({
         <NavItem label="Keyboard shortcuts" onClick={onOpenShortcuts}>
           <span className="text-[11px] font-mono font-bold leading-none">?</span>
         </NavItem>
+
+        {onSignOut ? (
+          <NavItem
+            label="Sign out"
+            subLabel={accountEmail ?? undefined}
+            onClick={onSignOut}
+          >
+            <svg aria-hidden="true" className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+            </svg>
+          </NavItem>
+        ) : null}
 
         {onToggleTheme ? (
           <NavItem

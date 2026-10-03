@@ -69,6 +69,7 @@ for (const [name, hint] of [
   ["TYPESAFE_API_KEY", "TypeSafe key (optional)"],
   ["DEVIN_API_KEY", "Devin API key (optional)"],
   ["LOCAL_ADAPTER_TOKEN", "bearer for the `shiba local` daemon (optional)"],
+  ["BETTER_AUTH_SECRET", "dashboard login secret, >=32 chars (`openssl rand -base64 48`; blank = no built-in login)"],
   ["TELEGRAM_BOT_TOKEN", "Telegram bot token from @BotFather (optional)"],
   ["TELEGRAM_WEBHOOK_SECRET", "Telegram webhook secret_token (optional)"],
   ["DISCORD_PUBLIC_KEY", "Discord app's Ed25519 public key (optional)"],

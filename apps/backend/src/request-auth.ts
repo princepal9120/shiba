@@ -5,6 +5,11 @@
  * split keeps each surface's own gate, per PLAN.md §18.0.
  */
 import { parseAutomationWebhookPath } from "./automations.js";
+import {
+  isBetterAuthConfigured,
+  isBetterAuthPath,
+  resolveBetterAuthUserId,
+} from "./better-auth.js";
 import type { Env } from "./env.js";
 import { isLocalRuntimePath } from "./local-routes.js";
 
@@ -69,7 +74,50 @@ export function isAuthenticated(request: Request, env: Env): boolean {
   // `/api/local` self-authenticates with a bearer token — same shape as
   // /mcp, exempt from the Access gate.
   if (isLocalRuntimePath(pathname)) return true;
-  // Without Access configured, only local development hosts bypass identity.
-  if (!isAccessConfigured(env)) return isLoopbackRequest(request);
-  return getUserId(request) !== null;
+  // `/api/auth/*` self-authenticates: sign-in/sign-up/session verbs are how
+  // a caller proves identity in the first place. The subscription-connect
+  // paths under /api/auth are NOT exempted here — they stay gated below.
+  if (isBetterAuthPath(pathname) && isBetterAuthConfigured(env)) return true;
+  // With no identity system configured, only local development hosts bypass.
+  if (!isAccessConfigured(env) && !isBetterAuthConfigured(env)) {
+    return isLoopbackRequest(request);
+  }
+  // Access deployments trust the (edge/JWT-verified) identity header.
+  if (isAccessConfigured(env)) return getUserId(request) !== null;
+  // better-auth mode needs the async session check — see isAuthorizedRequest.
+  return false;
+}
+
+/**
+ * Full async gate: the synchronous {@link isAuthenticated} check plus the
+ * better-auth cookie-session verification when the lane is configured.
+ * index.ts's gate and every route module's own recheck should await this;
+ * `isAuthenticated` alone only answers "identity proven so far".
+ */
+export async function isAuthorizedRequest(
+  request: Request,
+  env: Env,
+): Promise<boolean> {
+  return (
+    isAuthenticated(request, env) ||
+    (await resolveBetterAuthUserId(request, env)) !== null
+  );
+}
+
+/**
+ * Async identity resolution for the dashboard surfaces: the verified
+ * Access email when Access is configured, the better-auth session email
+ * for the built-in lane, else the raw header (loopback dev) or null.
+ */
+export async function resolveUserId(
+  request: Request,
+  env: Env,
+): Promise<string | null> {
+  if (isAccessConfigured(env)) {
+    return getUserId(request) ?? (await resolveBetterAuthUserId(request, env));
+  }
+  if (isBetterAuthConfigured(env)) {
+    return resolveBetterAuthUserId(request, env);
+  }
+  return getUserId(request);
 }

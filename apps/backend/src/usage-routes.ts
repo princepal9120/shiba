@@ -8,7 +8,7 @@
 import { getAgentByName } from "agents/routing";
 import type { DelegatedRun } from "@shiba/shared";
 import type { Env } from "./env.js";
-import { getUserId, isAuthenticated } from "./request-auth.js";
+import { isAuthorizedRequest } from "./request-auth.js";
 import { resolveRunStoreTarget } from "./runs-routes.js";
 import { buildUsageReport, parseUsageDays } from "./usage.js";
 
@@ -17,7 +17,7 @@ export async function handleUsage(request: Request, env: Env): Promise<Response 
   if (url.pathname !== "/api/usage") {
     return null;
   }
-  if (!isAuthenticated(request, env)) {
+  if (!(await isAuthorizedRequest(request, env))) {
     return Response.json({ error: "Authentication required." }, { status: 401 });
   }
   if (request.method !== "GET") {
