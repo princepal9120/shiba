@@ -9,6 +9,11 @@ export default {
     // Prevent persistent :hover styles after taps on touchscreens.
     hoverOnlyWhenSupported: true,
   },
+  // Class strategy so `dark:` variants follow the in-app next-themes toggle
+  // (html.dark), not the OS prefers-color-scheme — otherwise AppNavRail and
+  // AuthScreen stay dark on an OS-dark machine while the rest of the app
+  // (which remaps tokens under html.dark in styles.css) is light.
+  darkMode: "class",
   content: [
     resolve(root, "src/**/*.{js,ts,jsx,tsx,html}"),
     resolve(root, "../web/src/**/*.{astro,html,js,jsx,md,mdx,svelte,ts,tsx,vue}"),

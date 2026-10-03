@@ -346,6 +346,7 @@ html.dark [class~="bg-[#0000a8]"] [class~="text-white/90"],
 html.dark [class~="bg-[#0000a8]"] [class~="hover:text-white"]:hover {
   color: #152335e6;
 }
+html.dark [class~="bg-[#0000a8]"] [class~="text-white/80"] { color: #152335cc; }
 html.dark [class~="bg-[#0000a8]"] [class~="text-white/60"] { color: #15233599; }
 html.dark [class~="bg-[#0000a8]"] [class~="text-white/40"] { color: #15233566; }
 html.dark [class~="bg-[#0000a8]"] [class~="bg-white/10"]  { background-color: #1523351a; }

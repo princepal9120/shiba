@@ -13,6 +13,7 @@ import { MissionsView } from "./components/MissionsView";
 import { GatesView } from "./components/GatesView";
 import { DashboardView } from "./components/DashboardView";
 import { OnboardingModal, detectSetupSteps } from "./components/OnboardingModal";
+import { FirstRunWizard, ONBOARDING_STORAGE_KEY } from "./components/FirstRunWizard";
 import { SessionsSidebar, type SessionItem } from "./components/SessionsSidebar";
 import { StepTimeline } from "./components/StepTimeline";
 import { DiffView } from "./components/DiffView";
@@ -415,6 +416,20 @@ export function App(): React.JSX.Element {
   const [identityAttempt, setIdentityAttempt] = useState(0);
   const identityFailures = useRef(0);
   const retryIdentity = useCallback(() => setIdentityAttempt((n) => n + 1), []);
+  // First-run wizard: opens once per browser after the first authenticated
+  // session on the better-auth lane (Access identities are operators, not
+  // the signup path the wizard serves).
+  const [showFirstRun, setShowFirstRun] = useState(false);
+  useEffect(() => {
+    if (authMode !== "better-auth" || orchestratorName === null) return;
+    try {
+      if (localStorage.getItem(ONBOARDING_STORAGE_KEY) === "done") return;
+    } catch {
+      // private mode — show it anyway
+    }
+    setShowFirstRun(true);
+  }, [authMode, orchestratorName]);
+
   // Better-auth lane sign-out: clears the session cookie, then re-runs
   // whoami — the 401 that follows lands on AuthScreen again.
   const handleSignOut = useCallback(async () => {
@@ -1127,7 +1142,7 @@ export function App(): React.JSX.Element {
     {
       id: "setup-guide",
       label: "Open setup guide",
-      run: () => setShowOnboardingModal(true),
+      run: () => setShowFirstRun(true),
     },
     {
       id: "shortcuts",
@@ -1203,7 +1218,7 @@ export function App(): React.JSX.Element {
         activeSandboxCount={activeSandboxCount}
         setupDone={setupDone}
         setupTotal={SETUP_TOTAL_STEPS}
-        onOpenSetup={() => setShowOnboardingModal(true)}
+        onOpenSetup={() => setShowFirstRun(true)}
         onOpenShortcuts={() => setShowShortcutsModal(true)}
         accountEmail={authMode === "better-auth" ? orchestratorName : null}
         onSignOut={authMode === "better-auth" ? handleSignOut : undefined}
@@ -1233,7 +1248,7 @@ export function App(): React.JSX.Element {
               setupTotal={SETUP_TOTAL_STEPS}
               onOpenSetup={() => {
                 setMobileNavOpen(false);
-                setShowOnboardingModal(true);
+                setShowFirstRun(true);
               }}
               onOpenShortcuts={() => {
                 setMobileNavOpen(false);
@@ -1379,7 +1394,7 @@ export function App(): React.JSX.Element {
             }
             setupDone={setupDone}
             setupTotal={SETUP_TOTAL_STEPS}
-            onOpenSetup={() => setShowOnboardingModal(true)}
+            onOpenSetup={() => setShowFirstRun(true)}
             onToggleCollapse={toggleSessionsCollapsed}
           />
         </div>
@@ -1412,7 +1427,7 @@ export function App(): React.JSX.Element {
                 setupTotal={SETUP_TOTAL_STEPS}
                 onOpenSetup={() => {
                   setMobileSessionsOpen(false);
-                  setShowOnboardingModal(true);
+                  setShowFirstRun(true);
                 }}
                 isMobileDrawer={true}
                 onToggleCollapse={() => setMobileSessionsOpen(false)}
@@ -1727,6 +1742,13 @@ export function App(): React.JSX.Element {
       ) : null}
 
       {/* ONBOARDING SETUP MODAL */}
+      <FirstRunWizard
+        open={showFirstRun}
+        onClose={() => setShowFirstRun(false)}
+        onNavigate={(view) => setMainView(view)}
+        onOpenChecklist={() => setShowOnboardingModal(true)}
+      />
+
       <OnboardingModal
         isOpen={showOnboardingModal}
         onClose={() => setShowOnboardingModal(false)}

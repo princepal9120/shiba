@@ -49,9 +49,8 @@ export const APP_NAV_ITEMS: AppNavItem[] = [
 
 const NAV_GROUPS: { label: string; items: AppNavView[] }[] = [
   { label: "Workspace", items: ["dashboard", "tasks", "runs", "diff", "approvals", "missions", "automations", "analytics"] },
-  { label: "Capabilities", items: ["agents", "inbox", "memory", "integrations"] },
-  { label: "Sandbox & Safety", items: ["vm", "gates"] },
-  { label: "System", items: ["settings"] },
+  { label: "Capabilities", items: ["agents", "integrations", "inbox", "memory"] },
+  { label: "System", items: ["vm", "gates", "settings"] },
 ];
 
 export interface AppNavRailProps {

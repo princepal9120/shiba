@@ -5,24 +5,26 @@
  * /api/agents, /api/auth/*) rather than duplicating their internals. Sections
  * with no real data source are omitted, not stubbed.
  */
-import { useMemo, useState, type JSX, type ReactNode } from "react";
+import { type JSX, type ReactNode, useMemo, useState } from "react";
 import { version as dashboardVersion } from "../../package.json";
+import {
+  type AgentCliEntry,
+  type RoleModelWire,
+  type SetupStatus,
+  useAgentsDirectory,
+  useSetupStatus,
+} from "../live-status";
 import type { AppNavView } from "./AppNavRail";
 import { LoadErrorState } from "./LoadErrorState";
 import { MemoryTab } from "./MemoryTab";
-import { ToneChip } from "./ToneChip";
 import {
-  PROVIDER_AUTH_LANES,
-  authPhaseLabel,
-  authPhaseTone,
-  useAgentsDirectory,
-  useProviderAuth,
-  useSetupStatus,
-  type AgentCliEntry,
-  type ProviderAuthLane,
-  type RoleModelWire,
-  type SetupStatus,
-} from "../live-status";
+  SUBSCRIPTION_AUTH,
+  SubscriptionConnect,
+  type SubscriptionId,
+  type SubscriptionStatus,
+  subscriptionChip,
+} from "./SubscriptionConnect";
+import { ToneChip } from "./ToneChip";
 
 type SettingsSectionId =
   | "providers"
@@ -34,9 +36,13 @@ type SettingsSectionId =
   | "deployment";
 
 const SETTINGS_SECTIONS: { id: SettingsSectionId; label: string; blurb: string }[] = [
-  { id: "providers", label: "Providers", blurb: "Subscription lanes & agent credentials" },
+  { id: "providers", label: "Providers", blurb: "Your AI agents" },
   { id: "models", label: "Models", blurb: "Per-role agent routing" },
-  { id: "environments", label: "Environments", blurb: "Deployment configuration the Worker proves" },
+  {
+    id: "environments",
+    label: "Environments",
+    blurb: "Deployment configuration the Worker proves",
+  },
   { id: "memory", label: "Memory", blurb: "Vectorize long-term semantic memory" },
   { id: "guidance", label: "Agent guidance", blurb: "MCP principals & capability scopes" },
   { id: "experimental", label: "Experimental", blurb: "Opt-in feature flags (wrangler vars)" },
@@ -72,7 +78,15 @@ function Card({ children }: { children: ReactNode }): JSX.Element {
 }
 
 /** One row of the environments checklist: a label, a proven boolean, and a detail line. */
-function ChecklistRow({ label, ok, detail }: { label: string; ok: boolean; detail: string }): JSX.Element {
+function ChecklistRow({
+  label,
+  ok,
+  detail,
+}: {
+  label: string;
+  ok: boolean;
+  detail: string;
+}): JSX.Element {
   return (
     <div className="flex items-start gap-2.5 border-b border-[#e0ded5] px-4 py-2.5 last:border-b-0">
       <span
@@ -93,23 +107,26 @@ function ChecklistRow({ label, ok, detail }: { label: string; ok: boolean; detai
   );
 }
 
-function ProviderLaneRow({ lane }: { lane: ProviderAuthLane }): JSX.Element {
-  const { state } = useProviderAuth(lane.apiBase);
+function ProviderLaneRow({
+  id,
+  agents,
+}: {
+  id: SubscriptionId;
+  agents: AgentCliEntry[];
+}): JSX.Element {
+  const spec = SUBSCRIPTION_AUTH[id];
+  const credential = agents.find((entry) => entry.id === id)?.credential ?? spec.credential;
+  const [status, setStatus] = useState<SubscriptionStatus>({ kind: "loading" });
   return (
-    <div className="flex flex-col gap-1.5 border-b border-[#e0ded5] px-4 py-3 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-      <div className="min-w-0">
-        <div className="text-[13px] font-semibold text-[#222320]">{lane.label}</div>
-        <div className="font-mono text-[11px] text-[#6a6f63]">
-          {lane.flag} · {lane.credentialLabel}
+    <div className="border-b border-[#e0ded5] px-4 py-3 last:border-b-0">
+      <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+        <div className="min-w-0">
+          <div className="text-[13px] font-semibold text-[#222320]">{spec.label}</div>
+          <div className="text-[11px] text-[#6a6f63]">{spec.blurb}</div>
         </div>
-        {state.kind === "snapshot" && state.snapshot.message ? (
-          <div className="mt-0.5 text-[11px] text-[#6a6f63]">{state.snapshot.message}</div>
-        ) : null}
-        {state.kind === "error" ? (
-          <div className="mt-0.5 text-[11px] text-[#b91c1c]">{state.message}</div>
-        ) : null}
+        {subscriptionChip(status)}
       </div>
-      <ToneChip tone={authPhaseTone(state)} label={authPhaseLabel(state)} />
+      <SubscriptionConnect spec={spec} credential={credential} onStatus={setStatus} />
     </div>
   );
 }
@@ -143,7 +160,13 @@ function RoleModelRow({
         <div className="text-[13px] font-semibold text-[#222320]">{row.role}</div>
         <ToneChip
           tone={row.error ? "danger" : row.source === "default" ? "neutral" : "navy"}
-          label={row.error ? "Pin error" : row.source === "role-env" ? roleVar : ROLE_SOURCE_LABEL[row.source]}
+          label={
+            row.error
+              ? "Pin error"
+              : row.source === "role-env"
+                ? roleVar
+                : ROLE_SOURCE_LABEL[row.source]
+          }
         />
       </div>
       <div className="mt-2 flex flex-col gap-2 sm:flex-row">
@@ -167,9 +190,7 @@ function RoleModelRow({
           className="flex-1 bg-[#f1efe6] border border-[#e0ded5] rounded-none text-[#222320] px-2.5 py-1.5 text-xs font-mono read-only:opacity-80"
         />
       </div>
-      {row.error ? (
-        <div className="mt-1.5 text-[11px] text-[#b91c1c]">{row.error}</div>
-      ) : null}
+      {row.error ? <div className="mt-1.5 text-[11px] text-[#b91c1c]">{row.error}</div> : null}
       <div className="mt-1.5 font-mono text-[11px] text-[#6a6f63]">
         set via ROLE_MODEL_MAP["{row.role}"] or {roleVar}
       </div>
@@ -187,7 +208,9 @@ function ModelsSection({
   if (!status) {
     return (
       <Card>
-        <div className="px-4 py-6 text-center text-xs text-[#6a6f63]">Reading /api/setup/status…</div>
+        <div className="px-4 py-6 text-center text-xs text-[#6a6f63]">
+          Reading /api/setup/status…
+        </div>
       </Card>
     );
   }
@@ -227,21 +250,71 @@ function ModelsSection({
 
 function EnvironmentsSection({ status }: { status: SetupStatus | undefined }): JSX.Element {
   if (!status) {
-    return <Card><div className="px-4 py-6 text-center text-xs text-[#6a6f63]">Reading /api/setup/status…</div></Card>;
+    return (
+      <Card>
+        <div className="px-4 py-6 text-center text-xs text-[#6a6f63]">
+          Reading /api/setup/status…
+        </div>
+      </Card>
+    );
   }
   return (
     <Card>
-      <ChecklistRow label="Slack signing secret" ok={status.slack.signingSecret} detail="SLACK_SIGNING_SECRET — verifies Slack callbacks" />
-      <ChecklistRow label="Slack bot token" ok={status.slack.botToken} detail="SLACK_BOT_TOKEN — posts approval cards" />
-      <ChecklistRow label="Slack approvers" ok={status.slack.approvers > 0} detail={`SLACK_APPROVERS — ${status.slack.approvers} configured`} />
-      <ChecklistRow label="Slack channel→repo map" ok={status.slack.channelRepos} detail="SLACK_CHANNEL_REPOS — repo for bare mentions" />
-      <ChecklistRow label="GitHub token" ok={status.github.token} detail="GITHUB_TOKEN — opens pull requests" />
-      <ChecklistRow label="GitHub webhook secret" ok={status.github.webhookSecret} detail="GITHUB_WEBHOOK_SECRET — verifies deliveries" />
-      <ChecklistRow label="AI Gateway token" ok={status.gateway.token} detail="AI_GATEWAY_TOKEN — BYOK provider egress" />
-      <ChecklistRow label="AI Gateway reachable" ok={status.gateway.reachable === "yes"} detail={`gateway "${status.gateway.id}" — ${status.gateway.reachable}`} />
-      <ChecklistRow label="Cloudflare Access required" ok={status.access.required} detail="REQUIRE_ACCESS / ACCESS_AUD — identity on every path" />
-      <ChecklistRow label="Automations enabled" ok={status.automations.enabled} detail="AUTOMATIONS_ENABLED kill switch" />
-      <ChecklistRow label="TypeSafe key" ok={status.automations.typeSafe} detail="TYPESAFE_API_KEY — System One judgments" />
+      <ChecklistRow
+        label="Slack signing secret"
+        ok={status.slack.signingSecret}
+        detail="SLACK_SIGNING_SECRET — verifies Slack callbacks"
+      />
+      <ChecklistRow
+        label="Slack bot token"
+        ok={status.slack.botToken}
+        detail="SLACK_BOT_TOKEN — posts approval cards"
+      />
+      <ChecklistRow
+        label="Slack approvers"
+        ok={status.slack.approvers > 0}
+        detail={`SLACK_APPROVERS — ${status.slack.approvers} configured`}
+      />
+      <ChecklistRow
+        label="Slack channel→repo map"
+        ok={status.slack.channelRepos}
+        detail="SLACK_CHANNEL_REPOS — repo for bare mentions"
+      />
+      <ChecklistRow
+        label="GitHub token"
+        ok={status.github.token}
+        detail="GITHUB_TOKEN — opens pull requests"
+      />
+      <ChecklistRow
+        label="GitHub webhook secret"
+        ok={status.github.webhookSecret}
+        detail="GITHUB_WEBHOOK_SECRET — verifies deliveries"
+      />
+      <ChecklistRow
+        label="AI Gateway token"
+        ok={status.gateway.token}
+        detail="AI_GATEWAY_TOKEN — BYOK provider egress"
+      />
+      <ChecklistRow
+        label="AI Gateway reachable"
+        ok={status.gateway.reachable === "yes"}
+        detail={`gateway "${status.gateway.id}" — ${status.gateway.reachable}`}
+      />
+      <ChecklistRow
+        label="Cloudflare Access required"
+        ok={status.access.required}
+        detail="REQUIRE_ACCESS / ACCESS_AUD — identity on every path"
+      />
+      <ChecklistRow
+        label="Automations enabled"
+        ok={status.automations.enabled}
+        detail="AUTOMATIONS_ENABLED kill switch"
+      />
+      <ChecklistRow
+        label="TypeSafe key"
+        ok={status.automations.typeSafe}
+        detail="TYPESAFE_API_KEY — System One judgments"
+      />
     </Card>
   );
 }
@@ -260,19 +333,24 @@ const EXPERIMENTAL_FLAGS: { flag: string; effect: string; related: string }[] = 
   },
   {
     flag: "SHIBA_ANTIGRAVITY_SUBSCRIPTION=1",
-    effect: "Registers antigravity-subscription + /api/antigravity/callback (T50 pasted-redirect OAuth).",
-    related: "ANTIGRAVITY_SUBSCRIPTION_MODEL — no secret var (tokens live in the container profile)",
+    effect:
+      "Registers antigravity-subscription + /api/antigravity/callback (T50 pasted-redirect OAuth).",
+    related:
+      "ANTIGRAVITY_SUBSCRIPTION_MODEL — no secret var (tokens live in the container profile)",
   },
   {
     flag: "SHIBA_LOCAL_RUNTIME=1",
-    effect: "Admits runtime:\"local\" at intake and opens the /api/local daemon surface (T51).",
+    effect: 'Admits runtime:"local" at intake and opens the /api/local daemon surface (T51).',
     related: "LOCAL_ADAPTER_TOKEN secret — unset = the surface refuses every request",
   },
 ];
 
 const KILL_SWITCHES: { flag: string; effect: string }[] = [
-  { flag: "AUTOMATIONS_ENABLED", effect: "\"false\"/\"0\"/\"off\" stops every automation firing." },
-  { flag: "MEMORY_ENABLED", effect: "\"false\"/\"0\"/\"off\" disables run-end distillation into Memory — never the run." },
+  { flag: "AUTOMATIONS_ENABLED", effect: '"false"/"0"/"off" stops every automation firing.' },
+  {
+    flag: "MEMORY_ENABLED",
+    effect: '"false"/"0"/"off" disables run-end distillation into Memory — never the run.',
+  },
 ];
 
 export function SettingsView({
@@ -305,7 +383,8 @@ export function SettingsView({
             <span>Settings</span>
           </h2>
           <p className="text-xs text-[#6a6f63]">
-            Deployment configuration and operator surfaces — read-only mirrors of what the Worker reports.
+            Deployment configuration and operator surfaces — read-only mirrors of what the Worker
+            reports.
           </p>
         </div>
       </div>
@@ -349,16 +428,16 @@ export function SettingsView({
             {section === "providers" ? (
               <SectionShell
                 title="Providers"
-                description="Subscription-auth lanes and credential state. Connect/disconnect flows live in Agents & MCP."
+                description="Your AI agents. Connect a provider to let it run tasks for you — disconnect any time."
               >
                 <Card>
-                  {PROVIDER_AUTH_LANES.map((lane) => (
-                    <ProviderLaneRow key={lane.id} lane={lane} />
+                  {(Object.keys(SUBSCRIPTION_AUTH) as SubscriptionId[]).map((id) => (
+                    <ProviderLaneRow key={id} id={id} agents={agents} />
                   ))}
                 </Card>
                 <Card>
                   <div className="border-b border-[#e0ded5] px-4 py-2.5 text-[10px] font-mono font-semibold uppercase tracking-[0.12em] text-[#6a6f63]">
-                    Secret-backed credentials (from /api/agents)
+                    Other credentials
                   </div>
                   {secretCredentials.length === 0 ? (
                     <div className="px-4 py-5 text-center text-xs text-[#6a6f63]">
@@ -368,21 +447,34 @@ export function SettingsView({
                     </div>
                   ) : (
                     secretCredentials.map((entry) => (
-                      <div key={entry.id} className="flex items-center justify-between gap-3 border-b border-[#e0ded5] px-4 py-2.5 last:border-b-0">
+                      <div
+                        key={entry.id}
+                        className="flex items-center justify-between gap-3 border-b border-[#e0ded5] px-4 py-2.5 last:border-b-0"
+                      >
                         <div className="min-w-0">
                           <div className="text-xs font-medium text-[#222320]">{entry.label}</div>
-                          <div className="font-mono text-[11px] text-[#6a6f63]">{entry.credential.label}</div>
+                          <div className="font-mono text-[11px] text-[#6a6f63]">
+                            {entry.credential.label}
+                          </div>
                           {entry.credential.configured === false && entry.credential.setupHint ? (
-                            <div className="mt-0.5 font-mono text-[11px] text-[#b45309]">{entry.credential.setupHint}</div>
+                            <div className="mt-0.5 font-mono text-[11px] text-[#b45309]">
+                              {entry.credential.setupHint}
+                            </div>
                           ) : null}
                         </div>
                         <ToneChip
-                          tone={entry.credential.configured === true ? "ok" : entry.credential.configured === false ? "danger" : "neutral"}
+                          tone={
+                            entry.credential.configured === true
+                              ? "ok"
+                              : entry.credential.configured === false
+                                ? "danger"
+                                : "neutral"
+                          }
                           label={
                             entry.credential.configured === true
                               ? "Configured"
                               : entry.credential.configured === false
-                                ? "Missing secret"
+                                ? "Not set up"
                                 : "Not introspectable"
                           }
                         />
@@ -437,7 +529,9 @@ export function SettingsView({
                 <Card>
                   {principals === undefined ? (
                     <div className="px-4 py-6 text-center text-xs text-[#6a6f63]">
-                      {directory.state.kind === "error" ? "Could not load /api/agents." : "Loading principals…"}
+                      {directory.state.kind === "error"
+                        ? "Could not load /api/agents."
+                        : "Loading principals…"}
                     </div>
                   ) : principals.length === 0 ? (
                     <div className="px-4 py-6 text-center text-xs text-[#6a6f63]">
@@ -445,18 +539,29 @@ export function SettingsView({
                     </div>
                   ) : (
                     principals.map((principal) => (
-                      <div key={principal.principal} className="flex items-center justify-between gap-3 border-b border-[#e0ded5] px-4 py-2.5 last:border-b-0">
+                      <div
+                        key={principal.principal}
+                        className="flex items-center justify-between gap-3 border-b border-[#e0ded5] px-4 py-2.5 last:border-b-0"
+                      >
                         <div className="min-w-0">
-                          <div className="text-xs font-medium text-[#222320]">{principal.principal}</div>
+                          <div className="text-xs font-medium text-[#222320]">
+                            {principal.principal}
+                          </div>
                           <div className="mt-0.5 flex flex-wrap gap-1">
                             {principal.scopes.map((scope) => (
-                              <span key={scope} className="rounded-none border border-[#e0ded5] bg-[#f6f4ed] px-1.5 py-px font-mono text-[10px] text-[#6a6f63]">
+                              <span
+                                key={scope}
+                                className="rounded-none border border-[#e0ded5] bg-[#f6f4ed] px-1.5 py-px font-mono text-[10px] text-[#6a6f63]"
+                              >
                                 {scope}
                               </span>
                             ))}
                           </div>
                         </div>
-                        <ToneChip tone={principal.live ? "ok" : "neutral"} label={principal.live ? "Live" : "Revoked"} />
+                        <ToneChip
+                          tone={principal.live ? "ok" : "neutral"}
+                          label={principal.live ? "Live" : "Revoked"}
+                        />
                       </div>
                     ))
                   )}
@@ -478,10 +583,17 @@ export function SettingsView({
               >
                 <Card>
                   {EXPERIMENTAL_FLAGS.map((flag) => (
-                    <div key={flag.flag} className="border-b border-[#e0ded5] px-4 py-3 last:border-b-0">
-                      <div className="font-mono text-xs font-semibold text-[#1c1cc8]">{flag.flag}</div>
+                    <div
+                      key={flag.flag}
+                      className="border-b border-[#e0ded5] px-4 py-3 last:border-b-0"
+                    >
+                      <div className="font-mono text-xs font-semibold text-[#1c1cc8]">
+                        {flag.flag}
+                      </div>
                       <div className="mt-0.5 text-xs text-[#222320]">{flag.effect}</div>
-                      <div className="mt-0.5 font-mono text-[11px] text-[#6a6f63]">{flag.related}</div>
+                      <div className="mt-0.5 font-mono text-[11px] text-[#6a6f63]">
+                        {flag.related}
+                      </div>
                     </div>
                   ))}
                 </Card>
@@ -490,8 +602,13 @@ export function SettingsView({
                     Kill switches (env.ts)
                   </div>
                   {KILL_SWITCHES.map((flag) => (
-                    <div key={flag.flag} className="border-b border-[#e0ded5] px-4 py-3 last:border-b-0">
-                      <div className="font-mono text-xs font-semibold text-[#1c1cc8]">{flag.flag}</div>
+                    <div
+                      key={flag.flag}
+                      className="border-b border-[#e0ded5] px-4 py-3 last:border-b-0"
+                    >
+                      <div className="font-mono text-xs font-semibold text-[#1c1cc8]">
+                        {flag.flag}
+                      </div>
                       <div className="mt-0.5 text-xs text-[#222320]">{flag.effect}</div>
                     </div>
                   ))}
@@ -505,25 +622,35 @@ export function SettingsView({
                 <Card>
                   <div className="border-b border-[#e0ded5] px-4 py-2.5">
                     <div className="text-xs font-medium text-[#222320]">Serving host</div>
-                    <div className="font-mono text-[11px] text-[#6a6f63]">{hostname || "unknown"}</div>
+                    <div className="font-mono text-[11px] text-[#6a6f63]">
+                      {hostname || "unknown"}
+                    </div>
                   </div>
                   <div className="border-b border-[#e0ded5] px-4 py-2.5">
                     <div className="text-xs font-medium text-[#222320]">Dashboard package</div>
-                    <div className="font-mono text-[11px] text-[#6a6f63]">@shiba/frontend@{dashboardVersion}</div>
+                    <div className="font-mono text-[11px] text-[#6a6f63]">
+                      @shiba/frontend@{dashboardVersion}
+                    </div>
                   </div>
                   {status ? (
                     <>
                       <div className="border-b border-[#e0ded5] px-4 py-2.5">
                         <div className="text-xs font-medium text-[#222320]">Orchestrator model</div>
-                        <div className="font-mono text-[11px] text-[#6a6f63]">{status.models.orchestrator}</div>
+                        <div className="font-mono text-[11px] text-[#6a6f63]">
+                          {status.models.orchestrator}
+                        </div>
                       </div>
                       <div className="border-b border-[#e0ded5] px-4 py-2.5">
                         <div className="text-xs font-medium text-[#222320]">Coding model</div>
-                        <div className="font-mono text-[11px] text-[#6a6f63]">{status.models.coding}</div>
+                        <div className="font-mono text-[11px] text-[#6a6f63]">
+                          {status.models.coding}
+                        </div>
                       </div>
                       <div className="border-b border-[#e0ded5] px-4 py-2.5">
                         <div className="text-xs font-medium text-[#222320]">Default harness</div>
-                        <div className="font-mono text-[11px] text-[#6a6f63]">{status.models.harness}</div>
+                        <div className="font-mono text-[11px] text-[#6a6f63]">
+                          {status.models.harness}
+                        </div>
                       </div>
                       <div className="px-4 py-2.5">
                         <div className="text-xs font-medium text-[#222320]">AI Gateway</div>
@@ -534,7 +661,9 @@ export function SettingsView({
                     </>
                   ) : (
                     <div className="px-4 py-2.5 text-xs text-[#6a6f63]">
-                      {setup.state.kind === "error" ? "Model details unavailable — /api/setup/status failed." : "Reading /api/setup/status…"}
+                      {setup.state.kind === "error"
+                        ? "Model details unavailable — /api/setup/status failed."
+                        : "Reading /api/setup/status…"}
                     </div>
                   )}
                 </Card>
