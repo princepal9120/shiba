@@ -25,6 +25,9 @@ jobs:
       - name: Build site and dashboard
         run: pnpm build
 
+      - name: Restore Pages host redirects
+        run: cp apps/web/dist/_redirects public/_redirects
+
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:

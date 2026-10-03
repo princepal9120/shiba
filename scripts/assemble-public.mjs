@@ -1,5 +1,7 @@
-import { cp, mkdir, rm } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import { workerRedirects } from './worker-redirects.mjs';
 
 // Assemble the Worker's ASSETS directory (public/) from package-local build
 // outputs. Runs after `turbo run build`:
@@ -28,4 +30,11 @@ for (const [src, dst] of steps) {
     force: true,
   });
   console.log(`Copied ${src} -> ${dst}`);
+}
+
+const redirects = new URL('public/_redirects', root);
+if (existsSync(fileURLToPath(redirects))) {
+  const path = fileURLToPath(redirects);
+  await writeFile(path, workerRedirects(await readFile(path, 'utf8')));
+  console.log('Filtered host redirects from public/_redirects for Worker assets');
 }
