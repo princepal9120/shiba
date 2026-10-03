@@ -14,6 +14,48 @@ function run(script: string, args: string[] = []) {
   });
 }
 
+function runWorkerRedirects(input: string) {
+  return spawnSync(
+    "node",
+    [
+      "--input-type=module",
+      "-e",
+      `import { readFileSync } from "node:fs";
+import { workerRedirects } from "./scripts/worker-redirects.mjs";
+process.stdout.write(workerRedirects(readFileSync(0, "utf8")));`,
+    ],
+    { cwd: ROOT, encoding: "utf8", input },
+  );
+}
+
+describe("worker-redirects", () => {
+  it("keeps both docs rules from the real Pages redirects and drops host redirects", () => {
+    const redirects = readFileSync(join(ROOT, "apps", "web", "public", "_redirects"), "utf8");
+    const out = runWorkerRedirects(redirects);
+    expect(out.status).toBe(0);
+    expect(out.stdout).toContain("/docs /docs/overview/ 301");
+    expect(out.stdout).toContain("/docs/ /docs/overview/ 301");
+    expect(out.stdout).not.toContain("https://");
+  });
+
+  it("keeps relative rules, comments, and blank lines while dropping absolute destinations", () => {
+    const redirects = [
+      "# Keep comments",
+      "",
+      "/docs /docs/overview/ 301",
+      "/app https://app.tryshiba.dev/app/ 301",
+      "",
+      "# Keep trailing comments",
+      "",
+    ].join("\n");
+    const out = runWorkerRedirects(redirects);
+    expect(out.status).toBe(0);
+    expect(out.stdout).toBe(
+      "# Keep comments\n\n/docs /docs/overview/ 301\n\n# Keep trailing comments\n",
+    );
+  });
+});
+
 describe("plan-deploy", () => {
   it("parses a clean dry-run fixture and exits 0", () => {
     const out = run("plan-deploy.mjs", [
@@ -274,6 +316,7 @@ describe("scripts/ built-ins-only guard (L6)", () => {
     "ephemeral-stack.mjs",
     "validate-credentials.mjs",
     "check-alchemy-drift.mjs",
+    "worker-redirects.mjs",
   ];
 
   for (const script of SCRIPTS) {
