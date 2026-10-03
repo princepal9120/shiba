@@ -503,6 +503,9 @@ export function App(): React.JSX.Element {
         if (!cancelled) {
           setSessionApiAvailable(true);
           setWebSessions(Array.isArray(body.sessions) ? body.sessions : []);
+          // The mount-time fetch can run pre-auth (e.g. AuthScreen up); once a
+          // later attempt succeeds, drop the failure it toasted.
+          setNotice((n) => (n?.startsWith("Sessions request failed") ? null : n));
         }
       })
       .catch((error: unknown) => {
