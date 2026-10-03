@@ -13,7 +13,7 @@ import { grokHarness } from "./grok.js";
 import { opencodeHarness } from "./opencode.js";
 import { GIT_EGRESS_HOSTS, type AgentHarness, type AgentHarnessName, type RuntimeName } from "./types.js";
 
-export const HARNESSES: Record<string, AgentHarness> = {
+const REGISTRY = {
   opencode: opencodeHarness,
   "claude-code": claudeCodeHarness,
   "claude-subscription": claudeSubscriptionHarness,
@@ -26,7 +26,9 @@ export const HARNESSES: Record<string, AgentHarness> = {
   "antigravity-subscription": antigravitySubscriptionHarness,
   "cursor-subscription": cursorSubscriptionHarness,
   "devin-subscription": devinSubscriptionHarness,
-};
+} satisfies Record<AgentHarnessName, AgentHarness>;
+
+export const HARNESSES: Record<string, AgentHarness> = REGISTRY;
 
 /** The env surface the opt-in gate reads. */
 type HarnessGateEnv = {
@@ -59,6 +61,11 @@ function harnessEnabled(harness: AgentHarness, env: HarnessGateEnv): boolean {
   return gate === undefined || gate(env);
 }
 
+function subscriptionFlagName(name: AgentHarnessName): string {
+  const provider = name.replace(/-subscription$/, "").replace(/-/g, "_").toUpperCase();
+  return `SHIBA_${provider}_SUBSCRIPTION`;
+}
+
 /** Whether a harness sits behind an opt-in flag at all (ignoring whether the flag is set). */
 export function harnessIsGated(harness: AgentHarness): boolean {
   return HARNESS_GATES[harness.name as AgentHarnessName] !== undefined;
@@ -72,8 +79,12 @@ export function resolveHarness(name: string | undefined, env?: HarnessGateEnv): 
       .filter((entry) => harnessEnabled(entry, env))
       .map((entry) => entry.name)
       .join(", ");
+    const gateMessage =
+      harness !== undefined && harnessIsGated(harness)
+        ? `; it is not enabled (set ${subscriptionFlagName(harness.name as AgentHarnessName)}=1)`
+        : "";
     throw new Error(
-      `Unknown agent harness ${JSON.stringify(name)}: expected one of ${selectable}.`,
+      `Unknown agent harness ${JSON.stringify(name)}${gateMessage}: expected one of ${selectable}.`,
     );
   }
   // Registered is not runnable: cursor/antigravity have no CLI in the sandbox
@@ -128,7 +139,7 @@ export function allowedHostsFor(harness: AgentHarness, model: string): string[] 
 
 export type { AgentHarness };
 
-export const HARNESS_NAMES = ["opencode", "claude-code", "claude-subscription", "codex", "codex-subscription", "devin", "grok", "cursor", "antigravity", "antigravity-subscription", "cursor-subscription", "devin-subscription"] as const;
+export const HARNESS_NAMES = Object.keys(REGISTRY) as readonly AgentHarnessName[];
 
 /**
  * Per-harness default coding model. The checked-in ids are defaults, not
