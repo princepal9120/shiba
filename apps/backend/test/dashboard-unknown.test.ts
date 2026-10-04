@@ -53,7 +53,6 @@ describe("dashboard unknown status", () => {
     }];
     const markup = renderToStaticMarkup(React.createElement(RunRegistryView, {
       runs,
-      onInspectVM: () => {},
       onReuseParams: () => {},
       onCancelRun: () => {},
       onClearHistory: () => {},

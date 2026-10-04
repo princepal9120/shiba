@@ -143,3 +143,19 @@ export type MemorySession = SessionRecord;
  * the args, `ts` is epoch ms.
  */
 export type AuditEntry = AuditRow;
+
+/** Merged tool + retained run shape used by the Diff surface's run list. */
+export interface VMRun {
+  runId: string;
+  sandboxId: string;
+  repoUrl: string;
+  task: string;
+  baseBranch: string;
+  publishPullRequest: boolean;
+  status: string;
+  createdAt: number;
+  updatedAt: number;
+  summary?: string;
+  error?: string;
+  diff?: string;
+}

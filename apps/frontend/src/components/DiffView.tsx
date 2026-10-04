@@ -1,20 +1,18 @@
 import { useState, useMemo, type JSX } from "react";
 import { DiffViewer } from "./DiffViewer";
 import { formatTimeAgo, parseRepoName, extractCompletedDiff, statusLabel, statusChipClass } from "../ui-helpers";
-import type { VMRun } from "./VMInspector";
+import type { VMRun } from "../types";
 
 export interface DiffViewProps {
   runs: VMRun[];
   selectedRunId?: string | null;
   onSelectRun?: (runId: string) => void;
-  onInspectVM?: (runId: string) => void;
 }
 
 export function DiffView({
   runs,
   selectedRunId,
   onSelectRun,
-  onInspectVM,
 }: DiffViewProps): JSX.Element {
   const [internalSelectedId, setInternalSelectedId] = useState<string>(
     selectedRunId || runs[0]?.runId || ""
@@ -78,16 +76,6 @@ export function DiffView({
                 );
               })}
             </select>
-
-            {onInspectVM && activeRun ? (
-              <button
-                type="button"
-                onClick={() => onInspectVM(activeRun.runId)}
-                className="text-xs font-medium text-[#1c1cc8] bg-[#0000a8]/10 hover:bg-[#0000a8]/15 border border-[#0000a8]/20 px-2.5 py-1.5 rounded-none transition-colors"
-              >
-                Open in VM
-              </button>
-            ) : null}
           </div>
         ) : null}
       </div>
@@ -155,15 +143,6 @@ export function DiffView({
             <p className="text-xs text-[#6a6f63] max-w-md mb-4">
               Status: <span className="font-semibold">{statusLabel(activeRun.status)}</span>. This run may still be in progress, finished without file mutations, or encountered an early error before code was written.
             </p>
-            {onInspectVM ? (
-              <button
-                type="button"
-                onClick={() => onInspectVM(activeRun.runId)}
-                className="text-xs font-medium text-[#1c1cc8] bg-[#0000a8]/10 hover:bg-[#0000a8]/15 border border-[#0000a8]/20 px-3 py-1.5 rounded-none transition-colors"
-              >
-                Inspect Sandbox Environment in VM
-              </button>
-            ) : null}
           </div>
         )}
       </div>

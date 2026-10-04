@@ -39,11 +39,9 @@ vi.mock("ai", () => ({
 }));
 
 import { App } from "../../frontend/src/app";
-import { VMInspector } from "../../frontend/src/components/VMInspector";
 import { RunRegistryView } from "../../frontend/src/components/RunRegistryView";
 import { AutomationsView } from "../../frontend/src/components/AutomationsView";
 import { DashboardView } from "../../frontend/src/components/DashboardView";
-import { WorkspacePanel } from "../../frontend/src/components/WorkspacePanel";
 import { DiffView } from "../../frontend/src/components/DiffView";
 import { ApprovalsView } from "../../frontend/src/components/ApprovalsView";
 import { OnboardingModal, ONBOARDING_STEPS } from "../../frontend/src/components/OnboardingModal";
@@ -94,28 +92,6 @@ describe("dashboard rendering", () => {
     expect(markup).toContain("Sessions");
     expect(markup).toContain("Fix Failing Tests");
 
-    const wsMarkup = renderToStaticMarkup(
-      React.createElement(WorkspacePanel, {
-        toolRuns: [],
-        retainedRuns: [],
-        vmRuns: [],
-        pendingApprovals: [],
-        decisions: {},
-        onDecideApproval: vi.fn(),
-        storedApprovals: [],
-        storedDecisions: {},
-        decidedStoredApprovals: [],
-        storedApprovalsError: null,
-        onDecideStoredApproval: vi.fn(),
-        onRefreshRuns: vi.fn(),
-        onInspectVM: vi.fn(),
-        selectedRunId: null,
-        onSelectRun: vi.fn(),
-        collapsed: false,
-        onToggleCollapsed: vi.fn(),
-      })
-    );
-    expect(wsMarkup).toContain("No runs. Approved tasks appear here while they execute.");
   });
 
   it("renders a pending approval with its tool input and actions", () => {
@@ -164,32 +140,6 @@ describe("dashboard rendering", () => {
     expect(markup).toContain("Chat error: stream failed");
     expect(markup).toContain("run-1");
 
-    const wsMarkup = renderToStaticMarkup(
-      React.createElement(WorkspacePanel, {
-        toolRuns: [mocks.runsById["run-1"] as any],
-        retainedRuns: [],
-        vmRuns: [],
-        pendingApprovals: [],
-        decisions: {},
-        onDecideApproval: vi.fn(),
-        storedApprovals: [],
-        storedDecisions: {},
-        decidedStoredApprovals: [],
-        storedApprovalsError: null,
-        onDecideStoredApproval: vi.fn(),
-        onRefreshRuns: vi.fn(),
-        onInspectVM: vi.fn(),
-        selectedRunId: null,
-        onSelectRun: vi.fn(),
-        collapsed: false,
-        onToggleCollapsed: vi.fn(),
-      })
-    );
-    expect(wsMarkup).toContain("run-1");
-    expect(wsMarkup).toContain("Error");
-    expect(wsMarkup).toContain("sandbox failed");
-    expect(wsMarkup).toContain("The sandbox exited early.");
-    expect(wsMarkup).toContain("exit code 1");
   });
 
   it("renders task submission form", () => {
@@ -290,48 +240,8 @@ describe("dashboard rendering", () => {
     expect(approvalsMarkup).toContain("Cryptographic Audit Log");
   });
 
-  it("renders the Missions surface with standing-goal framing", async () => {
-    const { MissionsView } = await import("../../frontend/src/components/MissionsView");
-    const markup = renderToStaticMarkup(React.createElement(MissionsView));
-    expect(markup).toContain("Standing goal");
-    expect(markup).toContain("Deploy mission");
-    expect(markup).toContain("approval-gated");
-  });
 
-  it("renders the Gates surface with review, QA, and security entry points", async () => {
-    const { GatesView } = await import("../../frontend/src/components/GatesView");
-    const markup = renderToStaticMarkup(React.createElement(GatesView));
-    expect(markup).toContain("Code Review");
-    expect(markup).toContain("QA");
-    expect(markup).toContain("Security Review");
-    expect(markup).toContain("Publish result as a PR");
-  });
 
-  it("renders VMInspector with workspace inspection, diff and terminal tabs", () => {
-    const runs = [
-      {
-        runId: "run-vm-1",
-        sandboxId: "sb-1",
-        repoUrl: "https://github.com/owner/repo",
-        task: "Build feature",
-        baseBranch: "main",
-        publishPullRequest: false,
-        status: "completed",
-        createdAt: Date.now() - 60000,
-        updatedAt: Date.now(),
-        summary: "Feature built successfully.",
-        diff: "diff --git a/app.ts b/app.ts\n+const x = 1;",
-      },
-    ];
-    const markup = renderToStaticMarkup(React.createElement(VMInspector, { runs }));
-    expect(markup).toContain("VM Inspector");
-    expect(markup).toContain("Changes &amp; Diff");
-    expect(markup).toContain("Workspace Files");
-    expect(markup).toContain("Terminal &amp; Exec");
-    expect(markup).toContain("Web Preview");
-    expect(markup).toContain("Share VM View");
-    expect(markup).toContain("diff --git");
-  });
 
   it("renders RunRegistryView with stats, search and filters", () => {
     const runs = [
@@ -350,7 +260,6 @@ describe("dashboard rendering", () => {
     ];
     const markup = renderToStaticMarkup(React.createElement(RunRegistryView, {
       runs,
-      onInspectVM: () => {},
       onReuseParams: () => {},
       onCancelRun: () => {},
       onClearHistory: () => {},
@@ -358,7 +267,6 @@ describe("dashboard rendering", () => {
     }));
     expect(markup).toContain("Run Registry &amp; Workspaces");
     expect(markup).toContain("Total Runs");
-    expect(markup).toContain("Inspect Virtual Machine");
     expect(markup).toContain("Fix bug");
   });
 

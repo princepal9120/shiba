@@ -25,8 +25,10 @@ import {
   subscriptionChip,
 } from "./SubscriptionConnect";
 import { ToneChip } from "./ToneChip";
+import { useSavedRepos, saveRepo, removeRepo } from "../saved";
 
 type SettingsSectionId =
+  | "repositories"
   | "providers"
   | "models"
   | "environments"
@@ -36,6 +38,7 @@ type SettingsSectionId =
   | "deployment";
 
 const SETTINGS_SECTIONS: { id: SettingsSectionId; label: string; blurb: string }[] = [
+  { id: "repositories", label: "Repositories", blurb: "Saved GitHub targets" },
   { id: "providers", label: "Providers", blurb: "Your AI agents" },
   { id: "models", label: "Models", blurb: "Per-role agent routing" },
   {
@@ -425,7 +428,14 @@ export function SettingsView({
         {/* Content pane */}
         <div className="flex-1 overflow-y-auto p-4 lg:p-8">
           <div className="max-w-3xl mx-auto">
-            {section === "providers" ? (
+            {section === "repositories" ? (
+              <SectionShell
+                title="Repositories"
+                description="GitHub repos you've saved — they show up as picks in the task composer and fill in automatically when you reuse one."
+              >
+                <RepositoriesSection />
+              </SectionShell>
+            ) : section === "providers" ? (
               <SectionShell
                 title="Providers"
                 description="Your AI agents. Connect a provider to let it run tasks for you — disconnect any time."
@@ -673,5 +683,67 @@ export function SettingsView({
         </div>
       </div>
     </div>
+  );
+}
+
+
+function RepositoriesSection(): JSX.Element {
+  const repos = useSavedRepos();
+  const [draft, setDraft] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const add = () => {
+    const clean = draft.trim();
+    if (!clean.startsWith("https://github.com/")) {
+      setError("Repository URL must look like https://github.com/owner/repo.");
+      return;
+    }
+    saveRepo(clean);
+    setDraft("");
+    setError(null);
+  };
+
+  return (
+    <Card>
+      <div className="px-4 py-3 border-b border-[#e0ded5] flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <input
+            type="url"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            placeholder="https://github.com/owner/repo"
+            aria-label="New repository URL"
+            className="flex-1 bg-[#f1efe6] border border-[#e0ded5] rounded-none text-[#222320] px-2.5 py-1.5 text-xs font-mono focus:outline-none focus:border-[#1c1cc8] focus:ring-1 focus:ring-[#1c1cc8]/40 placeholder-[#6a6f63]/60 transition-colors"
+          />
+          <button
+            type="button"
+            onClick={add}
+            className="text-[11px] bg-[#0000a8]/10 hover:bg-[#0000a8]/15 border border-[#0000a8]/15 text-[#1c1cc8] font-medium py-1.5 px-3 rounded-none transition-colors shrink-0"
+          >
+            Save repo
+          </button>
+        </div>
+        {error ? <span className="text-[11px] text-[#fb2c36]">{error}</span> : null}
+      </div>
+      {repos.length === 0 ? (
+        <div className="px-4 py-6 text-center text-xs text-[#6a6f63]">
+          None saved yet — repos you run tasks against are saved automatically too.
+        </div>
+      ) : (
+        repos.map((repo) => (
+          <div key={repo} className="border-b border-[#e0ded5] px-4 py-3 last:border-b-0 flex items-center justify-between gap-3">
+            <span className="font-mono text-xs text-[#222320] truncate">{repo}</span>
+            <button
+              type="button"
+              onClick={() => removeRepo(repo)}
+              aria-label={`Remove ${repo}`}
+              className="shrink-0 text-[11px] bg-transparent hover:bg-[#fb2c36]/10 border border-[#e0ded5] hover:border-[#fb2c36]/50 text-[#6a6f63] hover:text-[#fb2c36] font-medium py-1 px-2.5 rounded-none transition-colors"
+            >
+              Remove
+            </button>
+          </div>
+        ))
+      )}
+    </Card>
   );
 }

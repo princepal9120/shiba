@@ -1,5 +1,6 @@
 import { type JSX, type SyntheticEvent, useEffect, useRef } from "react";
 import { Tooltip } from "./Tooltip";
+import type { SavedSkill } from "../saved";
 
 export interface TaskComposerProps {
   repoUrl: string;
@@ -17,6 +18,12 @@ export interface TaskComposerProps {
   onHarnessChange: (value: string) => void;
   onSubmit: (event: SyntheticEvent) => void;
   onClear: () => void;
+  /** Saved repos + run-history repos for the URL picker. */
+  repoSuggestions?: string[];
+  /** Your saved skills — toggle them onto the run. */
+  skills?: SavedSkill[];
+  selectedSkillIds?: string[];
+  onToggleSkill?: (id: string) => void;
 }
 
 const HARNESS_OPTIONS: { value: string; label: string; desc: string }[] = [
@@ -48,6 +55,10 @@ export function TaskComposer({
   onHarnessChange,
   onSubmit,
   onClear,
+  repoSuggestions = [],
+  skills = [],
+  selectedSkillIds = [],
+  onToggleSkill,
 }: TaskComposerProps): JSX.Element {
   const sendDisabled = busy || task.trim() === "" || repoUrl.trim() === "";
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -100,12 +111,20 @@ export function TaskComposer({
           <input
             type="url"
             required
+            list="shiba-saved-repos"
             value={repoUrl}
             onChange={(event) => onRepoUrlChange(event.target.value)}
             placeholder="github.com/owner/repo"
             aria-label="Repository URL"
             className={`${fieldClass} flex-1 min-w-[160px] font-mono`}
           />
+          {repoSuggestions.length > 0 ? (
+            <datalist id="shiba-saved-repos">
+              {repoSuggestions.map((repo) => (
+                <option key={repo} value={repo} />
+              ))}
+            </datalist>
+          ) : null}
         </Tooltip>
 
         <Tooltip content="Base branch to checkout" side="top">
@@ -146,6 +165,32 @@ export function TaskComposer({
           </label>
         </Tooltip>
       </div>
+
+      {skills.length > 0 ? (
+        <div className="flex items-center gap-1.5 flex-wrap" role="group" aria-label="Attach saved skills">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#6a6f63] mr-1">
+            Skills
+          </span>
+          {skills.map((skill) => {
+            const active = selectedSkillIds.includes(skill.id);
+            return (
+              <button
+                key={skill.id}
+                type="button"
+                aria-pressed={active}
+                onClick={() => onToggleSkill?.(skill.id)}
+                className={`text-[10px] font-medium px-2 py-1 rounded-none border transition-colors ${
+                  active
+                    ? "bg-[#0000a8]/10 border-[#0000a8]/30 text-[#1c1cc8]"
+                    : "bg-transparent border-[#e0ded5] text-[#6a6f63] hover:border-[#0000a8]/30 hover:text-[#222320]"
+                }`}
+              >
+                {skill.name}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
 
       <div className="flex items-center justify-between gap-3 pt-1 border-t border-black/[0.04]">
         <span className="min-w-0 text-[11px] text-[#6a6f63]/80 font-mono flex items-center gap-1">

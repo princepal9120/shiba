@@ -7,7 +7,6 @@ export type { RetainedRun };
 
 export interface RunRegistryViewProps {
   runs: RetainedRun[];
-  onInspectVM: (runId: string) => void;
   onReuseParams: (run: RetainedRun) => void;
   onCancelRun: (runId: string) => void;
   onClearHistory: () => void;
@@ -16,7 +15,6 @@ export interface RunRegistryViewProps {
 
 export function RunRegistryView({
   runs,
-  onInspectVM,
   onReuseParams,
   onCancelRun,
   onClearHistory,
@@ -260,17 +258,6 @@ export function RunRegistryView({
                         </div>
 
                         {/* Direct Inspect VM Button */}
-                        <button
-                          type="button"
-                          onClick={() => onInspectVM(run.runId)}
-                          className="bg-[#0000a8] hover:bg-[#1c1cc8] text-white font-semibold text-xs px-3 py-1.5 rounded-none transition-colors flex items-center gap-1.5 shadow-[2px_2px_0_var(--paper-shadow)]"
-                        >
-                          <svg aria-hidden="true"  className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
-                          <span>Inspect Virtual Machine</span>
-                        </button>
                       </div>
 
                       {/* Full Task Description */}

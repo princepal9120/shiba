@@ -463,3 +463,13 @@ Routing delivery to a registered address; Telegram/Discord webhook handshakes.
 - Copy pass — provider/agent surfaces now speak plain English ("Not set up", "Connect", "disconnect any time"); `OPERATOR_PROVISIONED`, raw API paths, and flag names demoted or removed.
 - Local verification: `pnpm typecheck` clean, `pnpm lint` clean (1 pre-existing warning), `pnpm lint:imports` clean, `pnpm test` green, `pnpm build` green.
 - Unverified (deploy-gated): production theme toggle and first-run wizard on app.tryshiba.dev.
+
+### 2026-10-03 (cont.) — dead-view removal, skills & saved repos
+
+- Deleted dead UI entirely (was hidden nav only): `MissionsView.tsx`, `GatesView.tsx`, `AnalyticsView.tsx`, `VMInspector.tsx` removed; standalone `?tab=vm|missions|gates|analytics` routes, `AppNavView` union entries, icons, and the unmounted `WorkspacePanel` shell removed. `WorkspacePanel.tsx` keeps only the stored-approval card exports used by `ApprovalsView`; `VMRun` type moved to `types.ts`. `onInspectVM` props dropped from `RunRegistryView`/`DiffView`; run clicks now navigate to Runs.
+- New `src/saved.ts` localStorage store: `shiba-repos-v1` (repos) + `shiba-skills-v1` (skills) with `useSyncExternalStore` hooks.
+- New `SkillsView.tsx` + "Skills" nav (Capabilities): add a skill (name + optional GitHub repo + notes), list, remove. Skills attach to runs — `TaskComposer` shows toggle chips; selected skills land in the task preamble as `Skills: name (repo)` for the cloud agent.
+- `TaskComposer` repo field now offers saved repos via datalist; `repoSuggestions` = saved repos + run-history GitHub URLs; submit auto-saves the repo.
+- `SettingsView` gains a "Repositories" section (add/remove saved repos).
+- Tests rewired: WorkspacePanel-tab tests → `ApprovalsView`; dead view render tests removed.
+- Gate: typecheck, lint, lint:imports, 1684 backend tests, build + docs:verify all green.

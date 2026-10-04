@@ -196,7 +196,7 @@ export function DashboardView({
               { id: "agents", number: "01", title: "Agents & MCP", detail: `${agents.length} registered principal${agents.length === 1 ? "" : "s"} · scopes and gateway` },
               { id: "inbox", number: "02", title: "Mailbox", detail: "Review mail, drafts, and approval-gated sends" },
               { id: "memory", number: "03", title: "Memory", detail: "Recall, browse, and manage stored context" },
-              { id: "vm", number: "04", title: "Sandbox", detail: "Inspect runs, terminals, and changed files" },
+              { id: "runs", number: "04", title: "Sandbox", detail: "Inspect runs, terminals, and changed files" },
             ] as const).map((capability) => (
               <button
                 key={capability.id}
