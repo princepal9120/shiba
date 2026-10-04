@@ -113,7 +113,7 @@ export function DashboardView({
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 paper-dots p-2 -m-2">
           <button
             type="button"
-            onClick={() => onNavigate("runs")}
+            onClick={() => onNavigate("analytics")}
             className="relative text-left bg-[#fffef8] border border-[#d3d2c8] rounded-none p-4 hover:border-[#0000a8]/30 hover:shadow-[2px_2px_0_var(--paper-shadow)] transition-all group"
           >
             <span className="absolute top-2 right-2 text-[10px] font-mono text-[#6a6f63]/60">01</span>
@@ -162,7 +162,7 @@ export function DashboardView({
 
           <button
             type="button"
-            onClick={() => onNavigate("runs")}
+            onClick={() => onNavigate("analytics")}
             className="relative text-left bg-[#fffef8] border border-[#d3d2c8] rounded-none p-4 hover:border-[#15803d]/30 hover:shadow-[2px_2px_0_var(--paper-shadow)] transition-all"
           >
             <span className="absolute top-2 right-2 text-[10px] font-mono text-[#6a6f63]/60">04</span>
@@ -196,7 +196,7 @@ export function DashboardView({
               { id: "agents", number: "01", title: "Agents & MCP", detail: `${agents.length} registered principal${agents.length === 1 ? "" : "s"} · scopes and gateway` },
               { id: "inbox", number: "02", title: "Mailbox", detail: "Review mail, drafts, and approval-gated sends" },
               { id: "memory", number: "03", title: "Memory", detail: "Recall, browse, and manage stored context" },
-              { id: "vm", number: "04", title: "Sandbox", detail: "Inspect runs, terminals, and changed files" },
+              { id: "analytics", number: "04", title: "Sandbox", detail: "Inspect runs, terminals, and changed files" },
             ] as const).map((capability) => (
               <button
                 key={capability.id}
@@ -220,7 +220,7 @@ export function DashboardView({
               <h3 className="text-[11px] font-mono tracking-[0.08em]">recent.activity</h3>
               <button
                 type="button"
-                onClick={() => onNavigate("runs")}
+                onClick={() => onNavigate("analytics")}
                 className="text-[10px] font-mono uppercase tracking-[0.1em] text-white/90 hover:text-white transition-colors"
               >
                 View all runs →

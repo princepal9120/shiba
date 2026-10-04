@@ -234,15 +234,7 @@ export function AnalyticsView({
                     : `Latest ${tableRuns.length} of ${runs.length}`}
                 </p>
               </div>
-              {onNavigate ? (
-                <button
-                  type="button"
-                  onClick={() => onNavigate("runs")}
-                  className="text-[11px] font-mono font-medium text-[#1c1cc8] transition-colors hover:text-[#0000a8]"
-                >
-                  Open registry →
-                </button>
-              ) : null}
+
             </header>
             {tableRuns.length === 0 ? (
               <div className="px-4 py-10 text-center">

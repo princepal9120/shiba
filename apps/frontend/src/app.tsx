@@ -5,14 +5,16 @@
 import { useAgentChat } from "@cloudflare/ai-chat/react";
 import { useAgent, useAgentToolEvents } from "agents/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { VMInspector, type VMRun } from "./components/VMInspector";
-import { RunRegistryView } from "./components/RunRegistryView";
+import type { VMRun } from "./types";
+import { AnalyticsView } from "./components/AnalyticsView";
 import { AutomationsView } from "./components/AutomationsView";
 import { AgentsView } from "./components/AgentsView";
-import { MissionsView } from "./components/MissionsView";
-import { GatesView } from "./components/GatesView";
+import { ProvidersView } from "./components/ProvidersView";
+import { SkillsView } from "./components/SkillsView";
+import { useSavedRepos, useSavedSkills, saveRepo } from "./saved";
 import { DashboardView } from "./components/DashboardView";
 import { OnboardingModal, detectSetupSteps } from "./components/OnboardingModal";
+import { FirstRunWizard, ONBOARDING_STORAGE_KEY } from "./components/FirstRunWizard";
 import { SessionsSidebar, type SessionItem } from "./components/SessionsSidebar";
 import { StepTimeline } from "./components/StepTimeline";
 import { DiffView } from "./components/DiffView";
@@ -21,7 +23,6 @@ import { InboxTab } from "./components/InboxTab";
 import { IntegrationsView } from "./components/IntegrationsView";
 import { MemoryTab } from "./components/MemoryTab";
 import { SettingsView } from "./components/SettingsView";
-import { AnalyticsView } from "./components/AnalyticsView";
 import { TaskComposer } from "./components/TaskComposer";
 import { toast } from "sonner";
 import { AppNavRail, APP_NAV_ITEMS, type AppNavView } from "./components/AppNavRail";
@@ -275,6 +276,9 @@ const STARTER_TEMPLATES = [
 
 export function App(): React.JSX.Element {
   const [repoUrl, setRepoUrl] = useState("");
+  const [selectedSkillIds, setSelectedSkillIds] = useState<string[]>([]);
+  const savedRepos = useSavedRepos();
+  const savedSkills = useSavedSkills();
   const [baseBranch, setBaseBranch] = useState("main");
   const [task, setTask] = useState("");
   const [publishPullRequest, setPublishPullRequest] = useState(false);
@@ -364,13 +368,10 @@ export function App(): React.JSX.Element {
       const runParam = params.get("run");
       if (runParam) {
         setSelectedRunId(runParam);
-        setMainView("vm");
-      } else if (tabParam === "dashboard") {
         setMainView("dashboard");
-      } else if (tabParam === "vm" || tabParam === "vm-inspector") {
-        setMainView("vm");
-      } else if (tabParam === "runs" || tabParam === "run-registry") {
-        setMainView("runs");
+        setMainView("dashboard");
+      } else if (tabParam === "analytics" || tabParam === "run-registry") {
+        setMainView("analytics");
       } else if (tabParam === "diff") {
         setMainView("diff");
       } else if (tabParam === "approvals") {
@@ -383,16 +384,14 @@ export function App(): React.JSX.Element {
         setMainView("automations");
       } else if (tabParam === "agents") {
         setMainView("agents");
-      } else if (tabParam === "missions") {
-        setMainView("missions");
-      } else if (tabParam === "gates" || tabParam === "quality-gates") {
-        setMainView("gates");
+      } else if (tabParam === "providers") {
+        setMainView("providers");
+      } else if (tabParam === "skills") {
+        setMainView("skills");
       } else if (tabParam === "integrations") {
         setMainView("integrations");
       } else if (tabParam === "settings") {
         setMainView("settings");
-      } else if (tabParam === "analytics" || tabParam === "costs") {
-        setMainView("analytics");
       }
     }
   }, []);
@@ -415,6 +414,20 @@ export function App(): React.JSX.Element {
   const [identityAttempt, setIdentityAttempt] = useState(0);
   const identityFailures = useRef(0);
   const retryIdentity = useCallback(() => setIdentityAttempt((n) => n + 1), []);
+  // First-run wizard: opens once per browser after the first authenticated
+  // session on the better-auth lane (Access identities are operators, not
+  // the signup path the wizard serves).
+  const [showFirstRun, setShowFirstRun] = useState(false);
+  useEffect(() => {
+    if (authMode !== "better-auth" || orchestratorName === null) return;
+    try {
+      if (localStorage.getItem(ONBOARDING_STORAGE_KEY) === "done") return;
+    } catch {
+      // private mode — show it anyway
+    }
+    setShowFirstRun(true);
+  }, [authMode, orchestratorName]);
+
   // Better-auth lane sign-out: clears the session cookie, then re-runs
   // whoami — the 401 that follows lands on AuthScreen again.
   const handleSignOut = useCallback(async () => {
@@ -744,11 +757,15 @@ export function App(): React.JSX.Element {
       }
       setNotice(null);
       const branch = baseBranch.trim() || "main";
+      const attachedSkills = savedSkills.filter((skill) => selectedSkillIds.includes(skill.id));
       const text = [
         `Repository: ${repoUrl.trim()}`,
         `Base branch: ${branch}`,
         `Coding agent harness: ${harness}`,
         `Open a pull request with the result: ${publishPullRequest ? "yes" : "no"}`,
+        ...(attachedSkills.length > 0
+          ? [`Skills: ${attachedSkills.map((skill) => skill.repoUrl ? `${skill.name} (${skill.repoUrl})` : skill.name).join(", ")}`]
+          : []),
         "",
         `Task: ${task.trim()}`,
       ].join("\n");
@@ -758,6 +775,7 @@ export function App(): React.JSX.Element {
       try {
         await chat.sendMessage({ text });
         if (!submitFailed.current) {
+          saveRepo(repoUrl.trim());
           setTask((current) => current === task ? "" : current);
           refreshRuns();
         }
@@ -768,7 +786,7 @@ export function App(): React.JSX.Element {
         setIsSubmitting(false);
       }
     },
-    [repoUrl, baseBranch, task, publishPullRequest, harness, chat, agent, orchestratorName, identityError, refreshRuns],
+    [repoUrl, baseBranch, task, publishPullRequest, harness, chat, agent, orchestratorName, identityError, refreshRuns, savedSkills, selectedSkillIds],
   );
 
   const confirmClearAll = useCallback(async () => {
@@ -953,6 +971,11 @@ export function App(): React.JSX.Element {
     }
     return Array.from(map.values()).sort((a, b) => b.createdAt - a.createdAt);
   }, [retainedRuns, toolRuns, seenAt]);
+  const repoSuggestions = useMemo(() => {
+    const merged = [...savedRepos, ...allRuns.map((run) => run.repoUrl)];
+    return [...new Set(merged.filter((repo) => typeof repo === "string" && repo.startsWith("https://github.com/")))];
+  }, [savedRepos, allRuns]);
+
 
   // Named web sessions are selectable chat contexts; retained delegated runs remain inspectable.
   const sessions = useMemo<SessionItem[]>(() => {
@@ -1015,7 +1038,7 @@ export function App(): React.JSX.Element {
       // selected chat session or its session-scoped run list.
       setSelectedRunId(id);
       setMobileSessionsOpen(false);
-      setMainView("vm");
+      setMainView("analytics");
       return;
     }
     if (session && id !== "default") {
@@ -1127,7 +1150,7 @@ export function App(): React.JSX.Element {
     {
       id: "setup-guide",
       label: "Open setup guide",
-      run: () => setShowOnboardingModal(true),
+      run: () => setShowFirstRun(true),
     },
     {
       id: "shortcuts",
@@ -1203,7 +1226,7 @@ export function App(): React.JSX.Element {
         activeSandboxCount={activeSandboxCount}
         setupDone={setupDone}
         setupTotal={SETUP_TOTAL_STEPS}
-        onOpenSetup={() => setShowOnboardingModal(true)}
+        onOpenSetup={() => setShowFirstRun(true)}
         onOpenShortcuts={() => setShowShortcutsModal(true)}
         accountEmail={authMode === "better-auth" ? orchestratorName : null}
         onSignOut={authMode === "better-auth" ? handleSignOut : undefined}
@@ -1233,7 +1256,7 @@ export function App(): React.JSX.Element {
               setupTotal={SETUP_TOTAL_STEPS}
               onOpenSetup={() => {
                 setMobileNavOpen(false);
-                setShowOnboardingModal(true);
+                setShowFirstRun(true);
               }}
               onOpenShortcuts={() => {
                 setMobileNavOpen(false);
@@ -1351,7 +1374,7 @@ export function App(): React.JSX.Element {
           onNewTask={handleNewTask}
           onInspectRun={(runId) => {
             setSelectedRunId(runId);
-            setMainView("vm");
+            setMainView("analytics");
           }}
         />
       ) : mainView === "tasks" ? (
@@ -1379,7 +1402,7 @@ export function App(): React.JSX.Element {
             }
             setupDone={setupDone}
             setupTotal={SETUP_TOTAL_STEPS}
-            onOpenSetup={() => setShowOnboardingModal(true)}
+            onOpenSetup={() => setShowFirstRun(true)}
             onToggleCollapse={toggleSessionsCollapsed}
           />
         </div>
@@ -1412,7 +1435,7 @@ export function App(): React.JSX.Element {
                 setupTotal={SETUP_TOTAL_STEPS}
                 onOpenSetup={() => {
                   setMobileSessionsOpen(false);
-                  setShowOnboardingModal(true);
+                  setShowFirstRun(true);
                 }}
                 isMobileDrawer={true}
                 onToggleCollapse={() => setMobileSessionsOpen(false)}
@@ -1595,6 +1618,13 @@ export function App(): React.JSX.Element {
               publishPullRequest={publishPullRequest}
               harness={harness}
               busy={busy}
+              repoSuggestions={repoSuggestions}
+              skills={savedSkills}
+              selectedSkillIds={selectedSkillIds}
+              onToggleSkill={(id) =>
+                setSelectedSkillIds((current) =>
+                  current.includes(id) ? current.filter((entry) => entry !== id) : [...current, id])
+              }
               isSubmitting={isSubmitting}
               clearing={clearing}
               onRepoUrlChange={setRepoUrl}
@@ -1609,39 +1639,19 @@ export function App(): React.JSX.Element {
         </main>
 
       </div>
-      ) : mainView === "vm" ? (
-        <VMInspector
-          runs={allRuns}
-          selectedRunId={selectedRunId}
-          onSelectRun={(id) => setSelectedRunId(id)}
-        />
-      ) : mainView === "runs" ? (
-        <RunRegistryView
+      ) : mainView === "analytics" ? (
+        <AnalyticsView
           runs={retainedRuns}
-          onInspectVM={(id) => {
-            setSelectedRunId(id);
-            setMainView("vm");
-          }}
-          onReuseParams={(run) => {
-            setRepoUrl(run.repoUrl);
-            setBaseBranch(run.baseBranch);
-            setTask(run.task);
-            setPublishPullRequest(run.publishPullRequest);
-            setMainView("tasks");
-          }}
-          onCancelRun={cancelRun}
-          onClearHistory={() => setShowClearModal(true)}
-          onRefresh={refreshRuns}
+          error={runsError}
+          sessionId={selectedSessionId}
+          sessionApiAvailable={sessionApiAvailable}
+          onNavigate={(view) => setMainView(view)}
         />
       ) : mainView === "diff" ? (
         <DiffView
           runs={allRuns}
           selectedRunId={selectedRunId}
           onSelectRun={(id) => setSelectedRunId(id)}
-          onInspectVM={(id) => {
-            setSelectedRunId(id);
-            setMainView("vm");
-          }}
         />
       ) : mainView === "approvals" ? (
         <ApprovalsView
@@ -1676,24 +1686,16 @@ export function App(): React.JSX.Element {
         </div>
       ) : mainView === "automations" ? (
         <AutomationsView />
+      ) : mainView === "providers" ? (
+        <ProvidersView />
+      ) : mainView === "skills" ? (
+        <SkillsView />
       ) : mainView === "agents" ? (
         <AgentsView />
-      ) : mainView === "missions" ? (
-        <MissionsView />
-      ) : mainView === "gates" ? (
-        <GatesView onNavigate={(view) => setMainView(view)} />
       ) : mainView === "integrations" ? (
         <IntegrationsView onNavigate={(view) => setMainView(view)} />
       ) : mainView === "settings" ? (
         <SettingsView onNavigate={(view) => setMainView(view)} />
-      ) : mainView === "analytics" ? (
-        <AnalyticsView
-          runs={retainedRuns}
-          error={runsError}
-          onNavigate={(view) => setMainView(view)}
-          sessionId={selectedSessionId}
-          sessionApiAvailable={sessionApiAvailable}
-        />
       ) : (
         null
       )}
@@ -1727,6 +1729,13 @@ export function App(): React.JSX.Element {
       ) : null}
 
       {/* ONBOARDING SETUP MODAL */}
+      <FirstRunWizard
+        open={showFirstRun}
+        onClose={() => setShowFirstRun(false)}
+        onNavigate={(view) => setMainView(view)}
+        onOpenChecklist={() => setShowOnboardingModal(true)}
+      />
+
       <OnboardingModal
         isOpen={showOnboardingModal}
         onClose={() => setShowOnboardingModal(false)}

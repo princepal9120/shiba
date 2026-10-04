@@ -451,3 +451,35 @@ Routing delivery to a registered address; Telegram/Discord webhook handshakes.
 - Local verification: `pnpm typecheck` clean, `pnpm test` green, `pnpm lint` / `pnpm lint:imports` / `pnpm build` / `pnpm env:load` / `pnpm env:scan` run in this session's gate.
 - Real-runtime verification (`wrangler dev --port 8789 --enable-containers=false --local-upstream localhost`, local D1, `BETTER_AUTH_SECRET` in `.dev.vars`): unauthenticated `whoami` → 401 `better_auth`; `sign-up/email` → 200 + session cookie; `whoami` with cookie → `{agent: "prince@shiba.dev", auth: "better-auth"}`; second sign-up → 403; `/api/auth/claude-subscription` unauth → 401 (still gated); wrong password → 401; `/api/approvals` with cookie → 200; sign-out → session cleared → whoami 401; hostile `Origin` + live session → 403 `INVALID_ORIGIN` (CSRF check real).
 - Unverified (deploy-gated): the production deploy itself — the live app.tryshiba.dev login needs `BETTER_AUTH_SECRET` set as a Worker secret on the deployed stage.
+
+# 2026-10-03 — dashboard UX overhaul: integrations dedupe, theme fix, provider connect, onboarding wizard
+
+- `components/SubscriptionConnect.tsx` (new, extracted from `AgentsView`) — shared connect module used by Agents & MCP, Settings → Providers, and the first-run wizard: per-lane spec table (`SUBSCRIPTION_AUTH`), status snapshot read, begin→verify→clear flows, antigravity paste-URL OAuth loop, `subscriptionChip` mapping.
+- `components/IntegrationsView.tsx` (rewritten) — third-party apps only: GitHub (live `/api/setup/status` read + real Connect → GitHub token page), Slack (live + Open Slack apps), Telegram/Discord (bot-portal links, honest "operator provisions" copy), Email (live mailbox count + Open Mailbox), Notion/Linear/Jira/Asana muted "Coming soon". Removed the agent-CLI table, provider lanes, and worker plumbing — those live once on Agents & MCP + Settings.
+- `components/SettingsView.tsx` — Providers tab now uses `ProviderLaneRow` (per-lane `SUBSCRIPTION_AUTH` spec + `SubscriptionConnect` + live chip): real Connect/Disconnect in place, no duplication.
+- `tailwind.config.js` — `darkMode: "class"`: the `dark:` utilities in AppNavRail/AuthScreen previously followed OS `prefers-color-scheme` instead of the theme toggle, so surfaces mixed light OS + dark OS. Now `html.dark` (next-themes class attribute) is the only source of truth. `styles.css` gains the `text-white/80`-under-navy remap (selected-nav blurb).
+- `components/FirstRunWizard.tsx` (new) — post-signup wizard (localStorage `shiba-onboarding-v1`): step 1 channels status + Integrations link, step 2 agent-provider connect (reuses `SubscriptionConnect`), step 3 harness + model routing read-out. `app.tsx` auto-opens it once after the first authenticated `better-auth` session; "Setup Guide" entry points now open the wizard, which itself links back to the operator checklist (`OnboardingModal`).
+- `AppNavRail.tsx` — nav regrouped: Integrations moved next to Agents under Capabilities; Sandbox & Safety folded into System (VM, Gates, Settings).
+- Copy pass — provider/agent surfaces now speak plain English ("Not set up", "Connect", "disconnect any time"); `OPERATOR_PROVISIONED`, raw API paths, and flag names demoted or removed.
+- Local verification: `pnpm typecheck` clean, `pnpm lint` clean (1 pre-existing warning), `pnpm lint:imports` clean, `pnpm test` green, `pnpm build` green.
+- Unverified (deploy-gated): production theme toggle and first-run wizard on app.tryshiba.dev.
+
+### 2026-10-03 (cont.) — dead-view removal, skills & saved repos
+
+- Deleted dead UI entirely (was hidden nav only): `MissionsView.tsx`, `GatesView.tsx`, `AnalyticsView.tsx`, `VMInspector.tsx` removed; standalone `?tab=vm|missions|gates|analytics` routes, `AppNavView` union entries, icons, and the unmounted `WorkspacePanel` shell removed. `WorkspacePanel.tsx` keeps only the stored-approval card exports used by `ApprovalsView`; `VMRun` type moved to `types.ts`. `onInspectVM` props dropped from `RunRegistryView`/`DiffView`; run clicks now navigate to Runs.
+- New `src/saved.ts` localStorage store: `shiba-repos-v1` (repos) + `shiba-skills-v1` (skills) with `useSyncExternalStore` hooks.
+- New `SkillsView.tsx` + "Skills" nav (Capabilities): add a skill (name + optional GitHub repo + notes), list, remove. Skills attach to runs — `TaskComposer` shows toggle chips; selected skills land in the task preamble as `Skills: name (repo)` for the cloud agent.
+- `TaskComposer` repo field now offers saved repos via datalist; `repoSuggestions` = saved repos + run-history GitHub URLs; submit auto-saves the repo.
+- `SettingsView` gains a "Repositories" section (add/remove saved repos).
+- Tests rewired: WorkspacePanel-tab tests → `ApprovalsView`; dead view render tests removed.
+- Gate: typecheck, lint, lint:imports, 1684 backend tests, build + docs:verify all green.
+
+### 2026-10-03 (cont.) — Runs page removed, Analytics kept
+
+- Per direction, `RunRegistryView.tsx` deleted instead of Analytics: the
+  Analytics run table carries the same record data. `AnalyticsView.tsx`
+  restored; nav/workspace slot is now Analytics; run clicks, dashboard
+  stat cards, and `?tab=` links (`runs`/`run-registry` → `analytics`)
+  repoint to it. The Registry-only actions (Reuse params / Cancel run /
+  Clear history) went with the page — Reuse still reachable from the
+  composer's saved-repo picks; Approvals' stored-run queue unchanged.

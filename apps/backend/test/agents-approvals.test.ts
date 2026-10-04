@@ -38,7 +38,7 @@ import worker from "../src/index.js";
 import type { Env } from "../src/env.js";
 import { TOKEN_PREFIX } from "../src/agent-tokens.js";
 import { SessionsSidebar } from "../../frontend/src/components/SessionsSidebar";
-import { WorkspacePanel, type WorkspacePanelProps } from "../../frontend/src/components/WorkspacePanel";
+import { ApprovalsView } from "../../frontend/src/components/ApprovalsView";
 
 /** In-memory KV standing in for AGENT_TOKENS — stores JSON strings like the real binding. */
 class FakeKV {
@@ -189,31 +189,22 @@ describe("SessionsSidebar agents group", () => {
   });
 });
 
-describe("WorkspacePanel unified Approvals tab", () => {
-  const baseProps: WorkspacePanelProps = {
-    toolRuns: [],
-    retainedRuns: [],
-    vmRuns: [],
-    pendingApprovals: [],
+describe("ApprovalsView unified pending list", () => {
+  const baseProps = {
+    pendingApprovals: [] as never[],
     decisions: {},
     onDecideApproval: noop,
-    storedApprovals: [],
+    storedApprovals: [] as never[],
     storedDecisions: {},
-    decidedStoredApprovals: [],
+    decidedStoredApprovals: [] as never[],
     storedApprovalsError: null,
     onDecideStoredApproval: noop,
-    onRefreshRuns: noop,
-    onInspectVM: noop,
-    selectedRunId: null,
-    onSelectRun: noop,
-    collapsed: false,
-    onToggleCollapsed: noop,
-    tab: "approvals",
+    onRefresh: noop,
   };
 
   it("renders one pending list holding chat and stored approvals with agent names", () => {
     const markup = renderToStaticMarkup(
-      React.createElement(WorkspacePanel, {
+      React.createElement(ApprovalsView, {
         ...baseProps,
         pendingApprovals: [
           {
@@ -256,7 +247,7 @@ describe("WorkspacePanel unified Approvals tab", () => {
       }),
     );
     // One merged group — not two separate sections.
-    expect(markup).toContain('aria-label="Pending approvals"');
+    expect(markup).toContain("Pending Approvals");
     expect(markup).not.toContain("Queued approvals");
     // Chat approval card: tool, args, the orchestrator name, and its actions.
     expect(markup).toContain("delegate_coding_task");
@@ -273,7 +264,7 @@ describe("WorkspacePanel unified Approvals tab", () => {
 
   it("falls back to the repoUrl mailbox when an email payload lacks mailbox", () => {
     const markup = renderToStaticMarkup(
-      React.createElement(WorkspacePanel, {
+      React.createElement(ApprovalsView, {
         ...baseProps,
         storedApprovals: [
           {

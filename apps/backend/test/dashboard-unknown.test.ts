@@ -7,7 +7,7 @@ import {
   statusLabel,
 } from "../../frontend/src/ui-helpers";
 import { statusDotClass } from "../../frontend/src/components/SessionsSidebar";
-import { RunRegistryView } from "../../frontend/src/components/RunRegistryView";
+import { AnalyticsView } from "../../frontend/src/components/AnalyticsView";
 import type { RetainedRun } from "../../frontend/src/types";
 
 describe("dashboard unknown status", () => {
@@ -51,15 +51,11 @@ describe("dashboard unknown status", () => {
       createdAt: Date.now() - 1000,
       updatedAt: Date.now(),
     }];
-    const markup = renderToStaticMarkup(React.createElement(RunRegistryView, {
+    const markup = renderToStaticMarkup(React.createElement(AnalyticsView, {
       runs,
-      onInspectVM: () => {},
-      onReuseParams: () => {},
-      onCancelRun: () => {},
-      onClearHistory: () => {},
-      onRefresh: () => {},
+      sessionId: "default",
+      sessionApiAvailable: false,
     }));
     expect(markup).toContain("Unknown");
-    expect(markup).toContain("#b45309");
   });
 });
