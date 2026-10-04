@@ -6,7 +6,7 @@ import { useAgentChat } from "@cloudflare/ai-chat/react";
 import { useAgent, useAgentToolEvents } from "agents/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { VMRun } from "./types";
-import { RunRegistryView } from "./components/RunRegistryView";
+import { AnalyticsView } from "./components/AnalyticsView";
 import { AutomationsView } from "./components/AutomationsView";
 import { AgentsView } from "./components/AgentsView";
 import { ProvidersView } from "./components/ProvidersView";
@@ -370,8 +370,8 @@ export function App(): React.JSX.Element {
         setSelectedRunId(runParam);
         setMainView("dashboard");
         setMainView("dashboard");
-      } else if (tabParam === "runs" || tabParam === "run-registry") {
-        setMainView("runs");
+      } else if (tabParam === "analytics" || tabParam === "run-registry") {
+        setMainView("analytics");
       } else if (tabParam === "diff") {
         setMainView("diff");
       } else if (tabParam === "approvals") {
@@ -1038,7 +1038,7 @@ export function App(): React.JSX.Element {
       // selected chat session or its session-scoped run list.
       setSelectedRunId(id);
       setMobileSessionsOpen(false);
-      setMainView("runs");
+      setMainView("analytics");
       return;
     }
     if (session && id !== "default") {
@@ -1374,7 +1374,7 @@ export function App(): React.JSX.Element {
           onNewTask={handleNewTask}
           onInspectRun={(runId) => {
             setSelectedRunId(runId);
-            setMainView("runs");
+            setMainView("analytics");
           }}
         />
       ) : mainView === "tasks" ? (
@@ -1639,19 +1639,13 @@ export function App(): React.JSX.Element {
         </main>
 
       </div>
-      ) : mainView === "runs" ? (
-        <RunRegistryView
+      ) : mainView === "analytics" ? (
+        <AnalyticsView
           runs={retainedRuns}
-          onReuseParams={(run) => {
-            setRepoUrl(run.repoUrl);
-            setBaseBranch(run.baseBranch);
-            setTask(run.task);
-            setPublishPullRequest(run.publishPullRequest);
-            setMainView("tasks");
-          }}
-          onCancelRun={cancelRun}
-          onClearHistory={() => setShowClearModal(true)}
-          onRefresh={refreshRuns}
+          error={runsError}
+          sessionId={selectedSessionId}
+          sessionApiAvailable={sessionApiAvailable}
+          onNavigate={(view) => setMainView(view)}
         />
       ) : mainView === "diff" ? (
         <DiffView

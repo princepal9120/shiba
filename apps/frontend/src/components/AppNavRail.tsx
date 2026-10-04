@@ -9,7 +9,7 @@ import type { JSX } from "react";
 export type AppNavView =
   | "dashboard"
   | "tasks"
-  | "runs"
+  | "analytics"
   | "diff"
   | "approvals"
   | "agents"
@@ -30,7 +30,7 @@ export interface AppNavItem {
 export const APP_NAV_ITEMS: AppNavItem[] = [
   { id: "dashboard", label: "Dashboard", description: "Overview & At-a-Glance Stats" },
   { id: "tasks", label: "Tasks", description: "Tasks & Live Sessions" },
-  { id: "runs", label: "Runs", description: "Run Registry & Workspaces" },
+  { id: "analytics", label: "Analytics", description: "Usage & Run Insights" },
   { id: "diff", label: "Diff", description: "Code Changes & Git Diffs" },
   { id: "approvals", label: "Approvals", description: "Review & Decision Queue" },
   { id: "providers", label: "Providers", description: "Connect AI Coding Agents" },
@@ -44,7 +44,7 @@ export const APP_NAV_ITEMS: AppNavItem[] = [
 ];
 
 const NAV_GROUPS: { label: string; items: AppNavView[] }[] = [
-  { label: "Workspace", items: ["dashboard", "tasks", "runs", "diff", "approvals", "automations"] },
+  { label: "Workspace", items: ["dashboard", "tasks", "analytics", "diff", "approvals", "automations"] },
   { label: "Capabilities", items: ["agents", "providers", "skills", "integrations", "inbox", "memory"] },
   { label: "System", items: ["settings"] },
 ];
@@ -79,7 +79,7 @@ const ICONS: Record<AppNavView, JSX.Element> = {
       <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
     </svg>
   ),
-  runs: (
+  analytics: (
     <svg aria-hidden="true"  className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M8 5.14v14l11-7-11-7z" />
     </svg>

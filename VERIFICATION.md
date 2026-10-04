@@ -473,3 +473,13 @@ Routing delivery to a registered address; Telegram/Discord webhook handshakes.
 - `SettingsView` gains a "Repositories" section (add/remove saved repos).
 - Tests rewired: WorkspacePanel-tab tests → `ApprovalsView`; dead view render tests removed.
 - Gate: typecheck, lint, lint:imports, 1684 backend tests, build + docs:verify all green.
+
+### 2026-10-03 (cont.) — Runs page removed, Analytics kept
+
+- Per direction, `RunRegistryView.tsx` deleted instead of Analytics: the
+  Analytics run table carries the same record data. `AnalyticsView.tsx`
+  restored; nav/workspace slot is now Analytics; run clicks, dashboard
+  stat cards, and `?tab=` links (`runs`/`run-registry` → `analytics`)
+  repoint to it. The Registry-only actions (Reuse params / Cancel run /
+  Clear history) went with the page — Reuse still reachable from the
+  composer's saved-repo picks; Approvals' stored-run queue unchanged.

@@ -39,7 +39,7 @@ vi.mock("ai", () => ({
 }));
 
 import { App } from "../../frontend/src/app";
-import { RunRegistryView } from "../../frontend/src/components/RunRegistryView";
+import { AnalyticsView } from "../../frontend/src/components/AnalyticsView";
 import { AutomationsView } from "../../frontend/src/components/AutomationsView";
 import { DashboardView } from "../../frontend/src/components/DashboardView";
 import { DiffView } from "../../frontend/src/components/DiffView";
@@ -243,7 +243,7 @@ describe("dashboard rendering", () => {
 
 
 
-  it("renders RunRegistryView with stats, search and filters", () => {
+  it("renders AnalyticsView with the run table", () => {
     const runs = [
       {
         runId: "run-reg-1",
@@ -258,16 +258,14 @@ describe("dashboard rendering", () => {
         updatedAt: Date.now(),
       },
     ];
-    const markup = renderToStaticMarkup(React.createElement(RunRegistryView, {
+    const markup = renderToStaticMarkup(React.createElement(AnalyticsView, {
       runs,
-      onReuseParams: () => {},
-      onCancelRun: () => {},
-      onClearHistory: () => {},
-      onRefresh: () => {},
+      sessionId: "default",
+      sessionApiAvailable: false,
     }));
-    expect(markup).toContain("Run Registry &amp; Workspaces");
-    expect(markup).toContain("Total Runs");
+    expect(markup).toContain("Analytics");
     expect(markup).toContain("Fix bug");
+    expect(markup).toContain("owner/repo");
   });
 
   it("renders AutomationsView with webhook endpoints", () => {
