@@ -576,3 +576,21 @@ Routing delivery to a registered address; Telegram/Discord webhook handshakes.
   — `compatibleHarnesses` also requires `supportedRuntimes: ["sandbox"]`,
   so unrunnable registered harnesses (antigravity, cursor) are no longer
   advertised as compatible routes. contributing.md pin table rows added.
+
+- Review addendum 2 (second ce-code-review wave, reliability + frontend-races
+  + agent-native): shared ACP driver — per-call JSON-RPC timeouts (60s
+  control / 20min prompt) so a wedged adapter fails with its own error
+  instead of burning the retryable outer exec timeout; pending calls reject
+  on child exit; stdout drains before exit so the terminal frame cannot
+  tear; `session/set_model` tolerates -32601 (unstable in ACP 0.x — adapter
+  runs its default model). Cursor lanes inherit all of this via the shared
+  ACP_DRIVER_SOURCE fold (the duplicated ~90-line driver is deleted).
+  Frontend — `useApiJson` exposes `inFlight`; the spine feed polls 5s after
+  each fetch settles rather than aborting slow reads; composer model
+  datalist scoped to ready connection providers; model-config + agents
+  refetch on composer re-entry; ActivityView remounts on session switch;
+  hero composer scrolls on short viewports; purpose inputs lock mid-save.
+  Delegation surfaces — the orchestrator prompt + delegate schema describe
+  name connectionId and the ACP lane ids; `queue_run` accepts
+  codingModel/connectionId (parity with POST /api/runs).
+  Gate: typecheck, lint, lint:imports, 1726 backend tests, build green.
