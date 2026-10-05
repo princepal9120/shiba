@@ -45,6 +45,14 @@ export const queueRunInputSchema = z.object({
     .enum(HARNESS_IDS)
     .optional()
     .describe("Coding agent harness. Defaults to the deployment's AGENT_HARNESS."),
+  codingModel: z
+    .string()
+    .optional()
+    .describe("Coding model as provider/model, e.g. anthropic/claude-sonnet-4-6. Defaults to the deployment's per-harness model."),
+  connectionId: z
+    .string()
+    .optional()
+    .describe("Model connection id (conn_*) from the deployment's connection catalog. Defaults to the implicit gateway/secret route."),
   testCommand: testCommandSchema
     .optional()
     .describe("Project test command as an argv array, e.g. [\"pnpm\", \"test\"]."),

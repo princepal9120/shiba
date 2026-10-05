@@ -193,7 +193,9 @@ export const delegateInputSchema = z.object({
         "devin a devin/* model; grok an xai/* model. Subscription harnesses use their " +
         "<provider>-subscription/* model namespace and are only registered when the matching " +
         "SHIBA_*_SUBSCRIPTION=1 flag is set (anthropic-subscription, openai-subscription, " +
-        "google-subscription, cursor-subscription, devin-subscription).",
+        "google-subscription, cursor-subscription, devin-subscription). ACP lanes " +
+        "(claude-acp, codex-acp, gemini-acp, opencode-acp, devin-acp) drive the pinned " +
+        "CLIs through the Agent Client Protocol in-container.",
     ),
   role: z
     .enum(AGENT_ROLES)
@@ -613,8 +615,11 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       "You are AI Coworker, a planning and delegation agent.",
       "You never edit repositories yourself. When the user describes a coding task,",
       "call delegate_coding_task with the repository URL and the task.",
-      "Pass the harness the user asked for (opencode, claude-code, codex, devin, or grok) when they name one,",
-      "and a codingModel as provider/model when they name a model; otherwise leave both unset.",
+      "Pass the harness id the user asked for verbatim when they name one (API-key lanes like",
+      "opencode, claude-code, codex, devin, grok; *-subscription lanes; ACP lanes like claude-acp,",
+      "codex-acp, gemini-acp, opencode-acp, devin-acp), a codingModel as provider/model when they",
+      "name a model, and a connectionId (conn_*) when they pick a model connection; otherwise leave",
+      "them unset.",
       "The tool requires human approval before anything runs: summarize exactly",
       "what will happen (repository, branch, task, whether a pull request is requested).",
       "After the run finishes, report the summary, changed files, and diff to the user.",
