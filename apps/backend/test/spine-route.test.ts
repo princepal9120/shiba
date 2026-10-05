@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   execute: vi.fn(),
   keepAliveWhile: vi.fn((fn: () => Promise<unknown>) => fn()),
   schedule: vi.fn(async (..._args: unknown[]) => ({})),
+  postSlackMessage: vi.fn(async () => ({})),
 }));
 vi.mock("@cloudflare/think", () => ({
   Think: class {
@@ -34,13 +35,21 @@ vi.mock("@cloudflare/think", () => ({
 }));
 vi.mock("agents/agent-tools", () => ({ agentTool: () => ({ execute: mocks.execute }) }));
 vi.mock("../src/agents/opencode-agent.js", () => ({ OpenCodeAgent: class {} }));
+// Thread post-backs never hit the network in unit tests — the outbox row is
+// what matters, not the delivery.
+vi.mock("../src/slack.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/slack.js")>()),
+  postSlackMessage: mocks.postSlackMessage,
+}));
 setSandboxHandleResolver(() => ({ destroy: mocks.destroy }));
 
 const AGENT_PRINCIPAL_HEADER = "X-Agent-Principal";
 
-function agent() {
+function agent(threadName?: string) {
   return Object.assign(Object.create(CodingOrchestrator.prototype) as CodingOrchestrator, {
-    env: { Sandbox: {}, GITHUB_TOKEN: "test-token" },
+    env: { Sandbox: {}, GITHUB_TOKEN: "test-token", SLACK_BOT_TOKEN: "xoxb-test" },
+    name: threadName,
+    ctx: { waitUntil: (promise: Promise<unknown>) => void promise.catch(() => undefined) },
     state: { runs: [] } as OrchestratorState,
     // The test subclass shadows the P9 setState override, so drive the
     // flush by hand — same order as production: apply → commit → drain.
@@ -119,7 +128,7 @@ describe("GET /api/spine", () => {
   });
 
   it("an agent principal sees only events on its own runs", async () => {
-    const instance = agent();
+    const instance = agent("slack:T1:C1:111.222");
     const mine = await instance.onRequest(queueBody("mine", "agent-alpha"));
     const { approvalId: mineApproval } = (await mine.json()) as { approvalId: string };
     const theirs = await instance.onRequest(queueBody("theirs"));
@@ -137,6 +146,41 @@ describe("GET /api/spine", () => {
     expect(body.events.every((e) => e.runId === mineRun)).toBe(true);
     expect(body.events.some((e) => e.runId === theirsRun)).toBe(false);
     expect(body.outbox.every((e) => e.runId === mineRun)).toBe(true);
+  });
+
+  it("filters outbox rows to the principal's runs — not vacuously", async () => {
+    const instance = agent("slack:T1:C1:111.222");
+    const mine = await instance.onRequest(queueBody("mine", "agent-alpha"));
+    const { approvalId: mineApproval } = (await mine.json()) as { approvalId: string };
+    const theirs = await instance.onRequest(queueBody("theirs"));
+    const { approvalId: theirsApproval } = (await theirs.json()) as { approvalId: string };
+    await instance.onRequest(resolveBody(mineApproval));
+    await instance.onRequest(resolveBody(theirsApproval));
+    const mineRun = `agent-tool:${mineApproval}`;
+    const theirsRun = `agent-tool:${theirsApproval}`;
+
+    // Populate the outbox: a run completion posts back to the thread,
+    // which requests a slack.post side effect tagged with that runId.
+    type ThreadInternals = {
+      postToThread(text: string, context?: { runId?: string; causationId?: string }): void;
+    };
+    const threaded = instance as unknown as ThreadInternals;
+    threaded.postToThread("mine finished", { runId: mineRun });
+    threaded.postToThread("theirs finished", { runId: theirsRun });
+
+    // Full view: both runs' effects are owed.
+    const all = (await (await instance.onRequest(spineGet())).json()) as { outbox: OutboxEntry[] };
+    expect(all.outbox.filter((e) => e.runId === mineRun)).toHaveLength(1);
+    expect(all.outbox.filter((e) => e.runId === theirsRun)).toHaveLength(1);
+
+    // Agent view: only its own run's effects — the previous assertion was
+    // vacuous while the outbox stayed empty.
+    const scoped = (await (await instance.onRequest(spineGet("agent-alpha"))).json()) as {
+      outbox: OutboxEntry[];
+    };
+    expect(scoped.outbox.length).toBeGreaterThan(0);
+    expect(scoped.outbox.every((e) => e.runId === mineRun)).toBe(true);
+    expect(scoped.outbox.some((e) => e.runId === theirsRun)).toBe(false);
   });
 
   it("rejects non-GET methods", async () => {

@@ -1662,12 +1662,14 @@ export function App(): React.JSX.Element {
               onBaseBranchChange={setBaseBranch}
               onPublishPullRequestChange={setPublishPullRequest}
               onHarnessChange={setHarness}
-              codingModel={codingModel}
-              connectionId={connectionId}
-              onCodingModelChange={setCodingModel}
-              onConnectionChange={setConnectionId}
-              modelSuggestions={codingModelSuggestions}
-              connections={modelConnections}
+              routing={{
+                codingModel,
+                connectionId,
+                onCodingModelChange: setCodingModel,
+                onConnectionChange: setConnectionId,
+                modelSuggestions: codingModelSuggestions,
+                connections: modelConnections,
+              }}
               variant={chat.messages.length === 0 ? "hero" : "docked"}
               onSubmit={submitTask}
               onClear={() => setShowClearModal(true)}

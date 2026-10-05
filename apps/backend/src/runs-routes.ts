@@ -4,7 +4,7 @@
  * Extracted from index.ts; the per-surface Access gate stays here.
  */
 import { getAgentByName } from "agents/routing";
-import { LOCAL_INTAKE_DASHBOARD, LOCAL_INTAKE_HEADER } from "@shiba/shared";
+import { AGENT_PRINCIPAL_HEADER, LOCAL_INTAKE_DASHBOARD, LOCAL_INTAKE_HEADER } from "@shiba/shared";
 import type { Env } from "./env.js";
 import { isAuthorizedRequest, resolveUserId } from "./request-auth.js";
 import { ORCHESTRATOR_NAME } from "./slack-routes.js";
@@ -91,5 +91,10 @@ export async function handleRuns(request: Request, env: Env): Promise<Response |
   // `https://internal` and never carry it.
   rewritten.headers.delete(LOCAL_INTAKE_HEADER);
   rewritten.headers.set(LOCAL_INTAKE_HEADER, LOCAL_INTAKE_DASHBOARD);
+  // Same strip for the agent-principal voucher: the DO reads queuedBy and
+  // the /api/spine filter from this header as worker-vouched. Only
+  // mcp-run-tools stamps it, on internal stub calls — never on this lane,
+  // so an inbound copy is a forgery, not a credential to forward.
+  rewritten.headers.delete(AGENT_PRINCIPAL_HEADER);
   return stub.fetch(rewritten);
 }

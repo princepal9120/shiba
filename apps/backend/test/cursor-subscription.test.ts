@@ -335,7 +335,7 @@ describe("the token never enters the container", () => {
     expect(file.path).toBe("/workspace/run-1.cursor-driver.cjs");
     expect(file.contents).toContain('"model":null');
     expect(file.contents).toContain('"task":"Fix it."');
-    expect(file.contents).toContain('spawn("cursor-agent"');
+    expect(file.contents).toContain('"argv":["cursor-agent","--force","acp"]');
     expect(file.contents).not.toContain("key-real");
   });
 });

@@ -17,7 +17,8 @@ FROM docker.io/cloudflare/sandbox:0.12.9-opencode
 RUN npm i -g opencode-ai@1.18.34 @anthropic-ai/claude-code@2.1.277 @openai/codex@0.155.0 @xai-official/grok@1.0.41 \
     @agentclientprotocol/claude-agent-acp@0.86.0 @agentclientprotocol/codex-acp@2.1.1 @google/gemini-cli@0.62.0 \
   && opencode --version && claude --version && codex --version && grok --version && gemini --version \
-  && command -v claude-agent-acp codex-acp && opencode acp --help >/dev/null
+  && command -v claude-agent-acp codex-acp && opencode acp --help >/dev/null \
+  && gemini --help 2>&1 | grep -q -- '--acp'
 
 # Devin CLI — checksum-verified against the published manifest
 # (https://static.devin.ai/cli/current/manifest.json), version-pinned like the
@@ -35,7 +36,8 @@ RUN set -eux; \
   echo "${s}  /tmp/devin.tar.gz" | sha256sum -c -; \
   tar -xzf /tmp/devin.tar.gz -C /usr/local bin/devin; \
   rm /tmp/devin.tar.gz; \
-  /usr/local/bin/devin --version
+  /usr/local/bin/devin --version; \
+  /usr/local/bin/devin acp --help </dev/null >/dev/null 2>&1 || { echo "devin acp probe failed"; exit 1; }
 
 # Cursor Agent CLI — checksum-verified, version-pinned like the Devin CLI.
 # The tarball ships dist-package/ (the cursor-agent binary plus its native

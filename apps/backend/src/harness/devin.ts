@@ -36,7 +36,25 @@ export const DEVIN_PROVIDERS = ["devin"] as const;
 export const DEVIN_EGRESS_HOSTS = ["api.devin.ai", "server.codeium.com"] as const;
 
 /** XDG_DATA_HOME inside the container; credentials.toml lands under it. */
-const CONTAINER_XDG_DATA = "/workspace/.xdg-data";
+export const CONTAINER_XDG_DATA = "/workspace/.xdg-data";
+
+/**
+ * The dummy credentials file. The real key never enters the container —
+ * the egress forwarders overwrite Authorization on the two Devin hosts.
+ * Shared with the devin-acp lane: `devin acp` reads the same file.
+ */
+export function devinCredentialsConfig(): HarnessConfigFile {
+  return {
+    path: CONTAINER_XDG_DATA + "/devin/credentials.toml",
+    contents: [
+      'windsurf_api_key = "dummy-egress-swapped"',
+      'api_server_url = "https://server.codeium.com"',
+      'devin_webapp_host = "https://app.devin.ai"',
+      'devin_api_url = "https://api.devin.ai"',
+      "",
+    ].join("\n"),
+  };
+}
 
 /** Thrown when a streamed Devin line reports an auth or run failure. */
 export class DevinErrorEvent extends Error {
@@ -83,21 +101,8 @@ export class DevinHarness implements AgentHarness {
     return [...DEVIN_EGRESS_HOSTS];
   }
 
-  /**
-   * The dummy credentials file. The real key never enters the container —
-   * the egress forwarders overwrite Authorization on the two Devin hosts.
-   */
   configFile(_input: CodingTaskInput, _sandboxId: string): HarnessConfigFile {
-    return {
-      path: CONTAINER_XDG_DATA + "/devin/credentials.toml",
-      contents: [
-        'windsurf_api_key = "dummy-egress-swapped"',
-        'api_server_url = "https://server.codeium.com"',
-        'devin_webapp_host = "https://app.devin.ai"',
-        'devin_api_url = "https://api.devin.ai"',
-        "",
-      ].join("\n"),
-    };
+    return devinCredentialsConfig();
   }
 
   env(input: CodingTaskInput, _configPath: string | null): Record<string, string> {

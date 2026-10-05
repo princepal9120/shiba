@@ -26,8 +26,8 @@ import {
   type VerificationOutcome,
   verifyRunOutcome,
 } from "./types.js";
+import { ACP_DRIVER_SOURCE } from "./acp.js";
 import {
-  CURSOR_DRIVER_SOURCE,
   CURSOR_EGRESS_HOSTS,
   cursorDriverPath,
   parseCursorEvent,
@@ -76,10 +76,15 @@ export class CursorSubscriptionHarness implements AgentHarness {
   configFile(input: CodingTaskInput, sandboxId: string): HarnessConfigFile {
     assertSupportedModel(this.name, this.supportedProviders, input.codingModel);
     const model = stripProvider(input.codingModel);
-    const run = { model: model === "auto" ? null : model, task: input.task };
+    const run = {
+      argv: ["cursor-agent", "--force", "acp"],
+      model: model === "auto" ? null : model,
+      task: input.task,
+      label: "Cursor",
+    };
     return {
       path: cursorDriverPath(sandboxId),
-      contents: `"use strict";\nconst cfg = ${JSON.stringify(run)};\n${CURSOR_DRIVER_SOURCE}`,
+      contents: `"use strict";\nconst cfg = ${JSON.stringify(run)};\n${ACP_DRIVER_SOURCE}`,
     };
   }
 

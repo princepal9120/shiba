@@ -180,8 +180,17 @@ export function compatibleHarnesses(service: ConnectionService): string[] {
   if (!(provider in PROVIDER_HOSTS)) return [];
   // Compatibility is the harness's own declaration: supportedProviders is
   // the only list — ACP and future lanes join automatically, a stale name
-  // check here could never lie about them.
-  return HARNESS_NAMES.filter((name) => HARNESSES[name]?.supportedProviders.includes(provider) === true);
+  // check here could never lie about them. Runnability is the second gate:
+  // a registered-but-unrunnable harness (antigravity, cursor — both declare
+  // supportedRuntimes: [] and resolveHarness refuses them) must not be
+  // advertised as a compatible route the dispatcher then rejects.
+  return HARNESS_NAMES.filter((name) => {
+    const harness = HARNESSES[name];
+    return (
+      harness?.supportedProviders.includes(provider) === true &&
+      harness.capabilities().supportedRuntimes.includes("sandbox")
+    );
+  });
 }
 
 /**

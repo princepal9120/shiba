@@ -56,6 +56,26 @@ export interface AcpHarnessSpec {
   readonly keyEnv?: string;
   /** Non-provider hosts the agent also needs (auth planes, telemetry). */
   readonly extraEgress?: readonly string[];
+  /**
+   * Transform `provider/model` into the id this agent's ACP server expects.
+   * Default strips the provider prefix (`anthropic/claude-x` → `claude-x`);
+   * OpenCode's ACP model grammar is `provider/model[/variant]`, so its lane
+   * passes the id through unchanged.
+   */
+  readonly modelId?: (model: string) => string;
+  /**
+   * Extra config files the agent's CLI needs (credentials.toml,
+   * opencode.json). They are emitted before the driver file in the
+   * configFile array so `env(configPath)` names the agent's own config,
+   * matching how OpenCodeHarness/DevinHarness wire OPENCODE_CONFIG and
+   * XDG_DATA_HOME.
+   */
+  readonly extraConfig?: (input: CodingTaskInput, sandboxId: string) => HarnessConfigFile[];
+  /**
+   * Extra env beyond the dummy provider key. Receives the same arguments
+   * as env() — `configPath` is the first emitted file's path.
+   */
+  readonly extraEnv?: (input: CodingTaskInput, configPath: string | null) => Record<string, string>;
 }
 
 export class AcpEventError extends Error {
@@ -118,25 +138,32 @@ export class AcpHarness implements AgentHarness {
     return [PROVIDER_HOSTS[provider] as string, ...(this.spec.extraEgress ?? [])];
   }
 
-  configFile(input: CodingTaskInput, sandboxId: string): HarnessConfigFile {
+  configFile(input: CodingTaskInput, sandboxId: string): HarnessConfigFile | HarnessConfigFile[] {
     assertSupportedModel(this.name, this.spec.providers, input.codingModel);
-    const model = stripProvider(input.codingModel);
+    const model = this.spec.modelId
+      ? this.spec.modelId(input.codingModel)
+      : stripProvider(input.codingModel);
     const run = {
       argv: this.spec.spawn,
       model: model === "auto" ? null : model,
       task: input.task,
       label: this.spec.label,
     };
-    return {
+    const driver: HarnessConfigFile = {
       path: acpDriverPath(sandboxId),
       // The run config is embedded as a JSON literal — JSON is valid JS.
       contents: `"use strict";\nconst cfg = ${JSON.stringify(run)};\n${ACP_DRIVER_SOURCE}`,
     };
+    const extras = this.spec.extraConfig?.(input, sandboxId) ?? [];
+    return extras.length ? [...extras, driver] : driver;
   }
 
-  env(input: CodingTaskInput, _configPath: string | null = null): Record<string, string> {
+  env(input: CodingTaskInput, configPath: string | null = null): Record<string, string> {
     const provider = assertSupportedModel(this.name, this.spec.providers, input.codingModel);
-    return { [this.spec.keyEnv ?? (PROVIDER_KEY_ENV[provider] as string)]: DUMMY_PROVIDER_KEY };
+    return {
+      [this.spec.keyEnv ?? (PROVIDER_KEY_ENV[provider] as string)]: DUMMY_PROVIDER_KEY,
+      ...(this.spec.extraEnv?.(input, configPath) ?? {}),
+    };
   }
 
   buildArgv(input: CodingTaskInput, _workdir: string): string[] {
@@ -182,7 +209,13 @@ function stripProvider(model: string): string {
 export const ACP_DRIVER_SOURCE = `const { spawn } = require("node:child_process");
 
 const emit = (o) => process.stdout.write(JSON.stringify(o) + "\\n");
-const fail = (msg) => { emit({ type: "error", message: String(msg).slice(0, 900) }); process.exit(1); };
+const fail = (msg) => {
+  // Kill the agent before exiting: an ACP server left running could keep
+  // mutating the worktree after the run is already marked failed.
+  try { child.kill("SIGKILL"); } catch (_) { /* spawn may never have started */ }
+  emit({ type: "error", message: String(msg).slice(0, 900) });
+  process.exit(1);
+};
 
 const child = spawn(cfg.argv[0], cfg.argv.slice(1), { cwd: process.cwd(), env: process.env, stdio: ["pipe", "pipe", "inherit"] });
 let buf = "";
@@ -222,7 +255,7 @@ function onUpdate(u) {
 function onRequest(msg) {
   if (msg.method === "session/request_permission") {
     const opts = (msg.params && msg.params.options) || [];
-    const allow = opts.find((o) => o && /allow/i.test(String(o.kind || o.optionId || ""))) || opts[0];
+    const allow = opts.find((o) => o && /allow/i.test(String(o.kind || o.optionId || "")));
     write({ id: msg.id, result: allow
       ? { outcome: { outcome: "selected", optionId: allow.optionId } }
       : { outcome: { outcome: "cancelled" } } });

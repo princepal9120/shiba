@@ -519,7 +519,8 @@ Routing delivery to a registered address; Telegram/Discord webhook handshakes.
   `@agentclientprotocol/codex-acp@2.1.1`, `@google/gemini-cli@0.62.0` on the
   global npm line with `command -v`/`opencode acp --help` build probes;
   `DEVIN_CLI_VERSION` bumped to `3000.11.3` (first registry release with
-  `devin acp`). All ACP servers are Apache-2.0/MIT.
+  `devin acp`). ACP adapter licenses are MIT/Apache-2.0 (within the licensing
+  bar); `@google/gemini-cli` is Apache-2.0 — verify per-package when bumping.
 - `orchestrator.ts` — `GET /api/spine` (routed in `runs-routes.ts`,
   GET-only → 405 otherwise): dashboard principal gets `{events, outbox}`;
   `X-Agent-Principal` requests are filtered to events whose `runId` belongs
@@ -555,3 +556,23 @@ Routing delivery to a registered address; Telegram/Discord webhook handshakes.
   tests, build + docs:verify, env:load/env:scan all green.
 - Unverified (deploy-gated): ACP lanes inside a real sandbox (image rebuild
   required), `/api/spine` on prod data, hero composer on app.tryshiba.dev.
+
+- Review addendum (ce-code-review pass on this diff): `runs-routes.ts` now
+  strips inbound `X-Agent-Principal` before forwarding to the DO — the DO
+  reads `queuedBy` and the `/api/spine` filter from that header as
+  worker-vouched, so a client-supplied copy was a forgery lane (same class
+  as `X-Shiba-Intake`; regression test added). `runtime.ts` — `AcpErrorEvent`/
+  `AcpEventError` added to both error-propagation allowlists so ACP driver
+  failures fail the run honestly instead of degrading to a redacted
+  "malformed event line" notice. `acp.ts` — `AcpHarnessSpec` gained
+  `modelId`/`extraConfig`/`extraEnv` hooks; `devin-acp` gets
+  `server.codeium.com` egress + the shared `devinCredentialsConfig()` +
+  `XDG_DATA_HOME` (the CLI authenticates from credentials.toml, not env);
+  `opencode-acp` passes `provider/model` through untransformed (OpenCode's
+  ACP model grammar) and gets its `opencode.json` + `OPENCODE_CONFIG`/
+  `OPENCODE_DISABLE_AUTOUPDATE`; the driver's fail path kills the spawned
+  agent before exiting (no orphan mutation after run-fail). Dockerfile —
+  `devin acp` and `gemini --acp` build probes added. `model-connections.ts`
+  — `compatibleHarnesses` also requires `supportedRuntimes: ["sandbox"]`,
+  so unrunnable registered harnesses (antigravity, cursor) are no longer
+  advertised as compatible routes. contributing.md pin table rows added.

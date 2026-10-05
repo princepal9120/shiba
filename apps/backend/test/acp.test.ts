@@ -5,6 +5,10 @@
  * compatibleHarnesses must admit the lanes and HARNESS_MODEL_ENV must point
  * each at its provider's model var.
  */
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   AcpErrorEvent,
@@ -89,6 +93,20 @@ describe("AcpHarness contract", () => {
     expect(config.contents).not.toContain('"anthropic/claude-sonnet-4-6"');
   });
 
+  it("the emitted driver is a syntactically valid Node program", () => {
+    // The driver ships inside a template literal — string assertions can't
+    // catch a syntax break, but `node --check` on the emitted file can.
+    const input = task("anthropic/claude-sonnet-4-6");
+    const config = claudeAcp.configFile(input, input.sandboxId);
+    const files = Array.isArray(config) ? config : config === null ? [] : [config];
+    const driver = files.find((f) => f.path === acpDriverPath(input.sandboxId));
+    expect(driver).toBeDefined();
+    const dir = mkdtempSync(join(tmpdir(), "acp-driver-"));
+    const driverPath = join(dir, "driver.cjs");
+    writeFileSync(driverPath, driver!.contents);
+    expect(() => execFileSync(process.execPath, ["--check", driverPath])).not.toThrow();
+  });
+
   it("env hands the container the dummy key on the provider's standard var", () => {
     expect(claudeAcp.env(task("anthropic/claude-sonnet-4-6"), null)).toEqual({
       ANTHROPIC_API_KEY: DUMMY_PROVIDER_KEY,
@@ -129,5 +147,60 @@ describe("the ACP driver event parser", () => {
     );
     expect(() => parseAcpDriverEvent("not json", "Claude ACP")).toThrow(AcpEventError);
     expect(() => parseAcpDriverEvent("[1,2]", "Claude ACP")).toThrow(AcpEventError);
+  });
+});
+
+describe("per-lane spec hooks (ce-code-review fixes)", () => {
+  it("devin-acp egress includes the codeium inference host, not just api.devin.ai", () => {
+    const hosts = resolveHarness("devin-acp").egressHosts("devin/swe-2-medium");
+    expect(hosts).toEqual(expect.arrayContaining(["api.devin.ai", "server.codeium.com"]));
+  });
+
+  it("devin-acp materializes credentials.toml and XDG_DATA_HOME like the devin lane", () => {
+    const devinAcp = resolveHarness("devin-acp");
+    const input = task("devin/swe-2-medium");
+    const config = devinAcp.configFile(input, input.sandboxId);
+    const files = Array.isArray(config) ? config : config === null ? [] : [config];
+    const creds = files.find((f) => f.path.endsWith("/devin/credentials.toml"));
+    expect(creds?.contents).toContain('api_server_url = "https://server.codeium.com"');
+    expect(creds?.contents).toContain('windsurf_api_key = "dummy-egress-swapped"');
+    expect(files.some((f) => f.path === acpDriverPath(input.sandboxId))).toBe(true);
+    expect(devinAcp.env(input, files[0]?.path ?? null)).toMatchObject({
+      XDG_DATA_HOME: "/workspace/.xdg-data",
+      DEVIN_API_KEY: DUMMY_PROVIDER_KEY,
+    });
+  });
+
+  it("opencode-acp passes provider/model through — OpenCode's ACP grammar needs the prefix", () => {
+    const opencodeAcp = resolveHarness("opencode-acp");
+    const input = task("google/gemini-3.5-flash-lite");
+    const config = opencodeAcp.configFile(input, input.sandboxId);
+    const files = Array.isArray(config) ? config : config === null ? [] : [config];
+    const driver = files.find((f) => f.path === acpDriverPath(input.sandboxId));
+    expect(driver?.contents).toContain('"google/gemini-3.5-flash-lite"');
+    // The agent's own opencode.json ships too (enabled_providers + dummy key).
+    const ocConfig = files.find((f) => f.path.endsWith(".opencode.json"));
+    expect(ocConfig?.contents).toContain('"enabled_providers"');
+    expect(opencodeAcp.env(input, ocConfig?.path ?? null)).toMatchObject({
+      OPENCODE_DISABLE_AUTOUPDATE: "true",
+    });
+    expect(opencodeAcp.env(input, ocConfig?.path ?? null).OPENCODE_CONFIG).toBe(ocConfig?.path);
+  });
+
+  it("default lanes still strip the provider prefix", () => {
+    const config = claudeAcp.configFile(task("anthropic/claude-sonnet-4-6"), "sbx");
+    const contents = Array.isArray(config) ? config[config.length - 1]!.contents : config?.contents;
+    expect(contents).toContain('"claude-sonnet-4-6"');
+    expect(contents).not.toContain('"anthropic/claude-sonnet-4-6"');
+  });
+});
+
+describe("compatibleHarnesses excludes unrunnable harnesses", () => {
+  it("antigravity and cursor declare no sandbox runtime and are not advertised", () => {
+    for (const service of ["google", "anthropic", "openai", "opencode-go", "devin", "cursor"] as const) {
+      expect(compatibleHarnesses(service)).not.toContain("antigravity");
+      expect(compatibleHarnesses(service)).not.toContain("cursor");
+    }
+    expect(compatibleHarnesses("google")).not.toEqual([]);
   });
 });

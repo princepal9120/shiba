@@ -12,6 +12,7 @@
  * never sent to session/set_model.
  */
 import type { CodingTaskInput, CodingTaskResult } from "../opencode-input.js";
+import { ACP_DRIVER_SOURCE } from "./acp.js";
 import { DUMMY_PROVIDER_KEY } from "../provider-gateway.js";
 import { boundTail } from "../security.js";
 import {
@@ -83,10 +84,15 @@ export class CursorHarness implements AgentHarness {
   configFile(input: CodingTaskInput, sandboxId: string): HarnessConfigFile {
     assertSupportedModel(this.name, this.supportedProviders, input.codingModel);
     const model = stripProvider(input.codingModel);
-    const run = { model: model === "auto" ? null : model, task: input.task };
+    const run = {
+      argv: [...CURSOR_ACP_ARGV],
+      model: model === "auto" ? null : model,
+      task: input.task,
+      label: "Cursor",
+    };
     return {
       path: cursorDriverPath(sandboxId),
-      contents: `"use strict";\nconst cfg = ${JSON.stringify(run)};\n${CURSOR_DRIVER_SOURCE}`,
+      contents: `"use strict";\nconst cfg = ${JSON.stringify(run)};\n${ACP_DRIVER_SOURCE}`,
     };
   }
 
@@ -121,113 +127,7 @@ function stripProvider(model: string): string {
   return slash > 0 ? model.slice(slash + 1) : model;
 }
 
-/**
- * Plain Node CJS, no npm imports — the sandbox image only guarantees `node`.
- * Exported for cursor-subscription, which writes the identical driver file.
- */
-export const CURSOR_DRIVER_SOURCE = `const { spawn } = require("node:child_process");
-
-const emit = (o) => process.stdout.write(JSON.stringify(o) + "\\n");
-const fail = (msg) => { emit({ type: "error", message: String(msg).slice(0, 900) }); process.exit(1); };
-
-const child = spawn("cursor-agent", ["--force", "acp"], { cwd: process.cwd(), env: process.env, stdio: ["pipe", "pipe", "inherit"] });
-let buf = "";
-let nextId = 1;
-const pending = new Map();
-let promptDone = false;
-
-const write = (o) => child.stdin.write(JSON.stringify(Object.assign({ jsonrpc: "2.0" }, o)) + "\\n");
-function send(method, params) {
-  const id = nextId++;
-  write({ id, method, params });
-  return new Promise((resolve, reject) => pending.set(id, { resolve, reject }));
-}
-
-function textOf(content) {
-  if (typeof content === "string") return content;
-  if (Array.isArray(content)) return content.map(textOf).join("");
-  if (content && typeof content === "object" && typeof content.text === "string") return content.text;
-  return "";
-}
-
-function onUpdate(u) {
-  if (!u || typeof u !== "object") return;
-  const kind = u.sessionUpdate;
-  if (kind === "agent_message_chunk" || kind === "user_message_chunk" || kind === "agent_thought_chunk") {
-    const t = textOf(u.content);
-    if (t) emit({ type: kind, text: t });
-  } else if (kind === "tool_call") {
-    emit({ type: kind, text: "tool: " + String(u.title || u.kind || u.toolCallId || "call") });
-  } else if (kind === "tool_call_update") {
-    if (typeof u.status === "string") emit({ type: kind, text: "tool " + u.status });
-  } else if (kind === "plan") {
-    emit({ type: kind, text: "plan updated" });
-  }
-}
-
-function onRequest(msg) {
-  if (msg.method === "session/request_permission") {
-    const opts = (msg.params && msg.params.options) || [];
-    const allow = opts.find((o) => o && /allow/i.test(String(o.kind || o.optionId || ""))) || opts[0];
-    write({ id: msg.id, result: allow
-      ? { outcome: { outcome: "selected", optionId: allow.optionId } }
-      : { outcome: { outcome: "cancelled" } } });
-    return;
-  }
-  // fs/terminal requests: clientCapabilities advertised none of them.
-  write({ id: msg.id, error: { code: -32601, message: "client does not implement " + msg.method } });
-}
-
-function onLine(line) {
-  let msg;
-  try { msg = JSON.parse(line); } catch { return; }
-  if (!msg || typeof msg !== "object") return;
-  if (msg.id !== undefined && (msg.result !== undefined || msg.error !== undefined)) {
-    const p = pending.get(msg.id);
-    if (!p) return;
-    pending.delete(msg.id);
-    if (msg.error) p.reject(new Error((msg.error.message || "JSON-RPC error") + " (" + msg.error.code + ")"));
-    else p.resolve(msg.result);
-  } else if (msg.id !== undefined && typeof msg.method === "string") {
-    onRequest(msg);
-  } else if (msg.method === "session/update") {
-    onUpdate(msg.params && msg.params.update);
-  }
-}
-
-child.stdout.on("data", (d) => {
-  buf += d.toString("utf8");
-  let i;
-  while ((i = buf.indexOf("\\n")) >= 0) {
-    onLine(buf.slice(0, i));
-    buf = buf.slice(i + 1);
-  }
-});
-child.on("error", (e) => fail("spawn failed: " + e.message));
-child.on("exit", (code) => { if (!promptDone) fail("agent exited before the prompt completed (code " + code + ")"); });
-
-(async () => {
-  try {
-    await send("initialize", {
-      protocolVersion: 1,
-      clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false },
-      clientInfo: { name: "shiba-ai-coworker", version: "0.1.0" },
-    });
-    const created = await send("session/new", { cwd: process.cwd(), mcpServers: [] });
-    const sessionId = created && created.sessionId;
-    if (!sessionId) fail("session/new returned no sessionId");
-    if (cfg.model) await send("session/set_model", { sessionId, modelId: cfg.model });
-    const res = await send("session/prompt", { sessionId, prompt: [{ type: "text", text: cfg.task }] });
-    promptDone = true;
-    const reason = String((res && res.stopReason) || "end_turn");
-    if (reason !== "end_turn") fail("Cursor stopped before finishing: " + reason);
-    emit({ type: "done", text: "stopReason: " + reason });
-    child.kill("SIGTERM");
-    process.exit(0);
-  } catch (e) {
-    fail(e && e.message ? e.message : e);
-  }
-})();
-`;
+/** Spawn argv for `cursor-agent --force acp` — embedded in the shared ACP driver's cfg. */
+const CURSOR_ACP_ARGV = ["cursor-agent", "--force", "acp"] as const;
 
 export const cursorHarness = new CursorHarness();

@@ -5,7 +5,7 @@
  * and never renders optimistic state.
  */
 
-import type { AuthSnapshot } from "@shiba/shared";
+import type { AuthSnapshot, OutboxEntry, SpineEvent } from "@shiba/shared";
 import { useCallback, useEffect, useState } from "react";
 import type { AgentPrincipal, InboxMailbox } from "./types";
 
@@ -180,30 +180,14 @@ export function useModelConfig(): { state: LoadState<ModelConfigWire>; reload: (
 }
 
 /** One spine event — the orchestrator's durable decision record (P9). */
-export interface SpineEventWire {
-  seq: number;
-  at: number;
-  commandId: string;
-  causationId?: string;
+export type SpineEventWire = Omit<SpineEvent, "kind" | "payload"> & {
+  /** Loose on purpose: the renderer must tolerate kinds newer than this build. */
   kind: string;
-  runId?: string;
-  approvalId?: string;
   payload?: Record<string, unknown>;
-}
+};
 
 /** One outbox row — a side effect the orchestrator owes. */
-export interface OutboxEntryWire {
-  id: string;
-  effectKind: string;
-  target: string;
-  summary?: string;
-  status: "pending" | "dispatched" | "failed";
-  attempts: number;
-  requestedAt?: number;
-  requestedBy?: string;
-  runId?: string;
-  lastError?: string;
-}
+export type OutboxEntryWire = OutboxEntry;
 
 export interface SpineWire {
   events: SpineEventWire[];

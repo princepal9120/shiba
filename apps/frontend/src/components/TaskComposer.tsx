@@ -2,14 +2,24 @@ import { type JSX, type SyntheticEvent, useEffect, useRef } from "react";
 import { Tooltip } from "./Tooltip";
 import type { SavedSkill } from "../saved";
 
+/** Model-by-purpose routing controls — the picker's values and its option lists. */
+export interface ModelRoutingControl {
+  codingModel: string;
+  connectionId: string;
+  onCodingModelChange: (value: string) => void;
+  onConnectionChange: (value: string) => void;
+  /** Coding-purpose models from /api/model-config (the "auto" floor plus registered connections). */
+  modelSuggestions?: string[];
+  connections?: { id: string; label: string; status: string }[];
+}
+
 export interface TaskComposerProps {
   repoUrl: string;
   task: string;
   baseBranch: string;
   publishPullRequest: boolean;
   harness: string;
-  codingModel: string;
-  connectionId: string;
+  routing: ModelRoutingControl;
   busy: boolean;
   isSubmitting: boolean;
   clearing: boolean;
@@ -18,8 +28,6 @@ export interface TaskComposerProps {
   onBaseBranchChange: (value: string) => void;
   onPublishPullRequestChange: (value: boolean) => void;
   onHarnessChange: (value: string) => void;
-  onCodingModelChange: (value: string) => void;
-  onConnectionChange: (value: string) => void;
   onSubmit: (event: SyntheticEvent) => void;
   onClear: () => void;
   /** Saved repos + run-history repos for the URL picker. */
@@ -28,9 +36,6 @@ export interface TaskComposerProps {
   skills?: SavedSkill[];
   selectedSkillIds?: string[];
   onToggleSkill?: (id: string) => void;
-  /** Coding-purpose models from /api/model-config (the "auto" floor plus registered connections). */
-  modelSuggestions?: string[];
-  connections?: { id: string; label: string; status: string }[];
   /** "docked" = compact bar under the timeline; "hero" = centered empty-state card. */
   variant?: "docked" | "hero";
 }
@@ -59,8 +64,7 @@ export function TaskComposer({
   baseBranch,
   publishPullRequest,
   harness,
-  codingModel,
-  connectionId,
+  routing,
   busy,
   isSubmitting,
   clearing,
@@ -69,16 +73,12 @@ export function TaskComposer({
   onBaseBranchChange,
   onPublishPullRequestChange,
   onHarnessChange,
-  onCodingModelChange,
-  onConnectionChange,
   onSubmit,
   onClear,
   repoSuggestions = [],
   skills = [],
   selectedSkillIds = [],
   onToggleSkill,
-  modelSuggestions = [],
-  connections = [],
   variant = "docked",
 }: TaskComposerProps): JSX.Element {
   const sendDisabled = busy || task.trim() === "" || repoUrl.trim() === "";
@@ -109,7 +109,7 @@ export function TaskComposer({
     "bg-[#f1efe6] border border-[#e0ded5] rounded-none text-[#222320] px-2.5 py-1.5 touch:min-h-11 text-xs focus:outline-none focus:border-[#1c1cc8] focus:ring-1 focus:ring-[#1c1cc8]/40 placeholder-[#6a6f63]/60 transition-colors";
 
   const currentHarness = HARNESS_OPTIONS.find((h) => h.value === harness);
-  const currentConnection = connections.find((c) => c.id === connectionId);
+  const currentConnection = routing.connections?.find((c) => c.id === routing.connectionId);
 
   const form = (
     <form
@@ -184,31 +184,31 @@ export function TaskComposer({
           <input
             type="text"
             list="shiba-coding-models"
-            value={codingModel}
-            onChange={(event) => onCodingModelChange(event.target.value)}
+            value={routing.codingModel}
+            onChange={(event) => routing.onCodingModelChange(event.target.value)}
             placeholder="model (auto)"
             aria-label="Coding model"
             className={`${fieldClass} w-36 font-mono`}
           />
-          {modelSuggestions.length > 0 ? (
+          {(routing.modelSuggestions?.length ?? 0) > 0 ? (
             <datalist id="shiba-coding-models">
-              {modelSuggestions.map((model) => (
+              {routing.modelSuggestions!.map((model) => (
                 <option key={model} value={model} />
               ))}
             </datalist>
           ) : null}
         </Tooltip>
 
-        {connections.length > 0 ? (
+        {(routing.connections?.length ?? 0) > 0 ? (
           <Tooltip content={currentConnection ? `Model connection — ${currentConnection.status}` : "Model connection (auto route)"} side="top">
             <select
-              value={connectionId}
-              onChange={(event) => onConnectionChange(event.target.value)}
+              value={routing.connectionId}
+              onChange={(event) => routing.onConnectionChange(event.target.value)}
               aria-label="Model connection"
               className={`${fieldClass} cursor-pointer`}
             >
               <option value="">auto route</option>
-              {connections.map((connection) => (
+              {routing.connections!.map((connection) => (
                 <option key={connection.id} value={connection.id}>
                   {connection.label}
                 </option>
@@ -302,7 +302,7 @@ export function TaskComposer({
           </h1>
           <p className="mt-2 text-sm text-[#6a6f63]">
             Describe the task — your agent works in an isolated sandbox against{" "}
-            <span className="font-mono text-xs">{repoSlug}</span> and opens a PR when it's done.
+            <span className="font-mono text-xs">{repoSlug}</span> and can open a PR when it's done.
           </p>
         </div>
         {form}

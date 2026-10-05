@@ -8,10 +8,10 @@ import { codexHarness } from "./codex.js";
 import { codexSubscriptionHarness } from "./codex-subscription.js";
 import { cursorHarness } from "./cursor.js";
 import { cursorSubscriptionHarness } from "./cursor-subscription.js";
-import { devinHarness } from "./devin.js";
+import { CONTAINER_XDG_DATA, devinCredentialsConfig, devinHarness } from "./devin.js";
 import { devinSubscriptionHarness } from "./devin-subscription.js";
 import { grokHarness } from "./grok.js";
-import { OPENCODE_PROVIDERS, opencodeHarness } from "./opencode.js";
+import { buildOpencodeConfig, OPENCODE_PROVIDERS, opencodeHarness } from "./opencode.js";
 import type { Env } from "../env.js";
 import { GIT_EGRESS_HOSTS, type AgentHarness, type AgentHarnessName, type RuntimeName } from "./types.js";
 
@@ -56,12 +56,34 @@ const REGISTRY = {
     label: "OpenCode ACP",
     spawn: ["opencode", "acp"],
     providers: OPENCODE_PROVIDERS,
+    // OpenCode's ACP modelId grammar is `provider/model[/variant]` — the
+    // default strip would drop the provider segment it resolves against.
+    modelId: (model) => model,
+    // `opencode acp` reads the same opencode.json the run lane writes
+    // (enabled_providers, dummy apiKey, autoupdate off) via OPENCODE_CONFIG.
+    extraConfig: (input, sandboxId) => [
+      {
+        path: `/workspace/${sandboxId}.opencode.json`,
+        contents: JSON.stringify(buildOpencodeConfig(input), null, 2),
+      },
+    ],
+    extraEnv: (_input, configPath) => ({
+      ...(configPath ? { OPENCODE_CONFIG: configPath } : {}),
+      OPENCODE_DISABLE_AUTOUPDATE: "true",
+    }),
   }),
   "devin-acp": new AcpHarness({
     name: "devin-acp",
     label: "Devin ACP",
     spawn: ["devin", "acp"],
     providers: ["devin"],
+    // api.devin.ai comes from the provider host; the CLI's inference backend
+    // (server.codeium.com, Pro accounts) is the second egress host.
+    extraEgress: ["server.codeium.com"],
+    // `devin acp` authenticates from credentials.toml, not the env var —
+    // same dummy file the devin lane writes (real key swaps in at egress).
+    extraConfig: () => [devinCredentialsConfig()],
+    extraEnv: () => ({ XDG_DATA_HOME: CONTAINER_XDG_DATA }),
   }),
 } satisfies Record<AgentHarnessName, AgentHarness>;
 
