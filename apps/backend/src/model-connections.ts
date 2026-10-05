@@ -18,7 +18,7 @@
  *  - a model id must match the connection's provider namespace and be
  *    compatible with the harness that will run it.
  */
-import { HARNESS_NAMES } from "./harness/index.js";
+import { HARNESS_NAMES, HARNESSES } from "./harness/index.js";
 import { PROVIDER_HOSTS } from "./harness/types.js";
 
 // ---------------------------------------------------------------------------
@@ -178,13 +178,18 @@ export function compatibleHarnesses(service: ConnectionService): string[] {
   if (service === "cursor") return [];
   const provider = providerOfService(service);
   if (!(provider in PROVIDER_HOSTS)) return [];
+  // Compatibility is the harness's own declaration: supportedProviders is
+  // the only list — ACP and future lanes join automatically, a stale name
+  // check here could never lie about them. Runnability is the second gate:
+  // a registered-but-unrunnable harness (antigravity, cursor — both declare
+  // supportedRuntimes: [] and resolveHarness refuses them) must not be
+  // advertised as a compatible route the dispatcher then rejects.
   return HARNESS_NAMES.filter((name) => {
-    if (name === "opencode") return true; // multi-provider
-    if (name === "claude-code") return provider === "anthropic";
-    if (name === "codex") return provider === "openai";
-    if (name === "devin") return provider === "devin";
-    if (name === "grok") return provider === "xai";
-    return false;
+    const harness = HARNESSES[name];
+    return (
+      harness?.supportedProviders.includes(provider) === true &&
+      harness.capabilities().supportedRuntimes.includes("sandbox")
+    );
   });
 }
 

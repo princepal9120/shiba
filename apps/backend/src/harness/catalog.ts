@@ -48,18 +48,25 @@ const CATALOG_META: Record<
   (typeof HARNESS_NAMES)[number],
   { label: string; binary: string; version: string; docsUrl: string }
 > = {
-  opencode: { label: "OpenCode", binary: "opencode", version: "1.18.31", docsUrl: "https://opencode.ai/docs/" },
+  opencode: { label: "OpenCode", binary: "opencode", version: "1.18.34", docsUrl: "https://opencode.ai/docs/" },
   "claude-code": { label: "Claude Code", binary: "claude", version: "2.1.277", docsUrl: "https://docs.anthropic.com/en/docs/claude-code" },
   "claude-subscription": { label: "Claude Code (subscription)", binary: "claude", version: "2.1.277", docsUrl: "https://docs.anthropic.com/en/docs/claude-code" },
   codex: { label: "Codex", binary: "codex", version: "0.155.0", docsUrl: "https://github.com/openai/codex" },
   "codex-subscription": { label: "Codex (subscription)", binary: "codex", version: "0.155.0", docsUrl: "https://github.com/openai/codex" },
-  devin: { label: "Devin", binary: "devin", version: "3000.10.31", docsUrl: "https://cli.devin.ai/docs" },
+  devin: { label: "Devin", binary: "devin", version: "3000.11.3", docsUrl: "https://cli.devin.ai/docs" },
   grok: { label: "Grok", binary: "grok", version: "1.0.41", docsUrl: "https://docs.x.ai" },
   cursor: { label: "Cursor", binary: "cursor-agent", version: "0.50.0", docsUrl: "https://docs.cursor.com" },
   antigravity: { label: "Antigravity", binary: "agy", version: "1.0.0", docsUrl: "https://antigravity.google" },
   "antigravity-subscription": { label: "Antigravity (subscription)", binary: "agy", version: "1.1.1", docsUrl: "https://antigravity.google" },
   "cursor-subscription": { label: "Cursor (subscription)", binary: "cursor-agent", version: "2026.10.01-e373342", docsUrl: "https://docs.cursor.com" },
-  "devin-subscription": { label: "Devin (subscription)", binary: "devin", version: "3000.10.31", docsUrl: "https://cli.devin.ai/docs" },
+  "devin-subscription": { label: "Devin (subscription)", binary: "devin", version: "3000.11.3", docsUrl: "https://cli.devin.ai/docs" },
+  // ACP lanes — binaries are the registry's npx/binary entrypoints, all
+  // Apache-2.0 or MIT, version-pinned in the Dockerfile.
+  "claude-acp": { label: "Claude Agent (ACP)", binary: "claude-agent-acp", version: "0.86.0", docsUrl: "https://agentclientprotocol.com" },
+  "codex-acp": { label: "Codex (ACP)", binary: "codex-acp", version: "2.1.1", docsUrl: "https://agentclientprotocol.com" },
+  "gemini-acp": { label: "Gemini CLI (ACP)", binary: "gemini", version: "0.62.0", docsUrl: "https://agentclientprotocol.com" },
+  "opencode-acp": { label: "OpenCode (ACP)", binary: "opencode", version: "1.18.34", docsUrl: "https://agentclientprotocol.com" },
+  "devin-acp": { label: "Devin (ACP)", binary: "devin", version: "3000.11.3", docsUrl: "https://agentclientprotocol.com" },
 };
 
 const GATEWAY_PROVIDER: Record<string, string> = {
@@ -69,6 +76,10 @@ const GATEWAY_PROVIDER: Record<string, string> = {
   grok: "xAI",
   cursor: "cursor",
   antigravity: "google",
+  "claude-acp": "anthropic",
+  "codex-acp": "openai",
+  "gemini-acp": "google",
+  "opencode-acp": "google / anthropic / openai / xAI",
 };
 
 /**
@@ -81,7 +92,7 @@ export function agentCliCatalog(
   return sandboxHarnessNames(env).map((id) => {
     const meta = CATALOG_META[id];
     const credential: AgentCliCredential =
-      id === "devin"
+      id === "devin" || id === "devin-acp"
         ? {
             kind: "worker-secret",
             label: "DEVIN_API_KEY",

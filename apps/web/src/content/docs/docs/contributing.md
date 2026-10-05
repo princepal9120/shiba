@@ -62,11 +62,14 @@ of them requires re-running the live acceptance checklist (T10).
 
 | Package | Version | Why it matters |
 |---|---|---|
-| `opencode-ai` | `1.18.31` | Pinned in `Dockerfile`; event parsing depends on the CLI stream format. |
+| `opencode-ai` | `1.18.34` | Pinned in `Dockerfile`; event parsing depends on the CLI stream format. |
 | `@cloudflare/sandbox` | `0.12.9` | Must match the base image tag in `Dockerfile`; verify the SDK egress behavior and credential boundary rather than asserting an absolute isolation guarantee. |
 | `@anthropic-ai/claude-code` | `2.1.277` | Pinned image CLI; unit-tested config/argv/parser does not establish live API execution. |
 | `@openai/codex` | `0.155.0` | Pinned image CLI; unit-tested config/argv/parser does not establish live API execution. |
-| Devin CLI | `3000.10.31` | Checksum-pinned image binary; uses `DEVIN_API_KEY` via Worker egress, not AI Gateway BYOK. |
+| Devin CLI | `3000.11.3` | Checksum-pinned image binary; uses `DEVIN_API_KEY` via Worker egress, not AI Gateway BYOK. First release that ships `devin acp` — the build probes the subcommand. |
+| `@agentclientprotocol/claude-agent-acp` | `0.86.0` | Pinned ACP adapter for `claude-acp`; driver protocol (session/new, set_model, prompt) depends on it. |
+| `@agentclientprotocol/codex-acp` | `2.1.1` | Pinned ACP adapter for `codex-acp`; same driver-protocol dependency. |
+| `@google/gemini-cli` | `0.62.0` | Pinned image CLI; the `gemini-acp` lane spawns `gemini --acp`, build-probed via `--help`. |
 | `CODING_MODEL` | `google/gemini-3.5-flash-lite` | Default only; model identifiers can change availability. `assertLiveCodingModel` rejects known retired IDs on requests. |
 
-All four harnesses are present in current source and image configuration; only OpenCode has a dated local end-to-end exercise, and no cloud end-to-end run is recorded. Keep this distinction current when updating documentation.
+All harnesses are present in current source and image configuration; only OpenCode has a dated local end-to-end exercise, and no cloud end-to-end run is recorded. Keep this distinction current when updating documentation.

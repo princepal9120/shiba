@@ -46,6 +46,7 @@ import type { Env } from "../env.js";
 import {
   allowedHostsFor,
   HARNESS_DEFAULT_MODELS,
+  HARNESS_MODEL_ENV,
   harnessRunsOn,
   resolveHarness,
 } from "../harness/index.js";
@@ -192,7 +193,9 @@ export const delegateInputSchema = z.object({
         "devin a devin/* model; grok an xai/* model. Subscription harnesses use their " +
         "<provider>-subscription/* model namespace and are only registered when the matching " +
         "SHIBA_*_SUBSCRIPTION=1 flag is set (anthropic-subscription, openai-subscription, " +
-        "google-subscription, cursor-subscription, devin-subscription).",
+        "google-subscription, cursor-subscription, devin-subscription). ACP lanes " +
+        "(claude-acp, codex-acp, gemini-acp, opencode-acp, devin-acp) drive the pinned " +
+        "CLIs through the Agent Client Protocol in-container.",
     ),
   role: z
     .enum(AGENT_ROLES)
@@ -612,8 +615,11 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       "You are AI Coworker, a planning and delegation agent.",
       "You never edit repositories yourself. When the user describes a coding task,",
       "call delegate_coding_task with the repository URL and the task.",
-      "Pass the harness the user asked for (opencode, claude-code, codex, devin, or grok) when they name one,",
-      "and a codingModel as provider/model when they name a model; otherwise leave both unset.",
+      "Pass the harness id the user asked for verbatim when they name one (API-key lanes like",
+      "opencode, claude-code, codex, devin, grok; *-subscription lanes; ACP lanes like claude-acp,",
+      "codex-acp, gemini-acp, opencode-acp, devin-acp), a codingModel as provider/model when they",
+      "name a model, and a connectionId (conn_*) when they pick a model connection; otherwise leave",
+      "them unset.",
       "The tool requires human approval before anything runs: summarize exactly",
       "what will happen (repository, branch, task, whether a pull request is requested).",
       "After the run finishes, report the summary, changed files, and diff to the user.",
@@ -674,26 +680,10 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     const harnessName =
       rolePick?.harness ?? input.harness ?? this.env.AGENT_HARNESS?.trim() ?? "opencode";
     const harness = resolveHarness(harnessName, this.env);
-    const perHarnessVar =
-      harness.name === "opencode"
-        ? this.env.CODING_MODEL?.trim()
-        : harness.name === "claude-code"
-          ? this.env.CLAUDE_CODE_MODEL?.trim()
-          : harness.name === "claude-subscription"
-            ? this.env.CLAUDE_SUBSCRIPTION_MODEL?.trim()
-            : harness.name === "codex-subscription"
-              ? this.env.CODEX_SUBSCRIPTION_MODEL?.trim()
-              : harness.name === "antigravity-subscription"
-                ? this.env.ANTIGRAVITY_SUBSCRIPTION_MODEL?.trim()
-                : harness.name === "cursor-subscription"
-                  ? this.env.CURSOR_SUBSCRIPTION_MODEL?.trim()
-                  : harness.name === "devin-subscription"
-                    ? this.env.DEVIN_SUBSCRIPTION_MODEL?.trim()
-                    : harness.name === "codex"
-                      ? this.env.CODEX_MODEL?.trim()
-                      : harness.name === "grok"
-                        ? this.env.GROK_MODEL?.trim()
-                        : this.env.DEVIN_MODEL?.trim();
+    // Deployment-level model override: one table lookup, not a name chain —
+    // a new harness declares its var in HARNESS_MODEL_ENV (open/closed).
+    const modelVar = HARNESS_MODEL_ENV[harness.name];
+    const perHarnessVar = modelVar !== undefined ? this.env[modelVar]?.trim() : undefined;
     const codingModel =
       rolePick?.model ||
       input.codingModel?.trim() ||
@@ -2643,6 +2633,27 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     }
     if (url.pathname === "/api/approvals") {
       return Response.json({ error: "Method not allowed." }, { status: 405 });
+    }
+    // P9 spine surface (PLAN-V2-NEXT): the durable event log + outbox —
+    // what the orchestrator decided and which side effects it still owes.
+    if (url.pathname === "/api/spine") {
+      if (request.method !== "GET") {
+        return Response.json({ error: "Method not allowed." }, { status: 405 });
+      }
+      const events = this.state?.events ?? [];
+      const outbox = this.state?.outbox ?? [];
+      if (agentPrincipal === null) {
+        return Response.json({ events, outbox });
+      }
+      // Agent principals see only events on runs they queued; an event with
+      // no runId is orchestrator-internal and stays hidden.
+      const mine = new Set(
+        this.store.list().filter((run) => run.queuedBy === agentPrincipal).map((run) => run.runId),
+      );
+      return Response.json({
+        events: events.filter((e) => e.runId !== undefined && mine.has(e.runId)),
+        outbox: outbox.filter((e) => e.runId !== undefined && mine.has(e.runId)),
+      });
     }
     const match = url.pathname.match(/^\/api\/runs(?:\/([^/]+))?$/);
     if (!match) {

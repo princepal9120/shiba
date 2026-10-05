@@ -17,6 +17,7 @@ import {
   RUN_SIGNAL_KINDS,
   type LocalRunResult,
 } from "@shiba/shared";
+import { AcpErrorEvent, AcpEventError } from "./harness/acp.js";
 import { AntigravityErrorEvent } from "./harness/antigravity.js";
 import { AntigravityUsageLimitError } from "./harness/antigravity-subscription.js";
 import { ClaudeCodeErrorEvent } from "./harness/claude-code.js";
@@ -266,6 +267,8 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
         error instanceof GrokErrorEvent ||
         error instanceof CursorErrorEvent ||
         error instanceof DevinErrorEvent ||
+        error instanceof AcpErrorEvent ||
+        error instanceof AcpEventError ||
         error instanceof ClaudeUsageLimitError ||
         error instanceof CodexUsageLimitError ||
         error instanceof AntigravityUsageLimitError ||
@@ -676,6 +679,8 @@ function streamProgress(harness: AgentHarness, emit: ProgressEmitter, _signal?: 
             error instanceof GrokErrorEvent ||
             error instanceof CursorErrorEvent ||
             error instanceof DevinErrorEvent ||
+            error instanceof AcpErrorEvent ||
+            error instanceof AcpEventError ||
             error instanceof ClaudeUsageLimitError ||
             error instanceof CodexUsageLimitError ||
             error instanceof AntigravityUsageLimitError ||

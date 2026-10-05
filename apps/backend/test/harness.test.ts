@@ -462,10 +462,21 @@ describe("connection compatibility stays honest", () => {
 describe("agent cli catalog", () => {
   it("lists every registered harness with its pinned version", () => {
     const catalog = agentCliCatalog({});
-    expect(catalog.map((a) => a.id)).toEqual(["opencode", "claude-code", "codex", "devin", "grok"]);
+    expect(catalog.map((a) => a.id)).toEqual([
+      "opencode",
+      "claude-code",
+      "codex",
+      "devin",
+      "grok",
+      "claude-acp",
+      "codex-acp",
+      "gemini-acp",
+      "opencode-acp",
+      "devin-acp",
+    ]);
     expect(catalog.find((a) => a.id === "grok")?.version).toBe("1.0.41");
     expect(catalog.find((a) => a.id === "grok")?.defaultModel).toBe("xai/grok-4.6");
-    expect(catalog.find((a) => a.id === "devin")?.version).toBe("3000.10.31");
+    expect(catalog.find((a) => a.id === "devin")?.version).toBe("3000.11.3");
     expect(catalog.find((a) => a.id === "devin")?.defaultModel).toBe("devin/swe-2-medium");
   });
 

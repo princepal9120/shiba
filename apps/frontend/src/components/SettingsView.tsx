@@ -12,11 +12,14 @@ import {
   type RoleModelWire,
   type SetupStatus,
   useAgentsDirectory,
+  useModelConfig,
   useSetupStatus,
 } from "../live-status";
 import type { AppNavView } from "./AppNavRail";
 import { LoadErrorState } from "./LoadErrorState";
 import { MemoryTab } from "./MemoryTab";
+import { ConnectionsCard, PurposeRoutingCard } from "./ModelRoutingSection";
+import { Card } from "./settings-ui";
 import {
   SUBSCRIPTION_AUTH,
   SubscriptionConnect,
@@ -69,14 +72,6 @@ function SectionShell({
       </div>
       {children}
     </section>
-  );
-}
-
-function Card({ children }: { children: ReactNode }): JSX.Element {
-  return (
-    <div className="rounded-none border border-[#e0ded5] bg-[#fffef8] shadow-[2px_2px_0_var(--paper-shadow)]">
-      {children}
-    </div>
   );
 }
 
@@ -247,6 +242,8 @@ function ModelsSection({
           </div>
         </div>
       </Card>
+      <PurposeRoutingCard />
+      <ConnectionsCard />
     </>
   );
 }

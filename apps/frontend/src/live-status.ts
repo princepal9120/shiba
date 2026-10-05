@@ -5,7 +5,7 @@
  * and never renders optimistic state.
  */
 
-import type { AuthSnapshot } from "@shiba/shared";
+import type { AuthSnapshot, OutboxEntry, SpineEvent } from "@shiba/shared";
 import { useCallback, useEffect, useState } from "react";
 import type { AgentPrincipal, InboxMailbox } from "./types";
 
@@ -65,11 +65,18 @@ export type LoadState<T> =
   | { kind: "error"; message: string }
   | { kind: "data"; data: T };
 
-function useApiJson<T>(path: string): { state: LoadState<T>; reload: () => void } {
+function useApiJson<T>(path: string): {
+  state: LoadState<T>;
+  reload: () => void;
+  /** True while a fetch is in flight — pollers must wait for it to settle. */
+  inFlight: boolean;
+} {
   const [state, setState] = useState<LoadState<T>>({ kind: "loading" });
+  const [inFlight, setInFlight] = useState(true);
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let cancelled = false;
+    setInFlight(true);
     void fetch(path)
       .then(async (response) => {
         if (!response.ok) throw new Error(`GET ${path} failed: ${response.status}`);
@@ -83,20 +90,23 @@ function useApiJson<T>(path: string): { state: LoadState<T>; reload: () => void 
             message: error instanceof Error ? error.message : String(error),
           });
         }
+      })
+      .finally(() => {
+        if (!cancelled) setInFlight(false);
       });
     return () => {
       cancelled = true;
     };
   }, [path, attempt]);
   const reload = useCallback(() => setAttempt((n) => n + 1), []);
-  return { state, reload };
+  return { state, reload, inFlight };
 }
 
-export function useSetupStatus(): { state: LoadState<SetupStatus>; reload: () => void } {
+export function useSetupStatus(): { state: LoadState<SetupStatus>; reload: () => void; inFlight: boolean } {
   return useApiJson<SetupStatus>("/api/setup/status");
 }
 
-export function useAgentsDirectory(): { state: LoadState<AgentsDirectory>; reload: () => void } {
+export function useAgentsDirectory(): { state: LoadState<AgentsDirectory>; reload: () => void; inFlight: boolean } {
   return useApiJson<AgentsDirectory>("/api/agents");
 }
 
@@ -142,9 +152,64 @@ export interface UsageReportWire {
 export function useUsageReport(
   sessionId: string,
   sessionApiAvailable: boolean,
-): { state: LoadState<UsageReportWire>; reload: () => void } {
+): { state: LoadState<UsageReportWire>; reload: () => void; inFlight: boolean } {
   const path = sessionApiAvailable
     ? `/api/usage?session=${encodeURIComponent(sessionId)}`
     : "/api/usage";
   return useApiJson<UsageReportWire>(path);
+}
+
+// ---------------------------------------------------------------------------
+// Model config (Project 4 — purpose-aware model routing) + spine (P9)
+// ---------------------------------------------------------------------------
+
+/** Wire shape of one `connections[]` entry — the ModelConfig DO's record. */
+export interface ModelConnectionWire {
+  id: string;
+  service: string;
+  displayName: string;
+  status: "unconfigured" | "ready" | "invalid" | "disabled";
+  credentialRef: string | null;
+}
+
+/** Wire shape of the purpose policy — purpose → Workers AI model id. */
+export interface PurposePolicyWire {
+  version: number;
+  models: Partial<Record<string, string>>;
+  updatedAt: number;
+}
+
+export interface ModelConfigWire {
+  connections: ModelConnectionWire[];
+  policy: PurposePolicyWire;
+  purposes: string[];
+}
+
+export function useModelConfig(): { state: LoadState<ModelConfigWire>; reload: () => void; inFlight: boolean } {
+  return useApiJson<ModelConfigWire>("/api/model-config");
+}
+
+/** One spine event — the orchestrator's durable decision record (P9). */
+export type SpineEventWire = Omit<SpineEvent, "kind" | "payload"> & {
+  /** Loose on purpose: the renderer must tolerate kinds newer than this build. */
+  kind: string;
+  payload?: Record<string, unknown>;
+};
+
+/** One outbox row — a side effect the orchestrator owes. */
+export type OutboxEntryWire = OutboxEntry;
+
+export interface SpineWire {
+  events: SpineEventWire[];
+  outbox: OutboxEntryWire[];
+}
+
+export function useSpine(
+  sessionId: string,
+  sessionApiAvailable: boolean,
+): { state: LoadState<SpineWire>; reload: () => void; inFlight: boolean } {
+  const path = sessionApiAvailable
+    ? `/api/spine?session=${encodeURIComponent(sessionId)}`
+    : "/api/spine";
+  return useApiJson<SpineWire>(path);
 }

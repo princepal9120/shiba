@@ -8,6 +8,8 @@ import emailOpenApi from "./email-openapi.json";
 import type { Env } from "./env.js";
 import { agentCliCatalog } from "./harness/catalog.js";
 import { isBetterAuthConfigured } from "./better-auth.js";
+import { modelConfigStub } from "./model-config-do.js";
+import { EMPTY_POLICY, PURPOSES } from "./model-connections.js";
 import { isAccessConfigured, resolveUserId } from "./request-auth.js";
 import { methodNotAllowed } from "./route-utils.js";
 import { readSetupStatus } from "./setup-status.js";
@@ -83,6 +85,35 @@ export async function handleMeta(request: Request, env: Env): Promise<Response |
       { agents: agentCliCatalog(env), principals: await agentPrincipals(env) },
       { headers: { "Cache-Control": "no-store" } },
     );
+  }
+  // The ModelConfig DO, surfaced to the dashboard: `/api/model-config`
+  // returns the combined view (connections + purpose policy + the purpose
+  // vocabulary); `/api/model-config/…` proxies the DO verbatim so the UI
+  // can register connections and edit policy. The identity gate upstream
+  // is the only auth — registration rejects pasted secrets server-side.
+  if (url.pathname === "/api/model-config" || url.pathname.startsWith("/api/model-config/")) {
+    const stub = modelConfigStub(env);
+    if (url.pathname === "/api/model-config") {
+      if (request.method !== "GET") {
+        return Response.json({ error: "Method not allowed." }, { status: 405 });
+      }
+      const [connectionsRes, policyRes] = await Promise.all([
+        stub.fetch(new Request("https://internal/connections")),
+        stub.fetch(new Request("https://internal/policy")),
+      ]);
+      const connections = (await connectionsRes.json().catch(() => ({}))) as { connections?: unknown };
+      const policy = (await policyRes.json().catch(() => ({}))) as { policy?: unknown };
+      return Response.json(
+        {
+          connections: connections.connections ?? [],
+          policy: policy.policy ?? EMPTY_POLICY,
+          purposes: PURPOSES,
+        },
+        { headers: { "Cache-Control": "no-store" } },
+      );
+    }
+    const inner = url.pathname.slice("/api/model-config".length);
+    return stub.fetch(new Request(`https://internal${inner}${url.search}`, request));
   }
   return null;
 }

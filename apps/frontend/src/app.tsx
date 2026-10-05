@@ -6,12 +6,14 @@ import { useAgentChat } from "@cloudflare/ai-chat/react";
 import { useAgent, useAgentToolEvents } from "agents/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { VMRun } from "./types";
+import { ActivityView } from "./components/ActivityView";
 import { AnalyticsView } from "./components/AnalyticsView";
 import { AutomationsView } from "./components/AutomationsView";
 import { AgentsView } from "./components/AgentsView";
 import { ProvidersView } from "./components/ProvidersView";
 import { SkillsView } from "./components/SkillsView";
 import { useSavedRepos, useSavedSkills, saveRepo } from "./saved";
+import { useAgentsDirectory, useModelConfig } from "./live-status";
 import { DashboardView } from "./components/DashboardView";
 import { OnboardingModal, detectSetupSteps } from "./components/OnboardingModal";
 import { FirstRunWizard, ONBOARDING_STORAGE_KEY } from "./components/FirstRunWizard";
@@ -283,6 +285,8 @@ export function App(): React.JSX.Element {
   const [task, setTask] = useState("");
   const [publishPullRequest, setPublishPullRequest] = useState(false);
   const [harness, setHarness] = useState("opencode");
+  const [codingModel, setCodingModel] = useState("");
+  const [connectionId, setConnectionId] = useState("");
   const [refreshToken, setRefreshToken] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -372,6 +376,8 @@ export function App(): React.JSX.Element {
         setMainView("dashboard");
       } else if (tabParam === "analytics" || tabParam === "run-registry") {
         setMainView("analytics");
+      } else if (tabParam === "activity" || tabParam === "orchestrator") {
+        setMainView("activity");
       } else if (tabParam === "diff") {
         setMainView("diff");
       } else if (tabParam === "approvals") {
@@ -762,6 +768,8 @@ export function App(): React.JSX.Element {
         `Repository: ${repoUrl.trim()}`,
         `Base branch: ${branch}`,
         `Coding agent harness: ${harness}`,
+        ...(codingModel.trim() ? [`Coding model: ${codingModel.trim()}`] : []),
+        ...(connectionId.trim() ? [`Model connection: ${connectionId.trim()}`] : []),
         `Open a pull request with the result: ${publishPullRequest ? "yes" : "no"}`,
         ...(attachedSkills.length > 0
           ? [`Skills: ${attachedSkills.map((skill) => skill.repoUrl ? `${skill.name} (${skill.repoUrl})` : skill.name).join(", ")}`]
@@ -786,7 +794,7 @@ export function App(): React.JSX.Element {
         setIsSubmitting(false);
       }
     },
-    [repoUrl, baseBranch, task, publishPullRequest, harness, chat, agent, orchestratorName, identityError, refreshRuns, savedSkills, selectedSkillIds],
+    [repoUrl, baseBranch, task, publishPullRequest, harness, codingModel, connectionId, chat, agent, orchestratorName, identityError, refreshRuns, savedSkills, selectedSkillIds],
   );
 
   const confirmClearAll = useCallback(async () => {
@@ -971,6 +979,46 @@ export function App(): React.JSX.Element {
     }
     return Array.from(map.values()).sort((a, b) => b.createdAt - a.createdAt);
   }, [retainedRuns, toolRuns, seenAt]);
+  // Model-by-purpose config: connections + the coding-purpose suggestion list.
+  const modelConfig = useModelConfig();
+  const agentsDirectory = useAgentsDirectory();
+  const modelConnections = useMemo(
+    () =>
+      modelConfig.state.kind === "data"
+        ? modelConfig.state.data.connections
+            .filter((c) => c.status === "ready")
+            .map((c) => ({ id: c.id, label: `${c.displayName} · ${c.service}`, service: c.service, status: c.status }))
+        : [],
+    [modelConfig.state],
+  );
+  // Only offer models the backend would accept: the provider namespace must
+  // have a ready connection — and match the selected one when one is picked.
+  const codingModelSuggestions = useMemo(() => {
+    const models = agentsDirectory.state.kind === "data"
+      ? agentsDirectory.state.data.agents.map((agent) => agent.defaultModel).filter((m) => typeof m === "string" && m.includes("/"))
+      : [];
+    const selected = modelConnections.find((c) => c.id === connectionId);
+    const allowedProviders = new Set(
+      (selected ? [selected] : modelConnections).map((c) => c.service),
+    );
+    return [
+      ...new Set(
+        allowedProviders.size === 0
+          ? models
+          : models.filter((m) => allowedProviders.has(m.slice(0, m.indexOf("/")))),
+      ),
+    ];
+  }, [agentsDirectory.state, modelConnections, connectionId]);
+
+  // Connections/agents can change in Settings — refetch each time the user
+  // returns to the composer so the pickers never serve a stale snapshot.
+  useEffect(() => {
+    if (mainView === "tasks") {
+      modelConfig.reload();
+      agentsDirectory.reload();
+    }
+  }, [mainView, modelConfig, agentsDirectory]);
+
   const repoSuggestions = useMemo(() => {
     const merged = [...savedRepos, ...allRuns.map((run) => run.repoUrl)];
     return [...new Set(merged.filter((repo) => typeof repo === "string" && repo.startsWith("https://github.com/")))];
@@ -1593,8 +1641,8 @@ export function App(): React.JSX.Element {
             </div>
           ) : null}
 
-          {/* TIMELINE (scrollable) */}
-          <div className="flex-1 overflow-y-auto overscroll-contain px-3 sm:px-5 xl:px-8 py-5">
+          {/* TIMELINE (scrollable) — hidden on the empty-state hero */}
+          <div className={`flex-1 overflow-y-auto overscroll-contain px-3 sm:px-5 xl:px-8 py-5 ${chat.messages.length === 0 ? "hidden" : ""}`}>
             <StepTimeline
               messages={chat.messages}
               isStreaming={chat.isStreaming || chat.status === "streaming"}
@@ -1609,8 +1657,11 @@ export function App(): React.JSX.Element {
             />
           </div>
 
-          {/* COMPOSER (sticky bottom) */}
-          <div className="border-t border-black/[0.08] bg-[#f6f4ed]/60 px-3 sm:px-5 xl:px-8 pt-3 sm:pt-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-[max(1rem,env(safe-area-inset-bottom))] shrink-0">
+          {/* COMPOSER — hero when the session is empty, docked once the run is going */}
+          <div className={chat.messages.length === 0
+            ? "flex-1 flex flex-col min-h-0"
+            : "border-t border-black/[0.08] bg-[#f6f4ed]/60 px-3 sm:px-5 xl:px-8 pt-3 sm:pt-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pb-[max(1rem,env(safe-area-inset-bottom))] shrink-0"
+          }>
             <TaskComposer
               repoUrl={repoUrl}
               task={task}
@@ -1632,6 +1683,15 @@ export function App(): React.JSX.Element {
               onBaseBranchChange={setBaseBranch}
               onPublishPullRequestChange={setPublishPullRequest}
               onHarnessChange={setHarness}
+              routing={{
+                codingModel,
+                connectionId,
+                onCodingModelChange: setCodingModel,
+                onConnectionChange: setConnectionId,
+                modelSuggestions: codingModelSuggestions,
+                connections: modelConnections,
+              }}
+              variant={chat.messages.length === 0 ? "hero" : "docked"}
               onSubmit={submitTask}
               onClear={() => setShowClearModal(true)}
             />
@@ -1639,6 +1699,14 @@ export function App(): React.JSX.Element {
         </main>
 
       </div>
+      ) : mainView === "activity" ? (
+        // Remount on session switch so the previous session's spine never
+        // renders as the new one's while its first fetch is in flight.
+        <ActivityView
+          key={selectedSessionId}
+          sessionId={selectedSessionId}
+          sessionApiAvailable={sessionApiAvailable}
+        />
       ) : mainView === "analytics" ? (
         <AnalyticsView
           runs={retainedRuns}

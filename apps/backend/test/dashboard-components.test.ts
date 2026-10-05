@@ -124,6 +124,12 @@ describe("dashboard components SSR (T14 sweep)", () => {
         baseBranch: "main",
         publishPullRequest: true,
         harness: "opencode",
+        routing: {
+          codingModel: "",
+          connectionId: "",
+          onCodingModelChange: () => {},
+          onConnectionChange: () => {},
+        },
         busy: false,
         isSubmitting: false,
         clearing: false,

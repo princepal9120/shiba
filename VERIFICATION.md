@@ -493,3 +493,104 @@ Routing delivery to a registered address; Telegram/Discord webhook handshakes.
 - `orchestrator.ts` — every mutation now flows decide → append → apply in one atomic write: `RunStore`/`createRun`/`transitionRun`/`reclaimStaleRuns` report decisions through a `decisionTap`; a `setState` override folds the buffered spine inputs into `state.events` (synthesizing `approval.requested|answered` from the `pendingApprovals` diff, deduped) and `state.outbox` in the same commit. `postToThread` emits `side_effect.requested` → persists → executes → `dispatched|failed`; `reclaimRuns` drains the outbox before reaping, so owed post-backs retry across DO restarts. Fencing/generation semantics unchanged (9 fencing tests green). Note: post-backs are at-least-once — a post that landed pre-crash can repost once (Slack has no idempotency keys).
 - Tests: `test/spine.test.ts` +10 (seq/validation, decider mapping, projection-vs-live equality, outbox lifecycle, approval pointer, retention cap, drainer).
 - Gate: typecheck, lint, lint:imports, 1694 backend tests, build + docs:verify, env:load/env:scan all green locally.
+
+### 2026-10-03 (cont.) — ACP harnesses, spine route, model-by-purpose, composer hero (PLAN-V2-NEXT cont.)
+
+- `src/harness/acp.ts` (new) — `AcpHarness` drives any ACP-server CLI over a
+  deterministic Node driver: `acpDriverPath(sandboxId)` →
+  `/workspace/<sandboxId>.acp-driver.cjs`, `buildArgv` = `node <driver>`,
+  `configFile` embeds `{argv, model (provider prefix stripped), task, label}`
+  plus `ACP_DRIVER_SOURCE` (CJS: initialize → session/new → session/set_model →
+  session/prompt, auto-allows permissions, no fs/terminal caps). `env` hands
+  the container `DUMMY_PROVIDER_KEY` on the provider's standard var (or
+  `keyEnv` override, e.g. `GEMINI_API_KEY`); `egressHosts` = provider host
+  only; `supportedRuntimes: ["sandbox"]`. `parseAcpDriverEvent` throws
+  `AcpEventError`/`AcpErrorEvent` on malformed/error frames.
+- `harness/types.ts` — five names registered: `claude-acp`, `codex-acp`,
+  `gemini-acp`, `opencode-acp`, `devin-acp`. `harness/index.ts` — registry
+  entries + `HARNESS_DEFAULT_MODELS` + `HARNESS_MODEL_ENV`
+  (`Record<AgentHarnessName, StringEnvKey|undefined>`; replaces the 9-deep
+  ternary — new harness = one map entry, exhaustive at compile time; ACP
+  lanes share the provider model vars, no new env plumbing).
+  `model-connections.ts` — `compatibleHarnesses` now derives from
+  `supportedProviders` (same open/closed fix).
+- `harness/catalog.ts` — ACP rows + `GATEWAY_PROVIDER` mappings; Dockerfile
+  pins `@agentclientprotocol/claude-agent-acp@0.86.0`,
+  `@agentclientprotocol/codex-acp@2.1.1`, `@google/gemini-cli@0.62.0` on the
+  global npm line with `command -v`/`opencode acp --help` build probes;
+  `DEVIN_CLI_VERSION` bumped to `3000.11.3` (first registry release with
+  `devin acp`). ACP adapter licenses are MIT/Apache-2.0 (within the licensing
+  bar); `@google/gemini-cli` is Apache-2.0 — verify per-package when bumping.
+- `orchestrator.ts` — `GET /api/spine` (routed in `runs-routes.ts`,
+  GET-only → 405 otherwise): dashboard principal gets `{events, outbox}`;
+  `X-Agent-Principal` requests are filtered to events whose `runId` belongs
+  to runs that principal queued (runId-less orchestrator-internal events
+  hidden). `resolveHarnessAndModel` reads `HARNESS_MODEL_ENV[name]`.
+- `meta-routes.ts` — `/api/model-config` bare returns
+  `{connections, policy, purposes}`; `/api/model-config/*` proxies to the
+  ModelConfig DO (`/connections` CRUD, `/policy` GET/PUT validated by
+  `validatePolicyModels`).
+- `packages/shared/src/mcp.ts` — `HARNESS_IDS` += 5 so `delegate_coding_task`
+  accepts ACP harnesses end to end.
+- Frontend — `live-status.ts` wire types + `useModelConfig` (`/api/model-config`)
+  + `useSpine(sessionId, sessionApiAvailable)` (`/api/spine`).
+  `components/ActivityView.tsx` (new) — orchestrator event spine: 5s poll,
+  kind-tone chips, run/command/causation ids, outbox column with
+  status/attempts/lastError; "Activity" nav slot after Tasks.
+  `TaskComposer.tsx` — five ACP harness options, coding-model input
+  (suggestions from `/api/agents` defaultModel), ready-connection select,
+  `variant="hero"` centered layout (heading + repo-aware subline + chips
+  inline) when the chat is empty.
+  `SettingsView.tsx` — Models section: purpose routing card
+  (orchestrator/automation_gate/distillation editable; intent/quality fixed
+  TypeSafe, coding per-task) + connections card (list/status chips/Mark
+  ready/Disable/register-with-alias).
+- Tests — `test/acp.test.ts` +11 (registry resolution, sandbox gate, model
+  env vars, compatibleHarnesses matrix, driver contract, dummy-key env,
+  egress, parser); `test/spine-route.test.ts` +3 (queue→mint event flow with
+  contiguous seq, per-principal filtering, GET-only); drifted tests updated
+  (harness catalog list, Dockerfile pin sources, composer props). Test
+  subclasses must replicate the P9 `setState` flush (applySpine → assign →
+  drain) — the base override is shadowed by the subclass's own property.
+- Gate: typecheck (incl. test tsconfig), lint, lint:imports, 1712 backend
+  tests, build + docs:verify, env:load/env:scan all green.
+- Unverified (deploy-gated): ACP lanes inside a real sandbox (image rebuild
+  required), `/api/spine` on prod data, hero composer on app.tryshiba.dev.
+
+- Review addendum (ce-code-review pass on this diff): `runs-routes.ts` now
+  strips inbound `X-Agent-Principal` before forwarding to the DO — the DO
+  reads `queuedBy` and the `/api/spine` filter from that header as
+  worker-vouched, so a client-supplied copy was a forgery lane (same class
+  as `X-Shiba-Intake`; regression test added). `runtime.ts` — `AcpErrorEvent`/
+  `AcpEventError` added to both error-propagation allowlists so ACP driver
+  failures fail the run honestly instead of degrading to a redacted
+  "malformed event line" notice. `acp.ts` — `AcpHarnessSpec` gained
+  `modelId`/`extraConfig`/`extraEnv` hooks; `devin-acp` gets
+  `server.codeium.com` egress + the shared `devinCredentialsConfig()` +
+  `XDG_DATA_HOME` (the CLI authenticates from credentials.toml, not env);
+  `opencode-acp` passes `provider/model` through untransformed (OpenCode's
+  ACP model grammar) and gets its `opencode.json` + `OPENCODE_CONFIG`/
+  `OPENCODE_DISABLE_AUTOUPDATE`; the driver's fail path kills the spawned
+  agent before exiting (no orphan mutation after run-fail). Dockerfile —
+  `devin acp` and `gemini --acp` build probes added. `model-connections.ts`
+  — `compatibleHarnesses` also requires `supportedRuntimes: ["sandbox"]`,
+  so unrunnable registered harnesses (antigravity, cursor) are no longer
+  advertised as compatible routes. contributing.md pin table rows added.
+
+- Review addendum 2 (second ce-code-review wave, reliability + frontend-races
+  + agent-native): shared ACP driver — per-call JSON-RPC timeouts (60s
+  control / 20min prompt) so a wedged adapter fails with its own error
+  instead of burning the retryable outer exec timeout; pending calls reject
+  on child exit; stdout drains before exit so the terminal frame cannot
+  tear; `session/set_model` tolerates -32601 (unstable in ACP 0.x — adapter
+  runs its default model). Cursor lanes inherit all of this via the shared
+  ACP_DRIVER_SOURCE fold (the duplicated ~90-line driver is deleted).
+  Frontend — `useApiJson` exposes `inFlight`; the spine feed polls 5s after
+  each fetch settles rather than aborting slow reads; composer model
+  datalist scoped to ready connection providers; model-config + agents
+  refetch on composer re-entry; ActivityView remounts on session switch;
+  hero composer scrolls on short viewports; purpose inputs lock mid-save.
+  Delegation surfaces — the orchestrator prompt + delegate schema describe
+  name connectionId and the ACP lane ids; `queue_run` accepts
+  codingModel/connectionId (parity with POST /api/runs).
+  Gate: typecheck, lint, lint:imports, 1726 backend tests, build green.

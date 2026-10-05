@@ -1,4 +1,5 @@
 /** Harness registry (PLAN.md T22). Selection is by name, default OpenCode. */
+import { AcpHarness } from "./acp.js";
 import { antigravityHarness } from "./antigravity.js";
 import { antigravitySubscriptionHarness } from "./antigravity-subscription.js";
 import { claudeCodeHarness } from "./claude-code.js";
@@ -7,10 +8,11 @@ import { codexHarness } from "./codex.js";
 import { codexSubscriptionHarness } from "./codex-subscription.js";
 import { cursorHarness } from "./cursor.js";
 import { cursorSubscriptionHarness } from "./cursor-subscription.js";
-import { devinHarness } from "./devin.js";
+import { CONTAINER_XDG_DATA, devinCredentialsConfig, devinHarness } from "./devin.js";
 import { devinSubscriptionHarness } from "./devin-subscription.js";
 import { grokHarness } from "./grok.js";
-import { opencodeHarness } from "./opencode.js";
+import { buildOpencodeConfig, OPENCODE_PROVIDERS, opencodeHarness } from "./opencode.js";
+import type { Env } from "../env.js";
 import { GIT_EGRESS_HOSTS, type AgentHarness, type AgentHarnessName, type RuntimeName } from "./types.js";
 
 const REGISTRY = {
@@ -26,6 +28,63 @@ const REGISTRY = {
   "antigravity-subscription": antigravitySubscriptionHarness,
   "cursor-subscription": cursorSubscriptionHarness,
   "devin-subscription": devinSubscriptionHarness,
+  // ACP registry agents (PLAN-V2-NEXT): every ACP-capable CLI the image ships
+  // is selectable as a harness. Spawn argv match the ACP registry entries;
+  // credentials ride the provider's existing BYOK/worker-secret lane.
+  "claude-acp": new AcpHarness({
+    name: "claude-acp",
+    label: "Claude ACP",
+    spawn: ["claude-agent-acp"],
+    providers: ["anthropic"],
+  }),
+  "codex-acp": new AcpHarness({
+    name: "codex-acp",
+    label: "Codex ACP",
+    spawn: ["codex-acp"],
+    providers: ["openai"],
+  }),
+  // gemini-cli reads GEMINI_API_KEY, not the provider's standard env var.
+  "gemini-acp": new AcpHarness({
+    name: "gemini-acp",
+    label: "Gemini ACP",
+    spawn: ["gemini", "--acp"],
+    providers: ["google"],
+    keyEnv: "GEMINI_API_KEY",
+  }),
+  "opencode-acp": new AcpHarness({
+    name: "opencode-acp",
+    label: "OpenCode ACP",
+    spawn: ["opencode", "acp"],
+    providers: OPENCODE_PROVIDERS,
+    // OpenCode's ACP modelId grammar is `provider/model[/variant]` — the
+    // default strip would drop the provider segment it resolves against.
+    modelId: (model) => model,
+    // `opencode acp` reads the same opencode.json the run lane writes
+    // (enabled_providers, dummy apiKey, autoupdate off) via OPENCODE_CONFIG.
+    extraConfig: (input, sandboxId) => [
+      {
+        path: `/workspace/${sandboxId}.opencode.json`,
+        contents: JSON.stringify(buildOpencodeConfig(input), null, 2),
+      },
+    ],
+    extraEnv: (_input, configPath) => ({
+      ...(configPath ? { OPENCODE_CONFIG: configPath } : {}),
+      OPENCODE_DISABLE_AUTOUPDATE: "true",
+    }),
+  }),
+  "devin-acp": new AcpHarness({
+    name: "devin-acp",
+    label: "Devin ACP",
+    spawn: ["devin", "acp"],
+    providers: ["devin"],
+    // api.devin.ai comes from the provider host; the CLI's inference backend
+    // (server.codeium.com, Pro accounts) is the second egress host.
+    extraEgress: ["server.codeium.com"],
+    // `devin acp` authenticates from credentials.toml, not the env var —
+    // same dummy file the devin lane writes (real key swaps in at egress).
+    extraConfig: () => [devinCredentialsConfig()],
+    extraEnv: () => ({ XDG_DATA_HOME: CONTAINER_XDG_DATA }),
+  }),
 } satisfies Record<AgentHarnessName, AgentHarness>;
 
 export const HARNESSES: Record<string, AgentHarness> = REGISTRY;
@@ -159,7 +218,7 @@ export const HARNESS_DEFAULT_MODELS: Record<string, string> = {
   // the provider prefix is the auth-path distinction, not a different vendor.
   "codex-subscription": "openai-subscription/gpt-5.3-codex",
   // SWE-2 medium is the free tier on Devin Pro; bare "swe-2" is a family
-  // name the pinned CLI (3000.10.31) does not resolve, and "swe" is the
+  // name the pinned CLI (3000.11.3) does not resolve, and "swe" is the
   // family alias.
   devin: "devin/swe-2-medium",
   grok: "xai/grok-4.6",
@@ -172,4 +231,39 @@ export const HARNESS_DEFAULT_MODELS: Record<string, string> = {
   // sensible default since the operator's plan governs what resolves.
   "cursor-subscription": "cursor-subscription/auto",
   "devin-subscription": "devin-subscription/swe-2-medium",
+  // ACP lanes inherit the provider's default model.
+  "claude-acp": "anthropic/claude-sonnet-4-6",
+  "codex-acp": "openai/gpt-5.3-codex",
+  "gemini-acp": "google/gemini-3.5-flash",
+  "opencode-acp": "google/gemini-3.5-flash-lite",
+  "devin-acp": "devin/swe-2-medium",
+};
+
+/**
+ * Harness → the env var that overrides its default model at the deployment
+ * level. ACP lanes share their provider harness's var rather than growing
+ * five new vars; a per-run `codingModel` still beats both. `keyof Env` keeps
+ * a rename compile-time loud.
+ */
+/** Keys of Env whose values are strings — the only vars a model id can live in. */
+type StringEnvKey = { [K in keyof Env]: Env[K] extends string | undefined ? K : never }[keyof Env];
+
+export const HARNESS_MODEL_ENV: Record<AgentHarnessName, StringEnvKey | undefined> = {
+  opencode: "CODING_MODEL",
+  "claude-code": "CLAUDE_CODE_MODEL",
+  "claude-subscription": "CLAUDE_SUBSCRIPTION_MODEL",
+  codex: "CODEX_MODEL",
+  "codex-subscription": "CODEX_SUBSCRIPTION_MODEL",
+  devin: "DEVIN_MODEL",
+  grok: "GROK_MODEL",
+  cursor: "CODING_MODEL",
+  antigravity: "CODING_MODEL",
+  "antigravity-subscription": "ANTIGRAVITY_SUBSCRIPTION_MODEL",
+  "cursor-subscription": "CURSOR_SUBSCRIPTION_MODEL",
+  "devin-subscription": "DEVIN_SUBSCRIPTION_MODEL",
+  "claude-acp": "CLAUDE_CODE_MODEL",
+  "codex-acp": "CODEX_MODEL",
+  "gemini-acp": "CODING_MODEL",
+  "opencode-acp": "CODING_MODEL",
+  "devin-acp": "DEVIN_MODEL",
 };

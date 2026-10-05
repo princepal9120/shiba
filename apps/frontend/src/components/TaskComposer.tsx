@@ -2,12 +2,24 @@ import { type JSX, type SyntheticEvent, useEffect, useRef } from "react";
 import { Tooltip } from "./Tooltip";
 import type { SavedSkill } from "../saved";
 
+/** Model-by-purpose routing controls — the picker's values and its option lists. */
+export interface ModelRoutingControl {
+  codingModel: string;
+  connectionId: string;
+  onCodingModelChange: (value: string) => void;
+  onConnectionChange: (value: string) => void;
+  /** Coding-purpose models from /api/model-config (the "auto" floor plus registered connections). */
+  modelSuggestions?: string[];
+  connections?: { id: string; label: string; status: string }[];
+}
+
 export interface TaskComposerProps {
   repoUrl: string;
   task: string;
   baseBranch: string;
   publishPullRequest: boolean;
   harness: string;
+  routing: ModelRoutingControl;
   busy: boolean;
   isSubmitting: boolean;
   clearing: boolean;
@@ -24,15 +36,22 @@ export interface TaskComposerProps {
   skills?: SavedSkill[];
   selectedSkillIds?: string[];
   onToggleSkill?: (id: string) => void;
+  /** "docked" = compact bar under the timeline; "hero" = centered empty-state card. */
+  variant?: "docked" | "hero";
 }
 
 const HARNESS_OPTIONS: { value: string; label: string; desc: string }[] = [
   { value: "opencode", label: "OpenCode", desc: "Default autonomous coding engine" },
   { value: "claude-code", label: "Claude Code", desc: "Anthropic Claude Code CLI" },
+  { value: "claude-acp", label: "Claude Agent (ACP)", desc: "Claude via the Agent Client Protocol adapter" },
   { value: "claude-subscription", label: "Claude (subscription)", desc: "Your Claude plan (needs SHIBA_CLAUDE_SUBSCRIPTION)" },
   { value: "codex", label: "Codex", desc: "Codex autonomous CLI agent" },
+  { value: "codex-acp", label: "Codex (ACP)", desc: "Codex via the Agent Client Protocol adapter" },
   { value: "codex-subscription", label: "Codex (subscription)", desc: "Your ChatGPT plan (needs SHIBA_CODEX_SUBSCRIPTION)" },
+  { value: "gemini-acp", label: "Gemini CLI (ACP)", desc: "Google Gemini CLI speaking ACP" },
+  { value: "opencode-acp", label: "OpenCode (ACP)", desc: "OpenCode's `acp` subcommand" },
   { value: "devin", label: "Devin", desc: "Cognition Devin CLI (needs DEVIN_API_KEY)" },
+  { value: "devin-acp", label: "Devin (ACP)", desc: "Devin CLI speaking ACP (needs DEVIN_API_KEY)" },
   { value: "devin-subscription", label: "Devin (subscription)", desc: "Your Devin plan (needs SHIBA_DEVIN_SUBSCRIPTION)" },
   { value: "grok", label: "Grok", desc: "xAI Grok CLI (AI Gateway BYOK)" },
   { value: "antigravity-subscription", label: "Antigravity (subscription)", desc: "Your Google plan (needs SHIBA_ANTIGRAVITY_SUBSCRIPTION)" },
@@ -45,6 +64,7 @@ export function TaskComposer({
   baseBranch,
   publishPullRequest,
   harness,
+  routing,
   busy,
   isSubmitting,
   clearing,
@@ -59,9 +79,11 @@ export function TaskComposer({
   skills = [],
   selectedSkillIds = [],
   onToggleSkill,
+  variant = "docked",
 }: TaskComposerProps): JSX.Element {
   const sendDisabled = busy || task.trim() === "" || repoUrl.trim() === "";
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const hero = variant === "hero";
 
   // Auto-grow the task field up to ~192px, then scroll.
   useEffect(() => {
@@ -87,13 +109,16 @@ export function TaskComposer({
     "bg-[#f1efe6] border border-[#e0ded5] rounded-none text-[#222320] px-2.5 py-1.5 touch:min-h-11 text-xs focus:outline-none focus:border-[#1c1cc8] focus:ring-1 focus:ring-[#1c1cc8]/40 placeholder-[#6a6f63]/60 transition-colors";
 
   const currentHarness = HARNESS_OPTIONS.find((h) => h.value === harness);
+  const currentConnection = routing.connections?.find((c) => c.id === routing.connectionId);
 
-  return (
+  const form = (
     <form
       data-testid="task-composer"
       aria-label="Task composer"
       onSubmit={handleSubmit}
-      className="rounded-none border border-[#d3d2c8] bg-[#fffef8] p-3 flex flex-col gap-2.5 shadow-[3px_3px_0_var(--paper-shadow)] relative group focus-within:border-[#0000a8]/40 transition-colors"
+      className={`rounded-none border bg-[#fffef8] flex flex-col shadow-[3px_3px_0_var(--paper-shadow)] relative group focus-within:border-[#0000a8]/40 transition-colors ${
+        hero ? "border-[#c9c8bc] p-4 sm:p-5 gap-3" : "border-[#d3d2c8] p-3 gap-2.5"
+      }`}
     >
       <textarea
         ref={textareaRef}
@@ -102,7 +127,9 @@ export function TaskComposer({
         onKeyDown={handleKeyDown}
         placeholder="Describe the task or bug to fix (e.g. 'Fix the broken authentication test in auth.test.ts')…"
         rows={1}
-        className="w-full resize-none bg-transparent text-base lg:text-sm text-[#222320] placeholder-[#6a6f63]/70 focus:outline-none min-h-[72px] max-h-48 overflow-y-auto leading-relaxed"
+        className={`w-full resize-none bg-transparent text-base lg:text-sm text-[#222320] placeholder-[#6a6f63]/70 focus:outline-none overflow-y-auto leading-relaxed ${
+          hero ? "min-h-[96px] max-h-64" : "min-h-[72px] max-h-48"
+        }`}
         aria-label="Task description"
       />
 
@@ -152,6 +179,43 @@ export function TaskComposer({
             ))}
           </select>
         </Tooltip>
+
+        <Tooltip content="Model the coding agent uses — leave blank for the deployment default" side="top">
+          <input
+            type="text"
+            list="shiba-coding-models"
+            value={routing.codingModel}
+            onChange={(event) => routing.onCodingModelChange(event.target.value)}
+            placeholder="model (auto)"
+            aria-label="Coding model"
+            className={`${fieldClass} w-36 font-mono`}
+          />
+          {(routing.modelSuggestions?.length ?? 0) > 0 ? (
+            <datalist id="shiba-coding-models">
+              {routing.modelSuggestions!.map((model) => (
+                <option key={model} value={model} />
+              ))}
+            </datalist>
+          ) : null}
+        </Tooltip>
+
+        {(routing.connections?.length ?? 0) > 0 ? (
+          <Tooltip content={currentConnection ? `Model connection — ${currentConnection.status}` : "Model connection (auto route)"} side="top">
+            <select
+              value={routing.connectionId}
+              onChange={(event) => routing.onConnectionChange(event.target.value)}
+              aria-label="Model connection"
+              className={`${fieldClass} cursor-pointer`}
+            >
+              <option value="">auto route</option>
+              {routing.connections!.map((connection) => (
+                <option key={connection.id} value={connection.id}>
+                  {connection.label}
+                </option>
+              ))}
+            </select>
+          </Tooltip>
+        ) : null}
 
         <Tooltip content="Publish branch and open Pull Request on completion" side="top">
           <label className="flex items-center gap-1.5 text-xs text-[#6a6f63] hover:text-[#222320] cursor-pointer select-none px-1.5 py-1 touch:min-h-11 rounded-none hover:bg-black/[0.04] transition-colors">
@@ -224,5 +288,28 @@ export function TaskComposer({
         </div>
       </div>
     </form>
+  );
+
+  if (!hero) return form;
+
+  const repoSlug = repoUrl.trim().split("/").slice(-2).join("/") || "your repo";
+  return (
+    <div className="flex-1 min-h-0 overflow-y-auto flex items-center justify-center px-4 py-10">
+      <div className="w-full max-w-2xl flex flex-col items-center gap-6">
+        <div className="text-center">
+          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-[#222320]">
+            What should we build?
+          </h1>
+          <p className="mt-2 text-sm text-[#6a6f63]">
+            Describe the task — your agent works in an isolated sandbox against{" "}
+            <span className="font-mono text-xs">{repoSlug}</span> and can open a PR when it's done.
+          </p>
+        </div>
+        {form}
+        <p className="text-[11px] text-[#6a6f63]/80 font-mono">
+          approval-gated · container isolated · everything lands in Activity
+        </p>
+      </div>
+    </div>
   );
 }

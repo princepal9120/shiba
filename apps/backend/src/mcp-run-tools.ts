@@ -51,6 +51,8 @@ export function registerRunTools(registry: ToolRegistry, env: Env): void {
           baseBranch: args.baseBranch,
           publishPullRequest: args.publishPullRequest,
           harness: args.harness,
+          codingModel: args.codingModel,
+          connectionId: args.connectionId,
           testCommand: args.testCommand,
         }),
       }, ctx.principal.principal);
