@@ -27,7 +27,14 @@ export type AgentHarnessName =
   | "antigravity"
   | "antigravity-subscription"
   | "cursor-subscription"
-  | "devin-subscription";
+  | "devin-subscription"
+  // ACP (Agent Client Protocol) lanes — the same transport cursor uses,
+  // parameterized by spawn argv in acp.ts.
+  | "claude-acp"
+  | "codex-acp"
+  | "gemini-acp"
+  | "opencode-acp"
+  | "devin-acp";
 
 /**
  * T43 runtimes a harness can execute under. "sandbox" and the refused

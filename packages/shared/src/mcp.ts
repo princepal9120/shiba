@@ -22,6 +22,12 @@ export const HARNESS_IDS = [
   "grok",
   "antigravity-subscription",
   "cursor-subscription",
+  // ACP lanes — every Agent Client Protocol agent the image ships.
+  "claude-acp",
+  "codex-acp",
+  "gemini-acp",
+  "opencode-acp",
+  "devin-acp",
 ] as const;
 export type HarnessId = (typeof HARNESS_IDS)[number];
 

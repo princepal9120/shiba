@@ -148,3 +148,74 @@ export function useUsageReport(
     : "/api/usage";
   return useApiJson<UsageReportWire>(path);
 }
+
+// ---------------------------------------------------------------------------
+// Model config (Project 4 — purpose-aware model routing) + spine (P9)
+// ---------------------------------------------------------------------------
+
+/** Wire shape of one `connections[]` entry — the ModelConfig DO's record. */
+export interface ModelConnectionWire {
+  id: string;
+  service: string;
+  displayName: string;
+  status: "unconfigured" | "ready" | "invalid" | "disabled";
+  credentialRef: string | null;
+}
+
+/** Wire shape of the purpose policy — purpose → Workers AI model id. */
+export interface PurposePolicyWire {
+  version: number;
+  models: Partial<Record<string, string>>;
+  updatedAt: number;
+}
+
+export interface ModelConfigWire {
+  connections: ModelConnectionWire[];
+  policy: PurposePolicyWire;
+  purposes: string[];
+}
+
+export function useModelConfig(): { state: LoadState<ModelConfigWire>; reload: () => void } {
+  return useApiJson<ModelConfigWire>("/api/model-config");
+}
+
+/** One spine event — the orchestrator's durable decision record (P9). */
+export interface SpineEventWire {
+  seq: number;
+  at: number;
+  commandId: string;
+  causationId?: string;
+  kind: string;
+  runId?: string;
+  approvalId?: string;
+  payload?: Record<string, unknown>;
+}
+
+/** One outbox row — a side effect the orchestrator owes. */
+export interface OutboxEntryWire {
+  id: string;
+  effectKind: string;
+  target: string;
+  summary?: string;
+  status: "pending" | "dispatched" | "failed";
+  attempts: number;
+  requestedAt?: number;
+  requestedBy?: string;
+  runId?: string;
+  lastError?: string;
+}
+
+export interface SpineWire {
+  events: SpineEventWire[];
+  outbox: OutboxEntryWire[];
+}
+
+export function useSpine(
+  sessionId: string,
+  sessionApiAvailable: boolean,
+): { state: LoadState<SpineWire>; reload: () => void } {
+  const path = sessionApiAvailable
+    ? `/api/spine?session=${encodeURIComponent(sessionId)}`
+    : "/api/spine";
+  return useApiJson<SpineWire>(path);
+}

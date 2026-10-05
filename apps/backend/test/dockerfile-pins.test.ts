@@ -54,6 +54,11 @@ const PIN_SOURCE: Record<string, { npm?: string; arg?: string }> = {
   codex: { npm: "@openai/codex" },
   grok: { npm: "@xai-official/grok" },
   devin: { arg: "DEVIN_CLI_VERSION" },
+  "claude-acp": { npm: "@agentclientprotocol/claude-agent-acp" },
+  "codex-acp": { npm: "@agentclientprotocol/codex-acp" },
+  "gemini-acp": { npm: "@google/gemini-cli" },
+  "opencode-acp": { npm: "opencode-ai" },
+  "devin-acp": { arg: "DEVIN_CLI_VERSION" },
 };
 
 describe("Dockerfile pins", () => {
@@ -82,7 +87,7 @@ describe("Dockerfile pins", () => {
     ].join("\n");
     expect(npmGlobalPins(dockerfile)).toEqual({ tool: "1" });
     expect(Object.keys(npmPins).sort()).toEqual(
-      Object.values(PIN_SOURCE).flatMap((source) => source.npm ? [source.npm] : []).sort(),
+      [...new Set(Object.values(PIN_SOURCE).flatMap((source) => source.npm ? [source.npm] : []))].sort(),
     );
   });
 

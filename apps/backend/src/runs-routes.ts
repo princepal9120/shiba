@@ -49,13 +49,19 @@ export async function resolveRunStoreTarget(
 
 export async function handleRuns(request: Request, env: Env): Promise<Response | null> {
   const url = new URL(request.url);
-  if (!/^\/api\/runs(?:\/[^/]+)?$/.test(url.pathname)) {
+  // /api/spine rides this lane: the orchestrator's P9 event log + outbox
+  // live on the same DO, behind the same dashboard auth and session scope.
+  const isSpine = url.pathname === "/api/spine";
+  if (!isSpine && !/^\/api\/runs(?:\/[^/]+)?$/.test(url.pathname)) {
     return null;
   }
   if (!(await isAuthorizedRequest(request, env))) {
     return Response.json({ error: "Authentication required." }, { status: 401 });
   }
-  if (request.method !== "GET" && request.method !== "DELETE" && request.method !== "POST") {
+  if (isSpine && request.method !== "GET") {
+    return Response.json({ error: "Method not allowed." }, { status: 405 });
+  }
+  if (!isSpine && request.method !== "GET" && request.method !== "DELETE" && request.method !== "POST") {
     return Response.json({ error: "Method not allowed." }, { status: 405 });
   }
   const resolved = await resolveRunStoreTarget(request, env, url);

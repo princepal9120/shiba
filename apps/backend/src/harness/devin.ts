@@ -9,7 +9,7 @@
  * two hosts the CLI calls: api.devin.ai (control plane) and
  * server.codeium.com (inference backend for Pro accounts).
  *
- * Verified against devin 3000.10.31: `devin auth status` reports the
+ * Verified against devin 3000.11.3: `devin auth status` reports the
  * credentials file as `$XDG_DATA_HOME/devin/credentials.toml` with keys
  * windsurf_api_key / api_server_url / devin_webapp_host / devin_api_url, and
  * api.devin.ai accepts `Authorization: Bearer <key>` (verified 200 on

@@ -5,7 +5,7 @@ description: Coding harnesses, Grok model access, and current implementation and
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
 
-**Implemented and selectable:** the dashboard and `delegate_coding_task` accept per-run harness and model choices; the approved choice is passed to the runtime. The image installs OpenCode 1.18.31, Claude Code 2.1.277, Codex 0.155.0, and Devin CLI 3000.10.31. Harness tests cover selection, argv/config/env construction, provider allowlists, and event parsing. These tests do not prove the CLIs can complete a task end to end.
+**Implemented and selectable:** the dashboard and `delegate_coding_task` accept per-run harness and model choices; the approved choice is passed to the runtime. The image installs OpenCode 1.18.34, Claude Code 2.1.277, Codex 0.155.0, Devin CLI 3000.11.3, and the ACP adapters (claude-agent-acp 0.86.0, codex-acp 2.1.1, gemini-cli 0.62.0). Harness tests cover selection, argv/config/env construction, provider allowlists, and event parsing. These tests do not prove the CLIs can complete a task end to end.
 
 **Verification status:** `VERIFICATION.md` records one local `wrangler dev` end-to-end exercise with OpenCode on 2026-09-19. The provider call returned 401, so model inference and successful task completion were not verified. The 2026-09-24 verification says no live cloud end-to-end run has been performed. Claude Code, Codex, and Devin have unit coverage only; no local or cloud harness end-to-end run is recorded for them.
 

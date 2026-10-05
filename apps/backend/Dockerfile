@@ -9,18 +9,26 @@ FROM docker.io/cloudflare/sandbox:0.12.9-opencode
 # gets the dummy key, and the real credential is swapped in at the Worker's
 # egress boundary. Bumping any of these versions requires re-running the T10
 # live acceptance checklist — the harness event parsers couple to the formats.
-RUN npm i -g opencode-ai@1.18.31 @anthropic-ai/claude-code@2.1.277 @openai/codex@0.155.0 @xai-official/grok@1.0.41 \
-  && opencode --version && claude --version && codex --version && grok --version
+# The ACP lanes (PLAN-V2-NEXT): the registry's adapters, all Apache-2.0 —
+# claude-agent-acp/codex-acp are their own entrypoints; gemini-cli ships
+# `--acp` natively; opencode ≥1.18.34 ships the `acp` subcommand; the Devin
+# CLI ships `acp` at 3000.11.3. `command -v` probes below fail the build if
+# an adapter renames its bin.
+RUN npm i -g opencode-ai@1.18.34 @anthropic-ai/claude-code@2.1.277 @openai/codex@0.155.0 @xai-official/grok@1.0.41 \
+    @agentclientprotocol/claude-agent-acp@0.86.0 @agentclientprotocol/codex-acp@2.1.1 @google/gemini-cli@0.62.0 \
+  && opencode --version && claude --version && codex --version && grok --version && gemini --version \
+  && command -v claude-agent-acp codex-acp && opencode acp --help >/dev/null
 
 # Devin CLI — checksum-verified against the published manifest
 # (https://static.devin.ai/cli/current/manifest.json), version-pinned like the
 # other harnesses. The tarball ships bin/devin plus man pages; only the binary
 # is needed. Bump requires the same T10 pass.
-ARG DEVIN_CLI_VERSION=3000.10.31
+# 3000.11.3 is the first registry-listed release that ships `devin acp`.
+ARG DEVIN_CLI_VERSION=3000.11.3
 RUN set -eux; \
   case "$(uname -m)" in \
-    x86_64) t=x86_64-unknown-linux; s=43218d80ee49576f4f84a1ffd4a4cec755c545b5ca98c5b26efce5340824f331;; \
-    aarch64) t=aarch64-unknown-linux; s=6da96b9c8c2337892c0dad0a12c7aaa7e568bfef7572bbf54e7a0ec88916ba33;; \
+    x86_64) t=x86_64-unknown-linux; s=83b3b113c01bf2a3e9e100db08d77e6b086806a7754f091e20831bdfe215157e;; \
+    aarch64) t=aarch64-unknown-linux; s=21a2d7a8dea67987067cde7eb3fe7193a48daa8f8c3d50d414c603c4a2b67f15;; \
     *) exit 1;; \
   esac; \
   curl -sSfL -o /tmp/devin.tar.gz "https://static.devin.ai/cli/${DEVIN_CLI_VERSION}/devin-${DEVIN_CLI_VERSION}-${t}.tar.gz"; \
