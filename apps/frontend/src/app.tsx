@@ -12,6 +12,7 @@ import { AutomationsView } from "./components/AutomationsView";
 import { AgentsView } from "./components/AgentsView";
 import { ProvidersView } from "./components/ProvidersView";
 import { SkillsView } from "./components/SkillsView";
+import { RemoteAccessView } from "./components/RemoteAccessView";
 import { useSavedRepos, useSavedSkills, saveRepo } from "./saved";
 import { codingModelOptions, readyConnectionOptions, useAgentsDirectory, useModelConfig } from "./live-status";
 import { DashboardView } from "./components/DashboardView";
@@ -405,6 +406,8 @@ export function App(): React.JSX.Element {
         setMainView("skills");
       } else if (tabParam === "integrations") {
         setMainView("integrations");
+      } else if (tabParam === "remote") {
+        setMainView("remote");
       } else if (tabParam === "settings") {
         setMainView("settings");
       }
@@ -1767,6 +1770,8 @@ export function App(): React.JSX.Element {
         <AgentsView />
       ) : mainView === "integrations" ? (
         <IntegrationsView onNavigate={(view) => setMainView(view)} />
+      ) : mainView === "remote" ? (
+        <RemoteAccessView />
       ) : mainView === "settings" ? (
         <SettingsView onNavigate={(view) => setMainView(view)} />
       ) : (

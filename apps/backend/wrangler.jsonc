@@ -77,6 +77,8 @@
     //   ROLE_MODEL_MAP          JSON {"<role>":{"harness":"...","model":"..."}}
     //   ROLE_MODEL__ORCHESTRATOR / __EXPLORER / __FIXER / __REVIEWER /
     //   __DESIGNER              "harness/model" or bare "harness" per role
+    //   PAIRING_SECRET          optional HMAC key for dashboard-minted
+    //   pairing tokens (T52); falls back to LOCAL_ADAPTER_TOKEN.
   }, 
   "ai": {
     "binding": "AI",

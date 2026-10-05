@@ -151,6 +151,8 @@ export interface Env {
    * surface refuses every request even when the flag is on.
    */
   LOCAL_ADAPTER_TOKEN?: string;
+  /** T52 HMAC key for dashboard-minted pairing tokens; falls back to LOCAL_ADAPTER_TOKEN. */
+  PAIRING_SECRET?: string;
   /**
    * Deploy-time container size. Must match wrangler `containers.instance_type`.
    * lite | basic | standard-1 | standard-2 | standard-3 | standard-4.

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Shiba-style steel-blue dither for blog hero images.
 
-Usage: python3 scripts/zuse-dither.py <input.png> <output.png> [pixel_size] [palette]
+Usage: python3 scripts/theme-dither.py <input.png> <output.png> [pixel_size] [palette]
 
 Downscales, applies a 4x4 Bayer ordered dither, quantizes to the
 steel-blue palette, and upscales with nearest neighbour for crisp
@@ -55,7 +55,7 @@ BAYER_4X4 = np.array([
 ], dtype=np.float32) / 16.0 - 0.5
 
 
-def zuse_dither(input_path, output_path, pixel_size=2, strength=35.0,
+def theme_dither(input_path, output_path, pixel_size=2, strength=35.0,
                 palette="steel-blue"):
     img = Image.open(input_path).convert("RGB")
     pal = PALETTES.get(palette, PALETTES["steel-blue"])
@@ -89,5 +89,5 @@ if __name__ == "__main__":
     src, dst = sys.argv[1], sys.argv[2]
     px = int(sys.argv[3]) if len(sys.argv) > 3 else 2
     pal_name = sys.argv[4] if len(sys.argv) > 4 else "steel-blue"
-    zuse_dither(src, dst, pixel_size=px, palette=pal_name)
+    theme_dither(src, dst, pixel_size=px, palette=pal_name)
 

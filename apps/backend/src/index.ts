@@ -22,6 +22,7 @@ import { handleApprovals } from "./approvals-routes.js";
 import { handleSubscriptionAuth } from "./auth-routes.js";
 import { handleAudit } from "./audit-routes.js";
 import { handleAutomations } from "./automations-routes.js";
+import { handleComputers } from "./computers-routes.js";
 import { handleGitHubWebhook } from "./github-webhook-routes.js";
 import { handleInbox } from "./inbox-routes.js";
 import { handleLocalAdapter, isLocalRuntimePath } from "./local-routes.js";
@@ -194,6 +195,10 @@ export default {
       const approvalsResponse = await handleApprovals(request, env);
       if (approvalsResponse) {
         return approvalsResponse;
+      }
+      const computersResponse = await handleComputers(request, env);
+      if (computersResponse) {
+        return computersResponse;
       }
       if (!codingModelVerified) {
         assertLiveCodingModel(env);

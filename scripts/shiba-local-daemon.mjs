@@ -12,6 +12,9 @@
  *   LOCAL_ADAPTER_TOKEN=<the deployment's daemon bearer> \
  *   node scripts/shiba-local-daemon.mjs [--once] [--poll <ms>]
  *
+ * Or pair once with a dashboard-minted token (saves ~/.shiba-local/config.json):
+ *   node scripts/shiba-local-daemon.mjs --connect <workerUrl> --pair <token>
+ *
  * Loop: POST /api/local/claim → execute → POST /api/local/result.
  * Claims hold the machine's slot: while a run is executing here the daemon
  * does not claim another — one daemon, one run, one process lease.
@@ -27,7 +30,8 @@
  * — this file is dependency-free on purpose so an operator can run it with
  * nothing but Node and git installed.
  */
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -41,6 +45,11 @@ const MAX_FILE_CHARS = 100_000;
 const MAX_TOTAL_FILE_CHARS = 500_000;
 const RECEIPT_COMMAND_CAP = 256;
 const DEFAULT_POLL_MS = 3_000;
+const DAEMON_VERSION = "0.1.0";
+const HEARTBEAT_MS = 30_000;
+const PROBED_HARNESSES = ["claude", "codex", "opencode", "agy"];
+// EX_CONFIG: a revoked token needs operator action, not a restart loop.
+const EXIT_REVOKED = 78;
 
 function fail(message, code = 1) {
   console.error(`shiba-local: ${message}`);
@@ -48,25 +57,34 @@ function fail(message, code = 1) {
 }
 
 function parseArgs(argv) {
-  const args = { once: false, pollMs: DEFAULT_POLL_MS };
+  const args = { once: false, pollMs: DEFAULT_POLL_MS, connect: "", pair: "" };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--once") args.once = true;
+    else if (argv[i] === "--connect" && argv[i + 1]) args.connect = argv[++i];
+    else if (argv[i] === "--pair" && argv[i + 1]) args.pair = argv[++i];
     else if (argv[i] === "--poll" && argv[i + 1]) {
       args.pollMs = Math.max(500, Number(argv[++i]) || DEFAULT_POLL_MS);
     } else if (argv[i] === "--help" || argv[i] === "-h") {
-      console.log("Usage: shiba-local-daemon [--once] [--poll <ms>]\n  Env: SHIBA_WORKER_URL, LOCAL_ADAPTER_TOKEN, SHIBA_LOCAL_RUN_ROOT");
+      console.log("Usage: shiba-local-daemon [--once] [--poll <ms>] [--connect <workerUrl> --pair <token>]\n  Env: SHIBA_WORKER_URL, LOCAL_ADAPTER_TOKEN, SHIBA_LOCAL_RUN_ROOT");
       process.exit(0);
     } else {
       fail(`Unknown argument ${argv[i]}`);
     }
   }
+  if (Boolean(args.connect) !== Boolean(args.pair)) fail("--connect and --pair must be given together.");
   return args;
 }
 
 const runRoot = process.env.SHIBA_LOCAL_RUN_ROOT ?? path.join(os.homedir(), ".shiba-local");
 const operator = process.env.SHIBA_LOCAL_OPERATOR ?? `${os.userInfo().username}@${os.hostname()}`;
+const configPath = path.join(runRoot, "config.json");
+const hostname = os.hostname();
+const platform = `${process.platform}-${process.arch}`;
 let workerUrl = "";
 let AUTH = {};
+let machineId = "";
+let harnesses = [];
+let activeRunId;
 
 async function post(sub, body) {
   const res = await fetch(`${workerUrl}/api/local/${sub}`, {
@@ -75,7 +93,7 @@ async function post(sub, body) {
     body: JSON.stringify(body),
   });
   const text = await res.text();
-  if (!res.ok) throw new Error(`${sub}: HTTP ${res.status} ${text.slice(0, 300)}`);
+  if (!res.ok) throw Object.assign(new Error(`${sub}: HTTP ${res.status} ${text.slice(0, 300)}`), { status: res.status });
   return text === "" ? {} : JSON.parse(text);
 }
 
@@ -410,15 +428,81 @@ async function execute(envelope) {
   }
 }
 
+// ── Fleet: pairing, machine identity, heartbeat ─────────────────────────
+/** Names only — the fleet view shows pills, not version strings. */
+function probeHarnesses() {
+  return PROBED_HARNESSES.filter(
+    (name) => spawnSync(name, ["--version"], { timeout: 5_000, stdio: "ignore" }).status === 0,
+  );
+}
+
+async function readConfig() {
+  try {
+    return JSON.parse(await fs.readFile(configPath, "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+async function writeConfig(config) {
+  await fs.mkdir(runRoot, { recursive: true, mode: 0o700 });
+  await fs.writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
+  // mode only applies on create; re-pairing over an old file must tighten it too.
+  await fs.chmod(configPath, 0o600);
+}
+
+async function localMachineId() {
+  const file = path.join(runRoot, "machine-id");
+  const existing = (await fs.readFile(file, "utf8").catch(() => "")).trim();
+  if (existing !== "") return existing;
+  const id = randomUUID();
+  await fs.mkdir(runRoot, { recursive: true, mode: 0o700 });
+  await fs.writeFile(file, `${id}\n`, { mode: 0o600 });
+  return id;
+}
+
+async function pair(url, pairingToken) {
+  workerUrl = url.replace(/\/+$/, "");
+  let paired;
+  try {
+    paired = await post("pair", { pairingToken, hostname, platform, daemonVersion: DAEMON_VERSION, harnesses });
+  } catch (error) {
+    fail(error.status === 401 ? "pairing token expired, reused, or invalid — mint a new one in Remote Access." : `pairing failed: ${error.message}`);
+  }
+  await writeConfig({ workerUrl, adapterToken: paired.adapterToken, machineId: paired.machineId });
+  console.log(`shiba-local: paired as ${paired.machineId}; saved ${configPath}`);
+}
+
+function revoked() {
+  fail("adapter token revoked; re-pair", EXIT_REVOKED);
+}
+
+async function heartbeat() {
+  try {
+    await post("heartbeat", { machineId, hostname, platform, daemonVersion: DAEMON_VERSION, harnesses, ...(activeRunId ? { activeRunId } : {}) });
+  } catch (error) {
+    if (error.status === 401) revoked();
+    // Network blips are expected; the next tick retries.
+    console.error(`shiba-local: heartbeat failed: ${error.message}`);
+  }
+}
+
 // ── Loop ────────────────────────────────────────────────────────────────
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  workerUrl = (process.env.SHIBA_WORKER_URL ?? "").replace(/\/+$/, "");
-  const adapterToken = process.env.LOCAL_ADAPTER_TOKEN ?? "";
-  if (workerUrl === "") fail("SHIBA_WORKER_URL is required (e.g. https://shiba.example.com).");
-  if (adapterToken === "") fail("LOCAL_ADAPTER_TOKEN is required — the deployment's daemon bearer.");
+  harnesses = probeHarnesses();
+  if (args.connect) await pair(args.connect, args.pair);
+  // Env vars win so the pre-pairing deployment-bearer setup keeps working unchanged.
+  const config = await readConfig();
+  workerUrl = (process.env.SHIBA_WORKER_URL ?? config.workerUrl ?? "").replace(/\/+$/, "");
+  const adapterToken = process.env.LOCAL_ADAPTER_TOKEN ?? config.adapterToken ?? "";
+  if (workerUrl === "") fail("SHIBA_WORKER_URL is required (e.g. https://shiba.example.com), or pair with --connect/--pair.");
+  if (adapterToken === "") fail("LOCAL_ADAPTER_TOKEN is required — the deployment's daemon bearer — or pair with --connect/--pair.");
   AUTH = { Authorization: `Bearer ${adapterToken}` };
+  machineId = (process.env.LOCAL_ADAPTER_TOKEN ? undefined : config.machineId) ?? (await localMachineId());
   await reapDeadWorkspaces();
+  await heartbeat();
+  setInterval(heartbeat, HEARTBEAT_MS).unref();
   console.log(`shiba-local: polling ${workerUrl}/api/local as ${operator} (root ${runRoot})`);
   let idlePolls = 0;
   for (;;) {
@@ -426,6 +510,7 @@ async function main() {
     try {
       claim = await post("claim", { operator });
     } catch (error) {
+      if (error.status === 401) revoked();
       console.error(`shiba-local: claim failed: ${error.message}`);
       if (args.once) process.exit(1);
       await new Promise((r) => setTimeout(r, Math.min(args.pollMs * 4, 30_000)));
@@ -445,10 +530,13 @@ async function main() {
     const { envelope } = claim;
     console.log(`shiba-local: claimed ${envelope.sandboxId} (${envelope.harness}) — ${envelope.repoUrl}@${envelope.baseBranch}`);
     let result;
+    activeRunId = envelope.sandboxId;
     try {
       result = await execute(envelope);
     } catch (error) {
       result = errorResult(`daemon error: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      activeRunId = undefined;
     }
     try {
       await post("result", { sandboxId: envelope.sandboxId, claimToken: claim.claimToken, result });

@@ -24,4 +24,5 @@ export * from "./auth.js";
 export * from "./codex-home.js";
 export * from "./antigravity.js";
 export * from "./local-runtime.js";
+export * from "./local-fleet.js";
 export * from "./security.js";

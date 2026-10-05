@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shiba (ai-intern) Architecture</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'JetBrains Mono', monospace; background: #020617; min-height: 100vh; padding: 2rem; color: white; }
+    .container { max-width: 1340px; margin: 0 auto; }
+    .header { margin-bottom: 1.75rem; }
+    .header-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem; }
+    .pulse-dot { width: 12px; height: 12px; background: #22d3ee; border-radius: 50%; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    h1 { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.025em; }
+    .subtitle { color: #94a3b8; font-size: 0.85rem; margin-left: 1.75rem; line-height: 1.65; }
+    .diagram-container { background: rgba(15,23,42,0.5); border-radius: 1rem; border: 1px solid #1e293b; padding: 1.5rem; overflow-x: auto; }
+    svg { width: 100%; min-width: 1180px; display: block; }
+    .section-title { color: #fbbf24; font-size: 0.78rem; font-weight: 600; margin: 2rem 0 0.75rem; letter-spacing: 0.06em; text-transform: uppercase; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; margin-top: 1rem; }
+    .card { background: rgba(15,23,42,0.5); border-radius: 0.75rem; border: 1px solid #1e293b; padding: 1.25rem; }
+    .card-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
+    .card-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .card-dot.cyan { background: #22d3ee; }
+    .card-dot.emerald { background: #34d399; }
+    .card-dot.violet { background: #a78bfa; }
+    .card-dot.amber { background: #fbbf24; }
+    .card-dot.rose { background: #fb7185; }
+    .card h3 { font-size: 0.85rem; font-weight: 600; }
+    .card ul { list-style: none; color: #94a3b8; font-size: 0.74rem; line-height: 1.55; }
+    .card li { margin-bottom: 0.5rem; }
+    .card code { color: #cbd5e1; background: rgba(148,163,184,0.12); padding: 1px 4px; border-radius: 3px; }
+    .warn { color: #fecdd3; }
+    .good { color: #a7f3d0; }
+    .footer { text-align: center; margin-top: 1.75rem; color: #475569; font-size: 0.75rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="header-row">
+        <div class="pulse-dot"></div>
+        <h1>Shiba Architecture</h1>
+      </div>
+      <p class="subtitle">Self-hosted, approval-gated AI coworker on Cloudflare Workers &middot; AGPL-3.0-only<br/>Single-tenant, account-owned &mdash; the operator's own Cloudflare account holds every secret</p>
+    </div>
+
+    <div class="diagram-container">
+      <svg viewBox="0 0 1180 1000"><title>Shiba Architecture Diagram</title>
+        <defs>
+          <marker id="ah" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/></marker>
+          <marker id="ahr" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#fb7185"/></marker>
+          <marker id="ahc" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#22d3ee"/></marker>
+          <marker id="ahv" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#a78bfa"/></marker>
+          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/></pattern>
+        </defs>
+        <rect width="100%" height="100%" fill="url(#grid)"/>
+
+        <line x1="150" y1="105" x2="172" y2="105" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#ahc)"/>
+        <path d="M 150 175 L 162 175 L 162 157 L 172 157" fill="none" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#ahc)"/>
+        <path d="M 150 267 L 162 267 L 162 465 L 172 465" fill="none" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#ah)"/>
+        <path d="M 385 301 L 398 301 L 398 89 L 418 89" fill="none" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="5,5" marker-end="url(#ahr)"/>
+        <text x="306" y="272" fill="#fb7185" font-size="7" text-anchor="middle">approved only</text>
+        <line x1="573" y1="89" x2="586" y2="89" stroke="#34d399" stroke-width="1.5" marker-end="url(#ah)"/>
+        <line x1="743" y1="89" x2="756" y2="89" stroke="#34d399" stroke-width="1.5" marker-end="url(#ah)"/>
+        <path d="M 896 89 L 903 89 L 903 250 L 700 250 L 700 258" fill="none" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#ah)"/>
+        <text x="800" y="246" fill="#fbbf24" font-size="7">spawns per run</text>
+        <path d="M 896 470 L 918 470 L 918 89 L 938 89" fill="none" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#ah)"/>
+        <text x="924" y="300" fill="#fbbf24" font-size="7">DUMMY</text>
+        <path d="M 896 505 L 918 505 L 918 205 L 938 205" fill="none" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="4,4" marker-end="url(#ahr)"/>
+        <path d="M 385 465 L 410 452" fill="none" stroke="#34d399" stroke-width="1.5" marker-end="url(#ah)"/>
+        <path d="M 896 686 L 920 686 L 920 762 L 938 762" fill="none" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#ah)"/>
+        <path d="M 663 312 L 663 392" fill="none" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="5,5" marker-end="url(#ahr)"/>
+        <text x="669" y="356" fill="#fb7185" font-size="7">AI binding</text>
+        <path d="M 495 220 L 495 700" fill="none" stroke="#a78bfa" stroke-width="1.5" stroke-dasharray="4,4" marker-end="url(#ahv)"/>
+        <text x="501" y="470" fill="#a78bfa" font-size="7">768-dim</text>
+
+        <rect x="178" y="28" width="760" height="862" rx="12" fill="rgba(251,191,36,0.04)" stroke="#fbbf24" stroke-width="1" stroke-dasharray="8,4"/>
+        <text x="190" y="48" fill="#fbbf24" font-size="10" font-weight="600">Cloudflare Account &mdash; single-tenant, account-owned</text>
+
+        <text x="190" y="72" fill="#64748b" font-size="8" font-weight="600">INGRESS</text>
+        <rect x="190" y="80" width="195" height="54" rx="6" fill="rgba(136,19,55,0.4)" stroke="#fb7185" stroke-width="1.5"/>
+        <text x="287" y="101" fill="white" font-size="11" font-weight="600" text-anchor="middle">Cloudflare Access</text>
+        <text x="287" y="117" fill="#94a3b8" font-size="8" text-anchor="middle">Cf-Access-Jwt-Assertion RS256+aud</text>
+        <rect x="190" y="148" width="195" height="54" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="287" y="169" fill="white" font-size="11" font-weight="600" text-anchor="middle">Worker</text>
+        <text x="287" y="185" fill="#94a3b8" font-size="8" text-anchor="middle">hand-rolled router &middot; index.ts</text>
+        <rect x="190" y="216" width="195" height="54" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="287" y="237" fill="white" font-size="11" font-weight="600" text-anchor="middle">MCP /mcp</text>
+        <text x="287" y="253" fill="#94a3b8" font-size="8" text-anchor="middle">OAuth 2.1 &middot; hashed bearer in KV</text>
+        <rect x="190" y="284" width="195" height="68" rx="6" fill="rgba(136,19,50,0.5)" stroke="#fb7185" stroke-width="2.5"/>
+        <text x="287" y="306" fill="white" font-size="11" font-weight="700" text-anchor="middle">APPROVAL GATE</text>
+        <text x="287" y="322" fill="#fecdd3" font-size="8" text-anchor="middle">route frozen before mint</text>
+        <text x="287" y="338" fill="#fecdd3" font-size="8" text-anchor="middle">rejection = 0 containers</text>
+        <rect x="190" y="366" width="195" height="54" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="287" y="387" fill="white" font-size="11" font-weight="600" text-anchor="middle">Cron */5 * * * *</text>
+        <text x="287" y="403" fill="#94a3b8" font-size="8" text-anchor="middle">automations &middot; reclaim runs</text>
+
+        <text x="190" y="442" fill="#64748b" font-size="8" font-weight="600">PUBLISH</text>
+        <rect x="190" y="452" width="195" height="90" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="287" y="474" fill="white" font-size="11" font-weight="600" text-anchor="middle">PR publish</text>
+        <text x="287" y="491" fill="#94a3b8" font-size="8" text-anchor="middle">HMAC-verified webhook</text>
+        <text x="287" y="506" fill="#94a3b8" font-size="8" text-anchor="middle">deletions as sha:null</text>
+        <text x="287" y="521" fill="#94a3b8" font-size="8" text-anchor="middle">token never in URL</text>
+        <text x="287" y="537" fill="#34d399" font-size="7" text-anchor="middle">github.ts</text>
+        <rect x="190" y="556" width="195" height="54" rx="6" fill="rgba(120,53,15,0.3)" stroke="#fbbf24" stroke-width="1.5"/>
+        <text x="287" y="577" fill="white" font-size="11" font-weight="600" text-anchor="middle">Artifacts (new)</text>
+        <text x="287" y="593" fill="#94a3b8" font-size="8" text-anchor="middle">fork per run, repo-scoped token</text>
+        <text x="287" y="606" fill="#fbbf24" font-size="7" text-anchor="middle">open beta &middot; PW plan</text>
+
+        <text x="418" y="72" fill="#64748b" font-size="8" font-weight="600">DURABLE OBJECTS &mdash; the only authoritative state</text>
+        <rect x="418" y="80" width="155" height="58" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="495" y="102" fill="white" font-size="11" font-weight="600" text-anchor="middle">CodingOrchestrator</text>
+        <text x="495" y="117" fill="#94a3b8" font-size="8" text-anchor="middle">Think&lt;Env&gt;</text>
+        <text x="495" y="131" fill="#94a3b8" font-size="7" text-anchor="middle">delegates, never edits</text>
+        <rect x="588" y="80" width="155" height="58" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="665" y="102" fill="white" font-size="11" font-weight="600" text-anchor="middle">OpenCodeAgent</text>
+        <text x="665" y="117" fill="#94a3b8" font-size="8" text-anchor="middle">AIChatAgent&lt;Env&gt;</text>
+        <text x="665" y="131" fill="#94a3b8" font-size="7" text-anchor="middle">structured in/out</text>
+        <rect x="758" y="80" width="160" height="58" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="838" y="102" fill="white" font-size="11" font-weight="600" text-anchor="middle">Sandbox</text>
+        <text x="838" y="117" fill="#94a3b8" font-size="8" text-anchor="middle">Container DO</text>
+        <text x="838" y="131" fill="#94a3b8" font-size="7" text-anchor="middle">ContainerProxy</text>
+        <text x="418" y="156" fill="#64748b" font-size="7">Also: Automations &middot; Mailbox &middot; Memory &middot; ModelConfig &middot; Waitlist &mdash; 9 total</text>
+
+        <rect x="418" y="166" width="155" height="54" rx="6" fill="rgba(76,29,149,0.4)" stroke="#a78bfa" stroke-width="1.5"/>
+        <text x="495" y="188" fill="white" font-size="10" font-weight="600" text-anchor="middle">D1 AGENT_AUDIT</text>
+        <text x="495" y="203" fill="#94a3b8" font-size="7" text-anchor="middle">tool-call audit trail</text>
+        <text x="495" y="214" fill="#94a3b8" font-size="7" text-anchor="middle">hash of args, never args</text>
+        <rect x="588" y="166" width="155" height="54" rx="6" fill="rgba(76,29,149,0.4)" stroke="#a78bfa" stroke-width="1.5"/>
+        <text x="665" y="188" fill="white" font-size="10" font-weight="600" text-anchor="middle">KV AGENT_TOKENS</text>
+        <text x="665" y="203" fill="#94a3b8" font-size="7" text-anchor="middle">sha256(raw), tok_ prefix</text>
+        <text x="665" y="214" fill="#94a3b8" font-size="7" text-anchor="middle">hashed, never plaintext</text>
+        <rect x="758" y="166" width="160" height="54" rx="6" fill="rgba(76,29,149,0.4)" stroke="#a78bfa" stroke-width="1.5"/>
+        <text x="838" y="188" fill="white" font-size="10" font-weight="600" text-anchor="middle">R2 + Vectorize</text>
+        <text x="838" y="203" fill="#94a3b8" font-size="7" text-anchor="middle">email &gt;256KB &middot; 768-dim</text>
+        <text x="838" y="214" fill="#94a3b8" font-size="7" text-anchor="middle">supporting, not authoritative</text>
+
+        <rect x="418" y="240" width="500" height="72" rx="8" fill="rgba(120,53,15,0.3)" stroke="#fbbf24" stroke-width="1.5"/>
+        <text x="430" y="260" fill="#fbbf24" font-size="10" font-weight="600">Workers AI binding &mdash; three jobs, none of them coding</text>
+        <text x="430" y="278" fill="#94a3b8" font-size="8">1. Embeddings &mdash; @cf/baai/bge-base-en-v1.5 in memory-do.ts:412 (batched, 768-dim, feeds Vectorize)</text>
+        <text x="430" y="293" fill="#94a3b8" font-size="8">2. Session distillation &mdash; @cf/zai-org/glm-4.7-flash in session-distill.ts:259 (bank facts after a run)</text>
+        <text x="430" y="306" fill="#94a3b8" font-size="8">3. Automation run_when gate &mdash; automations-do.ts:90; falls back to Workers AI when no TypeSafe key</text>
+
+        <text x="418" y="334" fill="#64748b" font-size="8" font-weight="600">HARNESSES &mdash; one interface, 10 registered</text>
+        <rect x="418" y="344" width="500" height="128" rx="8" fill="rgba(6,78,59,0.06)" stroke="#34d399" stroke-width="1" stroke-dasharray="4,4"/>
+        <rect x="430" y="356" width="88" height="52" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="474" y="378" fill="white" font-size="10" font-weight="600" text-anchor="middle">opencode</text>
+        <text x="474" y="393" fill="#34d399" font-size="7" text-anchor="middle">default</text>
+        <rect x="526" y="356" width="88" height="52" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="570" y="378" fill="white" font-size="10" font-weight="600" text-anchor="middle">claude-code</text>
+        <text x="570" y="393" fill="#94a3b8" font-size="7" text-anchor="middle">sonnet-4-6</text>
+        <rect x="622" y="356" width="88" height="52" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="666" y="378" fill="white" font-size="10" font-weight="600" text-anchor="middle">codex</text>
+        <text x="666" y="393" fill="#94a3b8" font-size="7" text-anchor="middle">gpt-5.3</text>
+        <rect x="718" y="356" width="88" height="52" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="762" y="378" fill="white" font-size="10" font-weight="600" text-anchor="middle">devin</text>
+        <text x="762" y="393" fill="#94a3b8" font-size="7" text-anchor="middle">swe-2-medium</text>
+        <rect x="814" y="356" width="92" height="52" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+        <text x="860" y="378" fill="white" font-size="10" font-weight="600" text-anchor="middle">grok</text>
+        <text x="860" y="393" fill="#94a3b8" font-size="7" text-anchor="middle">grok-4.6</text>
+        <text x="430" y="428" fill="#64748b" font-size="7">+ cursor &middot; antigravity &middot; *-subscription &mdash; registered but NOT runnable (supportedRuntimes: [])</text>
+        <text x="430" y="443" fill="#a7f3d0" font-size="7">configFile &middot; buildArgv &middot; parseEvent &middot; capabilities &middot; verify &mdash; one interface, all 10</text>
+        <text x="430" y="460" fill="#fb7185" font-size="7">DEFECT: delegate zod enum lists only 6 &rarr; codex-subscription rejected at the door</text>
+
+        <rect x="418" y="484" width="500" height="120" rx="8" fill="rgba(120,53,15,0.08)" stroke="#fbbf24" stroke-width="1" stroke-dasharray="4,4"/>
+        <text x="430" y="502" fill="#fbbf24" font-size="9" font-weight="600">Cloudflare Container &middot; standard-1 &middot; max_instances 5 &middot; sleepAfter 1m &middot; destroyed on settle</text>
+        <text x="430" y="522" fill="#94a3b8" font-size="8">runtime.ts: clone &rarr; checkpoint &rarr; harness exec &rarr; settle &rarr; collect &rarr; diff &rarr; test evidence &rarr; verify</text>
+        <text x="430" y="539" fill="#94a3b8" font-size="8">Bounded at every seam: MAX_DIFF_CHARS &middot; MAX_CAPTURED_FILES &middot; MAX_PROGRESS_EVENTS</text>
+        <text x="430" y="556" fill="#a7f3d0" font-size="8">exit code decides status &mdash; a failing run renders failed, never a green tick</text>
+        <text x="430" y="573" fill="#64748b" font-size="7">Dockerfile pins every CLI + checksum; opencode-ai@1.18.31 &middot; claude-code@2.1.277 &middot; codex@0.155.0</text>
+        <text x="430" y="590" fill="#fb7185" font-size="7">PROVEN: queue&rarr;approval&rarr;dispatch&rarr;container&rarr;clone&rarr;harness&rarr;egress rewrite&rarr;error&rarr;cleanup</text>
+
+        <rect x="418" y="616" width="500" height="110" rx="8" fill="rgba(136,19,55,0.07)" stroke="#fb7185" stroke-width="1" stroke-dasharray="4,4"/>
+        <text x="430" y="634" fill="#fb7185" font-size="9" font-weight="600">Egress boundary &mdash; egress.ts &middot; deny-by-default allowedHosts &middot; credential never enters the container</text>
+        <text x="430" y="653" fill="#94a3b8" font-size="8">Handlers: google &middot; anthropic &middot; openai &middot; xai &middot; devin-api &middot; devin-inference &middot; opencode-go</text>
+        <text x="430" y="670" fill="#94a3b8" font-size="8">Container holds a DUMMY key; the real one attaches at the boundary via cf-aig-authorization</text>
+        <text x="430" y="687" fill="#94a3b8" font-size="8">approveRepoScope(): github.com scoped to /owner/repo for this run only &mdash; deny by default</text>
+        <text x="430" y="704" fill="#94a3b8" font-size="8">Subscription branches attach Bearer on their own deny-by-default branch, never AI Gateway</text>
+        <text x="430" y="721" fill="#64748b" font-size="7">GITHUB_TOKEN never reaches a clone URL, argv, log line, or UI response</text>
+
+        <rect x="418" y="738" width="500" height="88" rx="8" fill="rgba(30,41,59,0.4)" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="6,3"/>
+        <text x="430" y="756" fill="#94a3b8" font-size="9" font-weight="600">Local runtime &mdash; optional &middot; SHIBA_LOCAL_RUNTIME=1 &middot; operator daemon polls /api/local</text>
+        <text x="430" y="774" fill="#94a3b8" font-size="8">Real filesystem &middot; real git history &middot; real browser &middot; no cold start</text>
+        <text x="430" y="791" fill="#fb7185" font-size="8">The ONLY runtime where the operator's own Claude / Codex login is legal</text>
+        <text x="430" y="808" fill="#a7f3d0" font-size="8">LocalDispatch DO mints a claim token &rarr; same verify gate before it can claim completed</text>
+        <text x="430" y="821" fill="#64748b" font-size="7">useCase &rarr; runtime: persistent-workspace | browser-verify | local-credentials</text>
+
+        <rect x="418" y="838" width="500" height="46" rx="8" fill="rgba(136,19,55,0.25)" stroke="#fb7185" stroke-width="1.5"/>
+        <text x="430" y="856" fill="#fecdd3" font-size="9" font-weight="600">computer runtime &mdash; guarded refusal (deliberate, per spec/GOAL.md)</text>
+        <text x="430" y="870" fill="#94a3b8" font-size="8">runCodingTask() always throws &mdash; preview-only, not production-ready</text>
+        <text x="430" y="881" fill="#64748b" font-size="7">resolveRuntimeName() accepts "computer" so failure is an explicit message, not a crash</text>
+
+        <rect x="15" y="78" width="135" height="54" rx="6" fill="rgba(30,41,59,0.5)" stroke="#94a3b8" stroke-width="1.5"/>
+        <text x="82" y="100" fill="white" font-size="11" font-weight="600" text-anchor="middle">Users</text>
+        <text x="82" y="116" fill="#94a3b8" font-size="8" text-anchor="middle">browser &middot; iPhone</text>
+        <rect x="15" y="148" width="135" height="54" rx="6" fill="rgba(30,41,59,0.5)" stroke="#94a3b8" stroke-width="1.5"/>
+        <text x="82" y="170" fill="white" font-size="11" font-weight="600" text-anchor="middle">Slack / TG</text>
+        <text x="82" y="186" fill="#94a3b8" font-size="8" text-anchor="middle">Discord &middot; webhooks</text>
+        <rect x="15" y="240" width="135" height="54" rx="6" fill="rgba(30,41,59,0.5)" stroke="#94a3b8" stroke-width="1.5"/>
+        <text x="82" y="262" fill="white" font-size="11" font-weight="600" text-anchor="middle">GitHub</text>
+        <text x="82" y="278" fill="#94a3b8" font-size="8" text-anchor="middle">clone &middot; PR &middot; hook</text>
+
+        <rect x="938" y="62" width="225" height="58" rx="6" fill="rgba(120,53,15,0.3)" stroke="#fbbf24" stroke-width="1.5"/>
+        <text x="1050" y="84" fill="white" font-size="11" font-weight="600" text-anchor="middle">AI Gateway</text>
+        <text x="1050" y="100" fill="#94a3b8" font-size="8" text-anchor="middle">logs &middot; ZDR &middot; unified billing</text>
+        <text x="1050" y="114" fill="#fbbf24" font-size="7" text-anchor="middle">Birthday Week: Web Search API</text>
+        <rect x="938" y="140" width="225" height="130" rx="6" fill="rgba(30,41,59,0.5)" stroke="#94a3b8" stroke-width="1.5"/>
+        <text x="1050" y="162" fill="white" font-size="11" font-weight="600" text-anchor="middle">Model providers</text>
+        <text x="1050" y="186" fill="#94a3b8" font-size="8" text-anchor="middle">Google AI Studio</text>
+        <text x="1050" y="204" fill="#94a3b8" font-size="8" text-anchor="middle">Anthropic</text>
+        <text x="1050" y="222" fill="#94a3b8" font-size="8" text-anchor="middle">OpenAI</text>
+        <text x="1050" y="240" fill="#94a3b8" font-size="8" text-anchor="middle">xAI</text>
+        <text x="1050" y="258" fill="#94a3b8" font-size="8" text-anchor="middle">Devin (api + inference)</text>
+        <rect x="938" y="735" width="225" height="60" rx="6" fill="rgba(30,41,59,0.5)" stroke="#94a3b8" stroke-width="1.5"/>
+        <text x="1050" y="757" fill="white" font-size="11" font-weight="600" text-anchor="middle">Operator logins</text>
+        <text x="1050" y="773" fill="#94a3b8" font-size="8" text-anchor="middle">claude &middot; codex &middot; grok</text>
+        <text x="1050" y="788" fill="#fb7185" font-size="7" text-anchor="middle">local runtime only</text>
+
+        <text x="15" y="920" fill="white" font-size="10" font-weight="600">Legend</text>
+        <rect x="15" y="930" width="16" height="10" rx="2" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1"/>
+        <text x="37" y="938" fill="#94a3b8" font-size="8">Worker / Durable Object</text>
+        <rect x="205" y="930" width="16" height="10" rx="2" fill="rgba(120,53,15,0.3)" stroke="#fbbf24" stroke-width="1"/>
+        <text x="227" y="938" fill="#94a3b8" font-size="8">Cloudflare service / Container</text>
+        <rect x="425" y="930" width="16" height="10" rx="2" fill="rgba(76,29,149,0.4)" stroke="#a78bfa" stroke-width="1"/>
+        <text x="447" y="938" fill="#94a3b8" font-size="8">State store</text>
+        <rect x="555" y="930" width="16" height="10" rx="2" fill="rgba(136,19,55,0.4)" stroke="#fb7185" stroke-width="1"/>
+        <text x="577" y="938" fill="#94a3b8" font-size="8">Security / approval gate</text>
+        <rect x="765" y="930" width="16" height="10" rx="2" fill="rgba(30,41,59,0.5)" stroke="#94a3b8" stroke-width="1"/>
+        <text x="787" y="938" fill="#94a3b8" font-size="8">External</text>
+        <line x1="890" y1="935" x2="906" y2="935" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="4,4"/>
+        <text x="912" y="938" fill="#94a3b8" font-size="8">Credential / control flow</text>
+      </svg>
+    </div>
+
+    <div class="section-title">Why Workers AI is here &mdash; and why it is not the coding model</div>
+    <div class="cards">
+      <div class="card">
+        <div class="card-header"><div class="card-dot amber"></div><h3>Three jobs, all plumbing</h3></div>
+        <ul>
+          <li>&bull; <strong>Embeddings.</strong> <code>@cf/baai/bge-base-en-v1.5</code> at <code>memory-do.ts:412</code>. Batched, 768-dim, feeds Vectorize. Runs inside the DO with no key and no egress.</li>
+          <li>&bull; <strong>Session distillation.</strong> <code>@cf/zai-org/glm-4.7-flash</code> at <code>session-distill.ts:259</code>. Compresses a finished run into bankable facts.</li>
+          <li>&bull; <strong>Automation gate.</strong> <code>automations-do.ts:90</code>. The <code>run_when</code> fuzzy gate falls back to Workers AI when <code>TYPESAFE_API_KEY</code> is unset.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-dot emerald"></div><h3>Why not route these through AI Gateway?</h3></div>
+        <ul>
+          <li>&bull; <strong>No credential to leak.</strong> The <code>AI</code> binding needs no key. The container path needs a key, an allowlist entry, and a handler.</li>
+          <li>&bull; <strong>No egress interception.</strong> Embeddings never touch your deny-by-default allowlist, so there is no handler to write and no scope to get wrong.</li>
+          <li>&bull; <strong>Latency.</strong> An in-DO call beats a Worker &rarr; gateway &rarr; provider round trip for a 768-dim vector.</li>
+          <li>&bull; <strong>It is a fallback, not a dependency.</strong> Delete the <code>AI</code> binding and you lose embeddings, distillation, and the keyless automation gate. Nothing else breaks.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-dot rose"></div><h3>What it must never do</h3></div>
+        <ul>
+          <li>&bull; <strong>Never write code.</strong> Coding goes through the container harness and AI Gateway. Workers AI has no repo, no egress allowlist, and no approval gate.</li>
+          <li>&bull; <strong>Never hold a provider key.</strong> The point of <code>egress.ts</code> is that the real credential attaches at the boundary. A binding that authenticates for you removes that control.</li>
+          <li>&bull; <span class="warn">Cost trap:</span> <code>session-distill</code> runs on <strong>every</strong> completed run. With <code>MEMORY_ENABLED</code> on, that is one extra model call per run, forever.</li>
+          <li>&bull; <span class="good">Fine as-is:</span> embeddings are cheap and batched. Distillation is the one to watch.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="section-title">The rest of the system</div>
+    <div class="cards">
+      <div class="card">
+        <div class="card-header"><div class="card-dot rose"></div><h3>The moat: approval gate + egress</h3></div>
+        <ul>
+          <li>&bull; <code>delegate_coding_task</code> carries <code>needsApproval</code>. The route is <strong>frozen before</strong> a run id is minted.</li>
+          <li>&bull; Rejection starts <strong>zero</strong> containers, not a cancelled one.</li>
+          <li>&bull; <code>egress.ts</code> is deny-by-default. Real key attaches at <code>cf-aig-authorization</code>; the container only ever sees a dummy.</li>
+          <li>&bull; <code>approveRepoScope()</code> narrows GitHub to one <code>/owner/repo</code> for one run.</li>
+          <li>&bull; Subscription harnesses are opt-in and dark. If multi-tenancy lands, they are removed, not reworked.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-dot emerald"></div><h3>Execution spine</h3></div>
+        <ul>
+          <li>&bull; <strong>9 Durable Objects</strong> are the only authoritative state. D1, KV, R2, Vectorize only support.</li>
+          <li>&bull; <code>CodingOrchestrator</code> plans and delegates. It never edits a repository itself.</li>
+          <li>&bull; Runs survive client disconnect via <code>schedule()</code> alarms + <code>reclaimRuns</code>, not sleeps.</li>
+          <li>&bull; Harness seam: <code>configFile</code>, <code>buildArgv</code>, <code>parseEvent</code>, <code>capabilities</code>, <code>verify</code>.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-dot amber"></div><h3>Measured state, honestly</h3></div>
+        <ul>
+          <li>&bull; 1547 tests pass, typecheck green.</li>
+          <li>&bull; <strong>One chain proven</strong> in <code>wrangler dev</code>: queue &rarr; signed approval &rarr; DO dispatch &rarr; container &rarr; scoped clone &rarr; harness &rarr; provider egress rewrite &rarr; structured error &rarr; cleanup.</li>
+          <li>&bull; It died at <strong>AI Gateway 401</strong>. A credential, not a code gap.</li>
+          <li>&bull; Two defects open: harness enum drift (6 of 10 accepted) and <code>testCommand</code> never reaching dispatch.</li>
+          <li>&bull; <code>compat_date</code> is 2026-06-01, so pending-I/O keep-alive is <strong>not</strong> active.</li>
+        </ul>
+      </div>
+    </div>
+
+    <p class="footer">Shiba &middot; princepal9120/ai-intern &middot; AGPL-3.0-only &middot; diagram built from measured code, not docs</p>
+  </div>
+</body>
+</html>

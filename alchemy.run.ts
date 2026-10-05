@@ -277,6 +277,9 @@ export const Worker = Cloudflare.Worker("Worker", {
       "TELEGRAM_BOT_TOKEN",
       "TELEGRAM_WEBHOOK_SECRET",
       "DISCORD_PUBLIC_KEY",
+      // T52: HMAC key for dashboard-minted pairing tokens (optional —
+      // falls back to LOCAL_ADAPTER_TOKEN when unset).
+      "PAIRING_SECRET",
     ]),
     // Live deploys fail closed: no Access identity = 401 on the dashboard/API.
     ...(isLiveStage ? { REQUIRE_ACCESS: "1" } : {}),

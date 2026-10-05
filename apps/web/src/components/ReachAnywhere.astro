@@ -1,0 +1,1109 @@
+---
+// ReachAnywhere.astro
+// Retro paper-OS ("designed-as-app") interactive architecture canvas
+// Strictly derived from design.md:
+// - Radius 0, hard offset shadows (2px/3px), window-chrome panels, dot-grid canvas
+// - Instrument Serif headings & Geist Mono microcopy
+// - Inbound: Web, Slack, Telegram, Discord
+// - Center: Shiba with rich animated SVG workstation (scanlines, blinking eyes, cursor, radar)
+// - Outbound: Computer Use, Code, Personal Agents, Memory
+// - Clean Shiba title without any badge beside it
+---
+
+<section id="reach-anywhere" class="shell reach-section" aria-labelledby="reach-title">
+  <!-- Section Introduction Header in Instrument Serif -->
+  <div class="reach-section-head">
+    <div>
+      <p class="eyebrow">YOUR TASK. YOUR APPROVAL.</p>
+      <h2 id="reach-title" class="reach-title">One agent.<br /><em>More ways to reach it.</em></h2>
+    </div>
+    <p class="micro">CHAT OR DASHBOARD &middot; APPROVAL BEFORE EXECUTION</p>
+  </div>
+
+  <!-- Retro Paper-OS Window Frame -->
+  <div class="reach-window" id="reach-window">
+    <!-- Window Titlebar with Beveled Marks -->
+    <div class="reach-titlebar">
+      <div class="reach-titlebar-left">
+        <span class="titlebar-dot" aria-hidden="true"></span>
+        <span class="titlebar-text">shiba.workspace &mdash; reach-anywhere.flow</span>
+      </div>
+      <div class="reach-titlebar-right" aria-hidden="true">
+        <span class="win-btn win-min"></span>
+        <span class="win-btn win-max"></span>
+        <span class="win-btn win-close"></span>
+      </div>
+    </div>
+
+    <!-- Window Canvas Area with Dot Grid -->
+    <div class="reach-canvas" id="reach-canvas">
+      <!-- Column Label Hairline -->
+      <div class="reach-col-headers">
+        <span class="reach-col-tag reach-tag-channels">01 / START A TASK</span>
+        <span class="reach-col-tag reach-tag-actions">02 / WORK IN YOUR CLOUD</span>
+      </div>
+
+      <!-- The 3-Column Diagram Stage -->
+      <div class="reach-stage" id="reach-stage">
+        <!-- SVG Canvas for Smooth Bezier Curves and Animated Glowing Packets -->
+        <svg class="reach-svg-canvas" id="reach-svg" viewBox="0 0 1000 400" preserveAspectRatio="none" aria-hidden="true">
+          <defs>
+            <filter id="packet-glow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="2.5" result="blur" />
+              <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
+            <filter id="packet-bright" x="-60%" y="-60%" width="220%" height="220%">
+              <feGaussianBlur stdDeviation="4" result="blur" />
+              <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
+          </defs>
+
+          <!-- Connector Wires (Dynamic S-curves calculated from card edge midpoints) -->
+          <g class="reach-wires-group" id="reach-wires-group">
+            <path id="wire-left-0" class="reach-wire" d="M 235,52 C 350,52 390,200 458,200" />
+            <path id="wire-left-1" class="reach-wire is-active-wire" d="M 235,124 C 340,124 390,200 458,200" />
+            <path id="wire-left-2" class="reach-wire" d="M 235,196 C 340,196 390,200 458,200" />
+            <path id="wire-left-3" class="reach-wire" d="M 235,268 C 350,268 390,200 458,200" />
+
+            <path id="wire-right-0" class="reach-wire" d="M 542,200 C 610,200 650,52 765,52" />
+            <path id="wire-right-1" class="reach-wire is-active-wire" d="M 542,200 C 610,200 660,124 765,124" />
+            <path id="wire-right-2" class="reach-wire" d="M 542,200 C 610,200 660,196 765,196" />
+            <path id="wire-right-3" class="reach-wire" d="M 542,200 C 610,200 650,268 765,268" />
+          </g>
+
+          <!-- Flowing Glowing Data Packets along the curves -->
+          <g class="reach-packets-group">
+            <!-- Web -> Center -->
+            <rect id="pkt-left-0" width="7" height="7" class="reach-pkt pkt-left" x="-100" y="-100" filter="url(#packet-glow)">
+              <animateMotion dur="3.4s" repeatCount="indefinite" begin="0.3s">
+                <mpath href="#wire-left-0" />
+              </animateMotion>
+            </rect>
+            <!-- Slack -> Center (Primary) -->
+            <rect id="pkt-left-1" width="8" height="8" class="reach-pkt pkt-left pkt-primary" x="-100" y="-100" filter="url(#packet-bright)">
+              <animateMotion dur="2.7s" repeatCount="indefinite" begin="1.1s">
+                <mpath href="#wire-left-1" />
+              </animateMotion>
+            </rect>
+            <!-- Telegram -> Center -->
+            <rect id="pkt-left-2" width="7" height="7" class="reach-pkt pkt-left" x="-100" y="-100" filter="url(#packet-glow)">
+              <animateMotion dur="3.6s" repeatCount="indefinite" begin="1.9s">
+                <mpath href="#wire-left-2" />
+              </animateMotion>
+            </rect>
+            <!-- Discord -> Center -->
+            <rect id="pkt-left-3" width="7" height="7" class="reach-pkt pkt-left" x="-100" y="-100" filter="url(#packet-glow)">
+              <animateMotion dur="4.0s" repeatCount="indefinite" begin="2.6s">
+                <mpath href="#wire-left-3" />
+              </animateMotion>
+            </rect>
+
+            <!-- Center -> Computer Use -->
+            <rect id="pkt-right-0" width="7" height="7" class="reach-pkt pkt-right" x="-100" y="-100" filter="url(#packet-glow)">
+              <animateMotion dur="3.3s" repeatCount="indefinite" begin="0.8s">
+                <mpath href="#wire-right-0" />
+              </animateMotion>
+            </rect>
+            <!-- Center -> Code (Featured primary stream) -->
+            <rect id="pkt-right-1" width="8" height="8" class="reach-pkt pkt-right pkt-primary" x="-100" y="-100" filter="url(#packet-bright)">
+              <animateMotion dur="2.4s" repeatCount="indefinite" begin="1.0s">
+                <mpath href="#wire-right-1" />
+              </animateMotion>
+            </rect>
+            <!-- Center -> Personal Agents -->
+            <rect id="pkt-right-2" width="7" height="7" class="reach-pkt pkt-right" x="-100" y="-100" filter="url(#packet-glow)">
+              <animateMotion dur="3.5s" repeatCount="indefinite" begin="1.7s">
+                <mpath href="#wire-right-2" />
+              </animateMotion>
+            </rect>
+            <!-- Center -> Memory -->
+            <rect id="pkt-right-3" width="7" height="7" class="reach-pkt pkt-right" x="-100" y="-100" filter="url(#packet-glow)">
+              <animateMotion dur="3.7s" repeatCount="indefinite" begin="2.2s">
+                <mpath href="#wire-right-3" />
+              </animateMotion>
+            </rect>
+          </g>
+        </svg>
+
+        <!-- Left Column: CHANNELS (Inbound Triggers) -->
+        <div class="reach-col reach-col-channels" role="list" aria-label="Input channels">
+          <!-- Web -->
+          <button type="button" class="reach-card" data-idx="0" data-channel="web" data-target="computer-use" aria-label="Channel: Web">
+            <span class="reach-card-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="2" y1="12" x2="22" y2="12"></line>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+              </svg>
+            </span>
+            <div class="reach-card-info">
+              <span class="reach-card-title">Web</span>
+              <span class="reach-card-sub">/app/ &middot; DASHBOARD</span>
+            </div>
+            <span class="reach-card-badge">LIVE</span>
+          </button>
+
+          <!-- Slack -->
+          <button type="button" class="reach-card" data-idx="1" data-channel="slack" data-target="code" aria-label="Channel: Slack">
+            <span class="reach-card-icon">
+              <img src="/assets/channels/slack.svg" alt="" width="20" height="20" class="pixelated" />
+            </span>
+            <div class="reach-card-info">
+              <span class="reach-card-title">Slack</span>
+              <span class="reach-card-sub">@shiba &middot; CHATOPS</span>
+            </div>
+            <span class="reach-card-badge">LIVE</span>
+          </button>
+
+          <!-- Telegram -->
+          <button type="button" class="reach-card" data-idx="2" data-channel="telegram" data-target="personal-agents" aria-label="Channel: Telegram">
+            <span class="reach-card-icon">
+              <img src="/assets/channels/telegram.svg" alt="" width="20" height="20" class="pixelated" />
+            </span>
+            <div class="reach-card-info">
+              <span class="reach-card-title">Telegram</span>
+              <span class="reach-card-sub">/shiba &middot; WEBHOOK</span>
+            </div>
+            <span class="reach-card-badge">BOT</span>
+          </button>
+
+          <!-- iPhone -->
+          <button type="button" class="reach-card" data-idx="3" data-channel="iphone" data-target="sandbox" aria-label="Channel: Mobile web">
+            <span class="reach-card-icon">
+              <img src="/assets/channels/iphone.svg" alt="" width="20" height="20" class="pixelated" />
+            </span>
+            <div class="reach-card-info">
+              <span class="reach-card-title">Mobile web</span>
+              <span class="reach-card-sub">DASHBOARD &middot; MOBILE</span>
+            </div>
+            <span class="reach-card-badge">APP</span>
+          </button>
+        </div>
+
+        <!-- Center Hub: Shiba Workstation with Rich Animated SVG -->
+        <div class="reach-center-hub" id="reach-center-hub">
+          <!-- Concentric Stepped Square Frames (Retro radar) -->
+          <div class="reach-coord-frame frame-1" aria-hidden="true"></div>
+          <div class="reach-coord-frame frame-2" aria-hidden="true"></div>
+          <div class="reach-coord-frame frame-3" aria-hidden="true"></div>
+
+          <!-- Central Hardware Workstation Node with Rich Animated SVG -->
+          <div class="reach-center-node" id="reach-center-node" title="Shiba Core Workstation">
+            <div class="reach-node-inner">
+              <!-- A readable mascot, framed as a terminal rather than nested tiny windows. -->
+              <svg class="reach-shiba-pc-svg" width="88" height="88" viewBox="0 0 96 96" fill="none" role="img" aria-labelledby="reach-shiba-logo-title">
+                <title id="reach-shiba-logo-title">Shiba, your coding companion</title>
+                <rect x="9" y="8" width="78" height="72" rx="4" fill="var(--card)" stroke="var(--navy)" stroke-width="2" />
+                <path d="M10 23H86" stroke="var(--line-2)" />
+                <circle cx="17" cy="16" r="2" fill="var(--navy)" />
+                <circle cx="24" cy="16" r="2" fill="var(--line-2)" />
+                <circle cx="31" cy="16" r="2" fill="var(--line-2)" />
+                <path d="M74 14L77 16L74 18M80 18H83" stroke="var(--navy)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                <!-- Upright ears and broad cream cheeks remain distinct at small sizes. -->
+                <path d="M25 48L24 30Q24 27 27 29L39 37M57 37L69 29Q72 27 72 30L71 48" fill="#D99850" stroke="#49382B" stroke-width="2" stroke-linejoin="round" />
+                <path d="M28 34L29 44L35 39Z M68 34L67 44L61 39Z" fill="#F4D3B1" />
+                <path d="M48 35C34 35 23 45 23 57C23 69 34 75 48 75C62 75 73 69 73 57C73 45 62 35 48 35Z" fill="#D99850" stroke="#49382B" stroke-width="2" />
+                <path d="M25 57C31 54 35 57 39 61C42 56 54 56 57 61C61 57 65 54 71 57C71 67 61 73 48 73C35 73 25 67 25 57Z" fill="#FFF1DB" />
+                <path d="M35 46L39 45M57 45L61 46" stroke="#FFF1DB" stroke-width="3" stroke-linecap="round" />
+                <g class="shiba-eye">
+                  <ellipse cx="36" cy="53" rx="2" ry="2.5" fill="#49382B" />
+                  <ellipse cx="60" cy="53" rx="2" ry="2.5" fill="#49382B" />
+                </g>
+                <path d="M44 60Q48 58 52 60L48 64Z" fill="#49382B" />
+                <path d="M48 64V66M42 66Q45 70 48 66Q51 70 54 66" stroke="#49382B" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M38 81V86H58V81M30 87H66" stroke="var(--navy)" stroke-width="2" stroke-linecap="square" />
+              </svg>
+            </div>
+            <span class="reach-node-status-led" aria-hidden="true"></span>
+          </div>
+
+          <!-- Clean Shiba Title & Primitives (NO badge beside Shiba!) -->
+          <div class="reach-center-info">
+            <div class="reach-name-row">
+              <span class="reach-brand-name">Shiba</span>
+            </div>
+            <div class="reach-primitives-strip" id="reach-primitives-strip">
+              <span class="prim-badge prim-memory">memory</span>
+              <span class="prim-sep">&middot;</span>
+              <span class="prim-badge prim-tools">tools</span>
+              <span class="prim-sep">&middot;</span>
+              <span class="prim-badge prim-sandbox">sandbox</span>
+              <span class="prim-sep">&middot;</span>
+              <span class="prim-badge prim-approval">approval gate</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: CAPABILITIES & ACTIONS (Computer Use, Code, Personal Agents, Memory) -->
+        <div class="reach-col reach-col-actions" role="list" aria-label="Capabilities and actions">
+          <!-- Computer Use -->
+          <button type="button" class="reach-card" data-idx="0" data-action="computer-use" aria-label="Capability: Computer Use">
+            <span class="reach-card-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square">
+                <rect width="20" height="14" x="2" y="3"></rect>
+                <line x1="8" x2="16" y1="21" y2="21"></line>
+                <line x1="12" x2="12" y1="17" y2="21"></line>
+                <path d="m15 11 3-3-3-3" stroke="var(--navy)" stroke-width="1.5"></path>
+              </svg>
+            </span>
+            <div class="reach-card-info">
+              <span class="reach-card-title">Computer Use</span>
+              <span class="reach-card-sub">BROWSER &middot; DESKTOP</span>
+            </div>
+            <span class="reach-card-badge">VM</span>
+          </button>
+
+          <!-- Code (Active default with highlight border matching [Image #1]) -->
+          <button type="button" class="reach-card is-active" data-idx="1" data-action="code" aria-label="Capability: Code">
+            <span class="reach-card-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square">
+                <polyline points="16 18 22 12 16 6"></polyline>
+                <polyline points="8 6 2 12 8 18"></polyline>
+              </svg>
+            </span>
+            <div class="reach-card-info">
+              <span class="reach-card-title">Code</span>
+              <span class="reach-card-sub">DIFF &middot; HARNESSES &middot; PR</span>
+            </div>
+            <span class="reach-card-badge">HARNESS</span>
+          </button>
+
+          <!-- Personal Agents -->
+          <button type="button" class="reach-card" data-idx="2" data-action="personal-agents" aria-label="Capability: Personal Agents">
+            <span class="reach-card-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square">
+                <rect x="3" y="6" width="18" height="14"></rect>
+                <circle cx="8.5" cy="12" r="1.5" fill="currentColor"></circle>
+                <circle cx="15.5" cy="12" r="1.5" fill="currentColor"></circle>
+                <line x1="9" y1="16" x2="15" y2="16"></line>
+                <line x1="12" y1="2" x2="12" y2="6"></line>
+              </svg>
+            </span>
+            <div class="reach-card-info">
+              <span class="reach-card-title">Personal Agents</span>
+              <span class="reach-card-sub">ANTIGRAVITY &middot; CURSOR</span>
+            </div>
+            <span class="reach-card-badge">AGENTS</span>
+          </button>
+
+          <!-- Sandbox -->
+          <button type="button" class="reach-card" data-idx="3" data-action="sandbox" aria-label="Capability: Sandbox">
+            <span class="reach-card-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square">
+                <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"></path>
+                <path d="m3.3 7 8.7 5 8.7-5"></path>
+                <path d="M12 22V12"></path>
+              </svg>
+            </span>
+            <div class="reach-card-info">
+              <span class="reach-card-title">Sandbox</span>
+              <span class="reach-card-sub">CLOUDFLARE CONTAINER</span>
+            </div>
+            <span class="reach-card-badge">ISOLATED</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Retro Statusbar Footer matching design.md statusbar idiom -->
+    <div class="reach-statusbar" id="reach-statusbar" role="status">
+      <div class="reach-statuscell status-runtime">
+        <span class="status-live-dot" aria-hidden="true"></span>
+        <span>INTERACTIVE WORKFLOW DEMO</span>
+      </div>
+      <div class="reach-statuscell status-core">
+        <span>ENGINE: <strong>GOOGLE/GEMINI-3.8-FLASH</strong></span>
+      </div>
+      <div class="reach-statuscell status-flow" id="reach-flow-narrative">
+        <span>FLOW: <em>Slack (@shiba) &rarr; Gemini 3.8 Flash (Sandbox) &rarr; Code (Diff &amp; PR)</em></span>
+      </div>
+      <div class="reach-statuscell status-gate">
+        <span>CODING RUNS: <strong>APPROVAL FIRST</strong></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  /* ==========================================================================
+     bezalel.sh retro paper-OS rules (strictly derived from design.md)
+     - Square corners everywhere (border-radius: 0)
+     - Hard offset shadows (2px/3px 0 var(--paper-shadow))
+     - Window chrome with titlebar and beveled square window marks
+     - Dot grid canvas
+     - Instrument Serif headings & Geist Mono microcopy
+     ========================================================================== */
+
+  .reach-section {
+    padding-top: 90px;
+    padding-bottom: 30px;
+  }
+
+  .reach-section-head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+    border-bottom: 1px solid var(--line-2);
+    padding-bottom: 24px;
+    margin-bottom: 28px;
+  }
+
+  .reach-title {
+    font-family: 'Instrument Serif', Georgia, serif !important;
+    font-size: clamp(34px, 3.8vw, 54px) !important;
+    font-weight: 400 !important;
+    line-height: 1.05 !important;
+    color: var(--ink) !important;
+    margin: 8px 0 0 !important;
+    letter-spacing: -0.01em !important;
+  }
+
+  .reach-title em {
+    color: var(--navy) !important;
+    font-style: italic !important;
+  }
+
+  /* Retro Paper-OS Window */
+  .reach-window {
+    border: 1px solid var(--line-2) !important;
+    background: var(--card) !important;
+    box-shadow: 3px 3px 0 var(--paper-shadow) !important;
+    border-radius: 0 !important;
+    overflow: hidden;
+  }
+
+  /* Window Titlebar */
+  .reach-titlebar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 32px;
+    padding: 0 10px;
+    background: var(--paper-title) !important;
+    color: var(--paper-title-fg) !important;
+    border-bottom: 1px solid var(--line-2);
+    user-select: none;
+  }
+
+  html[data-theme='dark'] .reach-titlebar {
+    background: var(--panel-2) !important;
+    color: var(--ink) !important;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .reach-titlebar-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Geist Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  .titlebar-dot {
+    width: 6px;
+    height: 6px;
+    background: var(--ok);
+    border-radius: 0 !important;
+  }
+
+  .reach-titlebar-right {
+    display: flex;
+    gap: 4px;
+  }
+
+  /* Retro 3 beveled window buttons */
+  .win-btn {
+    width: 14px;
+    height: 13px;
+    background: #bdbdbd;
+    border: 1px solid #444;
+    border-top: 1px solid #f5f5f5;
+    border-left: 1px solid #f5f5f5;
+    border-radius: 0 !important;
+    display: inline-block;
+  }
+
+  html[data-theme='dark'] .win-btn {
+    background: #4a4d46;
+    border: 1px solid #1a1a18;
+    border-top: 1px solid #6c7066;
+    border-left: 1px solid #6c7066;
+  }
+
+  /* Window Canvas with Dot Grid */
+  .reach-canvas {
+    position: relative;
+    padding: 24px 32px 30px;
+    background-color: var(--card);
+    background-image: radial-gradient(var(--paper-dot) 0.7px, transparent 0.7px);
+    background-size: 12px 12px;
+  }
+
+  .reach-col-headers {
+    display: flex;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 10px;
+    margin-bottom: 24px;
+    pointer-events: none;
+  }
+
+  .reach-col-tag {
+    font-family: 'Geist Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    color: var(--ink-2);
+    text-transform: uppercase;
+  }
+
+  /* Stage Grid Layout */
+  .reach-stage {
+    position: relative;
+    display: grid;
+    grid-template-columns: 235px minmax(0, 1fr) 235px;
+    align-items: center;
+    min-height: 400px;
+  }
+
+  /* SVG Canvas spanning the stage */
+  .reach-svg-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+    overflow: hidden;
+  }
+
+  .reach-wire {
+    fill: none;
+    stroke: var(--line-2);
+    stroke-width: 1.4;
+    transition: stroke 240ms ease, stroke-width 240ms ease;
+  }
+
+  .reach-wire.is-active-wire {
+    stroke: var(--navy);
+    stroke-width: 2.2;
+  }
+
+  .reach-pkt {
+    fill: var(--navy);
+    border-radius: 0 !important;
+  }
+
+  .reach-pkt.pkt-primary {
+    fill: #ffffff;
+  }
+
+  html[data-theme='dark'] .reach-pkt.pkt-primary {
+    fill: #ffffff;
+  }
+
+  /* Column of Cards */
+  .reach-col {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    z-index: 2;
+  }
+
+  .reach-col-channels {
+    justify-self: start;
+    width: 235px;
+  }
+
+  .reach-col-actions {
+    justify-self: end;
+    width: 235px;
+  }
+
+  /* Retro Paper-OS Cards */
+  .reach-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    height: 56px;
+    padding: 0 12px;
+    background: var(--panel-2) !important;
+    border: 1px solid var(--line-2) !important;
+    border-radius: 0 !important;
+    box-shadow: 2px 2px 0 var(--paper-shadow) !important;
+    color: var(--ink) !important;
+    font-family: 'Geist Mono', monospace !important;
+    cursor: pointer;
+    text-align: left;
+    transition: transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out), border-color 150ms ease, background 150ms ease;
+    outline: none;
+  }
+
+  .reach-card:hover {
+    background: var(--card) !important;
+    border-color: var(--navy) !important;
+    transform: translate(1px, 1px);
+    box-shadow: 1px 1px 0 var(--paper-shadow) !important;
+  }
+
+  .reach-card.is-active {
+    background: var(--card) !important;
+    border: 1px solid var(--line-2) !important;
+    box-shadow: 3px 3px 0 var(--paper-shadow) !important;
+  }
+
+  .reach-card-icon {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    flex: none;
+    border-radius: 0 !important;
+  }
+
+  .reach-card-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .reach-card-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .reach-card-sub {
+    font-size: 8.5px;
+    letter-spacing: 0.06em;
+    color: var(--ink-2);
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .reach-card-badge {
+    font-size: 8px;
+    letter-spacing: 0.1em;
+    color: var(--navy);
+    border: 1px solid var(--line-2);
+    background: var(--card);
+    padding: 1px 4px;
+    border-radius: 0 !important;
+    text-transform: uppercase;
+    flex: none;
+  }
+
+  /* Center Hub: Retro Workstation */
+  .reach-center-hub {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    z-index: 2;
+    padding-inline: 16px;
+  }
+
+  /* Stepped Square Frames (Retro radar) */
+  .reach-coord-frame {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    border: 1px solid var(--line);
+    transform: translate(-50%, calc(-50% - 24px));
+    border-radius: 0 !important;
+    pointer-events: none;
+  }
+
+  .reach-coord-frame.frame-1 {
+    width: 120px;
+    height: 120px;
+    animation: frame-radar 4s linear infinite;
+  }
+
+  .reach-coord-frame.frame-2 {
+    width: 180px;
+    height: 180px;
+    animation: frame-radar 4s linear infinite 1.33s;
+  }
+
+  .reach-coord-frame.frame-3 {
+    width: 240px;
+    height: 240px;
+    animation: frame-radar 4s linear infinite 2.66s;
+  }
+
+  @keyframes frame-radar {
+    0% {
+      opacity: 0.6;
+      transform: translate(-50%, calc(-50% - 24px)) scale(0.9);
+      border-color: var(--navy);
+    }
+    50% {
+      opacity: 0.25;
+      border-color: var(--line-2);
+    }
+    100% {
+      opacity: 0;
+      transform: translate(-50%, calc(-50% - 24px)) scale(1.18);
+      border-color: var(--line);
+    }
+  }
+
+  /* Center Hardware Node */
+  .reach-center-node {
+    display: grid;
+    place-items: center;
+    width: 108px;
+    height: 108px;
+    background: var(--card) !important;
+    border: 1px solid var(--line-2) !important;
+    box-shadow: 3px 3px 0 var(--paper-shadow) !important;
+    border-radius: 0 !important;
+    position: relative;
+    z-index: 3;
+    transition: transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+  }
+
+  .reach-node-inner {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 100%;
+    background: var(--panel-2);
+    overflow: hidden;
+  }
+
+  .reach-shiba-pc-svg {
+    display: block;
+    width: 88px;
+    height: 88px;
+  }
+
+  /* CRT Scanline Sweep Animation */
+  .crt-sweep-line {
+    animation: sweep-down 2.2s linear infinite;
+  }
+
+  @keyframes sweep-down {
+    0% { transform: translateY(0); opacity: 0; }
+    20% { opacity: 0.7; }
+    80% { opacity: 0.7; }
+    100% { transform: translateY(14px); opacity: 0; }
+  }
+
+  /* Shiba Eye Blink Animation */
+  .shiba-eye {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: eye-blink 5s infinite;
+  }
+
+  @keyframes eye-blink {
+    0%, 96%, 100% { transform: scaleY(1); }
+    98% { transform: scaleY(0.1); }
+  }
+
+  /* Terminal Cursor Blink */
+  .terminal-cursor {
+    animation: cursor-blink 1s steps(2, start) infinite;
+  }
+
+  @keyframes cursor-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+
+  /* Chassis LED Glow */
+  .chassis-led {
+    animation: led-glow 2.4s infinite;
+  }
+
+  @keyframes led-glow {
+    0%, 100% { fill: #22c55e; filter: drop-shadow(0 0 2px #22c55e); }
+    50% { fill: #15803d; filter: none; }
+  }
+
+  .reach-node-status-led {
+    position: absolute;
+    bottom: -3px;
+    right: -3px;
+    width: 7px;
+    height: 7px;
+    background: var(--ok);
+    border: 1px solid var(--card);
+    border-radius: 0 !important;
+  }
+
+  /* Center Labels */
+  .reach-center-info {
+    margin-top: 14px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    z-index: 3;
+  }
+
+  .reach-name-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .reach-brand-name {
+    font-family: 'Instrument Serif', Georgia, serif;
+    font-size: 24px;
+    font-weight: 400;
+    color: var(--ink);
+    letter-spacing: -0.01em;
+  }
+
+  .reach-primitives-strip {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-family: 'Geist Mono', monospace;
+    font-size: 10.5px;
+    color: var(--ink-2);
+    letter-spacing: 0.04em;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .prim-badge {
+    transition: color 150ms ease, background 150ms ease;
+    padding: 1px 3px;
+  }
+
+  .prim-badge.active-prim {
+    color: var(--navy);
+    font-weight: 600;
+    background: var(--panel-2);
+  }
+
+  .prim-sep {
+    color: var(--line-2);
+  }
+
+  /* Retro Statusbar Footer */
+  .reach-statusbar {
+    display: flex;
+    flex-wrap: wrap;
+    border-top: 1px solid var(--line-2);
+    background: var(--panel-2);
+    box-shadow: none;
+    margin: 0;
+  }
+
+  .reach-statuscell {
+    font-family: 'Geist Mono', monospace;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--ink-2);
+    padding: 7px 12px;
+    border-right: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .reach-statuscell:last-child {
+    border-right: none;
+  }
+
+  .status-runtime {
+    color: var(--ink);
+  }
+
+  .status-live-dot {
+    width: 6px;
+    height: 6px;
+    background: var(--ok);
+    flex: none;
+  }
+
+  .status-flow {
+    flex: 1;
+    min-width: 240px;
+  }
+
+  .status-flow em {
+    font-style: normal;
+    color: var(--ink);
+  }
+
+  .status-gate strong, .status-core strong {
+    color: var(--navy);
+  }
+
+  /* Responsive Rules */
+  @media (max-width: 960px) {
+    .reach-stage {
+      grid-template-columns: 185px minmax(0, 1fr) 185px;
+    }
+    .reach-col-channels, .reach-col-actions {
+      width: 185px;
+    }
+    .reach-card {
+      height: 52px;
+      padding: 0 8px;
+    }
+    .reach-card-title {
+      font-size: 12px;
+    }
+  }
+
+  @media (max-width: 720px) {
+    .reach-canvas {
+      padding: 18px 14px 20px;
+    }
+    .reach-stage {
+      grid-template-columns: 1fr;
+      gap: 24px;
+      min-height: auto;
+    }
+    .reach-col-channels, .reach-col-actions {
+      width: 100%;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+    .reach-center-hub {
+      padding: 16px 0;
+    }
+    .reach-svg-canvas, .reach-coord-frame, .reach-col-headers {
+      display: none;
+    }
+    .reach-statusbar {
+      flex-direction: column;
+    }
+    .reach-statuscell {
+      border-right: none;
+      border-bottom: 1px solid var(--line);
+    }
+    .reach-statuscell:last-child {
+      border-bottom: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .reach-coord-frame,
+    .reach-packets-group rect,
+    .crt-sweep-line,
+    .shiba-eye,
+    .terminal-cursor {
+      animation: none !important;
+    }
+  }
+</style>
+
+<script is:inline>
+  (function() {
+    var stage = document.getElementById('reach-stage');
+    var svg = document.getElementById('reach-svg');
+    var centerNode = document.getElementById('reach-center-node');
+    var narrativeEl = document.getElementById('reach-flow-narrative');
+    var primStrip = document.getElementById('reach-primitives-strip');
+    if (!stage || !svg || !centerNode) return;
+
+    var leftCards = stage.querySelectorAll('.reach-col-channels .reach-card');
+    var rightCards = stage.querySelectorAll('.reach-col-actions .reach-card');
+    var wires = svg.querySelectorAll('.reach-wire');
+
+    // Calculate exact wire paths connecting card edge midpoints to center node
+    function calculateWires() {
+      var stageRect = stage.getBoundingClientRect();
+      var centerRect = centerNode.getBoundingClientRect();
+      if (stageRect.width === 0 || centerRect.width === 0) return;
+
+      svg.setAttribute('viewBox', '0 0 ' + stageRect.width + ' ' + stageRect.height);
+
+      var centerLeftX = centerRect.left - stageRect.left;
+      var centerRightX = centerRect.right - stageRect.left;
+      var centerY = centerRect.top + centerRect.height / 2 - stageRect.top;
+
+      // Inbound wires: Channels -> Center
+      leftCards.forEach(function(card, idx) {
+        var cardBox = card.getBoundingClientRect();
+        var startX = cardBox.right - stageRect.left;
+        var startY = cardBox.top + cardBox.height / 2 - stageRect.top;
+        var endX = centerLeftX;
+        var endY = centerY;
+        var dx = endX - startX;
+        var d = 'M ' + startX + ',' + startY + ' C ' + (startX + dx * 0.48) + ',' + startY + ' ' + (endX - dx * 0.48) + ',' + endY + ' ' + endX + ',' + endY;
+        var wire = document.getElementById('wire-left-' + idx);
+        if (wire) wire.setAttribute('d', d);
+      });
+
+      // Outbound wires: Center -> Capabilities & Actions
+      rightCards.forEach(function(card, idx) {
+        var cardBox = card.getBoundingClientRect();
+        var startX = centerRightX;
+        var startY = centerY;
+        var endX = cardBox.left - stageRect.left;
+        var endY = cardBox.top + cardBox.height / 2 - stageRect.top;
+        var dx = endX - startX;
+        var d = 'M ' + startX + ',' + startY + ' C ' + (startX + dx * 0.48) + ',' + startY + ' ' + (endX - dx * 0.48) + ',' + endY + ' ' + endX + ',' + endY;
+        var wire = document.getElementById('wire-right-' + idx);
+        if (wire) wire.setAttribute('d', d);
+      });
+    }
+
+    calculateWires();
+    window.addEventListener('resize', calculateWires);
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(calculateWires);
+    }
+    setTimeout(calculateWires, 100);
+    setTimeout(calculateWires, 500);
+
+    // Realistic end-to-end agentic execution workflows
+    var workflows = [
+      {
+        channelIdx: 1, // Slack
+        channelName: 'Slack (@shiba)',
+        prim: 'sandbox',
+        actionIdx: 1, // Code
+        actionName: 'Code (Diff & PR)',
+        desc: 'Slack (@shiba) &rarr; Gemini 3.8 Flash (Sandbox) &rarr; Code (Diff &amp; PR)'
+      },
+      {
+        channelIdx: 0, // Web
+        channelName: 'Web (/app/)',
+        prim: 'tools',
+        actionIdx: 0, // Computer Use
+        actionName: 'Computer Use (@cloudflare/computer)',
+        desc: 'Web (/app/) &rarr; Gemini 3.8 Flash (Tools) &rarr; Computer Use (Browser VM)'
+      },
+      {
+        channelIdx: 2, // Telegram
+        channelName: 'Telegram (/shiba)',
+        prim: 'approval',
+        actionIdx: 2, // Personal Agents
+        actionName: 'Personal Agents (Antigravity & Cursor)',
+        desc: 'Telegram (/shiba) &rarr; Gemini 3.8 Flash (Approval Gate) &rarr; Personal Agents'
+      },
+      {
+        channelIdx: 3, // Discord
+        channelName: 'Discord (/shiba)',
+        prim: 'memory',
+        actionIdx: 3, // Memory
+        actionName: 'Memory (Vectorize DO)',
+        desc: 'Discord (/shiba) &rarr; Gemini 3.8 Flash (Memory DO) &rarr; Memory (Recall)'
+      }
+    ];
+
+    var currentFlow = 0;
+    var userInteracting = false;
+
+    function applyWorkflow(wf) {
+      // Highlight right card
+      rightCards.forEach(function(card, idx) {
+        if (idx === wf.actionIdx) {
+          card.classList.add('is-active');
+        } else {
+          card.classList.remove('is-active');
+        }
+      });
+
+      // Highlight left card
+      leftCards.forEach(function(card, idx) {
+        if (idx === wf.channelIdx) {
+          card.classList.add('is-active');
+        } else {
+          card.classList.remove('is-active');
+        }
+      });
+
+      // Highlight wires
+      wires.forEach(function(w) {
+        w.classList.remove('is-active-wire');
+      });
+      var leftW = document.getElementById('wire-left-' + wf.channelIdx);
+      var rightW = document.getElementById('wire-right-' + wf.actionIdx);
+      if (leftW) leftW.classList.add('is-active-wire');
+      if (rightW) rightW.classList.add('is-active-wire');
+
+      // Highlight primitive
+      if (primStrip) {
+        var badges = primStrip.querySelectorAll('.prim-badge');
+        badges.forEach(function(b) {
+          if (b.classList.contains('prim-' + wf.prim)) {
+            b.classList.add('active-prim');
+          } else {
+            b.classList.remove('active-prim');
+          }
+        });
+      }
+
+      // Update statusbar flow text
+      if (narrativeEl) {
+        narrativeEl.innerHTML = '<span>FLOW: <em>' + wf.desc + '</em></span>';
+      }
+    }
+
+    // Auto cycle every 3.8s
+    setInterval(function() {
+      if (userInteracting) return;
+      currentFlow = (currentFlow + 1) % workflows.length;
+      applyWorkflow(workflows[currentFlow]);
+    }, 3800);
+
+    // Interactive Hover & Click
+    leftCards.forEach(function(card) {
+      card.addEventListener('mouseenter', function() {
+        userInteracting = true;
+        var idx = parseInt(card.getAttribute('data-idx') || '0', 10);
+        var matched = workflows.find(function(w) { return w.channelIdx === idx; });
+        if (matched) applyWorkflow(matched);
+      });
+      card.addEventListener('mouseleave', function() {
+        userInteracting = false;
+      });
+      card.addEventListener('click', function() {
+        userInteracting = true;
+        var idx = parseInt(card.getAttribute('data-idx') || '0', 10);
+        var matched = workflows.find(function(w) { return w.channelIdx === idx; });
+        if (matched) applyWorkflow(matched);
+        setTimeout(function() { userInteracting = false; }, 3500);
+      });
+    });
+
+    rightCards.forEach(function(card) {
+      card.addEventListener('mouseenter', function() {
+        userInteracting = true;
+        var idx = parseInt(card.getAttribute('data-idx') || '1', 10);
+        var matched = workflows.find(function(w) { return w.actionIdx === idx; });
+        if (matched) applyWorkflow(matched);
+      });
+      card.addEventListener('mouseleave', function() {
+        userInteracting = false;
+      });
+      card.addEventListener('click', function() {
+        userInteracting = true;
+        var idx = parseInt(card.getAttribute('data-idx') || '1', 10);
+        var matched = workflows.find(function(w) { return w.actionIdx === idx; });
+        if (matched) applyWorkflow(matched);
+        setTimeout(function() { userInteracting = false; }, 3500);
+      });
+    });
+
+    // Start with default flow (Slack -> Gemini 3.8 Flash -> Code)
+    applyWorkflow(workflows[0]);
+  })();
+</script>

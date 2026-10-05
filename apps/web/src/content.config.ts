@@ -13,7 +13,7 @@ const journalSchema = z.object({
 	pubDate: z.coerce.date(),
 	// Optional edit date. Rendered as "Updated" only when present.
 	updatedDate: z.coerce.date().optional(),
-	// Editorial category. Three values, matching the zuse.sh Journal shape:
+	// Editorial category. Three values, matching the Journal shape:
 	// guide (teaches an evaluation method), journal (a build log entry),
 	// note (a short opinion or clarification).
 	category: z.enum(['guide', 'journal', 'note']),

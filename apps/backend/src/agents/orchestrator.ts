@@ -907,10 +907,9 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         codingModel,
         harness: resolvedHarness as CodingTaskInput["harness"],
         route,
-        ...(slackIds
-          ? { slackThread: { channelId: slackIds.channelId, threadTs: slackIds.threadTs } }
-          : {}),
-        ...(input.testCommand ? { testCommand: input.testCommand } : {}),
+        ...(slackIds ? { slackThread: { channelId: slackIds.channelId, threadTs: slackIds.threadTs } } : {}),
+        // The reserved run's frozen command is what the human approved.
+        ...(reserved.testCommand ? { testCommand: reserved.testCommand } : {}),
         ...(input.authAccount ? { authAccount: input.authAccount } : {}),
         ...(input.role !== undefined ? { role: input.role } : {}),
       };
@@ -1880,29 +1879,28 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         const delegate = this.getTools()["delegate_coding_task"] as {
           execute: (input: unknown, options?: unknown) => Promise<unknown>;
         };
-        await delegate.execute(
-          {
-            repoUrl: run.repoUrl,
-            task: run.task,
-            baseBranch: run.baseBranch,
-            publishPullRequest: run.publishPullRequest,
-            // The frozen route is the exact approved input: harness, model,
-            // and connection ride the pointer, never a fresh lookup. Pending
-            // approvals queued before route freezing carry `harness` only —
-            // pass it so the approved agent is not silently re-defaulted.
-            ...(run.route
-              ? {
-                  harness: run.route.harness,
-                  codingModel: run.route.modelId,
-                  ...(run.route.connectionId ? { connectionId: run.route.connectionId } : {}),
-                }
-              : record?.harness
-                ? { harness: record.harness as DelegateInput["harness"] }
-                : {}),
-            ...(run.authAccount ? { authAccount: run.authAccount } : {}),
-            ...(run.runtime !== undefined ? { runtime: run.runtime } : {}),
-            ...(run.testCommand?.length ? { testCommand: run.testCommand } : {}),
-            ...(record?.role !== undefined ? { role: record.role } : {}),
+        await delegate.execute({
+          repoUrl: run.repoUrl,
+          task: run.task,
+          baseBranch: run.baseBranch,
+          publishPullRequest: run.publishPullRequest,
+          // The frozen route is the exact approved input: harness, model,
+          // and connection ride the pointer, never a fresh lookup. Pending
+          // approvals queued before route freezing carry `harness` only —
+          // pass it so the approved agent is not silently re-defaulted.
+          ...(run.route
+            ? {
+                harness: run.route.harness,
+                codingModel: run.route.modelId,
+                ...(run.route.connectionId ? { connectionId: run.route.connectionId } : {}),
+              }
+            : record?.harness
+              ? { harness: record.harness as DelegateInput["harness"] }
+              : {}),
+          ...(run.authAccount ? { authAccount: run.authAccount } : {}),
+          ...(run.runtime !== undefined ? { runtime: run.runtime } : {}),
+          ...(run.testCommand?.length ? { testCommand: run.testCommand } : {}),
+          ...(record?.role !== undefined ? { role: record.role } : {}),
           },
           { toolCallId: approvalId },
         );

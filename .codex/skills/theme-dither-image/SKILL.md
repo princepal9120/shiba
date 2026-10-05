@@ -1,11 +1,11 @@
 ---
 name: theme-dither-image
-description: Generate AI hero/illustration images and quantize them to the site's theme palette via Bayer ordered dithering (zuse.sh / bezalel.network style). Use when creating blog heroes, marketing illustrations, retro pixel-art assets, or theme-matched light/dark image variants for the Shiba site.
+description: Generate AI hero/illustration images and quantize them to the site's theme palette via Bayer ordered dithering (bezalel.network-style retro dithering). Use when creating blog heroes, marketing illustrations, retro pixel-art assets, or theme-matched light/dark image variants for the Shiba site.
 ---
 
 # Theme-Dithered Images
 
-Pipeline: built-in image_gen tool -> scripts/zuse-dither.py -> light + dark palette variants -> CSS data-theme swap.
+Pipeline: built-in image_gen tool -> scripts/theme-dither.py -> light + dark palette variants -> CSS data-theme swap.
 
 ## Generate
 
@@ -19,10 +19,10 @@ Generated files land under ~/.codex/generated_images/<id>/exec-*.png — copy th
 
 ## Dither
 
-    python3 scripts/zuse-dither.py <in.png> <out.png> [pixel_size] [palette]
+    python3 scripts/theme-dither.py <in.png> <out.png> [pixel_size] [palette]
 
-Palettes (defined in scripts/zuse-dither.py):
-- violet-dusk — zuse.sh blog palette (blog heroes)
+Palettes (defined in scripts/theme-dither.py):
+- violet-dusk — legacy palette alias (blog heroes)
 - shiba-light — theme.css light tokens (site illustrations)
 - shiba-dark — theme.css dark tokens
 

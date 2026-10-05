@@ -1,4 +1,5 @@
 ---
+import ReachAnywhere from '../components/ReachAnywhere.astro';
 import MarketingPage from '../layouts/MarketingPage.astro';
 
 const description = 'A self-hosted AI engineer that asks before it writes code. Runs in your Cloudflare account, on Claude Code, Codex, OpenCode, Grok or Devin.';
@@ -39,9 +40,9 @@ const capabilities = [
     <div class="hero-copy">
       <p class="eyebrow">OPEN-SOURCE DEVIN CLOUD ALTERNATIVE</p>
       <h1 id="home-title">It asks before<br /><em>it writes code.</em></h1>
-      <p class="hero-lead">Give Shiba a repository and a task. When deployed, review the exact plan before a sandbox starts by default, then follow the work in your Cloudflare account.</p>
+      <p class="hero-lead">Give Shiba a repository and a coding task. Review the exact tool input, approve the run, and inspect the diff. The work stays in your Cloudflare account.</p>
       <div class="hero-actions">
-        <a class="button" href="https://github.com/princepal9120/shiba">Join the build <span aria-hidden="true">↗</span></a>
+        <a class="button" href="https://github.com/princepal9120/shiba">Explore the source <span aria-hidden="true">↗</span></a>
         <a class="button button-outline" href="/docs/getting-started/">Read the docs</a>
       </div>
 		<p class="hero-note">No hosted black box. Every task is approval-gated before a sandbox starts.</p>
@@ -79,27 +80,30 @@ const capabilities = [
   <section id="harnesses" class="shell harness-section" aria-labelledby="harness-title">
     <p class="eyebrow">TOOLS &amp; MODEL PROVIDERS</p>
     <h2 id="harness-title">Bring your tools. Keep control.</h2>
-    <p class="harness-lead">Five harnesses are supported — pick OpenCode, Claude Code, Codex, Devin CLI, or Grok, and run them with your own provider credentials.</p>
+    <p class="harness-lead">Six harnesses are supported — pick OpenCode, Claude Code, Codex, Devin CLI, Cursor, or Antigravity, and run them with your own provider credentials.</p>
     <div class="harness-grid" role="list" aria-label="Coding tools and model providers">
       <div class="harness-item integrated" role="listitem"><span class="harness-icon"><img src="/assets/harnesses/opencode.svg" alt="" width="32" height="32" /></span><span class="harness-label">OpenCode<small>INTEGRATED</small></span></div>
       <div class="harness-item integrated" role="listitem"><span class="harness-icon"><img src="/assets/harnesses/claude.svg" alt="" width="32" height="32" /></span><span class="harness-label">Claude Code<small>INTEGRATED</small></span></div>
       <div class="harness-item integrated" role="listitem"><span class="harness-icon"><img src="/assets/harnesses/openai.svg" alt="" width="32" height="32" /></span><span class="harness-label">Codex<small>INTEGRATED</small></span></div>
       <div class="harness-item integrated" role="listitem"><span class="harness-icon"><img src="/assets/harnesses/devin.svg" alt="" width="32" height="32" /></span><span class="harness-label">Devin CLI<small>INTEGRATED</small></span></div>
-      <div class="harness-item integrated" role="listitem"><span class="harness-icon"><img src="/assets/harnesses/grok.svg" alt="" width="32" height="32" /></span><span class="harness-label">Grok<small>INTEGRATED</small></span></div>
+      <div class="harness-item integrated" role="listitem"><span class="harness-icon"><img src="/assets/harnesses/cursor.svg" alt="" width="32" height="32" /></span><span class="harness-label">Cursor<small>INTEGRATED</small></span></div>
+      <div class="harness-item integrated" role="listitem"><span class="harness-icon"><img src="/assets/harnesses/antigravity.svg" alt="" width="32" height="32" /></span><span class="harness-label">Antigravity<small>INTEGRATED</small></span></div>
     </div>
     <p class="harness-note">Product names and logos belong to their respective owners. No affiliation is implied. <a href="/docs/claude-code/">See supported configuration →</a></p>
   </section>
+
+  <ReachAnywhere />
 
   <section id="channels" class="shell home-section channels-section" aria-labelledby="channels-title">
     <div class="section-head">
       <div>
         <p class="eyebrow">TRIGGER FROM ANYWHERE</p>
-        <h2 id="channels-title">Trigger @shiba.<br /><em>Get work done from anywhere.</em></h2>
+        <h2 id="channels-title">Start where you work.<br /><em>Stay in control.</em></h2>
       </div>
       <p class="micro">SLACK · MOBILE WEB · TELEGRAM · DISCORD</p>
     </div>
     <div class="channels-intro">
-      <p>Whether you are at your desk, on Slack, or on your phone, trigger <code>@shiba</code> to delegate a task. Review the exact plan, approve with one tap, and follow sandbox progress end-to-end.</p>
+      <p>Send a task from chat or open the dashboard on your phone. Review the proposed tool input before a sandbox starts, then follow progress and inspect the changes.</p>
     </div>
     <div class="channels-grid">
       <div class="channel-card">
@@ -112,7 +116,7 @@ const capabilities = [
           <span class="bubble-prompt"><strong class="highlight">@shiba</strong> fix the token refresh race in auth.ts</span>
           <span class="bubble-reply">↳ Generated plan ready for review</span>
         </div>
-        <p>Trigger in any channel or thread. Approvals arrive as interactive Block Kit cards with diff previews.</p>
+        <p>Mention @shiba in a configured Slack channel. Review the approval card in-thread before the sandbox starts.</p>
       </div>
 
       <div class="channel-card">
@@ -122,8 +126,8 @@ const capabilities = [
         </div>
         <h3>Mobile web</h3>
         <div class="channel-bubble">
-          <span class="bubble-prompt"><strong class="highlight">Add to Home Screen</strong> · Standalone App</span>
-          <span class="bubble-reply">↳ 1-tap review &amp; sandbox approval</span>
+          <span class="bubble-prompt"><strong class="highlight">Add to Home Screen</strong> · Mobile dashboard</span>
+          <span class="bubble-reply">↳ Review the input. Approve the run.</span>
         </div>
         <p>Mobile-optimized dashboard. Review proposed tool inputs, follow logs, and inspect diffs from anywhere.</p>
       </div>
@@ -138,7 +142,7 @@ const capabilities = [
           <span class="bubble-prompt"><strong class="highlight">/shiba</strong> deploy staging hotfix --branch main</span>
           <span class="bubble-reply">↳ Webhook dispatch &amp; inline buttons</span>
         </div>
-        <p>Direct bot interaction with cryptographic webhook dispatch and inline button approval gates end-to-end.</p>
+        <p>Send a coding task to your configured bot and review it before execution.</p>
       </div>
 
       <div class="channel-card">
@@ -158,7 +162,7 @@ const capabilities = [
 
   <section class="shell home-section" aria-labelledby="why-title">
     <div class="section-head"><h2 id="why-title">The agent does the work.<br /><em>You keep the keys.</em></h2><p class="micro">ONE DEPLOYMENT · ONE CONTROL PLANE</p></div>
-    <div class="section-copy"><p>An AI coding tool is worth exactly as much as the boundary around it. Shiba runs in your Cloudflare account, requires human approval before sandbox execution by default, and shows resulting changes instead of asking you to take completion on faith.</p><a class="text-link" href="/why-shiba/">Why we built it <span aria-hidden="true">↗</span></a></div>
+    <div class="section-copy"><p>Your infrastructure. Your approval. An inspectable diff. Shiba runs in your Cloudflare account, keeps provider credentials outside the sandbox, and waits for human approval before coding tasks execute.</p><a class="text-link" href="/why-shiba/">Why we built it <span aria-hidden="true">↗</span></a></div>
   </section>
 
   <section class="shell home-section compare" aria-labelledby="compare-title">
@@ -218,7 +222,7 @@ const capabilities = [
     </div>
   </section>
 
-  <section class="shell closing" aria-labelledby="closing-title"><div><p class="eyebrow">BUILD WITH YOUR OWN AGENT</p><h2 id="closing-title">Put software engineer in your cloud.</h2><p>Open source (AGPL-3.0), self-hosted, and yours to fork. It takes one command to run it against a repo you own.</p></div><div class="closing-actions"><a class="button" href="/docs/getting-started/">Run it on your repo <span aria-hidden="true">↗</span></a></div></section>
+  <section class="shell closing" aria-labelledby="closing-title"><div><p class="eyebrow">BUILD WITH YOUR OWN AGENT</p><h2 id="closing-title">Put an AI engineer in your cloud.</h2><p>Open source, self-hosted, and yours to fork. Configure your Cloudflare account, deploy Shiba, and bring a repository you own.</p></div><div class="closing-actions"><a class="button" href="/docs/getting-started/">Run it on your repo <span aria-hidden="true">↗</span></a></div></section>
 </MarketingPage>
 
 <style>

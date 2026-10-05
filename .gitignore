@@ -41,3 +41,5 @@ shiba-ai-coworker-docs/
 .tgrep/ 
 audit/
 !.env.schema
+.hermes/
+
