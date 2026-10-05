@@ -15,12 +15,15 @@ export function ActivityView({
   sessionId: string;
   sessionApiAvailable: boolean;
 }): JSX.Element {
-  const { state, reload } = useSpine(sessionId, sessionApiAvailable);
+  const { state, reload, inFlight } = useSpine(sessionId, sessionApiAvailable);
 
+  // Poll 5s after each fetch settles — never abort a request that's still in
+  // flight, or a slow DO keeps the feed stuck on "Reading the spine…" forever.
   useEffect(() => {
-    const timer = window.setInterval(reload, 5_000);
-    return () => window.clearInterval(timer);
-  }, [reload]);
+    if (inFlight) return;
+    const timer = window.setTimeout(reload, 5_000);
+    return () => window.clearTimeout(timer);
+  }, [inFlight, reload]);
 
   const events = state.kind === "data" ? state.data.events : [];
   const outbox = state.kind === "data" ? state.data.outbox : [];

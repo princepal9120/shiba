@@ -294,7 +294,7 @@ export function TaskComposer({
 
   const repoSlug = repoUrl.trim().split("/").slice(-2).join("/") || "your repo";
   return (
-    <div className="flex-1 flex items-center justify-center px-4 py-10">
+    <div className="flex-1 min-h-0 overflow-y-auto flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-2xl flex flex-col items-center gap-6">
         <div className="text-center">
           <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-[#222320]">

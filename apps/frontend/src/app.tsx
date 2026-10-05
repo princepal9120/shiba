@@ -982,21 +982,42 @@ export function App(): React.JSX.Element {
   // Model-by-purpose config: connections + the coding-purpose suggestion list.
   const modelConfig = useModelConfig();
   const agentsDirectory = useAgentsDirectory();
-  const codingModelSuggestions = useMemo(() => {
-    const models = agentsDirectory.state.kind === "data"
-      ? agentsDirectory.state.data.agents.map((agent) => agent.defaultModel).filter((m) => typeof m === "string" && m.includes("/"))
-      : [];
-    return [...new Set(models)];
-  }, [agentsDirectory.state]);
   const modelConnections = useMemo(
     () =>
       modelConfig.state.kind === "data"
         ? modelConfig.state.data.connections
             .filter((c) => c.status === "ready")
-            .map((c) => ({ id: c.id, label: `${c.displayName} · ${c.service}`, status: c.status }))
+            .map((c) => ({ id: c.id, label: `${c.displayName} · ${c.service}`, service: c.service, status: c.status }))
         : [],
     [modelConfig.state],
   );
+  // Only offer models the backend would accept: the provider namespace must
+  // have a ready connection — and match the selected one when one is picked.
+  const codingModelSuggestions = useMemo(() => {
+    const models = agentsDirectory.state.kind === "data"
+      ? agentsDirectory.state.data.agents.map((agent) => agent.defaultModel).filter((m) => typeof m === "string" && m.includes("/"))
+      : [];
+    const selected = modelConnections.find((c) => c.id === connectionId);
+    const allowedProviders = new Set(
+      (selected ? [selected] : modelConnections).map((c) => c.service),
+    );
+    return [
+      ...new Set(
+        allowedProviders.size === 0
+          ? models
+          : models.filter((m) => allowedProviders.has(m.slice(0, m.indexOf("/")))),
+      ),
+    ];
+  }, [agentsDirectory.state, modelConnections, connectionId]);
+
+  // Connections/agents can change in Settings — refetch each time the user
+  // returns to the composer so the pickers never serve a stale snapshot.
+  useEffect(() => {
+    if (mainView === "tasks") {
+      modelConfig.reload();
+      agentsDirectory.reload();
+    }
+  }, [mainView, modelConfig, agentsDirectory]);
 
   const repoSuggestions = useMemo(() => {
     const merged = [...savedRepos, ...allRuns.map((run) => run.repoUrl)];
@@ -1679,7 +1700,10 @@ export function App(): React.JSX.Element {
 
       </div>
       ) : mainView === "activity" ? (
+        // Remount on session switch so the previous session's spine never
+        // renders as the new one's while its first fetch is in flight.
         <ActivityView
+          key={selectedSessionId}
           sessionId={selectedSessionId}
           sessionApiAvailable={sessionApiAvailable}
         />

@@ -65,11 +65,18 @@ export type LoadState<T> =
   | { kind: "error"; message: string }
   | { kind: "data"; data: T };
 
-function useApiJson<T>(path: string): { state: LoadState<T>; reload: () => void } {
+function useApiJson<T>(path: string): {
+  state: LoadState<T>;
+  reload: () => void;
+  /** True while a fetch is in flight — pollers must wait for it to settle. */
+  inFlight: boolean;
+} {
   const [state, setState] = useState<LoadState<T>>({ kind: "loading" });
+  const [inFlight, setInFlight] = useState(true);
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let cancelled = false;
+    setInFlight(true);
     void fetch(path)
       .then(async (response) => {
         if (!response.ok) throw new Error(`GET ${path} failed: ${response.status}`);
@@ -83,20 +90,23 @@ function useApiJson<T>(path: string): { state: LoadState<T>; reload: () => void 
             message: error instanceof Error ? error.message : String(error),
           });
         }
+      })
+      .finally(() => {
+        if (!cancelled) setInFlight(false);
       });
     return () => {
       cancelled = true;
     };
   }, [path, attempt]);
   const reload = useCallback(() => setAttempt((n) => n + 1), []);
-  return { state, reload };
+  return { state, reload, inFlight };
 }
 
-export function useSetupStatus(): { state: LoadState<SetupStatus>; reload: () => void } {
+export function useSetupStatus(): { state: LoadState<SetupStatus>; reload: () => void; inFlight: boolean } {
   return useApiJson<SetupStatus>("/api/setup/status");
 }
 
-export function useAgentsDirectory(): { state: LoadState<AgentsDirectory>; reload: () => void } {
+export function useAgentsDirectory(): { state: LoadState<AgentsDirectory>; reload: () => void; inFlight: boolean } {
   return useApiJson<AgentsDirectory>("/api/agents");
 }
 
@@ -142,7 +152,7 @@ export interface UsageReportWire {
 export function useUsageReport(
   sessionId: string,
   sessionApiAvailable: boolean,
-): { state: LoadState<UsageReportWire>; reload: () => void } {
+): { state: LoadState<UsageReportWire>; reload: () => void; inFlight: boolean } {
   const path = sessionApiAvailable
     ? `/api/usage?session=${encodeURIComponent(sessionId)}`
     : "/api/usage";
@@ -175,7 +185,7 @@ export interface ModelConfigWire {
   purposes: string[];
 }
 
-export function useModelConfig(): { state: LoadState<ModelConfigWire>; reload: () => void } {
+export function useModelConfig(): { state: LoadState<ModelConfigWire>; reload: () => void; inFlight: boolean } {
   return useApiJson<ModelConfigWire>("/api/model-config");
 }
 
@@ -197,7 +207,7 @@ export interface SpineWire {
 export function useSpine(
   sessionId: string,
   sessionApiAvailable: boolean,
-): { state: LoadState<SpineWire>; reload: () => void } {
+): { state: LoadState<SpineWire>; reload: () => void; inFlight: boolean } {
   const path = sessionApiAvailable
     ? `/api/spine?session=${encodeURIComponent(sessionId)}`
     : "/api/spine";

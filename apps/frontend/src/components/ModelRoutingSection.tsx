@@ -97,6 +97,9 @@ export function PurposeRoutingCard(): JSX.Element {
             <input
               type="text"
               value={value(purpose.id)}
+              // Locked while a save is in flight — the success path clears the
+              // draft wholesale, so mid-flight keystrokes would be silently lost.
+              disabled={saving}
               onChange={(event) => {
                 const next: Record<string, string> = {};
                 for (const p of EDITABLE_PURPOSES) next[p.id] = value(p.id);

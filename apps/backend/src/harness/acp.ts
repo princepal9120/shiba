@@ -209,12 +209,22 @@ function stripProvider(model: string): string {
 export const ACP_DRIVER_SOURCE = `const { spawn } = require("node:child_process");
 
 const emit = (o) => process.stdout.write(JSON.stringify(o) + "\\n");
+// stdout to a pipe is async — exiting immediately can tear the last frame.
+// Flush first so the terminal error/done line always reaches the harness.
+const exitWhenDrained = (code) => {
+  if (process.stdout.writableLength > 0) {
+    process.stdout.once("drain", () => process.exit(code));
+    setTimeout(() => process.exit(code), 2000).unref();
+  } else {
+    process.exit(code);
+  }
+};
 const fail = (msg) => {
   // Kill the agent before exiting: an ACP server left running could keep
   // mutating the worktree after the run is already marked failed.
   try { child.kill("SIGKILL"); } catch (_) { /* spawn may never have started */ }
   emit({ type: "error", message: String(msg).slice(0, 900) });
-  process.exit(1);
+  exitWhenDrained(1);
 };
 
 const child = spawn(cfg.argv[0], cfg.argv.slice(1), { cwd: process.cwd(), env: process.env, stdio: ["pipe", "pipe", "inherit"] });
@@ -224,11 +234,30 @@ const pending = new Map();
 let promptDone = false;
 
 const write = (o) => child.stdin.write(JSON.stringify(Object.assign({ jsonrpc: "2.0" }, o)) + "\\n");
-function send(method, params) {
+// Handshake calls get a short per-call bound; the prompt keeps the long
+// outer-exec budget (the agent's whole run happens inside that one call).
+const CONTROL_TIMEOUT_MS = 60_000;
+const PROMPT_TIMEOUT_MS = 20 * 60_000;
+function send(method, params, timeoutMs) {
   const id = nextId++;
   write({ id, method, params });
-  return new Promise((resolve, reject) => pending.set(id, { resolve, reject }));
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      pending.delete(id);
+      reject(new Error(method + " timed out — the agent stopped answering JSON-RPC"));
+    }, timeoutMs ?? CONTROL_TIMEOUT_MS);
+    pending.set(id, {
+      resolve: (v) => { clearTimeout(timer); resolve(v); },
+      reject: (e) => { clearTimeout(timer); reject(e); },
+    });
+  });
 }
+// If the agent dies, no response is coming — reject every in-flight call so
+// the error path runs instead of hanging until the outer exec timeout.
+const rejectPending = (err) => {
+  for (const p of pending.values()) p.reject(err);
+  pending.clear();
+};
 
 function textOf(content) {
   if (typeof content === "string") return content;
@@ -273,7 +302,11 @@ function onLine(line) {
     const p = pending.get(msg.id);
     if (!p) return;
     pending.delete(msg.id);
-    if (msg.error) p.reject(new Error((msg.error.message || "JSON-RPC error") + " (" + msg.error.code + ")"));
+    if (msg.error) {
+      const err = new Error((msg.error.message || "JSON-RPC error") + " (" + msg.error.code + ")");
+      err.code = msg.error.code;
+      p.reject(err);
+    }
     else p.resolve(msg.result);
   } else if (msg.id !== undefined && typeof msg.method === "string") {
     onRequest(msg);
@@ -291,7 +324,10 @@ child.stdout.on("data", (d) => {
   }
 });
 child.on("error", (e) => fail("spawn failed: " + e.message));
-child.on("exit", (code) => { if (!promptDone) fail(cfg.label + " exited before the prompt completed (code " + code + ")"); });
+child.on("exit", (code) => {
+  rejectPending(new Error(cfg.label + " exited (code " + code + ")"));
+  if (!promptDone) fail(cfg.label + " exited before the prompt completed (code " + code + ")");
+});
 
 (async () => {
   try {
@@ -303,14 +339,26 @@ child.on("exit", (code) => { if (!promptDone) fail(cfg.label + " exited before t
     const created = await send("session/new", { cwd: process.cwd(), mcpServers: [] });
     const sessionId = created && created.sessionId;
     if (!sessionId) fail("session/new returned no sessionId");
-    if (cfg.model) await send("session/set_model", { sessionId, modelId: cfg.model });
-    const res = await send("session/prompt", { sessionId, prompt: [{ type: "text", text: cfg.task }] });
+    if (cfg.model) {
+      try {
+        await send("session/set_model", { sessionId, modelId: cfg.model });
+      } catch (e) {
+        // session/set_model is unstable in ACP 0.x — an adapter that doesn't
+        // implement it runs on its own default model, not on nothing.
+        if (e && e.code === -32601) {
+          emit({ type: "note", text: cfg.label + " does not implement session/set_model — running its default model" });
+        } else {
+          throw e;
+        }
+      }
+    }
+    const res = await send("session/prompt", { sessionId, prompt: [{ type: "text", text: cfg.task }] }, PROMPT_TIMEOUT_MS);
     promptDone = true;
     const reason = String((res && res.stopReason) || "end_turn");
     if (reason !== "end_turn") fail(cfg.label + " stopped before finishing: " + reason);
     emit({ type: "done", text: "stopReason: " + reason });
     child.kill("SIGTERM");
-    process.exit(0);
+    exitWhenDrained(0);
   } catch (e) {
     fail(e && e.message ? e.message : e);
   }
