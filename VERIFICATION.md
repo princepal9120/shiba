@@ -483,3 +483,13 @@ Routing delivery to a registered address; Telegram/Discord webhook handshakes.
   repoint to it. The Registry-only actions (Reuse params / Cancel run /
   Clear history) went with the page — Reuse still reachable from the
   composer's saved-repo picks; Approvals' stored-run queue unchanged.
+
+### 2026-10-03 (cont.) — P9 event spine (PLAN-V2-NEXT)
+
+- `packages/shared/src/events.ts` (new) — `SpineEvent` union validated by `spineEventSchema` (zod, strict payloads): `run.proposed|approved|rejected|started|progress|checkpointed|completed|failed|cancelled`, `side_effect.requested|dispatched|failed`, `approval.requested|answered`; per-orchestrator `seq`, `commandId`/`causationId` threading; `DECIDER_TO_SPINE` maps decider `RunEvent`s (aborted/reclaimed → `run.failed`), `MAX_SPINE_EVENTS = 1000`.
+- `packages/shared/src/projector.ts` (new) — pure folds: `applySpineEvent`/`replaySpine` rebuild `{runs, pendingApprovals, events, outbox}` from the log; `OutboxEntry` tracks effect id/kind/target/status/attempts. Projection honesty test: replayed `runs[0]` deep-equals live `applyRunEvents` output.
+- `src/orchestration/event-log.ts` (new) — `appendBatch` assigns seq from the retained tail and schema-validates before commit (throws on malformed input).
+- `src/orchestration/outbox.ts` (new) — `drainOutbox` executes due entries, caps attempts at 3, isolates executor throws per entry.
+- `orchestrator.ts` — every mutation now flows decide → append → apply in one atomic write: `RunStore`/`createRun`/`transitionRun`/`reclaimStaleRuns` report decisions through a `decisionTap`; a `setState` override folds the buffered spine inputs into `state.events` (synthesizing `approval.requested|answered` from the `pendingApprovals` diff, deduped) and `state.outbox` in the same commit. `postToThread` emits `side_effect.requested` → persists → executes → `dispatched|failed`; `reclaimRuns` drains the outbox before reaping, so owed post-backs retry across DO restarts. Fencing/generation semantics unchanged (9 fencing tests green). Note: post-backs are at-least-once — a post that landed pre-crash can repost once (Slack has no idempotency keys).
+- Tests: `test/spine.test.ts` +10 (seq/validation, decider mapping, projection-vs-live equality, outbox lifecycle, approval pointer, retention cap, drainer).
+- Gate: typecheck, lint, lint:imports, 1694 backend tests, build + docs:verify, env:load/env:scan all green locally.

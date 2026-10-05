@@ -7,6 +7,8 @@ export * from "./audit.js";
 export * from "./approvals.js";
 export * from "./chat.js";
 export * from "./decide.js";
+export * from "./events.js";
+export * from "./projector.js";
 export * from "./command-receipts.js";
 export * from "./run-signals.js";
 export * from "./mailbox.js";

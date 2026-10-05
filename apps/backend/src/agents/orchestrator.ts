@@ -5,94 +5,123 @@
  * container driven by OpenCodeAgent.
  */
 import { Think } from "@cloudflare/think";
-import type { Connection, ConnectionContext } from "agents";
-import { agentTool } from "agents/agent-tools";
-import { tool, type ToolSet } from "ai";
-import { Effect } from "effect";
-import { z } from "zod";
-import type { Env } from "../env.js";
 import {
   AGENT_ROLES,
+  approvalEventInput,
+  foldOutboxEvent,
   HARNESS_IDS,
+  isAgentRole,
   LOCAL_INTAKE_DASHBOARD,
   LOCAL_INTAKE_HEADER,
   LOCAL_RUNTIME_FLAG,
-  isAgentRole,
+  MAX_SPINE_EVENTS,
+  type OutboxEntry,
+  type RunCommand,
+  type RunDecision,
   runtimeSelectionSchema,
+  type SideEffectKind,
+  type SpineEvent,
+  type SpineEventInput,
+  sideEffectRequestInput,
+  sideEffectResultInput,
+  spineInputsFromDecider,
   testCommandSchema,
 } from "@shiba/shared";
-import {
-  formatAgentToolInput,
-  parseAgentResult,
-  type CodingTaskInput,
-} from "../opencode-input.js";
-import {
-  RUN_DEADLINE_MS,
-  RunStore,
-  AGENT_PRINCIPAL_HEADER,
-  canStartRun,
-  createRun,
-  isActiveStatus,
-  reclaimStaleRuns,
-  recordReceipt,
-  type DelegatedRun,
-  type RunPatch,
-  type RunStatus,
-} from "../runs.js";
-import { makeReceipt } from "../receipts.js";
+import type { Connection, ConnectionContext } from "agents";
+import { agentTool } from "agents/agent-tools";
+import { type ToolSet, tool } from "ai";
+import { Effect } from "effect";
+import { z } from "zod";
+import { postToChatThread } from "../chat-lane.js";
 import { createRunCodeTool } from "../codemode.js";
+import { runWorkerEffect, toRunFailure, tryRunPromise } from "../effect/runtime.js";
+import {
+  emailApprovalDraftRef,
+  executeEmailApproval,
+  PostTransmitError,
+  releaseRestartedDraftClaim,
+  unqueueEmailApprovalDraft,
+} from "../email-approvals.js";
+import type { Env } from "../env.js";
+import {
+  allowedHostsFor,
+  HARNESS_DEFAULT_MODELS,
+  harnessRunsOn,
+  resolveHarness,
+} from "../harness/index.js";
+import { mailboxDirectoryStub, mailboxStub, registeredMailbox } from "../mailbox-do.js";
+import { ADDRESS_RE, type MailboxRecord } from "../mailbox-store.js";
+import { type ApprovedRoute, describeRoute, isApprovedRoute } from "../model-connections.js";
+import { readModelConfig, resolveCodingRoute, revalidateCodingRoute } from "../model-policy.js";
+import { type CodingTaskInput, formatAgentToolInput, parseAgentResult } from "../opencode-input.js";
+import { appendBatch } from "../orchestration/event-log.js";
+import { drainOutbox } from "../orchestration/outbox.js";
 import {
   approvalEvidenceFor,
+  type CommandReceipt,
   createPendingApproval,
   decidedApprovals,
   isApprovalExpired,
   isJsonObject,
+  type PendingApproval,
   pruneExpiredApprovals,
   putCommandReceipt,
+  type ResolveResult,
   recordApprovalExecution,
   resolvePendingApproval,
-  type CommandReceipt,
-  type PendingApproval,
-  type ResolveResult,
 } from "../pending-approvals.js";
-import { makeSandboxId, parseGitHubRepoUrl, redactSecrets } from "../security.js";
-import { emailApprovalDraftRef, executeEmailApproval, PostTransmitError, releaseRestartedDraftClaim, unqueueEmailApprovalDraft } from "../email-approvals.js";
-import { ADDRESS_RE, type MailboxRecord } from "../mailbox-store.js";
-import { mailboxDirectoryStub, mailboxStub, registeredMailbox } from "../mailbox-do.js";
-import { approvalCardText, buildApprovalBlocks, type ApprovalCardInput } from "../slack-approval.js";
-import {
-  destroyManagedContainer,
-  leakedContainers,
-  type LeakHooks,
-} from "../sandbox/lifecycle.js";
-import { runWorkerEffect, toRunFailure, tryRunPromise } from "../effect/runtime.js";
-import { classifyExecutorError, classifyRunError, runErrorWire, toTaggedError, type RunErrorCode, type RunErrorWire } from "../run-errors.js";
-import { DEFAULT_ORCHESTRATOR_MODEL, distillSession } from "../session-distill.js";
-import { parseSlackThreadName } from "../slack-thread.js";
-import { postToChatThread } from "../chat-lane.js";
+import { makeReceipt } from "../receipts.js";
 import { evaluateResultQuality } from "../result-quality.js";
+import {
+  classifyExecutorError,
+  classifyRunError,
+  type RunErrorCode,
+  type RunErrorWire,
+  runErrorWire,
+  toTaggedError,
+} from "../run-errors.js";
+import {
+  AGENT_PRINCIPAL_HEADER,
+  canStartRun,
+  createRun,
+  type DecisionTap,
+  type DelegatedRun,
+  isActiveStatus,
+  RUN_DEADLINE_MS,
+  type RunPatch,
+  type RunStatus,
+  RunStore,
+  reclaimStaleRuns,
+  recordReceipt,
+} from "../runs.js";
+import { destroyManagedContainer, type LeakHooks, leakedContainers } from "../sandbox/lifecycle.js";
+import { makeSandboxId, parseGitHubRepoUrl, redactSecrets } from "../security.js";
+import { DEFAULT_ORCHESTRATOR_MODEL, distillSession } from "../session-distill.js";
 import { evaluateSessionTriage } from "../session-triage.js";
+import { postSlackMessage } from "../slack.js";
+import {
+  type ApprovalCardInput,
+  approvalCardText,
+  buildApprovalBlocks,
+} from "../slack-approval.js";
 import {
   slackRunCancelled,
   slackRunCompleted,
   slackRunFailed,
   slackRunStarted,
 } from "../slack-persona.js";
-import { postSlackMessage } from "../slack.js";
+import { parseSlackThreadName } from "../slack-thread.js";
 import { extractPullRequestUrl } from "../transcript.js";
-import { HARNESS_DEFAULT_MODELS, allowedHostsFor, harnessRunsOn, resolveHarness } from "../harness/index.js";
-import { describeRoute, isApprovedRoute, type ApprovedRoute } from "../model-connections.js";
-import { readModelConfig, revalidateCodingRoute, resolveCodingRoute } from "../model-policy.js";
-import { OpenCodeAgent } from "./opencode-agent.js";
-import { resolveRoleModel } from "./roles.js";
 import {
-  MAX_SESSIONS_PER_USER,
   isDashboardAgentName,
+  MAX_SESSIONS_PER_USER,
   sanitizeSessionMetadata,
   sanitizeSessionName,
   validateSessionRecordIntegrity,
   type WebSessionRecord,
 } from "../web-sessions.js";
+import { OpenCodeAgent } from "./opencode-agent.js";
+import { resolveRoleModel } from "./roles.js";
 
 /** App-range WebSocket close code sent to sockets of a deleted web session. */
 export const SESSION_DELETED_CLOSE_CODE = 4410;
@@ -116,6 +145,17 @@ export interface OrchestratorState {
    * answers from it instead of re-running the effect.
    */
   commandReceipts?: Record<string, CommandReceipt>;
+  /**
+   * P9 spine: the append-only event log. Every mutation routes through
+   * `decide → appendEvents → apply` — the events below are the durable
+   * record of what was decided; `runs`/`pendingApprovals` are their
+   * materialized projection, and `outbox` tracks the side effects the
+   * log requested. `seq` is per-orchestrator and never reused; the tail
+   * is retained to MAX_SPINE_EVENTS (receipts carry the durable outcome
+   * for anything older).
+   */
+  events?: SpineEvent[];
+  outbox?: OutboxEntry[];
 }
 
 /** A classified error lands as its matching terminal status. */
@@ -187,15 +227,15 @@ export const delegateInputSchema = z.object({
   testCommand: testCommandSchema
     .optional()
     .describe(
-      "The project's test command as argv, e.g. [\"pnpm\",\"test\"]. Runs in the " +
+      'The project\'s test command as argv, e.g. ["pnpm","test"]. Runs in the ' +
         "sandbox through the scoped exec allowlist; the run only reports " +
         "completed when the command is allowlisted and exits 0.",
     ),
   runtime: runtimeSelectionSchema
     .optional()
     .describe(
-      "Execution runtime: \"sandbox\" (default) runs in an isolated container; " +
-        "\"local\" runs on the operator's machine through the local daemon. \"local\" " +
+      'Execution runtime: "sandbox" (default) runs in an isolated container; ' +
+        '"local" runs on the operator\'s machine through the local daemon. "local" ' +
         "is admissible only from the dashboard on a deployment with SHIBA_LOCAL_RUNTIME=1.",
     ),
 });
@@ -225,7 +265,8 @@ function repoPullUrl(output: string, repoUrl: string): string | undefined {
   const match = /^https:\/\/github\.com\/([^/?#]+)\/([^/?#]+)\/pull\/(\d+)(?:[/?#]|$)/i.exec(url);
   if (!match) return undefined;
   const { owner, repo } = parseGitHubRepoUrl(repoUrl);
-  return match[1]!.toLowerCase() === owner.toLowerCase() && match[2]!.toLowerCase() === repo.toLowerCase()
+  return match[1]!.toLowerCase() === owner.toLowerCase() &&
+    match[2]!.toLowerCase() === repo.toLowerCase()
     ? url
     : undefined;
 }
@@ -242,10 +283,104 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     return (this.runControllersMap ??= new Map());
   }
 
+  /**
+   * P9: spine inputs awaiting commit on the next durable write. The
+   * store's decision tap, approval writes, and side-effect request/
+   * result sites push here; `setState` flushes the buffer so an event
+   * and the mutation it decided land in the same atomic write.
+   */
+  private spineBuf: SpineEventInput[] | undefined;
+
+  private emitSpine(...inputs: SpineEventInput[]): void {
+    // Lazy like runControllersMap: test subclasses constructed without
+    // the base constructor still get a buffer.
+    (this.spineBuf ??= []).push(...inputs);
+  }
+
+  /**
+   * The decision tap every run-transition path shares — store writes,
+   * mint, and reclaim all report their decided events through it so the
+   * log sees the same batch the read model applied.
+   */
+  private spineTap(command: RunCommand, decision: RunDecision): void {
+    if ("error" in decision) return;
+    this.emitSpine(
+      ...spineInputsFromDecider(command.runId, command.commandId, decision.events, command.at),
+    );
+  }
+
+  /**
+   * Fold pending spine inputs into the state about to commit: assign
+   * seq from the retained tail, synthesize approval.requested/answered
+   * events from the pendingApprovals diff (covering every mutation
+   * site, not only the ones that emit explicitly), and fold the
+   * side_effect.* events into the outbox projection.
+   */
+  private applySpine(next: OrchestratorState): void {
+    const before = this.state?.pendingApprovals ?? [];
+    const after = next.pendingApprovals ?? [];
+    // Snapshot the buffer; it is drained by setState only after the
+    // write commits, so a rejected write loses nothing.
+    const inputs = [...(this.spineBuf ?? [])];
+    const logged = new Set(
+      inputs
+        .filter((input) => input.kind === "approval.requested" || input.kind === "approval.answered")
+        .map((input) => `${input.kind}:${input.approvalId}`),
+    );
+    for (const approval of after) {
+      const prior = before.find(
+        (a) => a.approvalId === approval.approvalId && a.threadKey === approval.threadKey,
+      );
+      if (prior === undefined) {
+        if (!logged.has(`approval.requested:${approval.approvalId}`)) {
+          inputs.push(
+            approvalEventInput({
+              approval,
+              commandId: `approval.request:${approval.approvalId}`,
+              at: approval.createdAt,
+            }),
+          );
+        }
+      } else if (prior.status === "pending" && approval.status !== "pending") {
+        if (!logged.has(`approval.answered:${approval.approvalId}`)) {
+          inputs.push(
+            approvalEventInput({
+              approval,
+              result: approval.status === "approved" ? "approved" : "rejected",
+              commandId: `approval.answer:${approval.approvalId}`,
+              at: approval.decidedAt ?? Date.now(),
+            }),
+          );
+        }
+      }
+    }
+    if (inputs.length === 0) return;
+    const priorLog = this.state?.events ?? next.events ?? [];
+    const appended = appendBatch(priorLog, inputs);
+    next.events = [...priorLog, ...appended].slice(-MAX_SPINE_EVENTS);
+    let outbox = next.outbox;
+    for (const event of appended) {
+      outbox = foldOutboxEvent(outbox, event);
+    }
+    next.outbox = outbox;
+  }
+
+  /**
+   * Every state write funnels through here — store transitions,
+   * approval resolves, receipts — so the spine flush rides the same
+   * atomic commit as the mutation it records.
+   */
+  override setState(next: OrchestratorState): void {
+    this.applySpine(next);
+    super.setState(next);
+    this.spineBuf = [];
+  }
+
   private get store(): RunStore {
     return new RunStore(
       () => this.state?.runs ?? [],
       (runs) => this.setState({ ...this.state, runs }),
+      (command, decision) => this.spineTap(command, decision),
     );
   }
 
@@ -293,10 +428,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
   }
 
   // `cf_agent_state` frames carry a connection source; server mutations use "server".
-  override validateStateChange(
-    _nextState: OrchestratorState,
-    source: Connection | "server",
-  ): void {
+  override validateStateChange(_nextState: OrchestratorState, source: Connection | "server"): void {
     if (source !== "server") {
       throw new Error("Client state writes are not accepted.");
     }
@@ -329,7 +461,8 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     // Do not retry potentially published work after losing the execution context.
     for (const run of interrupted) {
       const updated = this.store.transition(run.runId, "unknown", {
-        error: "Execution interrupted by orchestrator restart. Inspect repository state before retrying.",
+        error:
+          "Execution interrupted by orchestrator restart. Inspect repository state before retrying.",
         errorCode: "outcome_unknown",
       });
       if (updated !== null) this.postOutcomeUnknown(updated);
@@ -369,15 +502,18 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         );
       }
       if (released && approval.execution === undefined) {
-        this.writeApprovals(recordApprovalExecution(this.approvals, {
-          threadKey: approval.threadKey,
-          approvalId: approval.approvalId,
-          execution: {
-            status: "failed",
-            error: "Execution interrupted by orchestrator restart while the draft was claimed 'sending' — outcome unknown (the dead attempt may have transmitted). The claim was released; inspect the mailbox before re-sending.",
-            executedAt: Date.now(),
-          },
-        }));
+        this.writeApprovals(
+          recordApprovalExecution(this.approvals, {
+            threadKey: approval.threadKey,
+            approvalId: approval.approvalId,
+            execution: {
+              status: "failed",
+              error:
+                "Execution interrupted by orchestrator restart while the draft was claimed 'sending' — outcome unknown (the dead attempt may have transmitted). The claim was released; inspect the mailbox before re-sending.",
+              executedAt: Date.now(),
+            },
+          }),
+        );
       }
     }
     // Approved email approvals execute through ctx.waitUntil — an
@@ -395,15 +531,18 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       const payload = isJsonObject(approval.payload) ? approval.payload : {};
       const draftId = typeof payload.draft_id === "string" ? payload.draft_id.trim() : "";
       if (approval.kind === "email_send" && draftId === "") {
-        this.writeApprovals(recordApprovalExecution(this.approvals, {
-          threadKey: approval.threadKey,
-          approvalId: approval.approvalId,
-          execution: {
-            status: "failed",
-            error: "Execution interrupted by orchestrator restart — outcome unknown. Inspect the mailbox before re-sending.",
-            executedAt: Date.now(),
-          },
-        }));
+        this.writeApprovals(
+          recordApprovalExecution(this.approvals, {
+            threadKey: approval.threadKey,
+            approvalId: approval.approvalId,
+            execution: {
+              status: "failed",
+              error:
+                "Execution interrupted by orchestrator restart — outcome unknown. Inspect the mailbox before re-sending.",
+              executedAt: Date.now(),
+            },
+          }),
+        );
         continue;
       }
       if (approval.kind === "email_send" || approval.kind === "email_delete") {
@@ -507,8 +646,16 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         await this.mintChatGateApproval(input, options.toolCallId);
         return true;
       },
-      execute: async (input: DelegateInput, options?: { toolCallId?: string; abortSignal?: AbortSignal }) => {
-        return this.executeDelegatedTask(input, childExecute, options?.toolCallId, options?.abortSignal);
+      execute: async (
+        input: DelegateInput,
+        options?: { toolCallId?: string; abortSignal?: AbortSignal },
+      ) => {
+        return this.executeDelegatedTask(
+          input,
+          childExecute,
+          options?.toolCallId,
+          options?.abortSignal,
+        );
       },
     });
     const tools: ToolSet = { ...super.getTools(), delegate_coding_task: delegate };
@@ -524,7 +671,8 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     // the chain below unchanged. A pinned role's model is authoritative —
     // a per-call codingModel cannot override what the operator pinned.
     const rolePick = input.role !== undefined ? resolveRoleModel(this.env, input.role) : null;
-    const harnessName = rolePick?.harness ?? input.harness ?? this.env.AGENT_HARNESS?.trim() ?? "opencode";
+    const harnessName =
+      rolePick?.harness ?? input.harness ?? this.env.AGENT_HARNESS?.trim() ?? "opencode";
     const harness = resolveHarness(harnessName, this.env);
     const perHarnessVar =
       harness.name === "opencode"
@@ -537,15 +685,15 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
               ? this.env.CODEX_SUBSCRIPTION_MODEL?.trim()
               : harness.name === "antigravity-subscription"
                 ? this.env.ANTIGRAVITY_SUBSCRIPTION_MODEL?.trim()
-            : harness.name === "cursor-subscription"
-              ? this.env.CURSOR_SUBSCRIPTION_MODEL?.trim()
-            : harness.name === "devin-subscription"
-              ? this.env.DEVIN_SUBSCRIPTION_MODEL?.trim()
-              : harness.name === "codex"
-              ? this.env.CODEX_MODEL?.trim()
-              : harness.name === "grok"
-                ? this.env.GROK_MODEL?.trim()
-                : this.env.DEVIN_MODEL?.trim();
+                : harness.name === "cursor-subscription"
+                  ? this.env.CURSOR_SUBSCRIPTION_MODEL?.trim()
+                  : harness.name === "devin-subscription"
+                    ? this.env.DEVIN_SUBSCRIPTION_MODEL?.trim()
+                    : harness.name === "codex"
+                      ? this.env.CODEX_MODEL?.trim()
+                      : harness.name === "grok"
+                        ? this.env.GROK_MODEL?.trim()
+                        : this.env.DEVIN_MODEL?.trim();
     const codingModel =
       rolePick?.model ||
       input.codingModel?.trim() ||
@@ -563,7 +711,9 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
    * An inadmissible connection/model/harness combination throws here —
    * before the approval card — so a bad route never starts a container.
    */
-  private async resolveRoute(input: DelegateInput): Promise<{ harness: string; codingModel: string; route: ApprovedRoute }> {
+  private async resolveRoute(
+    input: DelegateInput,
+  ): Promise<{ harness: string; codingModel: string; route: ApprovedRoute }> {
     const { harness, codingModel } = this.resolveHarnessAndModel(input);
     const snapshot = await readModelConfig(this.env);
     const route = resolveCodingRoute(snapshot, {
@@ -679,7 +829,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
           return "Approved input does not match this call's runtime.";
         }
         if (this.env[LOCAL_RUNTIME_FLAG] !== "1" || !isDashboardAgentName(this.name)) {
-          return "runtime \"local\" requires SHIBA_LOCAL_RUNTIME=1 and a dashboard session.";
+          return 'runtime "local" requires SHIBA_LOCAL_RUNTIME=1 and a dashboard session.';
         }
       }
       parseGitHubRepoUrl(input.repoUrl);
@@ -695,7 +845,11 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       // now. Either way the route is revalidated just before dispatch — a
       // revoked connection fails the run honestly, never a substitution.
       const frozen = reserved.route;
-      const { harness: resolvedHarness, codingModel, route } = frozen !== undefined && isApprovedRoute(frozen)
+      const {
+        harness: resolvedHarness,
+        codingModel,
+        route,
+      } = frozen !== undefined && isApprovedRoute(frozen)
         ? { harness: frozen.harness, codingModel: frozen.modelId, route: frozen }
         : yield* Effect.promise(() => this.resolveRoute(input));
       const sandboxId = makeSandboxId(input.repoUrl, input.task, callId);
@@ -711,14 +865,20 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         codingModel,
         harness: resolvedHarness as CodingTaskInput["harness"],
         route,
-        ...(slackIds ? { slackThread: { channelId: slackIds.channelId, threadTs: slackIds.threadTs } } : {}),
+        ...(slackIds
+          ? { slackThread: { channelId: slackIds.channelId, threadTs: slackIds.threadTs } }
+          : {}),
         ...(input.testCommand ? { testCommand: input.testCommand } : {}),
         ...(input.authAccount ? { authAccount: input.authAccount } : {}),
         ...(input.role !== undefined ? { role: input.role } : {}),
       };
       // Chat-originated runs get the outcome back in the thread in the
       // coworker voice; the summary carries the PR link when one was published.
-      const finish = (status: RunStatus, patch?: RunPatch, threadText?: string): DelegatedRun | null => {
+      const finish = (
+        status: RunStatus,
+        patch?: RunPatch,
+        threadText?: string,
+      ): DelegatedRun | null => {
         // Fenced write: a stale generation (cancel/reclaim landed while the
         // child was running) drops the transition AND every side effect.
         const updated = this.store.transition(runId, status, patch, generation);
@@ -738,7 +898,13 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       // approved, otherwise the stored evidence on the record stands.
       const startEvidence =
         pointer?.status === "approved" ? approvalEvidenceFor(pointer, reserved) : reserved.approval;
-      const running = this.store.transition(runId, "running", undefined, this.store.get(runId)?.generation, startEvidence);
+      const running = this.store.transition(
+        runId,
+        "running",
+        undefined,
+        this.store.get(runId)?.generation,
+        startEvidence,
+      );
       if (running === null || running.status !== "running") {
         return `Run ${runId} did not start — it is already ${this.store.get(runId)?.status ?? "missing"}.`;
       }
@@ -752,17 +918,32 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         }
       });
       this.postToThread(
-        slackRunStarted({ repoUrl: fullInput.repoUrl, baseBranch: fullInput.baseBranch, harness: fullInput.harness }),
+        slackRunStarted({
+          repoUrl: fullInput.repoUrl,
+          baseBranch: fullInput.baseBranch,
+          harness: fullInput.harness,
+        }),
       );
       const intakeTsKey = this.env.TYPESAFE_API_KEY?.trim() ?? "";
       if (intakeTsKey) {
         yield* Effect.forkDetach(
-          tryRunPromise(() => evaluateSessionTriage(intakeTsKey, fullInput.task, fullInput.repoUrl)).pipe(
+          tryRunPromise(() =>
+            evaluateSessionTriage(intakeTsKey, fullInput.task, fullInput.repoUrl),
+          ).pipe(
             Effect.flatMap((triage) =>
               Effect.sync(() => {
                 if (!triage) return;
                 const r = this.store.get(runId);
                 if (r && r.status === "running") {
+                  this.emitSpine({
+                    kind: "run.progress",
+                    commandId: `progress:${runId}:triage`,
+                    runId,
+                    at: Date.now(),
+                    payload: {
+                      summary: `TypeSafe Jev: ${triage.complexity} complexity (${triage.risk} risk, confidence ${triage.confidence.toFixed(2)}).`,
+                    },
+                  });
                   this.store.replace(
                     runId,
                     recordReceipt(
@@ -784,7 +965,9 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         Effect.sync(() => {
           const controller = new AbortController();
           this.runControllers.set(runId, controller);
-          return abortSignal ? AbortSignal.any([abortSignal, controller.signal]) : controller.signal;
+          return abortSignal
+            ? AbortSignal.any([abortSignal, controller.signal])
+            : controller.signal;
         }),
         (signal) =>
           Effect.gen({ self: this }, function* () {
@@ -855,7 +1038,13 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
                           if (run && run.status === "completed") {
                             this.store.replace(
                               runId,
-                              recordReceipt(run, makeReceipt("grade", `Result quality: ${quality.level} (score ${quality.score.toFixed(2)}, confidence ${quality.confidence.toFixed(2)}).`)),
+                              recordReceipt(
+                                run,
+                                makeReceipt(
+                                  "grade",
+                                  `Result quality: ${quality.level} (score ${quality.score.toFixed(2)}, confidence ${quality.confidence.toFixed(2)}).`,
+                                ),
+                              ),
                             );
                           }
                         }),
@@ -868,34 +1057,44 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
                 }
                 return output;
               }
-              const failure = classifyExecutorError(new Error(parsed?.summary ?? output.slice(0, 4000)));
+              const failure = classifyExecutorError(
+                new Error(parsed?.summary ?? output.slice(0, 4000)),
+              );
               const failureStatus = terminalStatusFor(failure.code);
-              finish(failureStatus, {
-                summary: output.slice(0, 4000),
-                error: redactSecrets(parsed?.summary ?? output.slice(0, 4000)).slice(0, 4000),
-                errorCode: failure.code,
-                // T42: partial signals survive a failed run — the missing
-                // milestones name the phase it never reached.
-                signals: parsed?.signals,
-                // Tokens the harness reported before failing are real spend.
-                usage: parsed?.usage,
-              }, slackRunFailed({
-                repoUrl: fullInput.repoUrl,
-                userMessage: runErrorWire(failure.code).userMessage,
-                detail: redactSecrets(parsed?.summary ?? output.slice(0, 1000)).slice(0, 1000),
-                unknown: failureStatus === "unknown",
-              }));
+              finish(
+                failureStatus,
+                {
+                  summary: output.slice(0, 4000),
+                  error: redactSecrets(parsed?.summary ?? output.slice(0, 4000)).slice(0, 4000),
+                  errorCode: failure.code,
+                  // T42: partial signals survive a failed run — the missing
+                  // milestones name the phase it never reached.
+                  signals: parsed?.signals,
+                  // Tokens the harness reported before failing are real spend.
+                  usage: parsed?.usage,
+                },
+                slackRunFailed({
+                  repoUrl: fullInput.repoUrl,
+                  userMessage: runErrorWire(failure.code).userMessage,
+                  detail: redactSecrets(parsed?.summary ?? output.slice(0, 1000)).slice(0, 1000),
+                  unknown: failureStatus === "unknown",
+                }),
+              );
               return output;
             }
             const message = `Coding run failed: ${JSON.stringify(output).slice(0, 2000)}`;
             const failure = classifyRunError(new Error(message));
             const failureStatus = terminalStatusFor(failure.code);
-            finish(failureStatus, { error: redactSecrets(message), errorCode: failure.code }, slackRunFailed({
-              repoUrl: fullInput.repoUrl,
-              userMessage: runErrorWire(failure.code).userMessage,
-              detail: message.slice(0, 1000),
-              unknown: failureStatus === "unknown",
-            }));
+            finish(
+              failureStatus,
+              { error: redactSecrets(message), errorCode: failure.code },
+              slackRunFailed({
+                repoUrl: fullInput.repoUrl,
+                userMessage: runErrorWire(failure.code).userMessage,
+                detail: message.slice(0, 1000),
+                unknown: failureStatus === "unknown",
+              }),
+            );
             return yield* Effect.fail(toTaggedError(failure.code, message));
           }).pipe(
             // The old catch block: every in-flight failure or interruption
@@ -907,15 +1106,19 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
               const failureStatus = terminalStatusFor(failure.code);
               return Effect.andThen(
                 Effect.sync(() => {
-                  finish(failureStatus, {
-                    error: redactSecrets(failure.message).slice(0, 4000),
-                    errorCode: failure.code,
-                  }, slackRunFailed({
-                    repoUrl: fullInput.repoUrl,
-                    userMessage: runErrorWire(failure.code).userMessage,
-                    detail: redactSecrets(failure.message).slice(0, 1000),
-                    unknown: failureStatus === "unknown",
-                  }));
+                  finish(
+                    failureStatus,
+                    {
+                      error: redactSecrets(failure.message).slice(0, 4000),
+                      errorCode: failure.code,
+                    },
+                    slackRunFailed({
+                      repoUrl: fullInput.repoUrl,
+                      userMessage: runErrorWire(failure.code).userMessage,
+                      detail: redactSecrets(failure.message).slice(0, 1000),
+                      unknown: failureStatus === "unknown",
+                    }),
+                  );
                 }),
                 Effect.failCause(cause),
               );
@@ -938,13 +1141,35 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
    * the pointer via POST /api/approvals. Email-kind approvals freeze a
    * mailbox payload instead of a run input.
    */
-  private async queueSlackRun(input: { repoUrl?: unknown; task?: unknown; baseBranch?: unknown; publishPullRequest?: unknown; harness?: unknown; codingModel?: unknown; connectionId?: unknown; authAccount?: unknown; runtime?: unknown; testCommand?: unknown; role?: unknown; intake?: unknown; threadKey?: unknown; kind?: unknown; mailbox?: unknown; payload?: unknown; queuedBy?: unknown; commandId?: unknown }): Promise<Response> {
+  private async queueSlackRun(input: {
+    repoUrl?: unknown;
+    task?: unknown;
+    baseBranch?: unknown;
+    publishPullRequest?: unknown;
+    harness?: unknown;
+    codingModel?: unknown;
+    connectionId?: unknown;
+    authAccount?: unknown;
+    runtime?: unknown;
+    testCommand?: unknown;
+    role?: unknown;
+    intake?: unknown;
+    threadKey?: unknown;
+    kind?: unknown;
+    mailbox?: unknown;
+    payload?: unknown;
+    queuedBy?: unknown;
+    commandId?: unknown;
+  }): Promise<Response> {
     const kind = typeof input.kind === "string" && input.kind.trim() ? input.kind.trim() : "run";
     let testCommand: string[] | undefined;
     if (input.testCommand !== undefined) {
       const parsed = testCommandSchema.safeParse(input.testCommand);
       if (!parsed.success) {
-        return Response.json({ error: "testCommand must be an argv array of 1-8 non-empty strings." }, { status: 400 });
+        return Response.json(
+          { error: "testCommand must be an argv array of 1-8 non-empty strings." },
+          { status: 400 },
+        );
       }
       if (parsed.data.length > 0) {
         testCommand = parsed.data;
@@ -958,9 +1183,10 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     }
     // T41: a caller-deterministic commandId makes a retried queue safe —
     // the receipt answers with the minted approvalId, never a second mint.
-    const queueCommandId = typeof input.commandId === "string" && input.commandId.trim()
-      ? `queue:${input.commandId.trim().slice(0, 200)}`
-      : undefined;
+    const queueCommandId =
+      typeof input.commandId === "string" && input.commandId.trim()
+        ? `queue:${input.commandId.trim().slice(0, 200)}`
+        : undefined;
     if (queueCommandId !== undefined) {
       const prior = this.commandReceipt(queueCommandId);
       if (prior !== undefined && prior.approvalId !== undefined) {
@@ -972,30 +1198,45 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     try {
       parseGitHubRepoUrl(repoUrl);
     } catch (error) {
-      return Response.json({ error: error instanceof Error ? error.message : "Invalid repository URL." }, { status: 400 });
+      return Response.json(
+        { error: error instanceof Error ? error.message : "Invalid repository URL." },
+        { status: 400 },
+      );
     }
     if (!task.trim()) {
       return Response.json({ error: "Task description is required." }, { status: 400 });
     }
     // The approver must see a real agent name on the card — validate here
     // so a bad harness fails before the card, never inside a container.
-    const harness = typeof input.harness === "string" && input.harness.trim() ? input.harness.trim() : undefined;
+    const harness =
+      typeof input.harness === "string" && input.harness.trim() ? input.harness.trim() : undefined;
     if (harness !== undefined) {
       try {
         resolveHarness(harness, this.env);
       } catch (error) {
-        return Response.json({ error: error instanceof Error ? error.message : "Unknown agent harness." }, { status: 400 });
+        return Response.json(
+          { error: error instanceof Error ? error.message : "Unknown agent harness." },
+          { status: 400 },
+        );
       }
     }
     // T52: the delegation role rides intake like harness/model — a bad
     // role name fails before the card, never inside a container.
     const role = typeof input.role === "string" ? input.role.trim() : "";
     if (role !== "" && !isAgentRole(role)) {
-      return Response.json({ error: `Unknown role "${role.slice(0, 40)}": expected one of ${AGENT_ROLES.join(", ")}.` }, { status: 400 });
+      return Response.json(
+        {
+          error: `Unknown role "${role.slice(0, 40)}": expected one of ${AGENT_ROLES.join(", ")}.`,
+        },
+        { status: 400 },
+      );
     }
     const publishPullRequest = input.publishPullRequest === true;
     if (publishPullRequest && !this.env.GITHUB_TOKEN) {
-      return Response.json({ error: "publishPullRequest was requested but GITHUB_TOKEN is not configured." }, { status: 400 });
+      return Response.json(
+        { error: "publishPullRequest was requested but GITHUB_TOKEN is not configured." },
+        { status: 400 },
+      );
     }
     // Freeze the route at queue time (spec §4): the approval card shows the
     // exact harness/model/connection that will execute, and an inadmissible
@@ -1007,14 +1248,26 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         task,
         baseBranch: typeof input.baseBranch === "string" ? input.baseBranch : "main",
         publishPullRequest,
-        harness: typeof input.harness === "string" && input.harness.trim() ? (input.harness.trim() as DelegateInput["harness"]) : undefined,
-        codingModel: typeof input.codingModel === "string" && input.codingModel.trim() ? input.codingModel.trim() : undefined,
-        connectionId: typeof input.connectionId === "string" && input.connectionId.trim() ? input.connectionId.trim() : undefined,
+        harness:
+          typeof input.harness === "string" && input.harness.trim()
+            ? (input.harness.trim() as DelegateInput["harness"])
+            : undefined,
+        codingModel:
+          typeof input.codingModel === "string" && input.codingModel.trim()
+            ? input.codingModel.trim()
+            : undefined,
+        connectionId:
+          typeof input.connectionId === "string" && input.connectionId.trim()
+            ? input.connectionId.trim()
+            : undefined,
         ...(role !== "" ? { role } : {}),
       });
       route = resolved.route;
     } catch (error) {
-      return Response.json({ error: error instanceof Error ? error.message : "Unsupported model route." }, { status: 400 });
+      return Response.json(
+        { error: error instanceof Error ? error.message : "Unsupported model route." },
+        { status: 400 },
+      );
     }
     // T51 intake boundary — the sharpest edge in the plan. `runtime: "local"`
     // is admitted only when BOTH hold: the deployment opted in
@@ -1026,28 +1279,49 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     // name in executeDelegatedTask.
     const runtimeRaw = typeof input.runtime === "string" ? input.runtime.trim() : "";
     if (runtimeRaw !== "" && runtimeRaw !== "sandbox" && runtimeRaw !== "local") {
-      return Response.json({ error: `Unknown runtime "${runtimeRaw.slice(0, 40)}": expected "sandbox" or "local".` }, { status: 400 });
+      return Response.json(
+        { error: `Unknown runtime "${runtimeRaw.slice(0, 40)}": expected "sandbox" or "local".` },
+        { status: 400 },
+      );
     }
     const runtime = runtimeRaw === "local" ? ("local" as const) : undefined;
     if (runtime === "local") {
       if (this.env[LOCAL_RUNTIME_FLAG] !== "1") {
-        return Response.json({ error: "The local runtime is not enabled on this deployment (SHIBA_LOCAL_RUNTIME=1)." }, { status: 403 });
+        return Response.json(
+          { error: "The local runtime is not enabled on this deployment (SHIBA_LOCAL_RUNTIME=1)." },
+          { status: 403 },
+        );
       }
       if (input.intake !== LOCAL_INTAKE_DASHBOARD) {
-        return Response.json({ error: "runtime \"local\" is admitted only through the dashboard." }, { status: 403 });
+        return Response.json(
+          { error: 'runtime "local" is admitted only through the dashboard.' },
+          { status: 403 },
+        );
       }
-      const localHarness = route !== undefined ? resolveHarness(route.harness, this.env) : undefined;
+      const localHarness =
+        route !== undefined ? resolveHarness(route.harness, this.env) : undefined;
       if (localHarness === undefined || !harnessRunsOn(localHarness, "local")) {
-        return Response.json({ error: `Harness "${route?.harness ?? harness ?? "default"}" does not run on the local runtime.` }, { status: 400 });
+        return Response.json(
+          {
+            error: `Harness "${route?.harness ?? harness ?? "default"}" does not run on the local runtime.`,
+          },
+          { status: 400 },
+        );
       }
     }
     const approvalId = crypto.randomUUID();
-    const threadKey = typeof input.threadKey === "string" && input.threadKey.trim() ? input.threadKey.trim() : "default";
+    const threadKey =
+      typeof input.threadKey === "string" && input.threadKey.trim()
+        ? input.threadKey.trim()
+        : "default";
     // Flood guard: pending approvals persist in DO state — an uncapped queue
     // lets one trigger token crowd out Slack, chat, and dashboard intake.
     const MAX_PENDING = 100;
     if (this.approvals.filter((a) => a.status === "pending").length >= MAX_PENDING) {
-      return Response.json({ error: "Approval queue is full — resolve pending approvals first." }, { status: 429 });
+      return Response.json(
+        { error: "Approval queue is full — resolve pending approvals first." },
+        { status: 429 },
+      );
     }
     try {
       // Approval mint and its queue receipt commit in one state write.
@@ -1058,7 +1332,10 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
           approvalId,
           repoUrl,
           task: task.slice(0, 4000),
-          baseBranch: typeof input.baseBranch === "string" && input.baseBranch.trim() ? input.baseBranch.slice(0, 200) : "main",
+          baseBranch:
+            typeof input.baseBranch === "string" && input.baseBranch.trim()
+              ? input.baseBranch.slice(0, 200)
+              : "main",
           publishPullRequest,
           route,
           // T48: the approved subscription account name, frozen with the input.
@@ -1092,9 +1369,18 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
           : {}),
       });
     } catch (error) {
-      return Response.json({ error: error instanceof Error ? error.message : "Could not queue approval." }, { status: 409 });
+      return Response.json(
+        { error: error instanceof Error ? error.message : "Could not queue approval." },
+        { status: 409 },
+      );
     }
-    return Response.json({ ok: true, approvalId, repoUrl, task: task.slice(0, 4000), route: describeRoute(route) });
+    return Response.json({
+      ok: true,
+      approvalId,
+      repoUrl,
+      task: task.slice(0, 4000),
+      route: describeRoute(route),
+    });
   }
 
   /**
@@ -1103,7 +1389,10 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
    * executor routes and sends against. `repoUrl`/`task` stay populated
    * as the human-readable summary dashboard cards and audit rows show.
    */
-  private async queueEmailApprovalRecord(kind: "email_send" | "email_delete", input: { mailbox?: unknown; payload?: unknown; threadKey?: unknown }): Promise<Response> {
+  private async queueEmailApprovalRecord(
+    kind: "email_send" | "email_delete",
+    input: { mailbox?: unknown; payload?: unknown; threadKey?: unknown },
+  ): Promise<Response> {
     const mailbox = typeof input.mailbox === "string" ? input.mailbox.trim() : "";
     if (!ADDRESS_RE.test(mailbox)) {
       return Response.json({ error: "mailbox must be a valid email address." }, { status: 400 });
@@ -1115,7 +1404,10 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     const required = kind === "email_send" ? ["to_addr", "subject", "body_text"] : ["email_id"];
     for (const field of required) {
       if (typeof fields[field] !== "string" || (fields[field] as string).trim() === "") {
-        return Response.json({ error: `payload.${field} must be a non-empty string.` }, { status: 400 });
+        return Response.json(
+          { error: `payload.${field} must be a non-empty string.` },
+          { status: 400 },
+        );
       }
     }
     // Address-format check fails at intake, not post-approval at the
@@ -1124,7 +1416,10 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     if (kind === "email_send") {
       const toAddr = (fields.to_addr as string).trim();
       if (!ADDRESS_RE.test(toAddr)) {
-        return Response.json({ error: "payload.to_addr must be a valid email address." }, { status: 400 });
+        return Response.json(
+          { error: "payload.to_addr must be a valid email address." },
+          { status: 400 },
+        );
       }
       fields.to_addr = toAddr;
     }
@@ -1148,44 +1443,67 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
           new Request(`https://internal/internal/mailbox/drafts/${encodeURIComponent(draftId)}`),
         );
         const draftRow = draftRes.ok
-          ? ((((await draftRes.json().catch(() => ({}))) as { draft?: Record<string, unknown> }).draft) ?? null)
+          ? (((await draftRes.json().catch(() => ({}))) as { draft?: Record<string, unknown> })
+              .draft ?? null)
           : null;
         if (draftRow === null) {
-          return Response.json({ error: `payload.draft_id "${draftId}" was not found in ${registration.address}.` }, { status: 400 });
+          return Response.json(
+            { error: `payload.draft_id "${draftId}" was not found in ${registration.address}.` },
+            { status: 400 },
+          );
         }
         if (draftRow.status !== "queued") {
-          return Response.json({ error: `draft "${draftId}" is "${String(draftRow.status)}" — only a queued draft can back an email_send approval.` }, { status: 400 });
+          return Response.json(
+            {
+              error: `draft "${draftId}" is "${String(draftRow.status)}" — only a queued draft can back an email_send approval.`,
+            },
+            { status: 400 },
+          );
         }
         if (
           draftRow.to_addr !== fields.to_addr ||
           draftRow.subject !== fields.subject ||
           draftRow.body_text !== fields.body_text
         ) {
-          return Response.json({ error: `payload does not match draft "${draftId}" — a draft-backed send must freeze the draft's own content.` }, { status: 400 });
+          return Response.json(
+            {
+              error: `payload does not match draft "${draftId}" — a draft-backed send must freeze the draft's own content.`,
+            },
+            { status: 400 },
+          );
         }
       }
     }
     const approvalId = crypto.randomUUID();
-    const threadKey = typeof input.threadKey === "string" && input.threadKey.trim() ? input.threadKey.trim() : "default";
+    const threadKey =
+      typeof input.threadKey === "string" && input.threadKey.trim()
+        ? input.threadKey.trim()
+        : "default";
     const subject = typeof fields.subject === "string" ? fields.subject : "";
     // The spec's card phrasing — "Agent X requests email send to Y:
     // subject" — reads verbatim off the card's "requests ${task}"
     // headline, so the action text lives on the record itself.
-    const task = kind === "email_send"
-      ? `email send to ${String(fields.to_addr)}: ${subject}`
-      : `email delete of ${String(fields.email_id)}${subject ? ` "${subject}"` : ""}`;
+    const task =
+      kind === "email_send"
+        ? `email send to ${String(fields.to_addr)}: ${subject}`
+        : `email delete of ${String(fields.email_id)}${subject ? ` "${subject}"` : ""}`;
     try {
-      this.writeApprovals(createPendingApproval(this.approvals, {
-        threadKey,
-        approvalId,
-        repoUrl: mailbox,
-        task: task.slice(0, 4000),
-        kind,
-        payload: { ...fields, mailbox },
-        createdAt: Date.now(),
-      }));
+      this.writeApprovals(
+        createPendingApproval(this.approvals, {
+          threadKey,
+          approvalId,
+          repoUrl: mailbox,
+          task: task.slice(0, 4000),
+          kind,
+          payload: { ...fields, mailbox },
+          createdAt: Date.now(),
+        }),
+      );
     } catch (error) {
-      return Response.json({ error: error instanceof Error ? error.message : "Could not queue approval." }, { status: 409 });
+      return Response.json(
+        { error: error instanceof Error ? error.message : "Could not queue approval." },
+        { status: 409 },
+      );
     }
     const body = kind === "email_send" ? String(fields.body_text).trim() : "";
     const excerpt = body.length > 500 ? `${body.slice(0, 499)}…` : body;
@@ -1217,16 +1535,27 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     const posted = fetch("https://slack.com/api/chat.postMessage", {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ channel, text: approvalCardText(input).slice(0, 3000), blocks: buildApprovalBlocks(input) }),
-    }).then(async (response) => {
-      // Slack reports app-level failures (not_in_channel, …) as HTTP 200 with ok:false.
-      const body = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
-      if (!response.ok || body?.ok !== true) {
-        console.error(`Slack email approval card post failed (${response.status}): ${body?.error ?? "unparseable response"}`);
-      }
-    }).catch((error) => {
-      console.error("Slack email approval card post failed", redactSecrets(String(error)));
-    });
+      body: JSON.stringify({
+        channel,
+        text: approvalCardText(input).slice(0, 3000),
+        blocks: buildApprovalBlocks(input),
+      }),
+    })
+      .then(async (response) => {
+        // Slack reports app-level failures (not_in_channel, …) as HTTP 200 with ok:false.
+        const body = (await response.json().catch(() => null)) as {
+          ok?: boolean;
+          error?: string;
+        } | null;
+        if (!response.ok || body?.ok !== true) {
+          console.error(
+            `Slack email approval card post failed (${response.status}): ${body?.error ?? "unparseable response"}`,
+          );
+        }
+      })
+      .catch((error) => {
+        console.error("Slack email approval card post failed", redactSecrets(String(error)));
+      });
     if (typeof this.ctx === "object" && this.ctx !== null && "waitUntil" in this.ctx) {
       this.ctx.waitUntil(posted);
     } else {
@@ -1240,13 +1569,23 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
    * dashboard); reject resolves without starting anything.
    */
   private async resolveApproval(body: {
-    threadKey?: unknown; approvalId?: unknown; approved?: unknown; decidedBy?: unknown;
+    threadKey?: unknown;
+    approvalId?: unknown;
+    approved?: unknown;
+    decidedBy?: unknown;
   }): Promise<Response> {
     const { threadKey, approvalId, approved, decidedBy: rawDecidedBy } = body;
-    if (typeof threadKey !== "string" || typeof approvalId !== "string" || typeof approved !== "boolean") {
+    if (
+      typeof threadKey !== "string" ||
+      typeof approvalId !== "string" ||
+      typeof approved !== "boolean"
+    ) {
       return Response.json({ error: "Invalid approval payload." }, { status: 400 });
     }
-    const decidedBy = typeof rawDecidedBy === "string" && rawDecidedBy.trim() ? rawDecidedBy.slice(0, 200) : "unknown";
+    const decidedBy =
+      typeof rawDecidedBy === "string" && rawDecidedBy.trim()
+        ? rawDecidedBy.slice(0, 200)
+        : "unknown";
     // A retried resolve (double-clicked card, redelivered callback) reads
     // the durable command receipt and learns the original answer instead
     // of re-litigating the decision — the receipt, the pointer update,
@@ -1258,25 +1597,41 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     }
     if (approved) await this.reclaimRuns();
     const now = Date.now();
-    const result = resolvePendingApproval(this.approvals, { threadKey, approvalId, approved, decidedBy }, now);
+    const result = resolvePendingApproval(
+      this.approvals,
+      { threadKey, approvalId, approved, decidedBy },
+      now,
+    );
     // Failed admission leaves the persisted approval pending and retryable.
     if (result.result === "approved") {
-      const record = this.approvals.find((a) => a.approvalId === approvalId && a.threadKey === threadKey);
+      const record = this.approvals.find(
+        (a) => a.approvalId === approvalId && a.threadKey === threadKey,
+      );
       // Email-kind approvals skip every run gate — no sandbox capacity,
       // no repo URL, no publish flag. They execute a mailbox payload.
-      const isEmail = record !== undefined && (record.kind === "email_send" || record.kind === "email_delete");
+      const isEmail =
+        record !== undefined && (record.kind === "email_send" || record.kind === "email_delete");
       if (!isEmail) {
         if (!canStartRun(this.store.list())) {
-          return Response.json({ error: "All coding runs are busy. Approve again when a slot frees." }, { status: 409 });
+          return Response.json(
+            { error: "All coding runs are busy. Approve again when a slot frees." },
+            { status: 409 },
+          );
         }
         if (record && record.publishPullRequest && !this.env.GITHUB_TOKEN) {
-          return Response.json({ error: "publishPullRequest was requested but GITHUB_TOKEN is not configured." }, { status: 400 });
+          return Response.json(
+            { error: "publishPullRequest was requested but GITHUB_TOKEN is not configured." },
+            { status: 400 },
+          );
         }
         if (record) {
           try {
             parseGitHubRepoUrl(record.repoUrl);
           } catch (error) {
-            return Response.json({ error: error instanceof Error ? error.message : "Invalid repository URL." }, { status: 400 });
+            return Response.json(
+              { error: error instanceof Error ? error.message : "Invalid repository URL." },
+              { status: 400 },
+            );
           }
         }
       }
@@ -1289,9 +1644,12 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     // and every other expired pending the prune filters out.
     const expiredSends = this.expiredEmailSends(now);
     const approvals = pruneExpiredApprovals(result.approvals, now);
-    const record = result.result === "approved"
-      ? approvals.find((approval) => approval.approvalId === approvalId && approval.threadKey === threadKey)
-      : undefined;
+    const record =
+      result.result === "approved"
+        ? approvals.find(
+            (approval) => approval.approvalId === approvalId && approval.threadKey === threadKey,
+          )
+        : undefined;
     const rejectedEmail =
       result.result === "rejected"
         ? approvals.find(
@@ -1301,7 +1659,8 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
               approval.kind === "email_send",
           )
         : undefined;
-    const isEmailRecord = record !== undefined && (record.kind === "email_send" || record.kind === "email_delete");
+    const isEmailRecord =
+      record !== undefined && (record.kind === "email_send" || record.kind === "email_delete");
     const run = record && !isEmailRecord ? this.mintApprovedRun(record) : undefined;
     // One state write reserves capacity, records the decision, and
     // commits the command receipt — a redelivery after this point
@@ -1335,7 +1694,8 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     // deliberately lets a second approval mint on an already-`queued`
     // row, and freeing it here would strand that sibling's later
     // approve at the claim CAS.
-    const releasable = rejectedEmail === undefined ? expiredSends : [rejectedEmail, ...expiredSends];
+    const releasable =
+      rejectedEmail === undefined ? expiredSends : [rejectedEmail, ...expiredSends];
     this.releaseEmailApprovalDrafts(releasable, this.liveApprovalDrafts(now));
     this.sweepStaleDrafts(expiredSends.length > 0);
     return Response.json({ result: result.result satisfies ResolveResult });
@@ -1388,9 +1748,12 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     // resolveHarness throws for a disabled gated harness, which is the
     // correct refusal: the run must not mint under an unregistered auth path.
     const harnessName = record.route?.harness ?? record.harness;
-    const continuationKey = harnessName !== undefined
-      ? resolveHarness(harnessName, this.env).continuationKey?.({ authAccount: record.authAccount })
-      : undefined;
+    const continuationKey =
+      harnessName !== undefined
+        ? resolveHarness(harnessName, this.env).continuationKey?.({
+            authAccount: record.authAccount,
+          })
+        : undefined;
     return createRun({
       runId: `agent-tool:${record.approvalId}`,
       sandboxId: makeSandboxId(record.repoUrl, record.task, record.approvalId),
@@ -1404,6 +1767,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       ...(record.runtime !== undefined ? { runtime: record.runtime } : {}),
       ...(record.testCommand !== undefined ? { testCommand: record.testCommand } : {}),
       ...(continuationKey !== undefined ? { continuationKey } : {}),
+      decisionTap: (command, decision) => this.spineTap(command, decision),
       // T40: the run carries its approval evidence from birth — who decided,
       // when, and the hash of the exact frozen input they approved.
       approval: approvalEvidenceFor(record, {
@@ -1436,29 +1800,32 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         const delegate = this.getTools()["delegate_coding_task"] as {
           execute: (input: unknown, options?: unknown) => Promise<unknown>;
         };
-        await delegate.execute({
-          repoUrl: run.repoUrl,
-          task: run.task,
-          baseBranch: run.baseBranch,
-          publishPullRequest: run.publishPullRequest,
-          // The frozen route is the exact approved input: harness, model,
-          // and connection ride the pointer, never a fresh lookup. Pending
-          // approvals queued before route freezing carry `harness` only —
-          // pass it so the approved agent is not silently re-defaulted.
-          ...(run.route
-            ? {
-                harness: run.route.harness,
-                codingModel: run.route.modelId,
-                ...(run.route.connectionId ? { connectionId: run.route.connectionId } : {}),
-              }
-            : record?.harness
-              ? { harness: record.harness as DelegateInput["harness"] }
-              : {}),
-          ...(run.authAccount ? { authAccount: run.authAccount } : {}),
-          ...(run.runtime !== undefined ? { runtime: run.runtime } : {}),
-          ...(run.testCommand?.length ? { testCommand: run.testCommand } : {}),
-          ...(record?.role !== undefined ? { role: record.role } : {}),
-        }, { toolCallId: approvalId });
+        await delegate.execute(
+          {
+            repoUrl: run.repoUrl,
+            task: run.task,
+            baseBranch: run.baseBranch,
+            publishPullRequest: run.publishPullRequest,
+            // The frozen route is the exact approved input: harness, model,
+            // and connection ride the pointer, never a fresh lookup. Pending
+            // approvals queued before route freezing carry `harness` only —
+            // pass it so the approved agent is not silently re-defaulted.
+            ...(run.route
+              ? {
+                  harness: run.route.harness,
+                  codingModel: run.route.modelId,
+                  ...(run.route.connectionId ? { connectionId: run.route.connectionId } : {}),
+                }
+              : record?.harness
+                ? { harness: record.harness as DelegateInput["harness"] }
+                : {}),
+            ...(run.authAccount ? { authAccount: run.authAccount } : {}),
+            ...(run.runtime !== undefined ? { runtime: run.runtime } : {}),
+            ...(run.testCommand?.length ? { testCommand: run.testCommand } : {}),
+            ...(record?.role !== undefined ? { role: record.role } : {}),
+          },
+          { toolCallId: approvalId },
+        );
       } catch (error) {
         // delegate.execute can throw before its inner `finish` seam ran;
         // this fallback is the terminal transition then. Fence on the
@@ -1467,19 +1834,26 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         // the dropped write means this catch also distills nothing.
         const failure = classifyRunError(error);
         const status = terminalStatusFor(failure.code);
-        const updated = this.store.transition(run.runId, status, {
-          error: redactSecrets(failure.message).slice(0, 4000),
-          errorCode: failure.code,
-        }, generation);
+        const updated = this.store.transition(
+          run.runId,
+          status,
+          {
+            error: redactSecrets(failure.message).slice(0, 4000),
+            errorCode: failure.code,
+          },
+          generation,
+        );
         if (updated !== null) {
           // A pre-start failure never reaches `finish`'s slackText seam —
           // post here or the thread sees ack + card + approved, then silence.
-          this.postToThread(slackRunFailed({
-            repoUrl: run.repoUrl,
-            userMessage: runErrorWire(failure.code).userMessage,
-            detail: redactSecrets(failure.message).slice(0, 1000),
-            unknown: status === "unknown",
-          }));
+          this.postToThread(
+            slackRunFailed({
+              repoUrl: run.repoUrl,
+              userMessage: runErrorWire(failure.code).userMessage,
+              detail: redactSecrets(failure.message).slice(0, 1000),
+              unknown: status === "unknown",
+            }),
+          );
           if (status === "completed" || status === "error") {
             this.dispatchSessionDistill(updated);
           }
@@ -1506,17 +1880,20 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         // age check can't see sibling approvals minted after a row queued,
         // so live pending drafts ride along as exclusions.
         const ref = emailApprovalDraftRef(record);
-        const live = ref === null ? undefined : this.liveApprovalDrafts(Date.now()).get(ref.mailbox);
+        const live =
+          ref === null ? undefined : this.liveApprovalDrafts(Date.now()).get(ref.mailbox);
         await executeEmailApproval(this.env, record, {
           excludeDraftIds: live === undefined ? undefined : [...live],
         });
         // The record is the only durable account of this runless
         // execution — the outcome lands on it, not only in logs.
-        this.writeApprovals(recordApprovalExecution(this.approvals, {
-          threadKey,
-          approvalId,
-          execution: { status: "executed", executedAt: Date.now() },
-        }));
+        this.writeApprovals(
+          recordApprovalExecution(this.approvals, {
+            threadKey,
+            approvalId,
+            execution: { status: "executed", executedAt: Date.now() },
+          }),
+        );
       } catch (error) {
         // The pointer is already spent — the failure is written back
         // onto the persisted record so an approved-but-failed send/
@@ -1528,13 +1905,19 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         // double-send, so the record reads `executed` with the
         // bookkeeping failure noted.
         const transmitted = error instanceof PostTransmitError;
-        this.writeApprovals(recordApprovalExecution(this.approvals, {
-          threadKey,
-          approvalId,
-          execution: transmitted
-            ? { status: "executed", error: `transmitted — post-send record failed: ${message}`, executedAt: Date.now() }
-            : { status: "failed", error: message, executedAt: Date.now() },
-        }));
+        this.writeApprovals(
+          recordApprovalExecution(this.approvals, {
+            threadKey,
+            approvalId,
+            execution: transmitted
+              ? {
+                  status: "executed",
+                  error: `transmitted — post-send record failed: ${message}`,
+                  executedAt: Date.now(),
+                }
+              : { status: "failed", error: message, executedAt: Date.now() },
+          }),
+        );
       }
     };
     const pending = dispatch();
@@ -1589,33 +1972,141 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
    * into the conversation they came from. Best-effort — the ack already went
    * out and failure must not touch the run.
    */
-  private postToThread(text: string): void {
+  private postToThread(text: string, context?: { runId?: string; causationId?: string }): void {
     const chat = postToChatThread(this.env, this.name, text);
-    if (chat) {
-      this.ctx.waitUntil(chat.catch((error: unknown) => {
-        console.error("Chat post-back failed", redactSecrets(String(error)));
-      }));
-      return;
-    }
     const ids = parseSlackThreadName(this.name);
     const token = this.env.SLACK_BOT_TOKEN?.trim();
-    if (!ids || !token) return;
+    const send =
+      chat ??
+      (ids && token
+        ? postSlackMessage(token, {
+            channel: ids.channelId,
+            threadTs: ids.threadTs,
+            text: text.slice(0, 3000),
+          })
+        : null);
+    if (send === null) return;
+    // P9 outbox: the send is requested as an event first — a crash
+    // between request and dispatch leaves a pending row the drainer
+    // retries on wake (at-least-once delivery, deduplicated request:
+    // a post that landed before the crash can be sent a second time).
+    const effectKind: SideEffectKind = chat ? "chat.post" : "slack.post";
+    const target = chat
+      ? `chat:${this.name ?? "unknown"}`
+      : `slack:${ids!.channelId}:${ids!.threadTs}`;
+    const effectId = `fx:${effectKind}:${crypto.randomUUID()}`;
+    const commandId = `post:${effectId}`;
+    this.emitSpine(
+      sideEffectRequestInput({
+        effectId,
+        effectKind,
+        target,
+        summary: text.slice(0, 3000),
+        commandId,
+        causationId: context?.causationId,
+        runId: context?.runId,
+        at: Date.now(),
+      }),
+    );
+    // Commit the request + outbox row before attempting the send.
+    this.setState({ ...this.state });
     this.ctx.waitUntil(
-      postSlackMessage(token, { channel: ids.channelId, threadTs: ids.threadTs, text: text.slice(0, 3000) })
+      send
+        .then(() => {
+          this.emitSpine(
+            sideEffectResultInput({
+              effectId,
+              effectKind,
+              target,
+              ok: true,
+              commandId,
+              at: Date.now(),
+            }),
+          );
+          this.setState({ ...this.state });
+        })
         .catch((error: unknown) => {
-          console.error(`Slack post-back failed: ${redactSecrets(error instanceof Error ? error.message : String(error))}`);
+          const message = error instanceof Error ? error.message : String(error);
+          console.error(`Post-back to ${target} failed: ${redactSecrets(message)}`);
+          this.emitSpine(
+            sideEffectResultInput({
+              effectId,
+              effectKind,
+              target,
+              ok: false,
+              error: message,
+              commandId,
+              at: Date.now(),
+            }),
+          );
+          this.setState({ ...this.state });
         }),
     );
   }
 
+  /**
+   * P9 outbox drainer — re-drives side effects still owed after a
+   * restart. Runs at the top of `reclaimRuns` (every wake path) so a
+   * pending post retries before the run it announces is marked
+   * unknown. Result events commit in one write; entries exhausted at
+   * MAX_OUTBOX_ATTEMPTS stay `failed` for the operator to inspect.
+   */
+  private async drainEffectOutbox(): Promise<void> {
+    const results = await drainOutbox(this.state?.outbox, async (entry) => {
+      if (entry.effectKind === "chat.post") {
+        const chat = postToChatThread(this.env, this.name, entry.summary ?? "");
+        if (chat === null) return { ok: false, error: "no chat thread destination configured" };
+        try {
+          await chat;
+          return { ok: true };
+        } catch (error) {
+          return { ok: false, error: error instanceof Error ? error.message : String(error) };
+        }
+      }
+      if (entry.effectKind === "slack.post") {
+        const ids = parseSlackThreadName(this.name);
+        const token = this.env.SLACK_BOT_TOKEN?.trim();
+        if (!ids || !token) return { ok: false, error: "no Slack thread destination configured" };
+        try {
+          await postSlackMessage(token, {
+            channel: ids.channelId,
+            threadTs: ids.threadTs,
+            text: (entry.summary ?? "").slice(0, 3000),
+          });
+          return { ok: true };
+        } catch (error) {
+          return { ok: false, error: error instanceof Error ? error.message : String(error) };
+        }
+      }
+      return { ok: false, error: `unsupported effect kind ${entry.effectKind}` };
+    });
+    if (results.length === 0) return;
+    for (const { entry, ok, error } of results) {
+      this.emitSpine(
+        sideEffectResultInput({
+          effectId: entry.id,
+          effectKind: entry.effectKind as SideEffectKind,
+          target: entry.target,
+          ok,
+          error,
+          commandId: `drain:${entry.id}`,
+          at: Date.now(),
+        }),
+      );
+    }
+    this.setState({ ...this.state });
+  }
+
   /** Terminal "unknown" notice for runs that end outside `finish` (restart, reclaim). */
   private postOutcomeUnknown(run: DelegatedRun): void {
-    this.postToThread(slackRunFailed({
-      repoUrl: run.repoUrl,
-      userMessage: runErrorWire(run.errorCode ?? "outcome_unknown").userMessage,
-      detail: run.error?.slice(0, 1000),
-      unknown: true,
-    }));
+    this.postToThread(
+      slackRunFailed({
+        repoUrl: run.repoUrl,
+        userMessage: runErrorWire(run.errorCode ?? "outcome_unknown").userMessage,
+        detail: run.error?.slice(0, 1000),
+        unknown: true,
+      }),
+    );
   }
 
   /** Wire projection for API responses: errorCode -> {status, code, userMessage}. */
@@ -1651,14 +2142,26 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
 
   /** Public: also the `schedule()` callback armed when a run starts. */
   async reclaimRuns(): Promise<void> {
-    const { runs, reclaimed } = reclaimStaleRuns(this.store.list(), Date.now());
+    // P9: owed side effects retry before any run is marked unknown —
+    // the completion notice must not be lost with the run's lease.
+    await this.drainEffectOutbox();
+    const { runs, reclaimed } = reclaimStaleRuns(
+      this.store.list(),
+      Date.now(),
+      undefined,
+      (command, decision) => this.spineTap(command, decision),
+    );
     if (reclaimed.length > 0) {
       this.setState({ ...this.state, runs });
-      await Promise.all(runs.filter((run) => reclaimed.includes(run.runId)).map(async (run) => {
-        this.postOutcomeUnknown(run);
-        this.runControllers.get(run.runId)?.abort();
-        await this.destroySandbox(run.sandboxId);
-      }));
+      await Promise.all(
+        runs
+          .filter((run) => reclaimed.includes(run.runId))
+          .map(async (run) => {
+            this.postOutcomeUnknown(run);
+            this.runControllers.get(run.runId)?.abort();
+            await this.destroySandbox(run.sandboxId);
+          }),
+      );
     }
     // Leaked containers outlive the run that leaked them: retry destroy on
     // every reclaim pass; a successful destroy clears its own registry entry.
@@ -1675,10 +2178,14 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     // dropping them would silently strand a queued card's pointer.
     const runs = this.store.list();
     const removed = new Set(runs.map((run) => run.runId));
-    await Promise.all(runs.filter((run) => isActiveStatus(run.status))
-      .map((run) => this.cancelRun(run.runId)));
+    await Promise.all(
+      runs.filter((run) => isActiveStatus(run.status)).map((run) => this.cancelRun(run.runId)),
+    );
     // Do not drop runs admitted while sandbox cleanup was awaiting I/O.
-    this.setState({ ...this.state, runs: this.store.list().filter((run) => !removed.has(run.runId)) });
+    this.setState({
+      ...this.state,
+      runs: this.store.list().filter((run) => !removed.has(run.runId)),
+    });
   }
 
   /** Pending email_send approvals past TTL — the records a prune drops. */
@@ -1704,7 +2211,11 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
   private liveApprovalDrafts(now: number): Map<string, Set<string>> {
     const live = new Map<string, Set<string>>();
     for (const approval of this.approvals) {
-      if (approval.status !== "pending" || approval.kind !== "email_send" || isApprovalExpired(approval, now)) {
+      if (
+        approval.status !== "pending" ||
+        approval.kind !== "email_send" ||
+        isApprovalExpired(approval, now)
+      ) {
         continue;
       }
       const ref = emailApprovalDraftRef(approval);
@@ -1726,7 +2237,10 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
    * the sibling to claim. Best-effort: a failure is logged, never
    * fatal to the pointer path that triggered it.
    */
-  private releaseEmailApprovalDrafts(records: PendingApproval[], liveDrafts: Map<string, Set<string>>): void {
+  private releaseEmailApprovalDrafts(
+    records: PendingApproval[],
+    liveDrafts: Map<string, Set<string>>,
+  ): void {
     const released = new Set<string>();
     const releasable = records.filter((record) => {
       const ref = emailApprovalDraftRef(record);
@@ -1810,7 +2324,10 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
               console.warn(`Stale draft sweep failed for ${record.address} (${swept.status})`);
             }
           } catch (error) {
-            console.warn(`Stale draft sweep failed for ${record.address}`, redactSecrets(String(error)));
+            console.warn(
+              `Stale draft sweep failed for ${record.address}`,
+              redactSecrets(String(error)),
+            );
           }
         }),
       );
@@ -1844,9 +2361,10 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     this.sweepStaleDrafts(expiredSends.length > 0);
     // Agent principals see only records they queued; operator surfaces
     // (no principal header) keep the full listing.
-    const visible = agentPrincipal === null
-      ? pruned
-      : pruned.filter((approval) => approval.queuedBy === agentPrincipal);
+    const visible =
+      agentPrincipal === null
+        ? pruned
+        : pruned.filter((approval) => approval.queuedBy === agentPrincipal);
     return Response.json({
       approvals: visible.filter((approval) => approval.status === "pending"),
       // Decided records leave the pending arm but stay listed — the
@@ -1912,9 +2430,8 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
             { status: 400 },
           );
         }
-        const next = index >= 0
-          ? existing.map((s, i) => (i === index ? session : s))
-          : [...existing, session];
+        const next =
+          index >= 0 ? existing.map((s, i) => (i === index ? session : s)) : [...existing, session];
         this.writeWebSessions(next);
         return Response.json({ session }, { status: 201 });
       }
@@ -1999,11 +2516,16 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         }
         const updated: WebSessionRecord = {
           ...existing,
-          name: patch.name !== undefined ? (sanitizeSessionName(patch.name) || existing.name) : existing.name,
+          name:
+            patch.name !== undefined
+              ? sanitizeSessionName(patch.name) || existing.name
+              : existing.name,
           metadata: sanitizedMeta,
           updatedAt: Date.now(),
         };
-        this.writeWebSessions(this.storedWebSessions.map((s) => (s.id === sessionId ? updated : s)));
+        this.writeWebSessions(
+          this.storedWebSessions.map((s) => (s.id === sessionId ? updated : s)),
+        );
         return Response.json({ session: updated });
       }
       if (request.method === "DELETE") {
@@ -2050,7 +2572,12 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       const now = Date.now();
       const updated = this.approvals.map((a) =>
         a.status === "pending"
-          ? { ...a, status: "rejected" as const, decidedAt: now, decidedBy: "system:session-deleted" }
+          ? {
+              ...a,
+              status: "rejected" as const,
+              decidedAt: now,
+              decidedBy: "system:session-deleted",
+            }
           : a,
       );
       this.writeApprovals(updated);
@@ -2094,7 +2621,10 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     if (request.method === "POST" && url.pathname === "/api/approvals") {
       // Approving is a human act — an agent principal can never decide.
       if (agentPrincipal !== null) {
-        return Response.json({ error: "Agent principals cannot decide approvals." }, { status: 403 });
+        return Response.json(
+          { error: "Agent principals cannot decide approvals." },
+          { status: 403 },
+        );
       }
       let approvalBody: unknown;
       try {
@@ -2102,7 +2632,11 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       } catch {
         return Response.json({ error: "Request body is not valid JSON." }, { status: 400 });
       }
-      if (typeof approvalBody !== "object" || approvalBody === null || Array.isArray(approvalBody)) {
+      if (
+        typeof approvalBody !== "object" ||
+        approvalBody === null ||
+        Array.isArray(approvalBody)
+      ) {
         return Response.json({ error: "Request body must be a JSON object." }, { status: 400 });
       }
       return this.resolveApproval(approvalBody as Record<string, unknown>);
@@ -2145,9 +2679,10 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     }
     await this.reclaimRuns();
     if (request.method === "GET" && id === null) {
-      const visible = agentPrincipal === null
-        ? this.store.list()
-        : this.store.list().filter((run) => run.queuedBy === agentPrincipal);
+      const visible =
+        agentPrincipal === null
+          ? this.store.list()
+          : this.store.list().filter((run) => run.queuedBy === agentPrincipal);
       const limitParam = url.searchParams.get("limit");
       if (limitParam !== null) {
         const limit = Number(limitParam);
@@ -2155,14 +2690,22 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
           return Response.json({ error: "limit must be a positive integer." }, { status: 400 });
         }
         // Store order is oldest-first; a bounded listing serves newest first.
-        return Response.json({ runs: visible.slice(-Math.min(limit, 500)).reverse().map((run) => this.serializeRun(run)) });
+        return Response.json({
+          runs: visible
+            .slice(-Math.min(limit, 500))
+            .reverse()
+            .map((run) => this.serializeRun(run)),
+        });
       }
       return Response.json({ runs: visible.map((run) => this.serializeRun(run)) });
     }
     if (request.method === "DELETE" && id === null) {
       // Registry clear is an operator action — never agent-bulk-deletable.
       if (agentPrincipal !== null) {
-        return Response.json({ error: "Agent principals cannot clear the run registry." }, { status: 403 });
+        return Response.json(
+          { error: "Agent principals cannot clear the run registry." },
+          { status: 403 },
+        );
       }
       await this.clearRuns();
       return Response.json({ ok: true });

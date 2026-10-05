@@ -14,25 +14,28 @@
  * evidence on the run, no `completed` from `pending`, no rewrites of a
  * terminal record.
  */
+
+import type {
+  ApprovalEvidence,
+  ApprovedRoute,
+  DelegatedRun,
+  Receipt,
+  RunPatch,
+  RunStatus,
+  RuntimeSelection,
+} from "@shiba/shared";
 import {
   applyRunEvents,
   decideRunTransition,
   isActiveStatus,
   normalizeRun,
   RUN_DEADLINE_MS,
-} from "@shiba/shared";
-import type {
-  ApprovalEvidence,
-  ApprovedRoute,
-  DelegatedRun,
-  Receipt,
-  RunCommand,
-  RunPatch,
-  RunStatus,
-  RuntimeSelection,
+  type RunCommand,
+  type RunDecision,
 } from "@shiba/shared";
 import { appendReceipt, makeReceipt } from "./receipts.js";
 
+export type { DelegatedRun, RunPatch, RunStatus } from "@shiba/shared";
 // Wire types and pure predicates live in @shiba/shared so the dashboard
 // consumes the same record shape; re-exported here for existing imports.
 export {
@@ -44,7 +47,6 @@ export {
   MAX_CONCURRENT_RUNS,
   RUN_DEADLINE_MS,
 } from "@shiba/shared";
-export type { DelegatedRun, RunPatch, RunStatus } from "@shiba/shared";
 
 export function createRun(args: {
   runId: string;
@@ -67,32 +69,33 @@ export function createRun(args: {
   /** T40: approval evidence stamped at queue time (the resolve path). */
   approval?: ApprovalEvidence;
   now?: number;
+  /** P9: observes the decided command+events so the caller can log them. */
+  decisionTap?: DecisionTap;
 }): DelegatedRun {
   const now = args.now ?? Date.now();
-  const decision = decideRunTransition(
-    { run: null },
-    {
-      type: "queue",
-      commandId: `queue:${args.runId}`,
-      runId: args.runId,
-      input: {
-        sandboxId: args.sandboxId,
-        repoUrl: args.repoUrl,
-        task: args.task,
-        baseBranch: args.baseBranch,
-        publishPullRequest: args.publishPullRequest,
-        ...(args.queuedBy !== undefined ? { queuedBy: args.queuedBy } : {}),
-        ...(args.route !== undefined ? { route: args.route } : {}),
-        ...(args.continuationKey !== undefined ? { continuationKey: args.continuationKey } : {}),
-        ...(args.continuesKey !== undefined ? { continuesKey: args.continuesKey } : {}),
-        ...(args.authAccount !== undefined ? { authAccount: args.authAccount } : {}),
-        ...(args.runtime !== undefined ? { runtime: args.runtime } : {}),
-        ...(args.testCommand !== undefined ? { testCommand: args.testCommand } : {}),
-      },
-      ...(args.approval !== undefined ? { approval: args.approval } : {}),
-      at: now,
+  const command: RunCommand = {
+    type: "queue",
+    commandId: `queue:${args.runId}`,
+    runId: args.runId,
+    input: {
+      sandboxId: args.sandboxId,
+      repoUrl: args.repoUrl,
+      task: args.task,
+      baseBranch: args.baseBranch,
+      publishPullRequest: args.publishPullRequest,
+      ...(args.queuedBy !== undefined ? { queuedBy: args.queuedBy } : {}),
+      ...(args.route !== undefined ? { route: args.route } : {}),
+      ...(args.continuationKey !== undefined ? { continuationKey: args.continuationKey } : {}),
+      ...(args.continuesKey !== undefined ? { continuesKey: args.continuesKey } : {}),
+      ...(args.authAccount !== undefined ? { authAccount: args.authAccount } : {}),
+      ...(args.runtime !== undefined ? { runtime: args.runtime } : {}),
+      ...(args.testCommand !== undefined ? { testCommand: args.testCommand } : {}),
     },
-  );
+    ...(args.approval !== undefined ? { approval: args.approval } : {}),
+    at: now,
+  };
+  const decision = decideRunTransition({ run: null }, command);
+  args.decisionTap?.(command, decision);
   // Queue on an empty machine can only fail on a mismatched evidence hash —
   // a wiring bug, so it throws rather than silently returning a half-record.
   if ("error" in decision) throw new Error(decision.error.message);
@@ -148,7 +151,13 @@ function commandForStatus(
     case "completed":
       return { type: "finish", commandId, runId: run.runId, patch: patch ?? {}, at };
     case "cancelled":
-      return { type: "cancel", commandId, runId: run.runId, ...(patch !== undefined ? { patch } : {}), at };
+      return {
+        type: "cancel",
+        commandId,
+        runId: run.runId,
+        ...(patch !== undefined ? { patch } : {}),
+        at,
+      };
     case "aborted":
       return {
         type: "abort",
@@ -184,12 +193,12 @@ export function transitionRun(
   patch?: RunPatch,
   now?: number,
   evidence?: ApprovalEvidence,
+  decisionTap?: DecisionTap,
 ): DelegatedRun {
   const stamped = now ?? Date.now();
-  const decision = decideRunTransition(
-    { run },
-    commandForStatus(run, status, patch, stamped, evidence),
-  );
+  const command = commandForStatus(run, status, patch, stamped, evidence);
+  const decision = decideRunTransition({ run }, command);
+  decisionTap?.(command, decision);
   // Preserve the pre-decider contract: an illegal or terminal transition
   // returns the record unchanged — callers fence on generation for drops.
   if ("error" in decision) return run;
@@ -205,22 +214,22 @@ export function reclaimStaleRuns(
   runs: DelegatedRun[],
   now: number,
   deadlineMs: number = RUN_DEADLINE_MS,
+  decisionTap?: DecisionTap,
 ): { runs: DelegatedRun[]; reclaimed: string[] } {
   const reclaimed: string[] = [];
   const next = runs.map((run) => {
     if (!isActiveStatus(run.status) || now - run.updatedAt <= deadlineMs) {
       return run;
     }
-    const decision = decideRunTransition(
-      { run },
-      {
-        type: "reclaim",
-        commandId: `reclaim:${run.runId}:${run.generation}`,
-        runId: run.runId,
-        deadlineMs,
-        at: now,
-      },
-    );
+    const command: RunCommand = {
+      type: "reclaim",
+      commandId: `reclaim:${run.runId}:${run.generation}`,
+      runId: run.runId,
+      deadlineMs,
+      at: now,
+    };
+    const decision = decideRunTransition({ run }, command);
+    decisionTap?.(command, decision);
     if ("error" in decision) return run;
     reclaimed.push(run.runId);
     return applyRunEvents(run, decision.events, makeReceipt) ?? run;
@@ -234,10 +243,14 @@ export function reclaimStaleRuns(
  * State storage itself stays injected — the store doesn't know it's a
  * Durable Object.
  */
+/** P9: observes each decided command+events batch — the event log's intake. */
+export type DecisionTap = (command: RunCommand, decision: RunDecision) => void;
+
 export class RunStore {
   constructor(
     private readonly read: () => DelegatedRun[],
     private readonly write: (runs: DelegatedRun[]) => void,
+    private readonly decisionTap?: DecisionTap,
   ) {}
 
   list(): DelegatedRun[] {
@@ -275,7 +288,7 @@ export class RunStore {
     this.write(
       runs.map((run) => {
         if (run.runId !== runId) return run;
-        updated = transitionRun(run, status, patch, undefined, evidence);
+        updated = transitionRun(run, status, patch, undefined, evidence, this.decisionTap);
         return updated;
       }),
     );
