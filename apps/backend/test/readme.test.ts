@@ -50,7 +50,7 @@ describe("README structure (T24 honest-ship contract)", () => {
   });
 
   it("states the subscription-credential policy honestly", () => {
-    expect(README).toContain("subscription lanes");
+    expect(README).toContain("Subscription lanes");
     expect(README).toContain("Free/Pro/Max");
   });
 
