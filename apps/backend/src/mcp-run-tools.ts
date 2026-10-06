@@ -9,6 +9,8 @@ import {
   runStatusInputSchema,
 } from "@shiba/shared";
 import type { Env } from "./env.js";
+import { signInternalRequest } from "./edge-identity.js";
+
 import type { ToolRegistry } from "./mcp-gateway.js";
 
 const ORCHESTRATOR_NAME = "default";
@@ -25,6 +27,9 @@ async function orchestratorJson(env: Env, path: string, init?: RequestInit, prin
   // queuedBy on intakes, so one agent token can never see or cancel
   // another agent's runs.
   if (principal) request.headers.set(AGENT_PRINCIPAL_HEADER, principal);
+  // Edge identity: sign the vouched principal so the DO can verify the
+  // Worker minted it (no-op until INTERNAL_SIGNING_KEY is configured).
+  await signInternalRequest(request, env);
   const res = await stub.fetch(request);
   const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (!res.ok) {

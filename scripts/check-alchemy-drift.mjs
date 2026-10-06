@@ -478,11 +478,20 @@ for (const [name, kind] of declared) {
   }
 }
 
-// (a) vars: same literal value, as a plain var entry
+// (a) vars: same literal value, as a plain var entry. A stage-conditional
+// entry is also in sync when its live branch is the wrangler literal —
+// `isLiveStage ? "lit" : <preview expr>` preserves live parity while a
+// preview stage gets its own value.
 for (const [key, value] of Object.entries(cfg.vars ?? {})) {
   const v = env.get(key);
   if (v === undefined) continue; // already reported by the sweep
-  if (envKind(v) !== "var" || literal(v) !== value) {
+  const stageCond = v.match(
+    /^isLiveStage\s*\?\s*(["'`](?:[^"'`\\]|\\.)*["'`])\s*:/,
+  );
+  const inSync =
+    (envKind(v) === "var" && literal(v) === value) ||
+    (envKind(v) === "other" && stageCond !== null && literal(stageCond[1]) === value);
+  if (!inSync) {
     drift.push(`var "${key}": wrangler ${JSON.stringify(value)} vs alchemy ${v}`);
   }
 }

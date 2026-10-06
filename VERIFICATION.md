@@ -847,3 +847,35 @@ Audit findings T1-T7 / D9-D12-D13 against `devin/1791266355-tests-dx`.
 - Gate: typecheck, lint, lint:imports, 1759 tests (7 skipped),
   build, test:built, check:ci (biome ci 883 warnings = +13 vs main,
   all warn-level; knip 6/6 issues = baseline) — all green.
+
+# 2026-10-03 — Edge identity signing + preview-stage deploys (PLAN-V2-NEXT)
+
+- `apps/backend/src/edge-identity.ts` (new): HMAC-SHA256 internal-request
+  signing. Canonical tuple `method\npath+search\nprincipal\nintake\ntimestamp`;
+  headers `X-Shiba-Internal-Sig` (64-char hex) + `X-Shiba-Internal-Ts`
+  (unix ms, 60s skew). `verifyInternalRequest` fails closed only for
+  requests carrying vouched headers (`X-Agent-Principal` /
+  `X-Shiba-Intake`) when `INTERNAL_SIGNING_KEY` is set; everything else
+  passes unverified, matching prior trust. Unset key = dev fallback +
+  once-per-DO warning.
+- Producers sign at every vouched `stub.fetch`: `runs-routes.ts`
+  `/api/runs|/api/spine` gateway, `mcp-run-tools.ts` `orchestratorJson`.
+  Consumer: `CodingOrchestrator.onRequest` verifies before reading
+  vouched headers → 401 on `missing_signature` / `stale_signature` /
+  `malformed_signature` / `bad_signature`.
+- `env.ts` + `.env.schema`: `INTERNAL_SIGNING_KEY` (@sensitive).
+- `alchemy.run.ts`: non-live stages (ALCHEMY_STAGE=pr-<n>) flip
+  `workersDev.enabled` on, skip the app.tryshiba.dev domain binding, and
+  derive `WORKER_HOSTNAME` from WORKERS_SUBDOMAIN — a preview stage can
+  never claim the live route.
+- `.github/workflows/preview-deploy.yml` (new): same-repo PRs deploy
+  `ALCHEMY_STAGE=pr-<n>` + comment the workers.dev URL; close job runs
+  `alchemy destroy` on the stage. Fork PRs skip (no secrets/trust).
+- Local verification: `vitest test/edge-identity.test.ts` (9) +
+  `test/edge-identity-do.test.ts` (5) — sign/verify round-trip, forged
+  principal/intake/path → 401, stale/malformed sigs, unvouched internal
+  posts unverified, unkeyed fallback.
+- Unverified (credential-gated): live `INTERNAL_SIGNING_KEY` rollout
+  order (DO code reads env at request time, so a secret set on the
+  Worker suffices — no stale-instance check possible from tests);
+  actual `pr-<n>` deploy/destroy cycle in CI.

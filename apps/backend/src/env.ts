@@ -214,6 +214,16 @@ export interface Env {
   /** Optional. Server-side credential for AI Gateway. Never sent to containers. */
   AI_GATEWAY_TOKEN?: string;
   /**
+   * Optional. HMAC key for edge identity signing (edge-identity.ts): the
+   * Worker signs requests that carry vouched headers (X-Agent-Principal,
+   * X-Shiba-Intake) into DO stubs, and DO consumers verify the signature
+   * before trusting those headers. Unset keeps the pre-signing header-trust
+   * behavior (with a once-per-lifetime warning) so local dev keeps working.
+   * One secret shared by every DO type — set the same value on all stages
+   * that should sign/verify each other.
+   */
+  INTERNAL_SIGNING_KEY?: string;
+  /**
    * T48 opt-in flag (§18.10): "1" registers the claude-subscription harness.
    * Absent it is unregistered, uncataloged, and unselectable — the
    * subscription path is dark unless the deployment owner enables it.

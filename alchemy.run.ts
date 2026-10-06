@@ -157,13 +157,16 @@ export const Worker = Cloudflare.Worker("Worker", {
     directory: "./public",
     notFoundHandling: "404-page",
   },
-  // workers.dev disabled — app.tryshiba.dev is the only public host
-  // (wrangler `workers_dev: false` parity; previews stay off).
-  workersDev: { enabled: false, previewsEnabled: false },
+  // workers.dev disabled on live stages — app.tryshiba.dev is the only
+  // public host (wrangler `workers_dev: false` parity; previews stay off).
+  // Non-live (preview) stages enable workers.dev so `pr-<n>` deploys are
+  // reachable at their own subdomain and never claim the live domain.
+  workersDev: isLiveStage ? { enabled: false, previewsEnabled: false } : { enabled: true },
   // wrangler `routes` parity: app.tryshiba.dev is the single public
   // dashboard host (dashboard + /api same-origin). Custom domain
-  // auto-manages DNS + edge TLS on the tryshiba.dev zone.
-  domain: { name: "app.tryshiba.dev" },
+  // auto-manages DNS + edge TLS on the tryshiba.dev zone. Live stages only —
+  // a preview stage claiming the zone route would steal prod traffic.
+  ...(isLiveStage ? { domain: { name: "app.tryshiba.dev" } } : {}),
   crons: ["*/5 * * * *"],
   env: {
     GATEWAY_ID: "default",
@@ -173,8 +176,9 @@ export const Worker = Cloudflare.Worker("Worker", {
     // Must match the Sandbox container's instanceType.
     INSTANCE_TYPE: "standard-1",
     // Public hostname for preview URLs + absolute screenshot links (T33).
-    // Empty = PR screenshot capture disabled.
-    WORKER_HOSTNAME: "app.tryshiba.dev",
+    // Empty = PR screenshot capture disabled. Preview stages fall back to
+    // their workers.dev hostname (or empty when WORKERS_SUBDOMAIN is unset).
+    WORKER_HOSTNAME: isLiveStage ? "app.tryshiba.dev" : (workerHost ?? ""),
 
     AI: Cloudflare.Workers.AI(),
 
