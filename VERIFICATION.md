@@ -595,6 +595,216 @@ Routing delivery to a registered address; Telegram/Discord webhook handshakes.
   codingModel/connectionId (parity with POST /api/runs).
   Gate: typecheck, lint, lint:imports, 1726 backend tests, build green.
 
+
+
+### 2026-10-06 — edge-harness security batch: vouched headers, queue replay, exec allowlist, consent CSRF, agent-name gate, permission pick, ACP lane single-source
+
+- C4 — `/api/usage` forwarded the caller's headers verbatim into the
+  orchestrator DO (`new Request(url, request)` clones them), so a supplied
+  `X-Agent-Principal`/`X-Shiba-Intake` read as worker-vouched for
+  `queuedBy`, the `/api/spine` filter, and the local-runtime voucher.
+  `usage-routes.ts` now strips both headers on the forwarded request —
+  same strip as `runs-routes.ts`, minus the dashboard stamp (this lane
+  forwards a read, never credentials).
+- C3 — queue replay's `sameInput` compared only repo/task/branch/
+  publishPullRequest/runtime/testCommand; a re-issued queue for an
+  existing runId with a different route/queuedBy/authAccount/
+  continuationKey silently kept the old record. `decide.ts` now compares
+  every field the queue froze onto the record — `sandboxId`, `queuedBy`,
+  the route field-wise (purpose/connectionId/modelId/harness/
+  policyVersion), `continuationKey`, `authAccount` — and a defined
+  `continuesKey` must name the stored `continuationKey`. Divergence is
+  `input_conflict`, not `replayed`.
+- C5 — the scoped-exec allowlist contributed `["node"]` for every ACP
+  lane (`buildArgv` is `["node", <driver>.cjs]`), which matched ANY node
+  invocation and defeated the allowlist. `runtime.ts` now contributes
+  `argv[0..1]` (interpreter + script path) when argv0 is a known
+  interpreter (EXEC_INTERPRETERS: node/nodejs/deno/bun/python/python3);
+  single-binary harnesses keep argv0 alone — that IS the harness binary.
+  The ACP harness's own driver exec still runs; `node -e` is refused and
+  the refusal is receipted.
+- C6 — the OAuth consent POST had no binding to the rendered form: any
+  third-party page could submit Approve on a signed-in owner's behalf
+  (ambient Access/better-auth identity rides along). GET now mints a
+  single-use `ConsentRecord` (clientId/redirectUri/codeChallenge/scopes/
+  owner/expiresAt) into KV keyed by the token's SHA-256, rendered as a
+  hidden `consent` field; POST consumes-then-verifies it before the
+  confirm check — missing/mismatched/expired → 400 invalid_request.
+- C7 — `isDashboardAgentName` allowed by fallthrough: every unparsed
+  prefix (`discord:`, `telegram:`, `web:<convId>` chat threads, future
+  lanes) counted as a dashboard surface for the local-runtime gate. It
+  now positive-lists the two dashboard shapes — `web:<userId>:<uuid>`
+  (strict parseSessionAgentName) and bare `<userId>` (no colon) — and
+  refuses every prefixed lane name and `default`.
+- C8 — the ACP driver's permission auto-allow picked the first
+  `/allow/i` option, so an adapter listing `allow_always` first granted
+  the broad scope. The picker (ACP_ALLOW_PICK_SOURCE, interpolated into
+  the CJS driver) ranks options: single-use (`once`/`single`) → any
+  non-always/session-wide allow → first allow → null. Response shape
+  unchanged.
+- Y2 — the five ACP lane specs were hand-mirrored across the registry,
+  HARNESS_DEFAULT_MODELS, and HARNESS_MODEL_ENV. `harness/index.ts` now
+  defines ACP_LANES once ({spec, mirrorOf} per lane); deriveAcpRows
+  builds the registry entries (AcpHarness named by the table key), the
+  default-model rows, and the model-env rows from it. catalog.ts +
+  Dockerfile rows stay per-lane by design.
+- Tests — acp.test.ts +3 (lane-table derivation pins, pick-order matrix,
+  driver embeds picker verbatim); decide.test.ts +2 (route/identity/
+  continuation divergence conflicts, all-fields-match replay);
+  exec-allowlist.test.ts +2 (`node -e` refused on an ACP lane while the
+  driver exec runs, opencode argv0 subcommands still allowed);
+  oauth-mcp.test.ts +2 (tokenless POST 400, single-use/binding matrix —
+  plus the authorizePost helper and admin-bearer test updated for the
+  two-step consent); usage.test.ts +1 (vouched headers don't reach the
+  DO); web-sessions.test.ts +1 (positive-list gate matrix).
+- Gate: typecheck, lint, lint:imports, 1739 backend tests, build,
+  env:load/env:scan all green.
+- Unverified (deploy-gated): real ACP lanes inside a sandbox, the OAuth
+  consent round-trip in a browser against Access, `/api/usage` on prod.
+
+- Docs sync (audit lane E): ARCHITECTURE.md §7 rewritten to the current
+  17-lane registry (API-key / subscription / ACP groups — cursor and
+  antigravity marked registered-but-unrunnable), P9 spine paragraph added
+  to §4, §6 screenshot step marked shipped, §9 OAuth gap corrected to
+  shipped-but-young, §10 "eight" → nine DO classes. spec/GOAL.md: "eight
+  Durable Objects" → nine; concurrent cap "three" → five (max_instances).
+  README: harness section rewritten (nine CLIs + three lane groups),
+  devin default corrected to devin/swe-2-medium, dashboard-only dev path
+  documented (`pnpm -C apps/frontend dev` vs root `turbo run dev`).
+  PLAN.md: "shipped beyond the tracker" note (T52, P9 spine, ACP lanes,
+  model-config, IA overhaul, /api/usage). Docs site: architecture.md
+  binding claim corrected (D1/KV/R2/Vectorize are bound), dashboard.md
+  nav updated (Activity, Skills, Analytics; Missions/Gates/VM/Runs are
+  deleted — no ?tab= links) + model-config route described,
+  contributing.md pin table +4 rows (grok, cursor-agent, agy, procoder).
+  .env.example expanded from ~15 to all 59 schema vars as grouped
+  commented entries.
+
+# 2026-10-06 — orchestrator-state audit lane: bounded approvals/outbox, floored sweep, incremental spine, gated polls
+
+Audit-lane fixes to durable-state growth and read-path cost in the
+orchestrator DO plus the dashboard pollers that drive it.
+
+- C1 — `packages/shared/approvals.ts`: `createPendingApproval` now
+  enforces the shared `MAX_PENDING_APPROVALS` ceiling itself (the
+  constant already lived in `steering.ts`) so no intake can mint past
+  the cap; run + email intakes still pre-check so their surfaces answer
+  429. `orchestrator.ts`: `queueEmailApprovalRecord` pre-checks the
+  count → 429, validates every whitelisted payload key as a bounded
+  string (`EMAIL_PAYLOAD_LIMITS` per key), and freezes only the
+  executor's keys (`EMAIL_SEND_PAYLOAD_KEYS`/
+  `EMAIL_DELETE_PAYLOAD_KEYS` + `mailbox`) — caller-supplied extras no
+  longer reach durable state.
+- C2 — `orchestrator.ts`: `postToThread` claims its effect id in a
+  per-lifetime `inFlightEffects` set before `ctx.waitUntil`, released in
+  both settle arms; `drainEffectOutbox` claims its batch and skips
+  claimed rows, so a mid-send read no longer double-posts. Rows left
+  claimed by a dead lifetime still replay on the next wake —
+  at-least-once honest.
+- P1 — `packages/shared/projector.ts`: `foldOutboxEvent` results pass
+  through `pruneOutboxEntries` — dispatched rows keep a 50-entry tail,
+  exhausted failures (`attempts >= MAX_OUTBOX_ATTEMPTS`, now shared via
+  `@shiba/shared`) keep 25; pending and still-retryable rows are never
+  dropped.
+- P3 — `approvals.ts`: `pruneApprovals` evicts decided records beyond
+  `DECIDED_APPROVALS_LIMIT` (the tail the listing serves) after the
+  expired-pending prune; `resolveApproval` + `listApprovals` call it, so
+  the listing's output is unchanged while state stays bounded.
+- P2 — `orchestrator.ts`: `reclaimRuns` split — `reclaimSweep` (stale
+  scan + leaked-container retries) is floored at 30s per DO lifetime on
+  read paths via `reclaimRunsForRead`; every call still drains the
+  effect outbox first, and alarm/resolve/teardown/DELETE sweep
+  unfloored through `reclaimRuns`.
+- P4 — `/api/spine` accepts `?since=<seq>` (400 on non-integer or
+  negative) returning only newer events + current outbox +
+  `earliestSeq`/`latestSeq`/`totalEvents` markers; `live-status.ts`
+  `useSpine` keeps a merged ref-buffer, appends tail events deduped by
+  seq capped at `MAX_SPINE_EVENTS`, and resets + resyncs when
+  `earliestSeq` shows the log rotated past the cursor.
+- P5 — `app.tsx`: `useStoredApprovals` and `useAgentPrincipals` take an
+  `enabled` flag — each 10s poller runs only while a view that renders
+  its data is mounted (approvals → approvals/tasks/dashboard,
+  principals → tasks/dashboard) and fires an immediate refresh on
+  re-entry.
+- P8 — `app.tsx`: the `sessions` memo no longer depends on composer
+  keystroke state (`task`, `repoUrl`, `pendingApprovals.length` removed;
+  only chat/tool/session inputs remain).
+- Tests — `email-approvals.test.ts` +3 (429 at capacity for both email
+  kinds, payload whitelist drops caller extras, over-limit/mistyped
+  intake → 400); `pending-approvals.test.ts` +2 (shared cap inside
+  `createPendingApproval`, decided-retention prune keeps the listing's
+  tail); `spine.test.ts` +3 (dispatched/failed retention bounds, owed
+  rows never pruned); `spine-route.test.ts` +3 (`?since` window +
+  markers + 400s, in-flight claim skips then retries honestly, read
+  floor still drains owed post-backs). `orchestrator.test.ts`: the
+  stale-run reclaim test now lapses the floor interval before the read
+  — the sweep still aborts the child + destroys the sandbox on access.
+- Gate: typecheck (incl. test tsconfig), lint, lint:imports, 1730
+  backend tests, build + docs:verify all green.
+- Unverified (credential-gated): live `/api/spine?since=` polling
+  against a running worker, reclaim-floor timing on prod DO lifetimes.
+
+# 2026-10-06 — deps/supply-chain: audit advisories, image digest, agy checksums, stale pins, verified-label honesty
+
+Lane: deps/supply-chain (audit findings E1–E8).
+
+- E1 — `@cloudflare/puppeteer` transitive advisories cleared: scoped override
+  `@cloudflare/puppeteer>@puppeteer/browsers@3.2.2` drops
+  extract-zip@2.0.1 (GHSA-jmr9-qjv8-65gv + GHSA-7pqw-9j4j-h8q3, both
+  unpatched upstream) and the proxy-agent>pac-proxy-agent>get-uri>
+  basic-ftp chain (GHSA-c475-qrg2-pj4r) from the lockfile. Safe because the
+  package's cloudflare ESM entrypoint never imports the node launcher tree
+  that loads @puppeteer/browsers (`puppeteer.launch(env.BROWSER)` only) —
+  verified by reading lib/esm/puppeteer/*.
+- E2 — http-cache-semantics overridden to 4.3.0 (first release outside
+  <=4.2.0, GHSA-ch52-4w7c-c8xp). braces@3.0.3 has no upstream fix
+  (CVE-2026-93687): patched `lib/parse.js` with a MAX_DEPTH=1024 guard so
+  every downstream recursive walker (expand/compile/stringify) is bounded;
+  advisory recorded in auditConfig.ignoreGhsas with the mitigation named.
+- E3 — LGPL-3.0 `node-liblzma` removed via `ignoredOptionalDependencies`
+  (it was an optional dep of just-bash via @cloudflare/think, only serving
+  `tar --lzma` — dead weight in workerd anyway; just-bash degrades with a
+  clear error when absent). MPL-2.0 `lightningcss` remains dev/build-only —
+  flagged exception, not hidden.
+- E4 — sandbox base image digest-pinned:
+  `cloudflare/sandbox:0.12.9-opencode@sha256:7b84b0…8107b5` (manifest-list
+  digest via Docker Registry v2 API). dockerfile-pins.test.ts now requires
+  the @sha256 suffix.
+- E5 — agy ACP zip now checksum-verified per arch (same s=<sha> +
+  `sha256sum -c` pattern as devin/cursor blocks). Google publishes no
+  checksums; both hashes were computed locally against AGY 1.1.1 zips on
+  2026-10-06 (x86_64 681,969,407 B, arm64 656,572,786 B) and recorded in the
+  Dockerfile comment + test.
+- E6 — `@modelcontextprotocol/server` 2.0.0→2.3.1 workspace-wide override;
+  agents@0.23.0 declares the peer as exact 2.0.0, allowed via
+  peerDependencyRules after typecheck+tests passed on 2.3.1. The `ai`
+  7.0.102→7.0.128 bump was REVERTED as breaking: backend-only ai bumped
+  `agents`/`@cloudflare/ai-chat` into a second pnpm peer-variant, so
+  vi.mock (keyed on resolved module path) stopped covering the
+  frontend-context copies and dashboard.test.ts rendered the real hooks
+  (SSR suspension). The mcp-server override is deliberately global for the
+  same reason — a per-app bump re-splits the instances.
+- E7 — `@cloudflare/puppeteer` caret range → exact 1.4.0 (repo convention).
+- E8 — `ModelOption.availability`: `verified` → `configured`. `ready` is an
+  operator-declared flag, never a wire probe; the union now reads honestly
+  (`"configured" | "unverified" | "retired"`, same field name — wire shape
+  unchanged).
+
+Local verification: `pnpm install` clean; `pnpm typecheck` 5/5; `pnpm lint`
+exit 0 (warnings-only baseline); `pnpm lint:imports` green; `pnpm test`
+1748 pass / 3 skip / 0 fail; `pnpm build` green; `pnpm audit` 69→65 vulns
+(high 14→10, braces suppressed via local patch), `--prod` 4 remaining
+(source-map-js via agents>vite>postcss, sprintf-js unpatched-upstream,
+postcss-selector-parser dev-side — all pre-existing, outside this lane's
+findings). The dual-peer-variant regression described under E6 was caught
+by dashboard.test.ts locally and in CI, root-caused via readlink on both
+contexts' .pnpm dirs, and re-verified fixed (13/13 dashboard tests).
+
+Unverified (credential-gated): `docker build` of the pinned image; agy zip
+checksums re-verified at fetch time inside the image build only.
+
+
+
 ## 2026-10-06 — test coverage + DX-gate alignment lane
 
 Audit findings T1-T7 / D9-D12-D13 against `devin/1791266355-tests-dx`.

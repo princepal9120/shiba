@@ -185,7 +185,7 @@ The parent uses Workers AI for planning. Real model-provider and GitHub credenti
 | apps/frontend/src/router.tsx, src/routes/__root.tsx, and src/routes/app.tsx | TanStack Start dashboard shell and /app route |
 | docs/ and scripts/ | Static documentation and build checks |
 
-No D1, KV, Queues, R2, Postgres, Redis, or separate frontend service is required. State resides in Agents/Sandbox Durable Objects.
+Beyond the Durable Objects, the deployed worker binds **D1 `AGENT_AUDIT`** (MCP tool-call audit + better-auth accounts), **KV `AGENT_TOKENS`** (hashed bearer tokens), **R2 `ATTACHMENTS`** (email bodies >256KB and screenshots), **Vectorize `MEMORY_VECTORS`** (768-dim recall), **Queues** are not used, and no Postgres/Redis/separate frontend service is required. State resides in Agents/Sandbox Durable Objects plus these stores.
 
 The runtime emits clone/configure/code/collect phases but awaits OpenCode execution; it does not stream every JSON event. The registry stores metadata and summary/error, not separate diff/file fields.
 

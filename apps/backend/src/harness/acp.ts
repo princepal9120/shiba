@@ -38,6 +38,27 @@ import {
   verifyRunOutcome,
 } from "./types.js";
 
+/** Harness names carrying the ACP lane suffix — derived from the name
+ * union, so a new `-acp` name widens this set automatically. */
+export type AcpHarnessName = Extract<AgentHarnessName, `${string}-acp`>;
+
+/** Every harness name that is not an ACP lane. */
+export type NonAcpHarnessName = Exclude<AgentHarnessName, AcpHarnessName>;
+
+/**
+ * One ACP lane, defined once (Y2). `spec` is everything an AcpHarness
+ * differs in minus the name — the ACP_LANES table key supplies it —
+ * and `mirrorOf` is the non-ACP harness whose default model and
+ * model-override env var the lane inherits: an ACP lane rides its
+ * provider harness's model lane instead of growing a parallel one.
+ * harness/index.ts derives the registry entry, the default model, and
+ * the env override from each entry, so a new lane is one table row.
+ */
+export interface AcpLane {
+  readonly spec: Omit<AcpHarnessSpec, "name">;
+  readonly mirrorOf: NonAcpHarnessName;
+}
+
 /** Everything an ACP harness differs in. */
 export interface AcpHarnessSpec {
   readonly name: AgentHarnessName;
@@ -200,6 +221,22 @@ function stripProvider(model: string): string {
 }
 
 /**
+ * Permission auto-allow, as plain CJS interpolated into the driver below.
+ * Adapters order options arbitrarily — a listed-first `allow_always` must
+ * not widen the grant — so the pick ranks them: a single-use allow wins,
+ * then any allow that isn't session-wide/always, and an `always` grant is
+ * chosen only when nothing narrower exists. Exported so the pick order is
+ * unit-testable without booting an ACP server.
+ */
+export const ACP_ALLOW_PICK_SOURCE = `(opts) => {
+  const tag = (o) => String((o && (o.kind || o.optionId)) || "").toLowerCase();
+  const allows = (opts || []).filter((o) => /allow/.test(tag(o)));
+  const once = allows.find((o) => /once|single/.test(tag(o)));
+  const bounded = allows.find((o) => !/always|every|forever|permanent|session/.test(tag(o)));
+  return once || bounded || allows[0] || null;
+}`;
+
+/**
  * The one-shot ACP client: initialize → session/new → set_model → prompt.
  * Re-emits session updates as NDJSON ({type, text}) the harness's
  * parseEvent reads; session/request_permission auto-picks an "allow"
@@ -284,7 +321,9 @@ function onUpdate(u) {
 function onRequest(msg) {
   if (msg.method === "session/request_permission") {
     const opts = (msg.params && msg.params.options) || [];
-    const allow = opts.find((o) => o && /allow/i.test(String(o.kind || o.optionId || "")));
+    // Narrowest grant wins — ACP_ALLOW_PICK_SOURCE ranks single-use ahead
+    // of always/session-wide regardless of the adapter's option order.
+    const allow = (${ACP_ALLOW_PICK_SOURCE})(opts);
     write({ id: msg.id, result: allow
       ? { outcome: { outcome: "selected", optionId: allow.optionId } }
       : { outcome: { outcome: "cancelled" } } });

@@ -60,7 +60,11 @@
   "homepage": "https://shiba-intern.pages.dev/",
   "pnpm": {
     "overrides": {
-      "jiti": "2.7.0"
+      "jiti": "2.7.0",
+      "chat": "4.40.0",
+      "@cloudflare/puppeteer>@puppeteer/browsers": "3.2.2",
+      "http-cache-semantics": "4.3.0",
+      "@modelcontextprotocol/server": "2.3.1"
     }
   }
 }

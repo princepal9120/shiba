@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   APPROVAL_TTL_MS,
   createPendingApproval,
+  DECIDED_APPROVALS_LIMIT,
+  decidedApprovals,
+  MAX_PENDING_APPROVALS,
+  pruneApprovals,
   pruneExpiredApprovals,
   resolvePendingApproval,
 } from "../src/pending-approvals.js";
@@ -109,5 +113,72 @@ describe("approval bookkeeping", () => {
     approvals = resolvePendingApproval(approvals, { ...POINTER, approved: true, decidedBy: "U1" }, 10).approvals;
     const pruned = pruneExpiredApprovals(approvals, APPROVAL_TTL_MS + 1);
     expect(pruned.map((a) => a.approvalId).sort()).toEqual(["a-1"]); // resolved a-1 stays, expired pending a-2 goes
+  });
+});
+
+describe("queue ceiling + decided retention", () => {
+  it("createPendingApproval refuses to mint past the shared pending cap", () => {
+    let approvals = createPendingApproval([], { ...POINTER, repoUrl: "r", task: "t", createdAt: 0 });
+    for (let i = 1; i < MAX_PENDING_APPROVALS; i += 1) {
+      approvals = createPendingApproval(approvals, {
+        threadKey: "default",
+        approvalId: `fill-${i}`,
+        repoUrl: "r",
+        task: "t",
+        createdAt: 0,
+      });
+    }
+    expect(() =>
+      createPendingApproval(approvals, {
+        threadKey: "default",
+        approvalId: "a-over",
+        repoUrl: "r",
+        task: "t",
+        createdAt: 1,
+      }),
+    ).toThrow(/full/i);
+    // Decided records don't count toward the cap — resolving one frees a slot.
+    approvals = resolvePendingApproval(
+      approvals,
+      { ...POINTER, approved: true, decidedBy: "U1" },
+      2,
+    ).approvals;
+    expect(
+      createPendingApproval(approvals, {
+        threadKey: "default",
+        approvalId: "a-over",
+        repoUrl: "r",
+        task: "t",
+        createdAt: 3,
+      }),
+    ).toHaveLength(MAX_PENDING_APPROVALS + 1);
+  });
+
+  it("pruneApprovals keeps every pending record and evicts decided history past the listing's tail", () => {
+    let approvals = createPendingApproval([], { ...POINTER, repoUrl: "r", task: "t", createdAt: 0 });
+    // Decide DECIDED_APPROVALS_LIMIT + 10 records, oldest first.
+    for (let i = 1; i <= DECIDED_APPROVALS_LIMIT + 10; i += 1) {
+      approvals = createPendingApproval(approvals, {
+        threadKey: "default",
+        approvalId: `d-${i}`,
+        repoUrl: "r",
+        task: "t",
+        createdAt: 0,
+      });
+      approvals = resolvePendingApproval(
+        approvals,
+        { threadKey: "default", approvalId: `d-${i}`, approved: i % 2 === 0, decidedBy: "U1" },
+        i,
+      ).approvals;
+    }
+    const pruned = pruneApprovals(approvals, 1_000);
+    // The still-pending pointer survives; the decided tail is exactly
+    // what the listing serves — nothing starved, nothing extra kept.
+    expect(pruned.filter((a) => a.status === "pending")).toHaveLength(1);
+    expect(pruned.filter((a) => a.status !== "pending")).toHaveLength(DECIDED_APPROVALS_LIMIT);
+    expect(decidedApprovals(pruned)).toEqual(decidedApprovals(approvals));
+    const kept = pruned.map((a) => a.approvalId);
+    expect(kept).toContain(`d-${DECIDED_APPROVALS_LIMIT + 10}`);
+    expect(kept).not.toContain("d-1");
   });
 });

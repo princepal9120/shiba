@@ -55,6 +55,7 @@ import {
   findSession,
   formatSessionList,
   isAuthorizedSessionAgent,
+  isDashboardAgentName,
   isValidSessionId,
   MAX_METADATA_KEYS,
   MAX_METADATA_KEY_LENGTH,
@@ -198,6 +199,33 @@ describe("web-sessions module (T30/T32)", () => {
       // "default" alias must never parse, authorize, or persist.
       expect(parseSessionAgentName("web:alice@example.com:default")).toBeNull();
       expect(parseSessionAgentName("web:default:default")).toBeNull();
+    });
+  });
+
+  describe("isDashboardAgentName (local-runtime surface gate)", () => {
+    it("positive-lists base user DOs and strict web sessions only", () => {
+      // The two dashboard shapes.
+      expect(isDashboardAgentName("alice@example.com")).toBe(true);
+      expect(isDashboardAgentName("user-123")).toBe(true);
+      expect(
+        isDashboardAgentName("web:alice@example.com:a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d"),
+      ).toBe(true);
+
+      // Chat-lane DO names and every other prefixed shape are out — the
+      // predicate must not allow by fallthrough.
+      expect(isDashboardAgentName("slack:T1:C1:1699.0001")).toBe(false);
+      expect(isDashboardAgentName("discord:1234567890")).toBe(false);
+      expect(isDashboardAgentName("telegram:42")).toBe(false);
+      expect(isDashboardAgentName("web:conversation-7")).toBe(false); // chat thread DO
+      expect(isDashboardAgentName("email:abc")).toBe(false);
+      expect(isDashboardAgentName("anything:else")).toBe(false);
+
+      // Malformed web sessions and the shared default DO are out too.
+      expect(isDashboardAgentName("web:alice@example.com:not-a-uuid")).toBe(false);
+      expect(isDashboardAgentName(`web:alice@example.com:${DEFAULT_SESSION_ID}`)).toBe(false);
+      expect(isDashboardAgentName(DEFAULT_SESSION_ID)).toBe(false);
+      expect(isDashboardAgentName("")).toBe(false);
+      expect(isDashboardAgentName(undefined)).toBe(false);
     });
   });
 

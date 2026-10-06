@@ -233,6 +233,32 @@ describe("GET /api/usage", () => {
     expect(body.budgetUsd).toBeNull();
   });
 
+  it("does not forward caller-supplied vouched headers into the DO", async () => {
+    // X-Agent-Principal (queuedBy + the /api/spine filter) and X-Shiba-Intake
+    // (the local-runtime voucher) read as worker-vouched inside the DO — the
+    // forwarded request must carry neither (same strip as handleRuns).
+    const forwarded: Headers[] = [];
+    const env = {
+      CodingOrchestrator: {
+        get: () => ({
+          fetch: async (request: Request) => {
+            forwarded.push(request.headers);
+            return Response.json({ runs: [] });
+          },
+        }),
+      },
+    } as unknown as Env;
+    const response = await handleUsage(
+      new Request("http://localhost/api/usage", {
+        headers: { "X-Agent-Principal": "forged", "X-Shiba-Intake": "local" },
+      }),
+      env,
+    );
+    expect(response?.status).toBe(200);
+    expect(forwarded[0]?.get("X-Agent-Principal")).toBeNull();
+    expect(forwarded[0]?.get("X-Shiba-Intake")).toBeNull();
+  });
+
   it("rejects non-GET and passes a dead run store through", async () => {
     const post = await handleUsage(new Request("http://localhost/api/usage", { method: "POST" }), envWithRuns());
     expect(post?.status).toBe(405);

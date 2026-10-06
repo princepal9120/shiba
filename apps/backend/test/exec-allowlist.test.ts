@@ -15,6 +15,7 @@ import {
   tokenizeCommand,
 } from "../src/exec-allowlist.js";
 import { SandboxRuntimeAdapter, type SandboxOps } from "../src/runtime.js";
+import { resolveHarness } from "../src/harness/index.js";
 import type { CodingTaskInput } from "../src/opencode-input.js";
 
 const ALLOWLIST = [["git"], ["pnpm", "test"], ["opencode"]] as const;
@@ -185,6 +186,40 @@ describe("adapter integration", () => {
     );
     expect(result.status).toBe("error");
     expect(result.summary).toContain("did not exit 0");
+  });
+
+  it("an interpreter-prefixed harness argv allowlists interpreter+script, not bare argv0", async () => {
+    // The ACP lanes spawn `node <driver>.cjs` — argv0 alone would admit every
+    // node invocation in the sandbox. The allowlist entry must pin the script.
+    const acp = resolveHarness("claude-acp");
+    const ops = runOps();
+    const result = await new SandboxRuntimeAdapter(acp).runCodingTask(
+      ops,
+      { ...INPUT, codingModel: "anthropic/claude-sonnet-4-6", testCommand: ["node", "-e", "1"] },
+      () => {},
+    );
+    expect(result.status).toBe("error");
+    // `node -e` never reached the sandbox — the refusal was receipted.
+    expect(ops.commands.some((c) => c.includes("'-e'"))).toBe(false);
+    expect(
+      (result.signals ?? []).find(
+        (s) => s.detail?.includes('"refused":true') && s.detail.includes("'-e'"),
+      ),
+    ).toBeDefined();
+    // …while the harness's own `node <driver>.cjs` exec ran fine.
+    expect(ops.commands.some((c) => c.includes(".acp-driver.cjs"))).toBe(true);
+  });
+
+  it("single-binary harnesses still allowlist argv0 — the binary's own commands run", async () => {
+    // ["opencode"] is the harness binary itself; its subcommands must stay allowed.
+    const ops = runOps();
+    const result = await new SandboxRuntimeAdapter().runCodingTask(
+      ops,
+      { ...INPUT, testCommand: ["opencode", "--version"] },
+      () => {},
+    );
+    expect(ops.commands).toContain("'opencode' '--version'");
+    expect(result.status).toBe("completed");
   });
 
   it("adapter-internal git + harness execs run through the same scoped boundary", async () => {

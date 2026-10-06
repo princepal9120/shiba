@@ -105,7 +105,10 @@ function useRetainedRuns(refreshToken: number, sessionId: string, sessionApiAvai
  * queued email send can be decided. Polls so cards disappear the moment
  * another surface (or a peer) resolves them.
  */
-function useStoredApprovals(refreshToken: number): {
+function useStoredApprovals(
+  refreshToken: number,
+  enabled: boolean,
+): {
   approvals: StoredApproval[];
   decided: StoredApproval[];
   error: string | null;
@@ -115,6 +118,9 @@ function useStoredApprovals(refreshToken: number): {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // The poll drives DO writes on the backend — only run it while a
+    // view that renders the data is up. Re-enabling loads immediately.
+    if (!enabled) return;
     let cancelled = false;
     // A slow poll landing after a newer one must not repaint a resolved card.
     let sent = 0;
@@ -149,7 +155,7 @@ function useStoredApprovals(refreshToken: number): {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [refreshToken]);
+  }, [refreshToken, enabled]);
 
   return { approvals, decided, error };
 }
@@ -157,10 +163,13 @@ function useStoredApprovals(refreshToken: number): {
 // Registered MCP-token principals, polled on the same cadence as stored
 // approvals. No error surface: a failed poll just keeps the last list —
 // the sidebar Agents group is informational, not a decision surface.
-function useAgentPrincipals(refreshToken: number): AgentPrincipal[] {
+function useAgentPrincipals(refreshToken: number, enabled: boolean): AgentPrincipal[] {
   const [principals, setPrincipals] = useState<AgentPrincipal[]>([]);
 
   useEffect(() => {
+    // Same gating as the approvals poll — no view rendering this data,
+    // no interval; re-entering a view refreshes immediately.
+    if (!enabled) return;
     let cancelled = false;
     let sent = 0;
     let applied = 0;
@@ -185,7 +194,7 @@ function useAgentPrincipals(refreshToken: number): AgentPrincipal[] {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [refreshToken]);
+  }, [refreshToken, enabled]);
 
   return principals;
 }
@@ -537,8 +546,17 @@ export function App(): React.JSX.Element {
     approvals: storedApprovals,
     decided: decidedStoredApprovals,
     error: storedApprovalsError,
-  } = useStoredApprovals(refreshToken);
-  const agentPrincipals = useAgentPrincipals(refreshToken);
+  } = useStoredApprovals(
+    refreshToken,
+    // Approvals data renders on the approvals board, the tasks strip, and
+    // the dashboard decided tail — the nav badge between them refreshes
+    // on entry to any of the three.
+    mainView === "approvals" || mainView === "tasks" || mainView === "dashboard",
+  );
+  const agentPrincipals = useAgentPrincipals(
+    refreshToken,
+    mainView === "tasks" || mainView === "dashboard",
+  );
 
   const toolRuns = useMemo(() => Object.values(runsById) as ToolRunRecord[], [runsById]);
 
@@ -1051,13 +1069,12 @@ export function App(): React.JSX.Element {
       });
     }
     return items;
+    // Deps are only what the list actually reads — composer keystroke
+    // state (task/repoUrl) must not invalidate the sidebar per keypress.
   }, [
-    task,
-    repoUrl,
     chat.messages.length,
     chat.isStreaming,
     chat.status,
-    pendingApprovals.length,
     retainedRuns,
     toolRuns,
     seenAt,

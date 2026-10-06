@@ -1,5 +1,5 @@
 /** Harness registry (PLAN.md T22). Selection is by name, default OpenCode. */
-import { AcpHarness } from "./acp.js";
+import { AcpHarness, type AcpHarnessName, type AcpLane, type NonAcpHarnessName } from "./acp.js";
 import { antigravityHarness } from "./antigravity.js";
 import { antigravitySubscriptionHarness } from "./antigravity-subscription.js";
 import { claudeCodeHarness } from "./claude-code.js";
@@ -15,6 +15,100 @@ import { buildOpencodeConfig, OPENCODE_PROVIDERS, opencodeHarness } from "./open
 import type { Env } from "../env.js";
 import { GIT_EGRESS_HOSTS, type AgentHarness, type AgentHarnessName, type RuntimeName } from "./types.js";
 
+/**
+ * ACP registry agents (PLAN-V2-NEXT): every ACP-capable CLI the image ships
+ * is selectable as a harness, defined ONCE here — the registry entry, the
+ * default model, and the model env var below all derive from this table, so
+ * a new lane is one entry (plus its Dockerfile install and catalog.ts row).
+ * Spawn argv match the ACP registry entries; credentials ride the
+ * provider's existing BYOK/worker-secret lane.
+ */
+export const ACP_LANES = {
+  "claude-acp": {
+    spec: {
+      label: "Claude ACP",
+      spawn: ["claude-agent-acp"],
+      providers: ["anthropic"],
+    },
+    mirrorOf: "claude-code",
+  },
+  "codex-acp": {
+    spec: {
+      label: "Codex ACP",
+      spawn: ["codex-acp"],
+      providers: ["openai"],
+    },
+    mirrorOf: "codex",
+  },
+  "gemini-acp": {
+    spec: {
+      label: "Gemini ACP",
+      spawn: ["gemini", "--acp"],
+      providers: ["google"],
+      // gemini-cli reads GEMINI_API_KEY, not the provider's standard env var.
+      keyEnv: "GEMINI_API_KEY",
+    },
+    mirrorOf: "antigravity",
+  },
+  "opencode-acp": {
+    spec: {
+      label: "OpenCode ACP",
+      spawn: ["opencode", "acp"],
+      providers: OPENCODE_PROVIDERS,
+      // OpenCode's ACP modelId grammar is `provider/model[/variant]` — the
+      // default strip would drop the provider segment it resolves against.
+      modelId: (model) => model,
+      // `opencode acp` reads the same opencode.json the run lane writes
+      // (enabled_providers, dummy apiKey, autoupdate off) via OPENCODE_CONFIG.
+      extraConfig: (input, sandboxId) => [
+        {
+          path: `/workspace/${sandboxId}.opencode.json`,
+          contents: JSON.stringify(buildOpencodeConfig(input), null, 2),
+        },
+      ],
+      extraEnv: (_input, configPath) => ({
+        ...(configPath ? { OPENCODE_CONFIG: configPath } : {}),
+        OPENCODE_DISABLE_AUTOUPDATE: "true",
+      }),
+    },
+    mirrorOf: "opencode",
+  },
+  "devin-acp": {
+    spec: {
+      label: "Devin ACP",
+      spawn: ["devin", "acp"],
+      providers: ["devin"],
+      // api.devin.ai comes from the provider host; the CLI's inference
+      // backend (server.codeium.com, Pro accounts) is the second egress host.
+      extraEgress: ["server.codeium.com"],
+      // `devin acp` authenticates from credentials.toml, not the env var —
+      // same dummy file the devin lane writes (real key swaps in at egress).
+      extraConfig: () => [devinCredentialsConfig()],
+      extraEnv: () => ({ XDG_DATA_HOME: CONTAINER_XDG_DATA }),
+    },
+    mirrorOf: "devin",
+  },
+} satisfies Record<AcpHarnessName, AcpLane>;
+
+/**
+ * Derive a per-lane record from ACP_LANES — every registry/model surface
+ * below flows through this so a lane added to the table reaches all of
+ * them. The loop (vs Object.fromEntries) keeps the union-keyed record
+ * honest under strict TS.
+ */
+function deriveAcpRows<T>(pick: (name: AcpHarnessName, lane: AcpLane) => T): Record<AcpHarnessName, T> {
+  const rows = {} as Record<AcpHarnessName, T>;
+  for (const [name, lane] of Object.entries(ACP_LANES) as [AcpHarnessName, AcpLane][]) {
+    rows[name] = pick(name, lane);
+  }
+  return rows;
+}
+
+/** The lanes as instantiated harnesses — the table key IS the harness name. */
+const ACP_HARNESSES: Record<AcpHarnessName, AgentHarness> = deriveAcpRows(
+  (name, lane) => new AcpHarness({ ...lane.spec, name }),
+);
+
 const REGISTRY = {
   opencode: opencodeHarness,
   "claude-code": claudeCodeHarness,
@@ -28,63 +122,7 @@ const REGISTRY = {
   "antigravity-subscription": antigravitySubscriptionHarness,
   "cursor-subscription": cursorSubscriptionHarness,
   "devin-subscription": devinSubscriptionHarness,
-  // ACP registry agents (PLAN-V2-NEXT): every ACP-capable CLI the image ships
-  // is selectable as a harness. Spawn argv match the ACP registry entries;
-  // credentials ride the provider's existing BYOK/worker-secret lane.
-  "claude-acp": new AcpHarness({
-    name: "claude-acp",
-    label: "Claude ACP",
-    spawn: ["claude-agent-acp"],
-    providers: ["anthropic"],
-  }),
-  "codex-acp": new AcpHarness({
-    name: "codex-acp",
-    label: "Codex ACP",
-    spawn: ["codex-acp"],
-    providers: ["openai"],
-  }),
-  // gemini-cli reads GEMINI_API_KEY, not the provider's standard env var.
-  "gemini-acp": new AcpHarness({
-    name: "gemini-acp",
-    label: "Gemini ACP",
-    spawn: ["gemini", "--acp"],
-    providers: ["google"],
-    keyEnv: "GEMINI_API_KEY",
-  }),
-  "opencode-acp": new AcpHarness({
-    name: "opencode-acp",
-    label: "OpenCode ACP",
-    spawn: ["opencode", "acp"],
-    providers: OPENCODE_PROVIDERS,
-    // OpenCode's ACP modelId grammar is `provider/model[/variant]` — the
-    // default strip would drop the provider segment it resolves against.
-    modelId: (model) => model,
-    // `opencode acp` reads the same opencode.json the run lane writes
-    // (enabled_providers, dummy apiKey, autoupdate off) via OPENCODE_CONFIG.
-    extraConfig: (input, sandboxId) => [
-      {
-        path: `/workspace/${sandboxId}.opencode.json`,
-        contents: JSON.stringify(buildOpencodeConfig(input), null, 2),
-      },
-    ],
-    extraEnv: (_input, configPath) => ({
-      ...(configPath ? { OPENCODE_CONFIG: configPath } : {}),
-      OPENCODE_DISABLE_AUTOUPDATE: "true",
-    }),
-  }),
-  "devin-acp": new AcpHarness({
-    name: "devin-acp",
-    label: "Devin ACP",
-    spawn: ["devin", "acp"],
-    providers: ["devin"],
-    // api.devin.ai comes from the provider host; the CLI's inference backend
-    // (server.codeium.com, Pro accounts) is the second egress host.
-    extraEgress: ["server.codeium.com"],
-    // `devin acp` authenticates from credentials.toml, not the env var —
-    // same dummy file the devin lane writes (real key swaps in at egress).
-    extraConfig: () => [devinCredentialsConfig()],
-    extraEnv: () => ({ XDG_DATA_HOME: CONTAINER_XDG_DATA }),
-  }),
+  ...ACP_HARNESSES,
 } satisfies Record<AgentHarnessName, AgentHarness>;
 
 export const HARNESSES: Record<string, AgentHarness> = REGISTRY;
@@ -207,7 +245,7 @@ export const HARNESS_NAMES = Object.keys(REGISTRY) as readonly AgentHarnessName[
  * DEVIN_MODEL / GROK_MODEL and the per-harness *_SUBSCRIPTION_MODEL vars, and
  * per run via the delegate tool's codingModel input.
  */
-export const HARNESS_DEFAULT_MODELS: Record<string, string> = {
+const CORE_DEFAULT_MODELS = {
   opencode: "google/gemini-3.5-flash-lite",
   "claude-code": "anthropic/claude-sonnet-4-6",
   // Subscription models carry the anthropic-subscription namespace: the
@@ -231,12 +269,13 @@ export const HARNESS_DEFAULT_MODELS: Record<string, string> = {
   // sensible default since the operator's plan governs what resolves.
   "cursor-subscription": "cursor-subscription/auto",
   "devin-subscription": "devin-subscription/swe-2-medium",
-  // ACP lanes inherit the provider's default model.
-  "claude-acp": "anthropic/claude-sonnet-4-6",
-  "codex-acp": "openai/gpt-5.3-codex",
-  "gemini-acp": "google/gemini-3.5-flash",
-  "opencode-acp": "google/gemini-3.5-flash-lite",
-  "devin-acp": "devin/swe-2-medium",
+} satisfies Record<NonAcpHarnessName, string>;
+
+export const HARNESS_DEFAULT_MODELS: Record<string, string> = {
+  ...CORE_DEFAULT_MODELS,
+  // ACP lanes inherit the provider's default model — the lane's mirrorOf
+  // names whose, so the model id lives in exactly one place.
+  ...deriveAcpRows((_name, lane) => CORE_DEFAULT_MODELS[lane.mirrorOf]),
 };
 
 /**
@@ -248,7 +287,7 @@ export const HARNESS_DEFAULT_MODELS: Record<string, string> = {
 /** Keys of Env whose values are strings — the only vars a model id can live in. */
 type StringEnvKey = { [K in keyof Env]: Env[K] extends string | undefined ? K : never }[keyof Env];
 
-export const HARNESS_MODEL_ENV: Record<AgentHarnessName, StringEnvKey | undefined> = {
+const CORE_MODEL_ENV = {
   opencode: "CODING_MODEL",
   "claude-code": "CLAUDE_CODE_MODEL",
   "claude-subscription": "CLAUDE_SUBSCRIPTION_MODEL",
@@ -261,9 +300,11 @@ export const HARNESS_MODEL_ENV: Record<AgentHarnessName, StringEnvKey | undefine
   "antigravity-subscription": "ANTIGRAVITY_SUBSCRIPTION_MODEL",
   "cursor-subscription": "CURSOR_SUBSCRIPTION_MODEL",
   "devin-subscription": "DEVIN_SUBSCRIPTION_MODEL",
-  "claude-acp": "CLAUDE_CODE_MODEL",
-  "codex-acp": "CODEX_MODEL",
-  "gemini-acp": "CODING_MODEL",
-  "opencode-acp": "CODING_MODEL",
-  "devin-acp": "DEVIN_MODEL",
+} satisfies Record<NonAcpHarnessName, StringEnvKey | undefined>;
+
+export const HARNESS_MODEL_ENV: Record<AgentHarnessName, StringEnvKey | undefined> = {
+  ...CORE_MODEL_ENV,
+  // ACP lanes share their provider harness's var rather than growing five
+  // new vars — derived from the same mirrorOf as the default model above.
+  ...deriveAcpRows((_name, lane) => CORE_MODEL_ENV[lane.mirrorOf]),
 };

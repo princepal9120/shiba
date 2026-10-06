@@ -11,9 +11,9 @@
  * already dispatched is never re-sent — callers dedupe on the stable
  * `fx:` id, so a retried command can't double-post.
  */
-import type { OutboxEntry } from "@shiba/shared";
+import { MAX_OUTBOX_ATTEMPTS, type OutboxEntry } from "@shiba/shared";
 
-export const MAX_OUTBOX_ATTEMPTS = 3;
+export { MAX_OUTBOX_ATTEMPTS };
 
 /** Entries the drainer may execute right now. */
 export function dueEntries(outbox: OutboxEntry[] | undefined): OutboxEntry[] {

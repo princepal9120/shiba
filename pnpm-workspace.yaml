@@ -1,5 +1,15 @@
-overrides:
-  chat: "4.40.0"
+# Overrides live in package.json -> pnpm.overrides: when a root package.json
+# declares pnpm.overrides, pnpm 10 ignores this file's `overrides:` map entirely
+# (the prior `chat: 4.40.0` entry here was silently dead). Keep all overrides in
+# one place to avoid the shadowing.
+#
+# E1: @cloudflare/puppeteer>@puppeteer/browsers@3.2.2 — drops the
+# extract-zip@2.0.1 (GHSA-jmr9-qjv8-65gv, GHSA-7pqw-9j4j-h8q3; unpatched
+# upstream) and proxy-agent>get-uri>basic-ftp (GHSA-c475-qrg2-pj4r) trees.
+# The package's cloudflare entrypoint never imports the node launcher tree
+# that loads @puppeteer/browsers, so forcing 3.x is inert here.
+# E2: http-cache-semantics@4.3.0 — first release outside the <=4.2.0
+# vulnerable range (GHSA-ch52-4w7c-c8xp), pulled by astro in apps/web.
 
 packages:
   - apps/*
@@ -9,10 +19,40 @@ onlyBuiltDependencies:
   - "@mongodb-js/zstd"
   - core-js-pure
   - esbuild
-  - node-liblzma
   - workerd
+
+# E3: node-liblzma is an OPTIONAL dep of just-bash (via @cloudflare/think) and
+# carries LGPL-3.0 — outside the repo's MIT/Apache/BSD/ISC bar. It only serves
+# just-bash's `tar --lzma` path, which cannot load a native addon in workerd
+# anyway; just-bash degrades with a clear error when it is absent.
+ignoredOptionalDependencies:
+  - node-liblzma
+
+# Advisory suppressions where the code is fixed locally but upstream has cut
+# no release — each entry must name the mitigation, not just silence the report.
+auditConfig:
+  ignoreGhsas:
+    # braces@3.0.3 (CVE-2026-93687): stack exhaustion via deeply nested brace
+    # patterns. Upstream has no patched release; patches/braces@3.0.3.patch adds
+    # the missing depth guard in parse() which bounds every downstream AST
+    # walker (expand/compile/stringify).
+    - GHSA-vfj7-8cjw-p6xm
+
+# E6: @modelcontextprotocol/server is overridden to 2.3.1 workspace-wide
+# (bug/feature fixes since 2.0.0). A global override — not a per-app bump —
+# because pnpm gives importers with different resolved peer sets separate
+# module instances, and a per-app bump left apps/frontend's agents/ai-chat
+# auto-peer on 2.0.0, splitting them from the backend's copies (which broke
+# vi.mock-by-resolved-path in backend dashboard tests). agents@0.23.0
+# declares the peer as an exact `2.0.0`; the MCP gateway path
+# (agents/mcp -> McpServer) typechecks and passes its tests on 2.3.1, so
+# allow the whole 2.x line for that parent only.
+peerDependencyRules:
+  allowedVersions:
+    "agents>@modelcontextprotocol/server": "^2.0.0"
 
 patchedDependencies:
   brace-expansion@5.0.12: patches/brace-expansion@5.0.12.patch
+  braces@3.0.3: patches/braces@3.0.3.patch
   chat@4.40.0: patches/chat@4.40.0.patch
   ai@7.0.102: patches/ai@7.0.102.patch

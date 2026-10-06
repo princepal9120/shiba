@@ -6,7 +6,8 @@
  */
 
 import type { AuthSnapshot, OutboxEntry, SpineEvent } from "@shiba/shared";
-import { useCallback, useEffect, useState } from "react";
+import { MAX_SPINE_EVENTS } from "@shiba/shared";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { AgentPrincipal, InboxMailbox } from "./types";
 
 /** Wire shape of `GET /api/setup/status` (backend `setup-status.ts`). Booleans only. */
@@ -248,14 +249,85 @@ export type OutboxEntryWire = OutboxEntry;
 export interface SpineWire {
   events: SpineEventWire[];
   outbox: OutboxEntryWire[];
+  /** Log-window markers the since-parameterized route adds. */
+  earliestSeq?: number;
+  latestSeq?: number;
+  totalEvents?: number;
 }
 
+/**
+ * Spine poller with an incremental cursor: after the first snapshot it
+ * asks for `?since=<last seen seq>` and merges by seq — the route used
+ * to resend the whole retained log every 5s. The accumulated buffer
+ * lives outside render state so an error-then-recover poll keeps the
+ * history it already had; a rotated log (earliestSeq past the cursor)
+ * forces a full resync.
+ */
 export function useSpine(
   sessionId: string,
   sessionApiAvailable: boolean,
 ): { state: LoadState<SpineWire>; reload: () => void; inFlight: boolean } {
-  const path = sessionApiAvailable
+  const base = sessionApiAvailable
     ? `/api/spine?session=${encodeURIComponent(sessionId)}`
     : "/api/spine";
-  return useApiJson<SpineWire>(path);
+  const [state, setState] = useState<LoadState<SpineWire>>({ kind: "loading" });
+  const [inFlight, setInFlight] = useState(true);
+  const [attempt, setAttempt] = useState(0);
+  const buffer = useRef<{ base: string; seq: number | null; events: SpineEventWire[] }>({
+    base,
+    seq: null,
+    events: [],
+  });
+  useEffect(() => {
+    // A new session target owns a different log — the cursor can't cross it.
+    if (buffer.current.base !== base) buffer.current = { base, seq: null, events: [] };
+    const since = buffer.current.seq;
+    const path = since === null ? base : `${base}${base.includes("?") ? "&" : "?"}since=${since}`;
+    let cancelled = false;
+    setInFlight(true);
+    void fetch(path)
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`GET ${path} failed: ${response.status}`);
+        return (await response.json()) as SpineWire;
+      })
+      .then((body) => {
+        if (cancelled) return;
+        if (since !== null && body.earliestSeq !== undefined && body.earliestSeq > since + 1) {
+          // The server pruned past the cursor — merging would leave a
+          // gap; drop it and let the next fetch resync from the tail.
+          buffer.current = { base, seq: null, events: [] };
+          setAttempt((n) => n + 1);
+          return;
+        }
+        const latest =
+          body.latestSeq ??
+          (body.events.length > 0 ? body.events[body.events.length - 1]!.seq : since ?? 0);
+        const seen = new Set(buffer.current.events.map((event) => event.seq));
+        buffer.current = {
+          base,
+          seq: latest,
+          events: [
+            ...buffer.current.events,
+            ...body.events.filter((event) => !seen.has(event.seq)),
+          ].slice(-MAX_SPINE_EVENTS),
+        };
+        setState({ kind: "data", data: { ...body, events: buffer.current.events } });
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setState({
+            kind: "error",
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setInFlight(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [base, attempt]);
+  const reload = useCallback(() => setAttempt((n) => n + 1), []);
+  return { state, reload, inFlight };
 }

@@ -96,17 +96,30 @@ async function shaB64(input: string): Promise<string> {
     .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
+function authorizeParams(clientId: string, challenge: string): URLSearchParams {
+  return new URLSearchParams({
+    response_type: "code", client_id: clientId, redirect_uri: REDIRECT,
+    code_challenge: challenge, code_challenge_method: "S256",
+    scope: "runs:read email:read", state: "s1",
+  });
+}
+
+async function consentToken(env: Env, params: URLSearchParams, owner: string | null = OWNER) {
+  // GET mints the single-use token bound to this exact request + owner and
+  // renders it into the form's hidden field — POST must present it back.
+  const get = await handleOAuth(new Request(`${ORIGIN}/oauth/authorize?${params}`), env, owner);
+  const html = await get!.text();
+  return { get, consent: /name="consent" value="([^"]+)"/.exec(html)?.[1] };
+}
+
 async function authorizePost(env: Env, clientId: string, verifier: string, owner: string | null = OWNER) {
-  const challenge = await shaB64(verifier);
+  const params = authorizeParams(clientId, await shaB64(verifier));
+  const { consent } = await consentToken(env, params, owner);
   return handleOAuth(
-    new Request(`${ORIGIN}/oauth/authorize?${new URLSearchParams({
-      response_type: "code", client_id: clientId, redirect_uri: REDIRECT,
-      code_challenge: challenge, code_challenge_method: "S256",
-      scope: "runs:read email:read", state: "s1",
-    })}`, {
+    new Request(`${ORIGIN}/oauth/authorize?${params}`, {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: "confirm=yes",
+      body: new URLSearchParams({ confirm: "yes", ...(consent !== undefined ? { consent } : {}) }).toString(),
     }),
     env, owner,
   );
@@ -195,18 +208,77 @@ describe("authorize + exchange", () => {
     expect(denied!.status).toBe(403);
     // Admin bearer path: the owner alternative for Access-less deploys.
     const admin = await createToken(env, "ops", ["admin:tokens"]);
+    const adminParams = authorizeParams(body.client_id as string, await shaB64("v".repeat(64)));
+    const adminGet = await handleOAuth(
+      new Request(`${ORIGIN}/oauth/authorize?${adminParams}`, {
+        headers: { authorization: `Bearer ${admin.token}` },
+      }),
+      env, null,
+    );
+    const consent = /name="consent" value="([^"]+)"/.exec(await adminGet!.text())?.[1];
     const confirmed = await handleOAuth(
-      new Request(`${ORIGIN}/oauth/authorize?${new URLSearchParams({
-        response_type: "code", client_id: body.client_id as string, redirect_uri: REDIRECT,
-        code_challenge: await shaB64("v".repeat(64)), code_challenge_method: "S256", scope: "runs:read email:read",
-      })}`, {
+      new Request(`${ORIGIN}/oauth/authorize?${adminParams}`, {
         method: "POST",
         headers: { "content-type": "application/x-www-form-urlencoded", authorization: `Bearer ${admin.token}` },
-        body: "confirm=yes",
+        body: new URLSearchParams({ confirm: "yes", ...(consent !== undefined ? { consent } : {}) }).toString(),
       }),
       env, null,
     );
     expect(confirmed!.status).toBe(302);
+  });
+
+  it("POST without the minted consent token is refused — the form can't be forged", async () => {
+    const { env } = makeEnv();
+    const { body } = await register(env);
+    const params = authorizeParams(body.client_id as string, await shaB64("v".repeat(64)));
+    // A third-party page can submit the form on a signed-in owner's behalf
+    // only if it holds the token — it can't read the rendered hidden field.
+    const forged = await handleOAuth(
+      new Request(`${ORIGIN}/oauth/authorize?${params}`, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: "confirm=yes",
+      }),
+      env, OWNER,
+    );
+    expect(forged!.status).toBe(400);
+    const error = (await forged!.json()) as { error: string };
+    expect(error.error).toBe("invalid_request");
+  });
+
+  it("the consent token is single-use and bound to the request + owner it was minted for", async () => {
+    const { env } = makeEnv();
+    const { body } = await register(env);
+    const clientId = body.client_id as string;
+    const challenge = await shaB64("v".repeat(64));
+    const params = authorizeParams(clientId, challenge);
+    const post = (p: URLSearchParams, consent: string, owner: string | null = OWNER) =>
+      handleOAuth(
+        new Request(`${ORIGIN}/oauth/authorize?${p}`, {
+          method: "POST",
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ confirm: "yes", consent }).toString(),
+        }),
+        env, owner,
+      );
+
+    const { consent: token } = await consentToken(env, params);
+    if (token === undefined) throw new Error("consent field missing from the rendered form");
+    // Right request, right token, right owner → code issued…
+    expect((await post(params, token))!.status).toBe(302);
+    // …and the same token can't mint a second code.
+    expect((await post(params, token))!.status).toBe(400);
+
+    // A token minted for one request cannot approve a different one.
+    const { consent: token2 } = await consentToken(env, params);
+    if (token2 === undefined) throw new Error("consent field missing from the rendered form");
+    const otherParams = authorizeParams(clientId, await shaB64("w".repeat(64)));
+    expect((await post(otherParams, token2))!.status).toBe(400);
+
+    // Nor can a different owner spend a token minted to someone else.
+    const { consent: token3 } = await consentToken(env, params);
+    if (token3 === undefined) throw new Error("consent field missing from the rendered form");
+    expect((await post(params, token3, "mallory@example.com"))!.status).toBe(400);
   });
 
   it("rejects an unregistered redirect_uri and unknown scopes", async () => {

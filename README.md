@@ -65,7 +65,7 @@ pnpm build
 pnpm docs:preview
 ~~~
 
-- Dashboard: `pnpm dev` (port 5173; opens `/app/`; `/api` and `/agents` proxy to the Worker on 8788).
+- Dashboard only: `pnpm -C apps/frontend dev` (vite on 5173; opens `/app/`; `/api` and `/agents` proxy to the Worker on 8788). Root `pnpm dev` runs `turbo run dev` — it starts every app including the backend `wrangler dev`, which needs wrangler credentials and a working local container engine; use the scoped command if you only want the UI.
 - Docs editing: `pnpm docs:dev` (port 4321/docs/; search requires a production build).
 - Built Worker/assets: `pnpm build`, then `npx wrangler dev --config apps/backend/wrangler.jsonc`. Containers require a compatible local engine; startup may fail without it.
 - Local Worker deployment packaging: `npx wrangler deploy --dry-run --config apps/backend/wrangler.jsonc`. This is not a deployment or proof of a live coding run.
@@ -205,13 +205,19 @@ Safety, all three required together: approval by default, opt-in unattended mode
 
 ## Agent harnesses
 
-Four, shipped in one pinned image: `opencode` (default, `opencode run --format json`), `claude-code` (`claude --print --output-format stream-json`), `codex` (`codex exec --json`), and `devin` (`devin -p`, Cognition's Devin CLI). Aider is not implemented. The dashboard's New Coding Task form picks the harness per run; `AGENT_HARNESS` is only the deployment default. The Agents view lists the image's CLIs with their pinned versions and credential status.
+The pinned image ships nine agent CLIs (`opencode`, `claude`, `codex`, `grok`, `devin`, `cursor-agent`, `gemini`, `agy`, `procoder`) plus two ACP adapter packages. Selectable lanes (`HARNESS_IDS` in `packages/shared/src/mcp.ts` — the single enum the delegate tool, MCP tools, and composer all derive from):
 
-Claude Code and Codex are **API-key harnesses only**. Subscription credentials are deliberately not proxied: Anthropic's terms forbid third parties routing requests through Free, Pro, or Max plan credentials on behalf of users.
+- **API-key lanes** (AI Gateway BYOK): `opencode` (default), `claude-code`, `codex`, `devin`, `grok`.
+- **Subscription lanes** (opt-in `SHIBA_*_SUBSCRIPTION=1`, dedicated egress branches): `claude-subscription`, `codex-subscription`, `antigravity-subscription`, `cursor-subscription`, `devin-subscription`.
+- **ACP lanes** (Agent Client Protocol via the shared driver in `harness/acp.ts`): `claude-acp`, `codex-acp`, `gemini-acp`, `opencode-acp`, `devin-acp`.
 
-The credential invariant holds for every harness — the container receives a dummy key and the real one is injected outside it at the egress boundary. `allowedHosts` is narrowed per run to the *selected* harness's provider host plus git, never the union across harnesses. All four CLIs are in the shipped image (versions pinned in the `Dockerfile`); only OpenCode has been exercised against a live CLI — the Claude Code, Codex, and Devin event parsers are asserted from their documented stream formats until T10 proves otherwise.
+Bare `cursor`/`antigravity` are registered in the catalog but not sandbox-runnable (no `supportedRuntimes` entry). Aider is not implemented. The dashboard's composer picks the harness per run; `AGENT_HARNESS` is only the deployment default. The Providers view lists the image's lanes with credential status.
 
-The `devin` harness is not an AI Gateway provider: the CLI authenticates to Cognition's own backends (`api.devin.ai` for the control plane, `server.codeium.com` for inference on Pro accounts) with an account API key. Set `DEVIN_API_KEY` as a Worker secret (`npx wrangler secret put DEVIN_API_KEY --config apps/backend/wrangler.jsonc`); the container's `credentials.toml` carries a dummy and the egress forwarders swap in the real Bearer. Models are `devin/<alias>` — `devin/swe-2` is the default (free on Devin Pro); `DEVIN_MODEL` sets the deploy default.
+Subscription lanes carry their own provider namespace (`<provider>-subscription/<model>`) and token secrets (`*_SUBSCRIPTION_TOKEN[_<ACCOUNT>]`, `CODEX_SUBSCRIPTION_AUTH_JSON`) on dedicated egress branches — they exist because the operator opted in; Anthropic's terms still forbid routing Free/Pro/Max plan credentials on behalf of third-party users.
+
+The credential invariant holds for every lane — the container receives a dummy key and the real one is injected outside it at the egress boundary. `allowedHosts` is narrowed per run to the *selected* harness's provider host plus git, never the union across harnesses. Only OpenCode has been exercised against a live CLI — the other lanes' event parsers are asserted from their documented stream formats until T10 proves otherwise, and the ACP lanes additionally need the sandbox image rebuilt before a live run can reach them.
+
+The `devin` harness is not an AI Gateway provider: the CLI authenticates to Cognition's own backends (`api.devin.ai` for the control plane, `server.codeium.com` for inference on Pro accounts) with an account API key. Set `DEVIN_API_KEY` as a Worker secret (`npx wrangler secret put DEVIN_API_KEY --config apps/backend/wrangler.jsonc`); the container's `credentials.toml` carries a dummy and the egress forwarders swap in the real Bearer. Models are `devin/<alias>` — `devin/swe-2-medium` is the default (the free tier on Devin Pro; bare `swe-2` is a family name the pinned CLI does not resolve); `DEVIN_MODEL` sets the deploy default.
 
 The computer adapter deliberately refuses execution — `@cloudflare/computer` is preview-only, so Sandbox remains the default.
 
