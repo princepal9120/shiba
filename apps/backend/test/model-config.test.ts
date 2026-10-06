@@ -399,7 +399,7 @@ describe("modelOptionsForPurpose", () => {
       "anthropic/a",
       "anthropic/b",
     ]);
-    expect(a?.availability).toBe("verified");
+    expect(a?.availability).toBe("configured");
     expect(b?.availability).toBe("unverified");
     expect(options.some((o) => o.connectionId === "conn_c")).toBe(false);
     expect(options.some((o) => o.connectionId === "conn_d")).toBe(false);
