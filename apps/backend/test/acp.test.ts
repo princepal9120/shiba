@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  ACP_ALLOW_PICK_SOURCE,
   AcpErrorEvent,
   AcpEventError,
   AcpHarness,
@@ -18,8 +19,10 @@ import {
   parseAcpDriverEvent,
 } from "../src/harness/acp.js";
 import {
+  ACP_LANES,
   HARNESS_DEFAULT_MODELS,
   HARNESS_MODEL_ENV,
+  HARNESSES,
   resolveHarness,
   resolveRunHarness,
 } from "../src/harness/index.js";
@@ -192,6 +195,66 @@ describe("per-lane spec hooks (ce-code-review fixes)", () => {
     const contents = Array.isArray(config) ? config[config.length - 1]!.contents : config?.contents;
     expect(contents).toContain('"claude-sonnet-4-6"');
     expect(contents).not.toContain('"anthropic/claude-sonnet-4-6"');
+  });
+});
+
+describe("ACP_LANES single-source (Y2)", () => {
+  it("derives the registry entries from the lane table — key is the harness name", () => {
+    for (const [name, lane] of Object.entries(ACP_LANES)) {
+      const harness = HARNESSES[name];
+      expect(harness).toBeInstanceOf(AcpHarness);
+      expect(harness?.name).toBe(name);
+      // spawn argv + providers are the lane spec's own fields.
+      expect(harness?.buildArgv(task("anthropic/claude-sonnet-4-6"), "/w")[0]).toBe("node");
+      expect(harness?.supportedProviders).toEqual(lane.spec.providers);
+    }
+    // Every ACP-shaped registry name comes from the table — no hand-mirrors.
+    expect(Object.keys(ACP_LANES).sort()).toEqual([...ACP_NAMES].sort());
+  });
+
+  it("derives the default model and model env var from the lane's mirrorOf", () => {
+    for (const [name, lane] of Object.entries(ACP_LANES)) {
+      expect(HARNESS_DEFAULT_MODELS[name]).toBe(HARNESS_DEFAULT_MODELS[lane.mirrorOf]);
+      expect(HARNESS_MODEL_ENV[name as keyof typeof HARNESS_MODEL_ENV]).toBe(
+        HARNESS_MODEL_ENV[lane.mirrorOf],
+      );
+    }
+    expect(HARNESS_DEFAULT_MODELS["opencode-acp"]).toBe("google/gemini-3.5-flash-lite");
+    expect(HARNESS_DEFAULT_MODELS["devin-acp"]).toBe("devin/swe-2-medium");
+  });
+});
+
+describe("permission auto-allow picks the narrowest grant (C8)", () => {
+  // The picker is plain CJS interpolated into the driver — evaluate the same
+  // source the driver runs.
+  const pick = new Function(`return (${ACP_ALLOW_PICK_SOURCE});`)() as (
+    opts: { optionId: string; kind?: string }[],
+  ) => { optionId: string } | null;
+
+  it("prefers a single-use allow over allow_always regardless of option order", () => {
+    const options = [
+      { optionId: "allow-always", kind: "allow_always" },
+      { optionId: "allow-once", kind: "allow_once" },
+      { optionId: "reject-once", kind: "reject_once" },
+    ];
+    expect(pick(options)?.optionId).toBe("allow-once");
+    expect(pick([...options].reverse())?.optionId).toBe("allow-once");
+  });
+
+  it("falls back to a generic allow, then any allow, else nothing", () => {
+    expect(pick([{ optionId: "yes", kind: "allow" }, { optionId: "aa", kind: "allow_always" }])?.optionId).toBe("yes");
+    // An always grant is picked only when nothing narrower exists.
+    expect(pick([{ optionId: "reject-once", kind: "reject_once" }, { optionId: "aa", kind: "allow_always" }])?.optionId).toBe("aa");
+    expect(pick([{ optionId: "r1", kind: "reject_once" }])).toBeNull();
+    expect(pick([])).toBeNull();
+  });
+
+  it("the emitted driver embeds the picker verbatim — no drift", () => {
+    const input = task("anthropic/claude-sonnet-4-6");
+    const config = claudeAcp.configFile(input, input.sandboxId);
+    const files = Array.isArray(config) ? config : config === null ? [] : [config];
+    const driver = files.find((f) => f.path === acpDriverPath(input.sandboxId));
+    expect(driver?.contents).toContain(ACP_ALLOW_PICK_SOURCE);
   });
 });
 

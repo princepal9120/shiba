@@ -185,11 +185,35 @@ export function decideRunTransition(state: RunMachineState, command: RunCommand)
         return { events: [{ type: "run.queued", commandId: command.commandId, at, run: queued }] };
       }
       if (run.runId === command.runId) {
+        const storedRoute = run.route;
+        const inputRoute = command.input.route;
+        const sameRoute =
+          storedRoute === inputRoute ||
+          (storedRoute !== undefined &&
+            inputRoute !== undefined &&
+            storedRoute.purpose === inputRoute.purpose &&
+            storedRoute.connectionId === inputRoute.connectionId &&
+            storedRoute.modelId === inputRoute.modelId &&
+            storedRoute.harness === inputRoute.harness &&
+            storedRoute.policyVersion === inputRoute.policyVersion);
+        // A replay is the same intent only when every field the queue froze
+        // onto the record matches — identity (queuedBy), the approved route,
+        // account-scoped auth/continuation keys, and the sandbox it named.
+        // continuesKey never lands on the record: the queue-time guard folds
+        // it into continuationKey, so a replayed resume may only name the
+        // stored key. Divergence is a conflict, not a silent keep.
         const sameInput =
+          run.sandboxId === command.input.sandboxId &&
           run.repoUrl === command.input.repoUrl &&
           run.task === command.input.task &&
           run.baseBranch === command.input.baseBranch &&
           run.publishPullRequest === command.input.publishPullRequest &&
+          run.queuedBy === command.input.queuedBy &&
+          sameRoute &&
+          run.continuationKey === command.input.continuationKey &&
+          (command.input.continuesKey === undefined ||
+            command.input.continuesKey === run.continuationKey) &&
+          run.authAccount === command.input.authAccount &&
           run.runtime === command.input.runtime &&
           JSON.stringify(run.testCommand ?? []) === JSON.stringify(command.input.testCommand ?? []);
         if (sameInput) {

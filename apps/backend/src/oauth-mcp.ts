@@ -67,6 +67,20 @@ interface RefreshRecord {
   clientId: string;
 }
 
+/**
+ * The binding between the rendered consent form and the code-minting
+ * submit: GET mints this record keyed by the hidden field's hash, POST
+ * must present the token and still match every frozen field.
+ */
+interface ConsentRecord {
+  clientId: string;
+  redirectUri: string;
+  codeChallenge: string;
+  scopes: Scope[];
+  owner: string;
+  expiresAt: number;
+}
+
 // ---------------------------------------------------------------------------
 // Constants
 
@@ -75,8 +89,11 @@ const CODE_PREFIX = "oauth_code_";
 const ACCESS_PREFIX = "oauth_at_";
 const REFRESH_PREFIX = "oauth_rt_";
 const RATE_PREFIX = "oauth_rate_";
+const CONSENT_PREFIX = "oauth_consent_";
 
 const CODE_TTL_MS = 10 * 60 * 1000;
+/** The consent form's window — same expiry as the code it can mint. */
+const CONSENT_TTL_MS = CODE_TTL_MS;
 export const ACCESS_TOKEN_TTL_MS = 60 * 60 * 1000;
 const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 /** Issuance endpoints: 20 hits per client IP per hour, KV-bucketed. */
@@ -270,12 +287,13 @@ function parseScopes(raw: string | null): Scope[] | null {
   return scopes as Scope[];
 }
 
-function consentPage(clientName: string, scopes: Scope[], action: string): string {
+function consentPage(clientName: string, scopes: Scope[], action: string, consent: string): string {
   const list = scopes.map((s) => `<li><code>${s}</code></li>`).join("");
   return `<!doctype html><html><body style="font-family:system-ui;max-width:32rem;margin:4rem auto">
 <h1>Authorize ${escapeHtml(clientName)}?</h1>
 <p>This MCP client requests these scopes:</p><ul>${list}</ul>
 <form method="post" action="${escapeHtml(action)}">
+<input type="hidden" name="consent" value="${escapeHtml(consent)}">
 <button type="submit" name="confirm" value="yes">Approve</button>
 </form>
 <p>Approving issues a single-use authorization code to the client's redirect URI.</p>
@@ -328,9 +346,48 @@ async function handleAuthorize(request: Request, env: OAuthEnv, ownerId: string 
 
   if (request.method === "GET") {
     const action = `${url.pathname}?${params.toString()}`;
-    return new Response(consentPage(client.name, scopes, action), {
+    // The consent token binds the approve POST to this exact request and
+    // owner — without it a third-party page could submit the form on a
+    // signed-in owner's behalf (the ambient Access/better-auth identity
+    // rides along automatically). It lives in a hidden field, never the
+    // URL, and its KV key is the token's hash like every secret here.
+    const consent = randomHex(32);
+    const consentRecord: ConsentRecord = {
+      clientId, redirectUri, codeChallenge: challenge, scopes,
+      owner, expiresAt: Date.now() + CONSENT_TTL_MS,
+    };
+    await kvPut(env, `${CONSENT_PREFIX}${await sha256Hex(consent)}`, consentRecord, CONSENT_TTL_MS);
+    return new Response(consentPage(client.name, scopes, action, consent), {
       headers: { "content-type": "text/html; charset=utf-8" },
     });
+  }
+  // The rendered form's single-use token must come back with the submit.
+  // It is consumed before any check so a replayed or forged POST mints
+  // nothing, and every field the form froze must still match — a token
+  // minted for one request cannot approve another.
+  const consentKey = `${CONSENT_PREFIX}${await sha256Hex(params.get("consent") ?? "")}`;
+  const consent = asRecord<ConsentRecord>(await kvGet(env, consentKey), [
+    "clientId",
+    "redirectUri",
+    "codeChallenge",
+    "scopes",
+    "owner",
+    "expiresAt",
+  ]);
+  if (consent !== null) {
+    try { await env.AGENT_TOKENS.delete(consentKey); } catch { /* deny below */ }
+  }
+  if (
+    consent === null ||
+    !Array.isArray(consent.scopes) ||
+    consent.clientId !== clientId ||
+    consent.redirectUri !== redirectUri ||
+    consent.codeChallenge !== challenge ||
+    consent.owner !== owner ||
+    consent.expiresAt < Date.now() ||
+    consent.scopes.join(" ") !== scopes.join(" ")
+  ) {
+    return jsonError(400, "invalid_request", "consent token is missing, mismatched, or expired.");
   }
   if (params.get("confirm") !== "yes") {
     return new Response("Authorization was not confirmed.", { status: 400 });
