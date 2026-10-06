@@ -40,22 +40,14 @@ export interface TaskComposerProps {
   variant?: "docked" | "hero";
 }
 
+// Keep the picker simple: the two everyday harnesses. Everything else stays
+// reachable — a deployment default, role pin, MCP, or API call naming codex /
+// devin / a subscription / an ACP lane still resolves and runs; when such a
+// harness is already selected it is appended to the list so the field never
+// renders blank.
 const HARNESS_OPTIONS: { value: string; label: string; desc: string }[] = [
   { value: "opencode", label: "OpenCode", desc: "Default autonomous coding engine" },
   { value: "claude-code", label: "Claude Code", desc: "Anthropic Claude Code CLI" },
-  { value: "claude-acp", label: "Claude Agent (ACP)", desc: "Claude via the Agent Client Protocol adapter" },
-  { value: "claude-subscription", label: "Claude (subscription)", desc: "Your Claude plan (needs SHIBA_CLAUDE_SUBSCRIPTION)" },
-  { value: "codex", label: "Codex", desc: "Codex autonomous CLI agent" },
-  { value: "codex-acp", label: "Codex (ACP)", desc: "Codex via the Agent Client Protocol adapter" },
-  { value: "codex-subscription", label: "Codex (subscription)", desc: "Your ChatGPT plan (needs SHIBA_CODEX_SUBSCRIPTION)" },
-  { value: "gemini-acp", label: "Gemini CLI (ACP)", desc: "Google Gemini CLI speaking ACP" },
-  { value: "opencode-acp", label: "OpenCode (ACP)", desc: "OpenCode's `acp` subcommand" },
-  { value: "devin", label: "Devin", desc: "Cognition Devin CLI (needs DEVIN_API_KEY)" },
-  { value: "devin-acp", label: "Devin (ACP)", desc: "Devin CLI speaking ACP (needs DEVIN_API_KEY)" },
-  { value: "devin-subscription", label: "Devin (subscription)", desc: "Your Devin plan (needs SHIBA_DEVIN_SUBSCRIPTION)" },
-  { value: "grok", label: "Grok", desc: "xAI Grok CLI (AI Gateway BYOK)" },
-  { value: "antigravity-subscription", label: "Antigravity (subscription)", desc: "Your Google plan (needs SHIBA_ANTIGRAVITY_SUBSCRIPTION)" },
-  { value: "cursor-subscription", label: "Cursor (subscription)", desc: "Your Cursor plan (needs SHIBA_CURSOR_SUBSCRIPTION)" },
 ];
 
 export function TaskComposer({
@@ -108,7 +100,11 @@ export function TaskComposer({
   const fieldClass =
     "bg-[#f1efe6] border border-[#e0ded5] rounded-none text-[#222320] px-2.5 py-1.5 touch:min-h-11 text-xs focus:outline-none focus:border-[#1c1cc8] focus:ring-1 focus:ring-[#1c1cc8]/40 placeholder-[#6a6f63]/60 transition-colors";
 
-  const currentHarness = HARNESS_OPTIONS.find((h) => h.value === harness);
+  const harnessOptions =
+    harness !== "" && !HARNESS_OPTIONS.some((h) => h.value === harness)
+      ? [...HARNESS_OPTIONS, { value: harness, label: harness, desc: "Deployment-pinned harness" }]
+      : HARNESS_OPTIONS;
+  const currentHarness = harnessOptions.find((h) => h.value === harness);
   const currentConnection = routing.connections?.find((c) => c.id === routing.connectionId);
 
   const form = (
@@ -172,7 +168,7 @@ export function TaskComposer({
             aria-label="Harness"
             className={`${fieldClass} cursor-pointer`}
           >
-            {HARNESS_OPTIONS.map((option) => (
+            {harnessOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
