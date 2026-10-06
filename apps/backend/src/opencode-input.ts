@@ -58,6 +58,13 @@ const codingTaskInputSchema = z.object({
    */
   testCommand: testCommandSchema.optional(),
   /**
+   * Run-fork lineage: `refs/shiba/checkpoints/<parentSandboxId>/<seq>` in
+   * the parent worktree this run resumes from. The executor restores that
+   * ref into its clone (image support pending — the field rides the
+   * frozen input so dispatch cannot silently drop it).
+   */
+  forkCheckpointRef: z.string().regex(/^refs\/shiba\/checkpoints\//).optional(),
+  /**
    * T51: the approved runtime. `"local"` runs on the operator's machine
    * via the dispatch mailbox — admissible only from a dashboard intake
    * under SHIBA_LOCAL_RUNTIME=1; every chat surface refuses it at intake.

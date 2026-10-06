@@ -22,7 +22,8 @@ export type RunSpineKind =
   | "run.checkpointed"
   | "run.completed"
   | "run.failed"
-  | "run.cancelled";
+  | "run.cancelled"
+  | "run.forked";
 
 export type SideEffectKind =
   | "slack.post"
@@ -50,6 +51,7 @@ export const SPINE_KINDS: readonly SpineKind[] = [
   "run.completed",
   "run.failed",
   "run.cancelled",
+  "run.forked",
   "side_effect.requested",
   "side_effect.dispatched",
   "side_effect.failed",
@@ -75,6 +77,10 @@ export const spineEventPayloadSchema = z.union([
     summary: z.string().optional(),
   }),
   z.strictObject({ checkpointRef: z.string(), checkpointSeq: z.number() }),
+  // run.forked: the fork's lineage + the approval it minted.
+  z.strictObject({
+    forkedFrom: z.strictObject({ runId: z.string(), checkpointRef: z.string() }),
+  }),
   z.strictObject({ approval: pendingApprovalSchema }),
   z.strictObject({
     approvalId: z.string(),

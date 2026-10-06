@@ -5,6 +5,7 @@
 import type { RuntimeSelection } from "./local-runtime.js";
 import type { ApprovedRoute } from "./model.js";
 import type { AgentRole } from "./roles.js";
+import type { ForkLineage } from "./runs.js";
 import { MAX_PENDING_APPROVALS } from "./steering.js";
 
 export const APPROVAL_TTL_MS = 30 * 60 * 1000;
@@ -104,6 +105,13 @@ export interface PendingApproval {
   /** The test command the human approved, as argv. */
   testCommand?: string[];
   /**
+   * Run-fork lineage frozen with the rest of the approved input: the
+   * parent runId + the checkpoint ref the fork resumes from. The approval
+   * card names the lineage, and the input hash covers it — a fork is a
+   * new decision, not a replay of the parent's.
+   */
+  forkedFrom?: ForkLineage;
+  /**
    * T52: the delegation role this run was queued under. The role pin
    * already resolved into `route` at queue time — this rides along as
    * frozen provenance so dispatch threads it into the run envelope.
@@ -151,6 +159,7 @@ export interface CreateApprovalInput {
   authAccount?: string;
   runtime?: RuntimeSelection;
   testCommand?: string[];
+  forkedFrom?: ForkLineage;
   role?: AgentRole;
   kind?: ApprovalKind;
   payload?: JsonValue;
@@ -182,6 +191,7 @@ export function createPendingApproval(
       ...(input.authAccount !== undefined ? { authAccount: input.authAccount } : {}),
       ...(input.runtime !== undefined ? { runtime: input.runtime } : {}),
       ...(input.testCommand !== undefined ? { testCommand: input.testCommand } : {}),
+      ...(input.forkedFrom !== undefined ? { forkedFrom: input.forkedFrom } : {}),
       ...(input.role !== undefined ? { role: input.role } : {}),
       ...(input.kind !== undefined ? { kind: input.kind } : {}),
       ...(input.payload !== undefined ? { payload: input.payload } : {}),
@@ -315,6 +325,8 @@ export interface RunInputFields {
   runtime?: RuntimeSelection;
   /** The test command — part of what the human approved. */
   testCommand?: string[];
+  /** Run-fork lineage — part of what the human approved. */
+  forkedFrom?: ForkLineage;
 }
 
 /** Key-sorted JSON — the canonical form the input hash covers. */
@@ -350,6 +362,9 @@ export function runInputHash(input: RunInputFields): string {
     ...(input.authAccount !== undefined ? { authAccount: input.authAccount } : {}),
     ...(input.runtime !== undefined ? { runtime: input.runtime } : {}),
     ...(tc !== undefined && tc.length > 0 ? { testCommand: tc } : {}),
+    ...(input.forkedFrom !== undefined
+      ? { forkedFrom: input.forkedFrom as unknown as JsonValue }
+      : {}),
   });
 }
 

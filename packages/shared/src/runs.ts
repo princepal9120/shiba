@@ -106,6 +106,13 @@ export interface DelegatedRun {
   /** The test command this approval-gated run executes, as argv. */
   testCommand?: string[];
   /**
+   * Run-fork lineage (PLAN-V2-NEXT): the parent run and the checkpoint ref
+   * this run resumes from (`refs/shiba/checkpoints/<sandboxId>/<seq>`).
+   * Frozen at queue time and covered by the approval input hash like every
+   * other approved field. Absent on runs that were not forked.
+   */
+  forkedFrom?: ForkLineage;
+  /**
    * Token/cost usage the harness's event stream actually reported — never
    * fabricated. Absent when the harness emits no parseable usage (devin,
    * grok, cursor, antigravity, the local daemon) or the run died before a
@@ -115,6 +122,20 @@ export interface DelegatedRun {
    * prices the run itself.
    */
   usage?: RunUsage;
+}
+
+/**
+ * Lineage a forked run carries: which parent run it cloned from and the
+ * git checkpoint ref (in the parent's worktree) it resumes from.
+ */
+export interface ForkLineage {
+  /** The parent run's runId. */
+  runId: string;
+  /**
+   * `refs/shiba/checkpoints/<parentSandboxId>/<seq>` — a hidden ref in the
+   * parent worktree the fork's executor restores into its own clone.
+   */
+  checkpointRef: string;
 }
 
 /**

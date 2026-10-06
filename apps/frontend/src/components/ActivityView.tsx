@@ -125,6 +125,11 @@ function eventSummary(event: SpineEventWire): string {
   if (typeof p.target === "string") return `${p.effectKind ?? "effect"} → ${p.target}`;
   if (typeof p.error === "string") return p.error;
   if (typeof p.result === "string") return p.result;
+  if (p.forkedFrom && typeof p.forkedFrom === "object") {
+    const f = p.forkedFrom as Record<string, unknown>;
+    const ref = typeof f.checkpointRef === "string" ? f.checkpointRef.split("/").pop() : "";
+    return `fork of ${typeof f.runId === "string" ? f.runId.slice(0, 12) : "?"}… · cp ${ref}`;
+  }
   if (p.run && typeof p.run === "object") {
     const run = p.run as Record<string, unknown>;
     return [run.harness, run.codingModel].filter((v) => typeof v === "string").join(" · ");

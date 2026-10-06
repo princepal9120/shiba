@@ -105,6 +105,7 @@ function spineToDeciderEvent(event: SpineEvent): RunEvent | null {
       };
     case "run.progress":
     case "run.checkpointed":
+    case "run.forked":
     case "run.rejected":
       return null;
     default:

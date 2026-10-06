@@ -9,7 +9,7 @@ import { stableHash, type JsonValue } from "./approvals.js";
  * re-running the command: a retried resolve, a double-fired webhook
  * fan-out, or a retried queue can never mint the effect twice.
  */
-export type CommandKind = "approval.resolve" | "run.queue";
+export type CommandKind = "approval.resolve" | "run.queue" | "run.fork";
 
 export const MAX_COMMAND_RECEIPTS = 256;
 
