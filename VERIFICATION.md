@@ -952,6 +952,37 @@ Audit findings T1-T7 / D9-D12-D13 against `devin/1791266355-tests-dx`.
 - Unverified (credential-gated): live executor restoring the checkpoint
   ref inside a sandbox (needs the image-side fetch/restore seam).
 
+# 2026-10-06 — ACP server: Shiba as an installable agent (shiba-acp)
+
+- New workspace `apps/acp-server` (@shiba/acp-server): a Node bin
+  (`dist/index.js`, esbuild-bundled) that speaks ACP JSON-RPC 2.0 over
+  stdio and drives the deployment's operator HTTP surface — Zed/JetBrains/
+  T3 can register Shiba as an external agent.
+- Wire mapping: `initialize` handshake → `session/new` (resolves the
+  cwd's `origin` remote into the run's repoUrl) → `session/prompt` mints
+  a pending approval via POST /api/runs, surfaces it in-editor as
+  `session/request_permission`, posts the decision to /api/approvals,
+  then pumps `/api/spine?since=` + `/api/runs` until the run settles.
+  `run.progress`/`run.*` → `agent_message_chunk`; `side_effect.*` →
+  `tool_call_update`. `session/cancel` → DELETE /api/runs/<id>;
+  `session/set_model` carries into codingModel.
+- Auth: `SHIBA_URL` + `SHIBA_TOKEN` (better-auth session token, sent as
+  the session cookie — the deployment's operator credential; agent
+  principals can never decide approvals). `shiba-acp login` mints a
+  token via /api/auth/sign-in/email.
+- Spine events validated with the shared `spineEventSchema`; queue
+  input validated with `queueRunInputSchema` (the workspace dep on
+  @shiba/shared is load-bearing, not token).
+- Local verification: `vitest test/server.test.ts` (8) — initialize
+  handshake, session/new repo resolution, unknown-method -32601,
+  prompt→queue→permission→approve→end_turn round-trip (asserts the
+  /api/runs + /api/approvals bodies), reject→refusal, cancel→cancelled,
+  queue-error→JSON-RPC error, remote-URL normalization.
+- Unverified (credential-gated): a live editor driving a real run
+  end-to-end (needs SHIBA_URL/SHIBA_TOKEN against a deployment and an
+  ACP client); the sandbox-side run execution itself is unchanged.
+||||||| c1464f2
+
 # 2026-10-03 — ACP registry resolver + generic `acp` harness lane
 
 - `src/harness/acp-registry.ts` (new): schema-validated parser for the
