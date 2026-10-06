@@ -21,6 +21,7 @@ import {
 } from "@shiba/shared";
 import worker from "../src/index.js";
 import { CodingOrchestrator } from "../src/agents/orchestrator.js";
+import { productionEnvStubs, setStateLikeProduction } from "./orchestrator-host.js";
 import { LocalDispatch } from "../src/local-dispatch.js";
 import { LocalRuntimeAdapter, type LocalDispatchClient } from "../src/runtime.js";
 import { resolveHarness } from "../src/harness/index.js";
@@ -250,11 +251,11 @@ describe("LocalDispatch DO", () => {
 
 function makeOrchestrator(env: Record<string, unknown> = {}, name = "default") {
   const instance = Object.assign(Object.create(CodingOrchestrator.prototype) as CodingOrchestrator, {
-    env,
+    env: { ...productionEnvStubs(), ...env },
     name,
     state: { runs: [] } as { runs: unknown[]; pendingApprovals?: unknown[] },
     setState(next: unknown) {
-      Object.assign(this, { state: next });
+      setStateLikeProduction(this as unknown as CodingOrchestrator, next as Parameters<CodingOrchestrator["setState"]>[0]);
     },
   });
   return instance as unknown as {

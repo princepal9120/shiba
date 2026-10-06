@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CodingOrchestrator } from "../src/agents/orchestrator.js";
 import type { OrchestratorState } from "../src/agents/orchestrator.js";
+import { setStateLikeProduction } from "./orchestrator-host.js";
 import {
   emailApprovalBridgeReady,
   executeEmailApproval,
@@ -174,7 +175,7 @@ function agentWithMailbox(opts: {
   const instance = Object.assign(Object.create(CodingOrchestrator.prototype) as CodingOrchestrator, {
     env,
     state: { runs: [] } as OrchestratorState,
-    setState(state: OrchestratorState) { Object.assign(this, { state }); },
+    setState(state: OrchestratorState) { setStateLikeProduction(this, state); },
   });
   // The resolver hands background work to ctx.waitUntil — capture every
   // dispatch (executor + draft releases) so assertions run only after

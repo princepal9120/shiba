@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { hasRunSignal, runSignal, type RunSignal } from "@shiba/shared";
 import { CodingOrchestrator } from "../src/agents/orchestrator.js";
 import type { OrchestratorState } from "../src/agents/orchestrator.js";
+import { productionEnvStubs, setStateLikeProduction } from "./orchestrator-host.js";
 import {
   formatAgentResult,
   parseAgentResult,
@@ -153,8 +154,8 @@ describe("run-signal envelope", () => {
 describe("run-signal waiter (orchestrator row)", () => {
   function agent() {
     return Object.assign(Object.create(CodingOrchestrator.prototype) as CodingOrchestrator, {
-      env: { Sandbox: {}, GITHUB_TOKEN: "test-token" }, state: { runs: [] } as OrchestratorState,
-      setState(state: OrchestratorState) { Object.assign(this, { state }); },
+      env: { ...productionEnvStubs(), Sandbox: {}, GITHUB_TOKEN: "test-token" }, state: { runs: [] } as OrchestratorState,
+      setState(state: OrchestratorState) { setStateLikeProduction(this, state); },
     });
   }
 

@@ -8,6 +8,7 @@ import { CodingOrchestrator } from "../src/agents/orchestrator.js";
 import type { OrchestratorState } from "../src/agents/orchestrator.js";
 import type { SpineEvent, OutboxEntry } from "@shiba/shared";
 import { setSandboxHandleResolver } from "../src/sandbox/lifecycle.js";
+import { productionEnvStubs, setStateLikeProduction } from "./orchestrator-host.js";
 
 const mocks = vi.hoisted(() => ({
   destroy: vi.fn(),
@@ -47,21 +48,14 @@ const AGENT_PRINCIPAL_HEADER = "X-Agent-Principal";
 
 function agent(threadName?: string) {
   return Object.assign(Object.create(CodingOrchestrator.prototype) as CodingOrchestrator, {
-    env: { Sandbox: {}, GITHUB_TOKEN: "test-token", SLACK_BOT_TOKEN: "xoxb-test" },
+    env: { ...productionEnvStubs(), Sandbox: {}, GITHUB_TOKEN: "test-token", SLACK_BOT_TOKEN: "xoxb-test" },
     name: threadName,
     ctx: { waitUntil: (promise: Promise<unknown>) => void promise.catch(() => undefined) },
     state: { runs: [] } as OrchestratorState,
-    // The test subclass shadows the P9 setState override, so drive the
-    // flush by hand — same order as production: apply → commit → drain.
+    // The test subclass shadows the P9 setState override — the shared
+    // host drives the real flush in production order: apply → commit → drain.
     setState(this: CodingOrchestrator, next: OrchestratorState) {
-      type SpineInternals = {
-        applySpine(n: OrchestratorState): void;
-        spineBuf: unknown;
-      };
-      const self = this as unknown as SpineInternals;
-      self.applySpine(next);
-      Object.assign(this, { state: next });
-      self.spineBuf = [];
+      setStateLikeProduction(this, next);
     },
   });
 }

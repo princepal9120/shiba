@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Env } from "../src/env.js";
 import { CodingOrchestrator, type OrchestratorState } from "../src/agents/orchestrator.js";
+import { productionEnvStubs, setStateLikeProduction } from "./orchestrator-host.js";
 import { parseAgentToolInput } from "../src/opencode-input.js";
 import type { PendingApproval } from "../src/pending-approvals.js";
 import { setSandboxHandleResolver } from "../src/sandbox/lifecycle.js";
@@ -33,7 +34,7 @@ vi.mock("../src/agents/opencode-agent.js", () => ({ OpenCodeAgent: class {} }));
 setSandboxHandleResolver(() => ({ destroy: mocks.destroy }));
 
 function env(overrides: Partial<Env> = {}): Env {
-  return { Sandbox: {}, GITHUB_TOKEN: "test-token", ...overrides } as Env;
+  return { ...productionEnvStubs(), Sandbox: {}, GITHUB_TOKEN: "test-token", ...overrides } as Env;
 }
 
 function agent(overrides: Partial<Env> = {}) {
@@ -41,7 +42,7 @@ function agent(overrides: Partial<Env> = {}) {
     env: env(overrides),
     state: { runs: [] } as OrchestratorState,
     setState(state: OrchestratorState) {
-      Object.assign(this, { state });
+      setStateLikeProduction(this, state);
     },
   });
 }

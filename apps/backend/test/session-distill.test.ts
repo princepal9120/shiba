@@ -1,12 +1,21 @@
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@cloudflare/think", () => ({ Think: class {} }));
+vi.mock("@cloudflare/think", () => ({ Think: class {
+  schedule() { return Promise.resolve({}); }
+} }));
 vi.mock("agents/agent-tools", () => ({ agentTool: vi.fn() }));
 vi.mock("ai", () => ({ tool: vi.fn() }));
 vi.mock("../src/agents/opencode-agent.js", () => ({ OpenCodeAgent: class {} }));
 
 import { CodingOrchestrator } from "../src/agents/orchestrator.js";
+import { setSandboxHandleResolver } from "../src/sandbox/lifecycle.js";
+
+// Same seam as orchestrator-result: run completion always destroys the
+// sandbox, so the suite must never reach the real @cloudflare/sandbox import.
+const sandboxDestroy = vi.hoisted(() => vi.fn(async () => {}));
+setSandboxHandleResolver(() => ({ destroy: sandboxDestroy }));
+import { productionEnvStubs, setStateLikeProduction } from "./orchestrator-host.js";
 import type { Env } from "../src/env.js";
 import { Memory } from "../src/memory-do.js";
 import type { FactRecord, SessionRecord, SqlRow } from "../src/memory-store.js";
@@ -62,6 +71,7 @@ function makeEnv(opts: {
   const stubs = new Map<string, FakeStub>();
   const aiCalls: AiCall[] = [];
   const env = {
+    ...productionEnvStubs(),
     ORCHESTRATOR_MODEL: "@cf/test/orchestrator",
     MEMORY_ENABLED: opts.memoryEnabled,
     Memory: {
@@ -400,7 +410,7 @@ describe("T10 orchestrator wiring", () => {
     instance.ctx = { waitUntil: (p: Promise<unknown>) => pending.push(p) };
     instance.keepAliveWhile = (fn: () => Promise<unknown>) => fn();
     instance.setState = (s: unknown) => {
-      instance.state = s;
+      setStateLikeProduction(instance, s as Parameters<CodingOrchestrator["setState"]>[0]);
     };
     return { instance, pending };
   }

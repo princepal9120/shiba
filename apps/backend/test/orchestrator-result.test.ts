@@ -1,13 +1,23 @@
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@cloudflare/think", () => ({ Think: class {} }));
+vi.mock("@cloudflare/think", () => ({ Think: class {
+  schedule() { return Promise.resolve({}); }
+} }));
 vi.mock("agents/agent-tools", () => ({ agentTool: vi.fn() }));
 vi.mock("ai", () => ({ tool: vi.fn() }));
 vi.mock("../src/agents/opencode-agent.js", () => ({ OpenCodeAgent: class {} }));
 
 import { CodingOrchestrator } from "../src/agents/orchestrator.js";
 import { formatAgentResult, parseAgentResult, type CodingTaskResult } from "../src/opencode-input.js";
+import { setSandboxHandleResolver } from "../src/sandbox/lifecycle.js";
 import { approveDirect } from "./seeding.js";
+import { productionEnvStubs, setStateLikeProduction } from "./orchestrator-host.js";
+
+// The release path always destroys the run's sandbox — route it through
+// the resolver seam so the suite never loads the real @cloudflare/sandbox
+// (a genuine resolution error otherwise prints mid-suite on some runners).
+const mocks = vi.hoisted(() => ({ destroy: vi.fn(async () => {}) }));
+setSandboxHandleResolver(() => ({ destroy: mocks.destroy }));
 
 function completedResult(): CodingTaskResult {
   return {
@@ -36,9 +46,9 @@ function errorResult(): CodingTaskResult {
 function makeOrchestrator(): any {
   const instance: any = Object.create(CodingOrchestrator.prototype);
   instance.state = { runs: [] };
-  instance.env = {};
+  instance.env = productionEnvStubs();
   instance.setState = (s: unknown) => {
-    instance.state = s;
+    setStateLikeProduction(instance, s as Parameters<CodingOrchestrator["setState"]>[0]);
   };
   return instance;
 }

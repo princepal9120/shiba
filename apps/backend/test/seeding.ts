@@ -78,6 +78,10 @@ export function approvePointerOnly<S extends SeedableState>(
     { threadKey: "default", approvalId: callId, approved: true, decidedBy: "test" },
     now,
   );
+  // Two commits, like production: the queue write lands the pending pointer
+  // (approval.requested), the resolve write lands the decision (answered) —
+  // a spine-aware setState folds the same event pair the real route emits.
+  host.setState({ ...host.state, pendingApprovals: created });
   host.setState({ ...host.state, pendingApprovals: approvals });
 }
 

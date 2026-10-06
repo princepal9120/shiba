@@ -73,6 +73,7 @@ import {
   SESSION_DELETED_CLOSE_CODE,
   type OrchestratorState,
 } from "../src/agents/orchestrator.js";
+import { productionEnvStubs, setStateLikeProduction } from "./orchestrator-host.js";
 import worker from "../src/index.js";
 import type { Env } from "../src/env.js";
 import type { PendingApproval } from "../src/pending-approvals.js";
@@ -329,12 +330,13 @@ describe("CodingOrchestrator internal web-sessions handler and teardown", () => 
     const orchestrator = Object.create(CodingOrchestrator.prototype) as CodingOrchestrator;
     const state: OrchestratorState = { runs: [], webSessions: initialSessions, pendingApprovals: [] };
     Object.assign(orchestrator, {
+      env: productionEnvStubs() as unknown as Env,
       state,
       cancelRun: vi.fn(async () => {}),
       reclaimRuns: vi.fn(async () => {}),
       getConnections: () => connections,
       setState(s: OrchestratorState) {
-        Object.assign(this, { state: s });
+        setStateLikeProduction(this, s);
       },
     });
     Object.defineProperty(orchestrator, "store", {
@@ -1084,9 +1086,10 @@ describe("Forged session records cannot steer Worker trust points", () => {
     const forged = forgedRecord(alice, victim);
     const orchestrator = Object.create(CodingOrchestrator.prototype) as CodingOrchestrator;
     Object.assign(orchestrator, {
+      env: productionEnvStubs() as unknown as Env,
       state: { runs: [], webSessions: [forged], pendingApprovals: [] } as OrchestratorState,
       setState(s: OrchestratorState) {
-        Object.assign(this, { state: s });
+        setStateLikeProduction(this, s);
       },
     });
     Object.defineProperty(orchestrator, "name", { value: alice, configurable: true });

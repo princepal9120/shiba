@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CodingOrchestrator, delegateInputSchema } from "../src/agents/orchestrator.js";
 import type { OrchestratorState } from "../src/agents/orchestrator.js";
+import { productionEnvStubs, setStateLikeProduction } from "./orchestrator-host.js";
 import { HARNESS_IDS } from "@shiba/shared";
 import { createRun, RUN_DEADLINE_MS, type DelegatedRun } from "../src/runs.js";
 import { formatAgentResult, parseAgentToolInput } from "../src/opencode-input.js";
@@ -34,8 +35,8 @@ setSandboxHandleResolver(() => ({ destroy: mocks.destroy }));
 
 function agent() {
   const instance = Object.assign(Object.create(CodingOrchestrator.prototype) as CodingOrchestrator, {
-    env: { Sandbox: {}, GITHUB_TOKEN: "test-token" }, state: { runs: [] } as OrchestratorState,
-    setState(state: OrchestratorState) { Object.assign(this, { state }); },
+    env: { ...productionEnvStubs(), Sandbox: {}, GITHUB_TOKEN: "test-token" }, state: { runs: [] } as OrchestratorState,
+    setState(state: OrchestratorState) { setStateLikeProduction(this, state); },
   });
   return instance;
 }
@@ -352,8 +353,9 @@ describe("approval handoff recovery", () => {
     let crashState: OrchestratorState | undefined;
     const writes: OrchestratorState[] = [];
     instance.setState = (state) => {
-      writes.push(structuredClone(state));
-      Object.assign(instance, { state });
+      setStateLikeProduction(instance, state);
+      // Record what production would have committed — post-spine flush.
+      writes.push(structuredClone(instance.state));
     };
     // Snapshot exactly at dispatch entry, before any child execution can start.
     instance.getTools = () => {

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CodingOrchestrator } from "../src/agents/orchestrator.js";
 import type { OrchestratorState } from "../src/agents/orchestrator.js";
+import { productionEnvStubs, setStateLikeProduction } from "./orchestrator-host.js";
 import { createRun, type DelegatedRun } from "../src/runs.js";
 import { approveDirect } from "./seeding.js";
 import { formatAgentResult } from "../src/opencode-input.js";
@@ -11,6 +12,7 @@ import { setSandboxHandleResolver } from "../src/sandbox/lifecycle.js";
 const mocks = vi.hoisted(() => ({ destroy: vi.fn(), execute: vi.fn(), grade: vi.fn(async () => null) }));
 vi.mock("../src/result-quality.js", () => ({ evaluateResultQuality: mocks.grade }));
 vi.mock("@cloudflare/think", () => ({ Think: class {
+  schedule() { return Promise.resolve({}); }
   onStart() {}
   getTools() { return {}; }
   onRequest() { return new Response(null, { status: 404 }); }
@@ -24,8 +26,8 @@ setSandboxHandleResolver(() => ({ destroy: mocks.destroy }));
 
 function agent() {
   const instance = Object.assign(Object.create(CodingOrchestrator.prototype) as CodingOrchestrator, {
-    env: { Sandbox: {}, GITHUB_TOKEN: "test-token" }, state: { runs: [] } as OrchestratorState,
-    setState(state: OrchestratorState) { Object.assign(this, { state }); },
+    env: { ...productionEnvStubs(), Sandbox: {}, GITHUB_TOKEN: "test-token" }, state: { runs: [] } as OrchestratorState,
+    setState(state: OrchestratorState) { setStateLikeProduction(this, state); },
   });
   return instance;
 }
