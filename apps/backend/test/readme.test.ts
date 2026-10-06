@@ -49,9 +49,9 @@ describe("README structure (T24 honest-ship contract)", () => {
     expect(README).not.toContain("limited to `google/*`");
   });
 
-  it("states that subscription credentials are not proxied", () => {
-    expect(README).toContain("API-key harnesses only");
-    expect(README).toContain("Free, Pro, or Max");
+  it("states the subscription-credential policy honestly", () => {
+    expect(README).toContain("subscription lanes");
+    expect(README).toContain("Free/Pro/Max");
   });
 
   it("does not claim Slack events or automations are unbuilt", () => {

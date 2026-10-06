@@ -70,6 +70,10 @@ of them requires re-running the live acceptance checklist (T10).
 | `@agentclientprotocol/claude-agent-acp` | `0.86.0` | Pinned ACP adapter for `claude-acp`; driver protocol (session/new, set_model, prompt) depends on it. |
 | `@agentclientprotocol/codex-acp` | `2.1.1` | Pinned ACP adapter for `codex-acp`; same driver-protocol dependency. |
 | `@google/gemini-cli` | `0.62.0` | Pinned image CLI; the `gemini-acp` lane spawns `gemini --acp`, build-probed via `--help`. |
+| `@xai-official/grok` | `1.0.41` | Pinned image CLI; `grok` lane runs headless `--single` + streaming-json against `api.x.ai`. |
+| `cursor-agent` | `2026.10.01-e373342` | Checksum-pinned tarball (`downloads.cursor.com/lab/…`); `dist-package/` layout needs its sibling `.node` files. |
+| `agy_acp_server` | `1.1.1` | Antigravity ACP server zip (`dl.google.com/agy-extensions`); auth + subscription lanes spawn it. |
+| `procoder` | `3.6.0` | Pinned image CLI. |
 | `CODING_MODEL` | `google/gemini-3.5-flash-lite` | Default only; model identifiers can change availability. `assertLiveCodingModel` rejects known retired IDs on requests. |
 
 All harnesses are present in current source and image configuration; only OpenCode has a dated local end-to-end exercise, and no cloud end-to-end run is recorded. Keep this distinction current when updating documentation.

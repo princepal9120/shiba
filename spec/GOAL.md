@@ -44,7 +44,7 @@ Primitives in use, each justified:
 - **Vectorize `MEMORY_VECTORS`** — 768-dim embeddings for memory recall
 - **turbo** — per-app build/typecheck/test orchestration
 
-Still forbidden without a concrete requirement: Queues, Workflows, Hono (the Worker router stays hand-rolled), and any additional store beyond the eight Durable Objects + the four supporting stores above.
+Still forbidden without a concrete requirement: Queues, Workflows, Hono (the Worker router stays hand-rolled), and any additional store beyond the nine Durable Objects + the four supporting stores above.
 
 Use:
 
@@ -82,7 +82,7 @@ Its `delegate_coding_task` tool must accept structured input:
 
 The delegation tool must use AI SDK `needsApproval: true`. No sandbox starts before the human approves the exact tool input.
 
-Each delegated run gets its own deterministic, DNS-safe sandbox ID and isolated container. Limit concurrent coding agents to three.
+Each delegated run gets its own deterministic, DNS-safe sandbox ID and isolated container. Concurrent coding agents are capped at five (`max_instances` in `wrangler.jsonc`, mirrored as `maxInstances` in `alchemy.run.ts`).
 
 `OpenCodeAgent` must format and parse structured agent-tool input explicitly. Do not scrape arbitrary prose to discover the repository URL.
 
