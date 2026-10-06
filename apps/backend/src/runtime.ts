@@ -120,6 +120,23 @@ export interface RuntimeAdapter {
 // for credential-dir modes (T50 profile dirs must be 0700).
 const SETUP_COMMAND_ALLOWLIST: readonly (readonly string[])[] = [["mkdir"], ["ln"], ["chmod"]];
 
+/**
+ * Interpreter argv0s that cannot identify a harness by themselves —
+ * `["node"]` on the allowlist would admit every node invocation in the
+ * sandbox. When a harness argv leads with one of these (the ACP lanes run
+ * `node <driver>.cjs`), the allowlist entry is argv[0..1] — interpreter +
+ * script path — not bare argv0. Single-binary harnesses (opencode, claude,
+ * codex, devin…) keep argv0 alone: that IS the harness binary.
+ */
+const EXEC_INTERPRETERS: ReadonlySet<string> = new Set([
+  "node",
+  "nodejs",
+  "deno",
+  "bun",
+  "python",
+  "python3",
+]);
+
 export const COMPUTER_PREVIEW_MESSAGE =
   "@cloudflare/computer is preview-only and not production-ready, so it is disabled. " +
   "Set RUNTIME=sandbox (the default) or wait for Computer to graduate from preview. " +
@@ -154,12 +171,20 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
 
     // T45: every exec this run sends to the sandbox goes through the scoped
     // executor — argv-prefix allowlist (adapter-internal git + the harness's
-    // own argv0 + its declared execAllowlist), timeout, output cap, receipts.
+    // own argv prefix + its declared execAllowlist), timeout, output cap, receipts.
     const capabilities = this.harness.capabilities(input.codingModel);
     const harnessArgv = this.harness.buildArgv(input, workdir);
+    // The harness's own argv prefix leads the allowlist (see
+    // EXEC_INTERPRETERS): interpreter-prefixed argv like `node driver.cjs`
+    // contributes interpreter + script, a bare binary just itself.
+    const argv0 = harnessArgv[0] as string;
+    const harnessExecPrefix =
+      harnessArgv.length > 1 && EXEC_INTERPRETERS.has(argv0.split("/").pop() ?? "")
+        ? harnessArgv.slice(0, 2)
+        : [argv0];
     const allowlist: readonly (readonly string[])[] = [
       ["git"],
-      [harnessArgv[0] as string],
+      harnessExecPrefix,
       ...capabilities.execAllowlist,
     ];
     const scoped: SandboxOps = {

@@ -141,6 +141,77 @@ describe("decideRunTransition — queue", () => {
     );
   });
 
+  it("rejects a replay that diverges on route, identity, or continuation fields", () => {
+    const route = {
+      purpose: "coding" as const,
+      connectionId: "conn-1",
+      modelId: "anthropic/claude-sonnet-4-6",
+      harness: "claude-code",
+      policyVersion: 1,
+    };
+    // A different approved route is a different run, not a replay.
+    expectError(
+      pendingRun({ route }),
+      queue({ input: { ...INPUT, route: { ...route, modelId: "anthropic/claude-opus-4-6" } } }),
+      "input_conflict",
+    );
+    // …and dropping the route (or adding one) diverges the same way.
+    expectError(pendingRun({ route }), queue(), "input_conflict");
+    expectError(pendingRun(), queue({ input: { ...INPUT, route } }), "input_conflict");
+    // queuedBy is the MCP intake principal — a different one is a new intent.
+    expectError(
+      pendingRun({ queuedBy: "agent-a" }),
+      queue({ input: { ...INPUT, queuedBy: "agent-b" } }),
+      "input_conflict",
+    );
+    // Account-scoped auth + continuation keys pin the conversation home.
+    expectError(
+      pendingRun({ authAccount: "acct-1", continuationKey: "claude:home:x" }),
+      queue({ input: { ...INPUT, authAccount: "acct-2", continuationKey: "claude:home:x" } }),
+      "input_conflict",
+    );
+    // continuesKey never lands on the record — a replayed resume may only
+    // name the stored continuationKey.
+    expectError(
+      pendingRun({ continuationKey: "claude:home:x" }),
+      queue({ input: { ...INPUT, continuesKey: "claude:home:y" } }),
+      "input_conflict",
+    );
+  });
+
+  it("replays when every frozen field — route included — matches", () => {
+    const route = {
+      purpose: "coding" as const,
+      connectionId: "conn-1",
+      modelId: "anthropic/claude-sonnet-4-6",
+      harness: "claude-code",
+      policyVersion: 1,
+    };
+    const run = pendingRun({
+      queuedBy: "agent-a",
+      authAccount: "acct-1",
+      continuationKey: "claude:home:x",
+      route,
+    });
+    const decision = decideRunTransition(
+      { run },
+      queue({
+        input: {
+          ...INPUT,
+          queuedBy: "agent-a",
+          authAccount: "acct-1",
+          continuationKey: "claude:home:x",
+          continuesKey: "claude:home:x",
+          route: { ...route },
+        },
+      }),
+    );
+    expect("events" in decision && decision.events[0]).toMatchObject({
+      type: "run.queued",
+      replayed: true,
+    });
+  });
+
   it("rejects queue evidence whose hash does not cover the queued input", () => {
     expectError(null, queue({ approval: evidence({ inputHash: "deadbeef" }) }), "approval_mismatch");
   });

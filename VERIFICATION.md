@@ -594,3 +594,68 @@ Routing delivery to a registered address; Telegram/Discord webhook handshakes.
   name connectionId and the ACP lane ids; `queue_run` accepts
   codingModel/connectionId (parity with POST /api/runs).
   Gate: typecheck, lint, lint:imports, 1726 backend tests, build green.
+
+### 2026-10-06 — edge-harness security batch: vouched headers, queue replay, exec allowlist, consent CSRF, agent-name gate, permission pick, ACP lane single-source
+
+- C4 — `/api/usage` forwarded the caller's headers verbatim into the
+  orchestrator DO (`new Request(url, request)` clones them), so a supplied
+  `X-Agent-Principal`/`X-Shiba-Intake` read as worker-vouched for
+  `queuedBy`, the `/api/spine` filter, and the local-runtime voucher.
+  `usage-routes.ts` now strips both headers on the forwarded request —
+  same strip as `runs-routes.ts`, minus the dashboard stamp (this lane
+  forwards a read, never credentials).
+- C3 — queue replay's `sameInput` compared only repo/task/branch/
+  publishPullRequest/runtime/testCommand; a re-issued queue for an
+  existing runId with a different route/queuedBy/authAccount/
+  continuationKey silently kept the old record. `decide.ts` now compares
+  every field the queue froze onto the record — `sandboxId`, `queuedBy`,
+  the route field-wise (purpose/connectionId/modelId/harness/
+  policyVersion), `continuationKey`, `authAccount` — and a defined
+  `continuesKey` must name the stored `continuationKey`. Divergence is
+  `input_conflict`, not `replayed`.
+- C5 — the scoped-exec allowlist contributed `["node"]` for every ACP
+  lane (`buildArgv` is `["node", <driver>.cjs]`), which matched ANY node
+  invocation and defeated the allowlist. `runtime.ts` now contributes
+  `argv[0..1]` (interpreter + script path) when argv0 is a known
+  interpreter (EXEC_INTERPRETERS: node/nodejs/deno/bun/python/python3);
+  single-binary harnesses keep argv0 alone — that IS the harness binary.
+  The ACP harness's own driver exec still runs; `node -e` is refused and
+  the refusal is receipted.
+- C6 — the OAuth consent POST had no binding to the rendered form: any
+  third-party page could submit Approve on a signed-in owner's behalf
+  (ambient Access/better-auth identity rides along). GET now mints a
+  single-use `ConsentRecord` (clientId/redirectUri/codeChallenge/scopes/
+  owner/expiresAt) into KV keyed by the token's SHA-256, rendered as a
+  hidden `consent` field; POST consumes-then-verifies it before the
+  confirm check — missing/mismatched/expired → 400 invalid_request.
+- C7 — `isDashboardAgentName` allowed by fallthrough: every unparsed
+  prefix (`discord:`, `telegram:`, `web:<convId>` chat threads, future
+  lanes) counted as a dashboard surface for the local-runtime gate. It
+  now positive-lists the two dashboard shapes — `web:<userId>:<uuid>`
+  (strict parseSessionAgentName) and bare `<userId>` (no colon) — and
+  refuses every prefixed lane name and `default`.
+- C8 — the ACP driver's permission auto-allow picked the first
+  `/allow/i` option, so an adapter listing `allow_always` first granted
+  the broad scope. The picker (ACP_ALLOW_PICK_SOURCE, interpolated into
+  the CJS driver) ranks options: single-use (`once`/`single`) → any
+  non-always/session-wide allow → first allow → null. Response shape
+  unchanged.
+- Y2 — the five ACP lane specs were hand-mirrored across the registry,
+  HARNESS_DEFAULT_MODELS, and HARNESS_MODEL_ENV. `harness/index.ts` now
+  defines ACP_LANES once ({spec, mirrorOf} per lane); deriveAcpRows
+  builds the registry entries (AcpHarness named by the table key), the
+  default-model rows, and the model-env rows from it. catalog.ts +
+  Dockerfile rows stay per-lane by design.
+- Tests — acp.test.ts +3 (lane-table derivation pins, pick-order matrix,
+  driver embeds picker verbatim); decide.test.ts +2 (route/identity/
+  continuation divergence conflicts, all-fields-match replay);
+  exec-allowlist.test.ts +2 (`node -e` refused on an ACP lane while the
+  driver exec runs, opencode argv0 subcommands still allowed);
+  oauth-mcp.test.ts +2 (tokenless POST 400, single-use/binding matrix —
+  plus the authorizePost helper and admin-bearer test updated for the
+  two-step consent); usage.test.ts +1 (vouched headers don't reach the
+  DO); web-sessions.test.ts +1 (positive-list gate matrix).
+- Gate: typecheck, lint, lint:imports, 1739 backend tests, build,
+  env:load/env:scan all green.
+- Unverified (deploy-gated): real ACP lanes inside a sandbox, the OAuth
+  consent round-trip in a browser against Access, `/api/usage` on prod.
