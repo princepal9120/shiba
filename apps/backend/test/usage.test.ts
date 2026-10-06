@@ -237,12 +237,12 @@ describe("GET /api/usage", () => {
     // X-Agent-Principal (queuedBy + the /api/spine filter) and X-Shiba-Intake
     // (the local-runtime voucher) read as worker-vouched inside the DO — the
     // forwarded request must carry neither (same strip as handleRuns).
-    let forwarded: Headers | null = null;
+    const forwarded: Headers[] = [];
     const env = {
       CodingOrchestrator: {
         get: () => ({
           fetch: async (request: Request) => {
-            forwarded = request.headers;
+            forwarded.push(request.headers);
             return Response.json({ runs: [] });
           },
         }),
@@ -255,8 +255,8 @@ describe("GET /api/usage", () => {
       env,
     );
     expect(response?.status).toBe(200);
-    expect(forwarded?.get("X-Agent-Principal")).toBeNull();
-    expect(forwarded?.get("X-Shiba-Intake")).toBeNull();
+    expect(forwarded[0]?.get("X-Agent-Principal")).toBeNull();
+    expect(forwarded[0]?.get("X-Shiba-Intake")).toBeNull();
   });
 
   it("rejects non-GET and passes a dead run store through", async () => {
