@@ -5,6 +5,7 @@
 import type { RuntimeSelection } from "./local-runtime.js";
 import type { ApprovedRoute } from "./model.js";
 import type { AgentRole } from "./roles.js";
+import { MAX_PENDING_APPROVALS } from "./steering.js";
 
 export const APPROVAL_TTL_MS = 30 * 60 * 1000;
 
@@ -164,6 +165,9 @@ export function createPendingApproval(
   if (approvals.some((a) => a.approvalId === input.approvalId)) {
     throw new Error(`Approval ${input.approvalId} is already pending or resolved.`);
   }
+  if (approvals.filter((a) => a.status === "pending").length >= MAX_PENDING_APPROVALS) {
+    throw new Error("Approval queue is full — resolve pending approvals first.");
+  }
   return [
     ...approvals,
     {
@@ -261,6 +265,22 @@ export function decidedApprovals(approvals: PendingApproval[]): PendingApproval[
     .filter((approval) => approval.status !== "pending")
     .sort((a, b) => (b.decidedAt ?? b.createdAt) - (a.decidedAt ?? a.createdAt))
     .slice(0, DECIDED_APPROVALS_LIMIT);
+}
+
+/**
+ * Bounded retention for the approvals store: pending records already
+ * TTL-prune, but decided ones accumulated forever in DO state. The
+ * listing only ever serves the newest DECIDED_APPROVALS_LIMIT, so the
+ * store keeps exactly that tail — decidedApprovals()'s output is
+ * unchanged — and evicts the rest.
+ */
+export function pruneApprovals(approvals: PendingApproval[], now: number): PendingApproval[] {
+  const alive = pruneExpiredApprovals(approvals, now);
+  if (alive.filter((a) => a.status !== "pending").length <= DECIDED_APPROVALS_LIMIT) {
+    return alive;
+  }
+  const keep = new Set(decidedApprovals(alive).map((a) => a.approvalId));
+  return alive.filter((a) => a.status === "pending" || keep.has(a.approvalId));
 }
 
 /** Approval expiry shares the pointer contract; see resolvePendingApproval. */

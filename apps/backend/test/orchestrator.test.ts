@@ -179,13 +179,21 @@ describe("orchestrator run routes", () => {
     );
     execution.catch(() => {});
     await vi.waitFor(() => expect(mocks.execute).toHaveBeenCalledOnce());
-    // Age the run past its deadline, then touch any route (reclaim on access).
+    // Age the run past its deadline, then touch a route — reclaim on
+    // access is floored per DO lifetime, and starting this run already
+    // swept once, so let the interval lapse before the read.
     const stale = { ...(instance.state.runs as DelegatedRun[])[0]!, updatedAt: Date.now() - RUN_DEADLINE_MS - 1 };
     instance.setState({ ...instance.state, runs: [stale] });
-    await instance.onRequest(new Request("https://internal/api/runs"));
-    expect(signals[0]?.aborted).toBe(true);
-    expect((instance.state.runs as DelegatedRun[])[0]?.status).toBe("unknown");
-    expect(mocks.destroy).toHaveBeenCalledOnce();
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(Date.now() + 60_000);
+      await instance.onRequest(new Request("https://internal/api/runs"));
+      expect(signals[0]?.aborted).toBe(true);
+      expect((instance.state.runs as DelegatedRun[])[0]?.status).toBe("unknown");
+      expect(mocks.destroy).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("retries a leaked container's destroy during reclaim", async () => {

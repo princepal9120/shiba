@@ -171,6 +171,52 @@ export function applySpineEvent<S extends SpineProjection>(
 }
 
 /**
+ * Max delivery attempts per outbox row — the drainer (the backend's
+ * drainOutbox) and the fold's retention rule share it: a `failed` row
+ * under the cap is still owed and must never prune; an exhausted one
+ * survives only inside a bounded triage tail.
+ */
+export const MAX_OUTBOX_ATTEMPTS = 3;
+
+/**
+ * Retention for settled outbox rows — the spine log is capped at
+ * MAX_SPINE_EVENTS but the outbox was not, so a busy orchestrator's
+ * state could grow without bound. Settled rows keep a short tail for
+ * the operator; pending and retryable-failed rows never prune (the
+ * drainer still owes them).
+ */
+export const OUTBOX_DISPATCHED_KEEP = 50;
+export const OUTBOX_FAILED_KEEP = 25;
+
+/**
+ * Bound the outbox rows: keep every row the drainer still owes plus
+ * the newest OUTBOX_DISPATCHED_KEEP dispatched and OUTBOX_FAILED_KEEP
+ * exhausted-failed tails. drainOutbox semantics are untouched — due
+ * entries (pending, failed-under-cap) are never dropped.
+ */
+export function pruneOutboxEntries(outbox: OutboxEntry[] | undefined): OutboxEntry[] | undefined {
+  if (outbox === undefined) return outbox;
+  const dispatched = outbox.filter((entry) => entry.status === "dispatched");
+  const exhausted = outbox.filter(
+    (entry) => entry.status === "failed" && entry.attempts >= MAX_OUTBOX_ATTEMPTS,
+  );
+  if (dispatched.length <= OUTBOX_DISPATCHED_KEEP && exhausted.length <= OUTBOX_FAILED_KEEP) {
+    return outbox;
+  }
+  const keepSettled = new Set(
+    [...dispatched.slice(-OUTBOX_DISPATCHED_KEEP), ...exhausted.slice(-OUTBOX_FAILED_KEEP)].map(
+      (entry) => entry.id,
+    ),
+  );
+  return outbox.filter(
+    (entry) =>
+      entry.status === "pending" ||
+      (entry.status === "failed" && entry.attempts < MAX_OUTBOX_ATTEMPTS) ||
+      keepSettled.has(entry.id),
+  );
+}
+
+/**
  * Fold a side_effect.* event into the outbox rows — the piece of the
  * projection the DO also folds into live writes so the outbox stays
  * durable between the request and the drainer's next pass.
@@ -183,7 +229,7 @@ export function foldOutboxEvent(
     const { effectId, effectKind, target, summary } = event.payload;
     const rows = outbox ?? [];
     if (rows.some((entry) => entry.id === effectId)) return rows;
-    return [
+    return pruneOutboxEntries([
       ...rows,
       {
         id: effectId,
@@ -196,7 +242,7 @@ export function foldOutboxEvent(
         requestedBy: event.commandId,
         runId: event.runId,
       },
-    ];
+    ]);
   }
   if (
     (event.kind === "side_effect.dispatched" || event.kind === "side_effect.failed") &&
@@ -204,19 +250,21 @@ export function foldOutboxEvent(
     "effectId" in event.payload
   ) {
     const { effectId, error } = event.payload;
-    return (outbox ?? []).map((entry) =>
-      entry.id === effectId
-        ? {
-            ...entry,
-            status:
-              event.kind === "side_effect.dispatched"
-                ? ("dispatched" as const)
-                : ("failed" as const),
-            attempts: entry.attempts + 1,
-            dispatchedAt: event.kind === "side_effect.dispatched" ? event.at : entry.dispatchedAt,
-            lastError: error ?? entry.lastError,
-          }
-        : entry,
+    return pruneOutboxEntries(
+      (outbox ?? []).map((entry) =>
+        entry.id === effectId
+          ? {
+              ...entry,
+              status:
+                event.kind === "side_effect.dispatched"
+                  ? ("dispatched" as const)
+                  : ("failed" as const),
+              attempts: entry.attempts + 1,
+              dispatchedAt: event.kind === "side_effect.dispatched" ? event.at : entry.dispatchedAt,
+              lastError: error ?? entry.lastError,
+            }
+          : entry,
+      ),
     );
   }
   return outbox;
