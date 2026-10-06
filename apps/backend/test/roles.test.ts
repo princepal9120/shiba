@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Env } from "../src/env.js";
 import { describeRoleModels, resolveRoleModel } from "../src/agents/roles.js";
 import { CodingOrchestrator, type OrchestratorState } from "../src/agents/orchestrator.js";
+import { productionEnvStubs, setStateLikeProduction } from "./orchestrator-host.js";
 import { parseAgentToolInput, formatAgentToolInput, type CodingTaskInput } from "../src/opencode-input.js";
 import { approveDirect } from "./seeding.js";
 import { setSandboxHandleResolver } from "../src/sandbox/lifecycle.js";
@@ -24,13 +25,13 @@ vi.mock("../src/agents/opencode-agent.js", () => ({ OpenCodeAgent: class {} }));
 setSandboxHandleResolver(() => ({ destroy: mocks.destroy }));
 
 function env(overrides: Partial<Env> = {}): Env {
-  return { Sandbox: {}, GITHUB_TOKEN: "test-token", ...overrides } as Env;
+  return { ...productionEnvStubs(), Sandbox: {}, GITHUB_TOKEN: "test-token", ...overrides } as Env;
 }
 
 function agent(overrides: Partial<Env> = {}) {
   const instance = Object.assign(Object.create(CodingOrchestrator.prototype) as CodingOrchestrator, {
     env: env(overrides), state: { runs: [] } as OrchestratorState,
-    setState(state: OrchestratorState) { Object.assign(this, { state }); },
+    setState(state: OrchestratorState) { setStateLikeProduction(this, state); },
   });
   return instance;
 }

@@ -17,6 +17,7 @@ vi.mock("agents/mcp", () => ({
 }));
 vi.mock("@cloudflare/think", () => ({
   Think: class {
+    schedule() { return Promise.resolve({}); }
     onStart() {}
     getTools() {
       return {};
@@ -29,9 +30,17 @@ vi.mock("@cloudflare/think", () => ({
 vi.mock("agents/agent-tools", () => ({ agentTool: () => ({ execute: vi.fn() }) }));
 vi.mock("../src/agents/opencode-agent.js", () => ({ OpenCodeAgent: class {} }));
 
+// Resolver seam, not vi.mock: detached continuations can bypass vi.mock's
+// dynamic-import interception and load the real SDK.
+const sandboxDestroy = vi.hoisted(() => vi.fn(async () => {}));
+
 import { CodingOrchestrator, type OrchestratorState } from "../src/agents/orchestrator.js";
+import { productionEnvStubs, setStateLikeProduction } from "./orchestrator-host.js";
 import type { TokenRecord } from "../src/agent-tokens.js";
 import type { Env } from "../src/env.js";
+import { setSandboxHandleResolver } from "../src/sandbox/lifecycle.js";
+
+setSandboxHandleResolver(() => ({ destroy: sandboxDestroy }));
 import { createToolRegistry } from "../src/mcp-gateway.js";
 import { registerEmailTools } from "../src/mcp-email-tools.js";
 import { registerMemoryTools } from "../src/mcp-memory-tools.js";
@@ -59,6 +68,7 @@ const agent: TokenRecord = { principal: "claude-code", scopes: ["sandbox:exec", 
 function setup() {
   const orchestrator = Object.assign(Object.create(CodingOrchestrator.prototype) as CodingOrchestrator, {
     env: {
+      ...productionEnvStubs(),
       Sandbox: {},
       GITHUB_TOKEN: "test-token",
       // listApprovals kicks the stale-draft sweep; an empty directory keeps it quiet.
@@ -66,7 +76,7 @@ function setup() {
     },
     state: { runs: [] } as OrchestratorState,
     setState(state: OrchestratorState) {
-      Object.assign(this, { state });
+      setStateLikeProduction(this, state);
     },
     // resolveApproval dispatches under keepAliveWhile; the fake has no
     // DO context, so run the dispatch inline like the base method does.

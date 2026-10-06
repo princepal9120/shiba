@@ -595,6 +595,8 @@ Routing delivery to a registered address; Telegram/Discord webhook handshakes.
   codingModel/connectionId (parity with POST /api/runs).
   Gate: typecheck, lint, lint:imports, 1726 backend tests, build green.
 
+
+
 ### 2026-10-06 — edge-harness security batch: vouched headers, queue replay, exec allowlist, consent CSRF, agent-name gate, permission pick, ACP lane single-source
 
 - C4 — `/api/usage` forwarded the caller's headers verbatim into the
@@ -800,3 +802,48 @@ contexts' .pnpm dirs, and re-verified fixed (13/13 dashboard tests).
 
 Unverified (credential-gated): `docker build` of the pinned image; agy zip
 checksums re-verified at fetch time inside the image build only.
+
+
+
+## 2026-10-06 — test coverage + DX-gate alignment lane
+
+Audit findings T1-T7 / D9-D12-D13 against `devin/1791266355-tests-dx`.
+
+- New tests: `test/model-config.test.ts` (20 — proxy route shape,
+  purposes map, provider-namespace/compatibleHarnesses validation,
+  credentialRef refusal, PATCH/DELETE/markChecked, REQUIRE_ACCESS
+  gating, DO fail-open policy); `test/acp-driver.test.ts` (13 —
+  vm-eval of the real `ACP_DRIVER_SOURCE`: 60s/20min timeouts,
+  rejectPending on exit, err.code propagation, exitWhenDrained,
+  -32601 tolerated only on `session/set_model`); `test/
+  interactive-surfaces.test.ts` (7 — `useApiJson` inFlight,
+  ActivityView 5s poll only after settle via fake timers, model
+  suggestion filter on ready connections; minimal React dispatcher
+  seam, no DOM libs).
+- T1: `test/orchestrator-host.ts` gains `setStateLikeProduction()`
+  mirroring `CodingOrchestrator.setState` (apply -> commit ->
+  spineBuf drain); the test-side setState forks in spine-route,
+  orchestrator-fencing, run-signals, web-sessions, command-receipts
+  now share it instead of re-implementing the flush.
+- T5: `pnpm test:built` (runs `marketing-pages.test.ts` alone)
+  added and invoked post-`pnpm build` in CI; `describe.skipIf`
+  kept as the local `pnpm test` fallback.
+- T6: `theme-marketing-i18n.test.ts` rewritten — keeps
+  `data-theme="dark"` class + prefers-reduced-motion + i18n-parity
+  coverage; drops copy-mirror assertions down to loose
+  `/approv/i`+`/cloudflare/i` presence.
+- T7: green-suite stderr 254 -> 59 lines and strictly a subset of
+  main's classes: `productionEnvStubs()` (ModelConfig/Mailbox/
+  MEMORY_ENABLED=0) spread first in every env literal, `schedule()`
+  stubs on Think class mocks, `setSandboxHandleResolver` seams for
+  the destroy path (detached continuations bypass vi.mock).
+- DX: root `deploy` -> `deploy:alchemy` (references updated in
+  README, SKILL.md, mint-token.mjs, deployment docs); `precommit`/
+  `check` now use CI's biome flags; `check:ci` = biome ci + knip
+  --max-issues 6, added to CLAUDE.md gate; apps/web dev script
+  drops `ASTRO_DEV_BACKGROUND=1` (turbo `persistent: true` owns
+  the lifecycle). Frontend seams: `readyConnectionOptions`/
+  `codingModelOptions` exported from live-status.ts for tests.
+- Gate: typecheck, lint, lint:imports, 1759 tests (7 skipped),
+  build, test:built, check:ci (biome ci 883 warnings = +13 vs main,
+  all warn-level; knip 6/6 issues = baseline) — all green.

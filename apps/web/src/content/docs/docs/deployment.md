@@ -50,7 +50,7 @@ pnpm build
 npx alchemy deploy
 ```
 
-`pnpm deploy` combines those two commands. `alchemy.run.ts` reads the root `.env`, defines the Worker, Sandbox container, Durable Objects, KV/R2/D1/Vectorize, email, and optional Access resources, and binds only the explicitly supported secrets. The default Alchemy state is local filesystem state. The optional Cloudflare State Store requires a separate one-time provider bootstrap; see the comments in `alchemy.run.ts` before changing `ALCHEMY_STATE_BACKEND`.
+`pnpm deploy:alchemy` combines those two commands. `alchemy.run.ts` reads the root `.env`, defines the Worker, Sandbox container, Durable Objects, KV/R2/D1/Vectorize, email, and optional Access resources, and binds only the explicitly supported secrets. The default Alchemy state is local filesystem state. The optional Cloudflare State Store requires a separate one-time provider bootstrap; see the comments in `alchemy.run.ts` before changing `ALCHEMY_STATE_BACKEND`.
 
 The live stage uses the stable production resource names. For an isolated test deployment, set `ALCHEMY_STAGE` (for example, `ALCHEMY_STAGE=test-preview npx alchemy deploy`); the Worker/container/storage names are suffixed. Select the stage through `ALCHEMY_STAGE` only—do not pass a conflicting `--stage` flag. Test stages do not create the managed Access apps, so use only disposable data and do not expose a test Worker publicly.
 

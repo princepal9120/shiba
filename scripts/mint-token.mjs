@@ -52,7 +52,7 @@ function parseArgs(argv) {
     } else if (arg === "--help" || arg === "-h") {
       console.log(
         "Usage: node scripts/mint-token.mjs --agent <name> --scopes <a,b,c> [--ttl-days N] [--host <worker-host>] [--namespace-id <id>] [--write]\n" +
-          "  --namespace-id: the agentTokensNamespace printed by `pnpm run deploy` (Alchemy owns the KV, not wrangler.jsonc)\n" +
+          "  --namespace-id: the agentTokensNamespace printed by `pnpm run deploy:alchemy` (Alchemy owns the KV, not wrangler.jsonc)\n" +
           `Valid scopes: ${SCOPES.join(", ")}`,
       );
       process.exit(0);

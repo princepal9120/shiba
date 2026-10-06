@@ -13,7 +13,7 @@ import { AgentsView } from "./components/AgentsView";
 import { ProvidersView } from "./components/ProvidersView";
 import { SkillsView } from "./components/SkillsView";
 import { useSavedRepos, useSavedSkills, saveRepo } from "./saved";
-import { useAgentsDirectory, useModelConfig } from "./live-status";
+import { codingModelOptions, readyConnectionOptions, useAgentsDirectory, useModelConfig } from "./live-status";
 import { DashboardView } from "./components/DashboardView";
 import { OnboardingModal, detectSetupSteps } from "./components/OnboardingModal";
 import { FirstRunWizard, ONBOARDING_STORAGE_KEY } from "./components/FirstRunWizard";
@@ -1003,9 +1003,7 @@ export function App(): React.JSX.Element {
   const modelConnections = useMemo(
     () =>
       modelConfig.state.kind === "data"
-        ? modelConfig.state.data.connections
-            .filter((c) => c.status === "ready")
-            .map((c) => ({ id: c.id, label: `${c.displayName} · ${c.service}`, service: c.service, status: c.status }))
+        ? readyConnectionOptions(modelConfig.state.data.connections)
         : [],
     [modelConfig.state],
   );
@@ -1015,17 +1013,7 @@ export function App(): React.JSX.Element {
     const models = agentsDirectory.state.kind === "data"
       ? agentsDirectory.state.data.agents.map((agent) => agent.defaultModel).filter((m) => typeof m === "string" && m.includes("/"))
       : [];
-    const selected = modelConnections.find((c) => c.id === connectionId);
-    const allowedProviders = new Set(
-      (selected ? [selected] : modelConnections).map((c) => c.service),
-    );
-    return [
-      ...new Set(
-        allowedProviders.size === 0
-          ? models
-          : models.filter((m) => allowedProviders.has(m.slice(0, m.indexOf("/")))),
-      ),
-    ];
+    return codingModelOptions(models, modelConnections, connectionId);
   }, [agentsDirectory.state, modelConnections, connectionId]);
 
   // Connections/agents can change in Settings — refetch each time the user

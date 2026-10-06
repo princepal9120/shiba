@@ -190,6 +190,52 @@ export function useModelConfig(): { state: LoadState<ModelConfigWire>; reload: (
   return useApiJson<ModelConfigWire>("/api/model-config");
 }
 
+/** One ready connection as the coding-model picker lists it (app.tsx). */
+export interface ConnectionOption {
+  id: string;
+  label: string;
+  service: string;
+  status: ModelConnectionWire["status"];
+}
+
+/**
+ * Only `ready` connections feed the coding pickers — an unverified or
+ * disabled credential path must not offer models the run can't pay for.
+ */
+export function readyConnectionOptions(connections: ModelConnectionWire[]): ConnectionOption[] {
+  return connections
+    .filter((c) => c.status === "ready")
+    .map((c) => ({
+      id: c.id,
+      label: `${c.displayName} · ${c.service}`,
+      service: c.service,
+      status: c.status,
+    }));
+}
+
+/**
+ * Offer only models the backend would accept: the provider namespace must
+ * have a ready connection — and match the selected one when one is picked.
+ * No ready connection means no filter (the catalog is still informative).
+ */
+export function codingModelOptions(
+  models: string[],
+  connections: ConnectionOption[],
+  connectionId: string,
+): string[] {
+  const selected = connections.find((c) => c.id === connectionId);
+  const allowedProviders = new Set(
+    (selected ? [selected] : connections).map((c) => c.service),
+  );
+  return [
+    ...new Set(
+      allowedProviders.size === 0
+        ? models
+        : models.filter((m) => allowedProviders.has(m.slice(0, m.indexOf("/")))),
+    ),
+  ];
+}
+
 /** One spine event — the orchestrator's durable decision record (P9). */
 export type SpineEventWire = Omit<SpineEvent, "kind" | "payload"> & {
   /** Loose on purpose: the renderer must tolerate kinds newer than this build. */

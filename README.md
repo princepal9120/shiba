@@ -90,7 +90,7 @@ pnpm install
 pnpm run bootstrap   # asks for Access emails + secrets → .env, mints the Alchemy token once, builds, deploys
 ~~~
 
-Re-deploy after changes with `pnpm run deploy` (build + `alchemy deploy`). Preview with `pnpm deploy:preview` (`alchemy plan`); tear down with `pnpm deploy:destroy`. Use `pnpm run …` — bare `pnpm deploy`/`pnpm setup` are pnpm built-ins.
+Re-deploy after changes with `pnpm run deploy:alchemy` (build + `alchemy deploy`). Preview with `pnpm deploy:preview` (`alchemy plan`); tear down with `pnpm deploy:destroy`. The script is named `deploy:alchemy` — bare `pnpm deploy`/`pnpm setup` are pnpm built-ins.
 
 What a live deploy does, secure by default:
 
@@ -102,7 +102,7 @@ What a live deploy does, secure by default:
 
 Still manual: add a provider key (BYOK) to the `default` AI Gateway, create the Slack app from `slack-app-manifest.yaml`, and mint an MCP token for Claude Code (see [Use from Claude Code](#use-from-claude-code)). Inbound email needs a domain on Cloudflare with Email Routing sending to the Worker; workers.dev cannot receive mail.
 
-Stage selection goes through `$ALCHEMY_STAGE` only (e.g. `ALCHEMY_STAGE=test-x pnpm run deploy` suffixes every resource name); do not pass `--stage`. State is on the local filesystem by default; `ALCHEMY_STATE_BACKEND=cloudflare` opts into the remote State Store after `npx alchemy provider cloudflare bootstrap`.
+Stage selection goes through `$ALCHEMY_STAGE` only (e.g. `ALCHEMY_STAGE=test-x pnpm run deploy:alchemy` suffixes every resource name); do not pass `--stage`. State is on the local filesystem by default; `ALCHEMY_STATE_BACKEND=cloudflare` opts into the remote State Store after `npx alchemy provider cloudflare bootstrap`.
 
 Rollback to wrangler (same bindings): `npx wrangler deploy --config apps/backend/wrangler.jsonc` — but it does not create the Access apps, so set them up by hand.
 
@@ -118,7 +118,7 @@ Rollback to wrangler (same bindings): `npx wrangler deploy --config apps/backend
 
 ### Use from Claude Code
 
-Mint a token into the deployed KV (id printed as `agentTokensNamespace` by `pnpm run deploy`), then paste the printed line:
+Mint a token into the deployed KV (id printed as `agentTokensNamespace` by `pnpm run deploy:alchemy`), then paste the printed line:
 
 ~~~sh
 node scripts/mint-token.mjs --agent claude-code --scopes sandbox:exec,runs:read \

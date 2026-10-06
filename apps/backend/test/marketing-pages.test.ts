@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
+// These read apps/web's *built* output — they only have meaning after
+// `pnpm build`. CI runs them via `pnpm test:built` as a post-build step;
+// the skip keeps `pnpm test` (which runs before dist exists) green
+// locally instead of failing on a stale or absent build.
 const root = join(import.meta.dirname, "..", "..", "web", "dist");
 const built = existsSync(join(root, "waitlist", "index.html"));
 

@@ -54,5 +54,5 @@ jobs:
           CODEX_SUBSCRIPTION_AUTH_JSON: ${{ secrets.CODEX_SUBSCRIPTION_AUTH_JSON }}
           LOCAL_ADAPTER_TOKEN: ${{ secrets.LOCAL_ADAPTER_TOKEN }}
         # alchemy deploy reads .env via process.loadEnvFile — no file needed;
-        # env vars above win. `pnpm run deploy` = build + alchemy deploy.
-        run: pnpm run deploy
+        # env vars above win. `pnpm run deploy:alchemy` = build + alchemy deploy.
+        run: pnpm run deploy:alchemy

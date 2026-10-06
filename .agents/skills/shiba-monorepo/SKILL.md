@@ -60,7 +60,7 @@ worse than a slow one. `pnpm knip` reports dead files, deps, and exports.
 
 ### 4. Two deploy files, one stack
 
-`alchemy.run.ts` is the primary path (`pnpm deploy`); `wrangler.jsonc` is the
+`alchemy.run.ts` is the primary path (`pnpm deploy:alchemy`); `wrangler.jsonc` is the
 rollback path. **They must declare the same bindings.** After changing either,
 run the check — it is already enforced in CI (`.github/workflows/ci.yml`), so
 drift fails the build:
@@ -100,7 +100,7 @@ pnpm -C apps/backend test          # 74 files
 pnpm -C apps/backend dev           # wrangler dev, port 8788
 pnpm -C apps/frontend dev          # dashboard only
 pnpm docs:dev                      # docs only
-pnpm deploy                        # alchemy (primary)
+pnpm deploy:alchemy                # alchemy (primary)
 pnpm deploy:preview                # plan, do not apply
 npx wrangler deploy --dry-run --config apps/backend/wrangler.jsonc   # needs Docker
 ```
