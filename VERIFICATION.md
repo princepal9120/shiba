@@ -981,3 +981,33 @@ Audit findings T1-T7 / D9-D12-D13 against `devin/1791266355-tests-dx`.
 - Unverified (credential-gated): a live editor driving a real run
   end-to-end (needs SHIBA_URL/SHIBA_TOKEN against a deployment and an
   ACP client); the sandbox-side run execution itself is unchanged.
+||||||| c1464f2
+
+# 2026-10-03 — ACP registry resolver + generic `acp` harness lane
+
+- `src/harness/acp-registry.ts` (new): schema-validated parser for the
+  operator-pinned registry snapshot (`ACP_REGISTRY_JSON`, the verbatim
+  cdn.agentclientprotocol.com registry.json — resolution is offline,
+  never a runtime fetch), `resolveAcpAgent` covering `binary` (per-platform
+  pick + sha256) / `npx` / `uvx` distributions, `acp/<id>[@version]` model
+  ids, and the `ACP_REGISTRY_ALLOWLIST` admission gate (comma ids, `*`
+  = all, absent = lane dark).
+- `AcpRegistryHarness` — a generic `acp` harness that resolves a
+  registry agent into a spawn spec and delegates to the shared `AcpHarness`
+  driver. `resolveHarness` binds deployment env at resolve time; the
+  HARNESSES sentinel stays env-free for declaration surfaces.
+- Plumbing: `AgentHarnessName` + `PROVIDER_HOSTS.acp` (registry.npmjs.org
+  install anchor; binary/uvx origins join via extraEgress at resolve),
+  `HARNESS_GATES.acp`, `HARNESS_IDS` + `CATALOG_META` + CONNECTION_SERVICES
+  `acp` (modelId encodes `acp/<registry-id>`), `ACP_MODEL` default-model
+  var, env schema/example/alchemy/setup.mjs entries.
+- `apps/backend/scripts/acp-install.sh` + Dockerfile COPY: generic
+  sha256-verified installer landing archives under /opt/acp-agents/<id>/
+  (same verify pattern as the agy block; no image rebuild run here).
+- Local verification: `vitest test/acp-registry.test.ts` (27) — registry
+  parse/shape errors, allowlist null/set/`*`, per-platform binary pick,
+  sha256 + env passthrough, npx/uvx spawns, allowlist deny at resolve,
+  gate-on admission via resolveHarness, driver argv + dummy key.
+- Unverified (credential-gated): a real sandbox run executing a registry
+  agent (image rebuild + install-step wiring is the follow-up seam, same
+  status as the computer-use tools).

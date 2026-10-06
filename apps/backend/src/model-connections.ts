@@ -32,6 +32,11 @@ export const CONNECTION_SERVICES = [
   "devin",
   "opencode-go",
   "cursor",
+  // The ACP registry namespace: a connection in this service models
+  // `acp/<registry-agent-id>` — the generic `acp` harness resolves the
+  // id against the operator-pinned snapshot at admit time. It carries
+  // no credential of its own; the registry allowlist is the boundary.
+  "acp",
 ] as const;
 export type ConnectionService = (typeof CONNECTION_SERVICES)[number];
 
@@ -51,6 +56,11 @@ export const SERVICE_AUTH_MODE: Record<ConnectionService, ConnectionAuthMode> = 
   // Cursor Cloud Agents is a remote execution service, not an inference
   // endpoint: no harness drives it, and it is not in PROVIDER_HOSTS.
   cursor: "worker-service-secret",
+  // acp connections provision no credential through either lane — the
+  // registry agent's own env block declares what it reads, and any real
+  // key is a per-agent concern the allowlist names. The mode label is a
+  // formality for the union; no secret env var maps to it.
+  acp: "worker-service-secret",
 };
 
 /** Which env secret's *presence* a worker-service-secret connection reports. */
@@ -181,6 +191,10 @@ export function providerOfService(service: ConnectionService): string {
  */
 export function compatibleHarnesses(service: ConnectionService): string[] {
   if (service === "cursor") return [];
+  // `acp` is a registry-driven namespace: the one generic harness covers
+  // every allowlisted agent (it declares providers ["acp"]). The env gate
+  // (ACP_REGISTRY_ALLOWLIST) applies at resolveHarness time, not here.
+  if (service === "acp") return ["acp"];
   const provider = providerOfService(service);
   if (!(provider in PROVIDER_HOSTS)) return [];
   // Compatibility is the harness's own declaration: supportedProviders is

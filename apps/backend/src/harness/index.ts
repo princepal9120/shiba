@@ -1,5 +1,6 @@
 /** Harness registry (PLAN.md T22). Selection is by name, default OpenCode. */
 import { AcpHarness, type AcpHarnessName, type AcpLane, type NonAcpHarnessName } from "./acp.js";
+import { AcpRegistryHarness, acpRegistryEnabled } from "./acp-registry.js";
 import { antigravityHarness } from "./antigravity.js";
 import { antigravitySubscriptionHarness } from "./antigravity-subscription.js";
 import { claudeCodeHarness } from "./claude-code.js";
@@ -110,6 +111,11 @@ const ACP_HARNESSES: Record<AcpHarnessName, AgentHarness> = deriveAcpRows(
 );
 
 const REGISTRY = {
+  // The generic registry lane — an env-free sentinel. `resolveHarness`
+  // returns an env-bound instance for "acp"; this entry exists so the
+  // name/declaration surfaces (HARNESS_NAMES, catalog, capability checks)
+  // see it consistently.
+  acp: new AcpRegistryHarness(undefined),
   opencode: opencodeHarness,
   "claude-code": claudeCodeHarness,
   "claude-subscription": claudeSubscriptionHarness,
@@ -134,6 +140,8 @@ type HarnessGateEnv = {
   SHIBA_ANTIGRAVITY_SUBSCRIPTION?: string;
   SHIBA_CURSOR_SUBSCRIPTION?: string;
   SHIBA_DEVIN_SUBSCRIPTION?: string;
+  ACP_REGISTRY_ALLOWLIST?: string;
+  ACP_REGISTRY_JSON?: string;
 } | undefined;
 
 /**
@@ -151,6 +159,9 @@ const HARNESS_GATES: Partial<Record<AgentHarnessName, (env: HarnessGateEnv) => b
   // DEVIN_SUBSCRIPTION_TOKEN), opt-in like the other subscription harnesses.
   "cursor-subscription": (env) => env?.SHIBA_CURSOR_SUBSCRIPTION === "1",
   "devin-subscription": (env) => env?.SHIBA_DEVIN_SUBSCRIPTION === "1",
+  // Registry agents are arbitrary binaries — the lane stays dark until an
+  // operator pins a snapshot (ACP_REGISTRY_JSON) AND names allowed ids.
+  acp: (env) => acpRegistryEnabled(env),
 };
 
 function harnessEnabled(harness: AgentHarness, env: HarnessGateEnv): boolean {
@@ -159,6 +170,7 @@ function harnessEnabled(harness: AgentHarness, env: HarnessGateEnv): boolean {
 }
 
 function subscriptionFlagName(name: AgentHarnessName): string {
+  if (name === "acp") return "ACP_REGISTRY_ALLOWLIST";
   const provider = name.replace(/-subscription$/, "").replace(/-/g, "_").toUpperCase();
   return `SHIBA_${provider}_SUBSCRIPTION`;
 }
@@ -170,7 +182,10 @@ export function harnessIsGated(harness: AgentHarness): boolean {
 
 export function resolveHarness(name: string | undefined, env?: HarnessGateEnv): AgentHarness {
   if (name === undefined || name.trim() === "") return opencodeHarness;
-  const harness = HARNESSES[name.trim().toLowerCase()];
+  const key = name.trim().toLowerCase();
+  // "acp" binds the deployment env now so the resolved registry agent's
+  // spawn is pinned when the caller later supplies a codingModel.
+  const harness = key === "acp" ? new AcpRegistryHarness(env) : HARNESSES[key];
   if (!harness || !harnessEnabled(harness, env)) {
     const selectable = Object.values(HARNESSES)
       .filter((entry) => harnessEnabled(entry, env))
@@ -178,7 +193,9 @@ export function resolveHarness(name: string | undefined, env?: HarnessGateEnv): 
       .join(", ");
     const gateMessage =
       harness !== undefined && harnessIsGated(harness)
-        ? `; it is not enabled (set ${subscriptionFlagName(harness.name as AgentHarnessName)}=1)`
+        ? key === "acp"
+          ? "; it is not enabled (set ACP_REGISTRY_ALLOWLIST, optionally with ACP_REGISTRY_JSON pinned)"
+          : `; it is not enabled (set ${subscriptionFlagName(harness.name as AgentHarnessName)}=1)`
         : "";
     throw new Error(
       `Unknown agent harness ${JSON.stringify(name)}${gateMessage}: expected one of ${selectable}.`,
@@ -246,6 +263,10 @@ export const HARNESS_NAMES = Object.keys(REGISTRY) as readonly AgentHarnessName[
  * per run via the delegate tool's codingModel input.
  */
 const CORE_DEFAULT_MODELS = {
+  // Sentinel only — a run that names harness "acp" without a codingModel
+  // lands on a real registry id (claude-acp ships on npm), which the
+  // allowlist still has to admit.
+  acp: "acp/claude-acp",
   opencode: "google/gemini-3.5-flash-lite",
   "claude-code": "anthropic/claude-sonnet-4-6",
   // Subscription models carry the anthropic-subscription namespace: the
@@ -288,6 +309,8 @@ export const HARNESS_DEFAULT_MODELS: Record<string, string> = {
 type StringEnvKey = { [K in keyof Env]: Env[K] extends string | undefined ? K : never }[keyof Env];
 
 const CORE_MODEL_ENV = {
+  // ACP_MODEL pins the deployment's default registry agent (`acp/<id>`).
+  acp: "ACP_MODEL",
   opencode: "CODING_MODEL",
   "claude-code": "CLAUDE_CODE_MODEL",
   "claude-subscription": "CLAUDE_SUBSCRIPTION_MODEL",
