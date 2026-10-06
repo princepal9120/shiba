@@ -160,7 +160,12 @@ export interface ModelOption {
   modelId: string;
   compatibleHarnesses: string[];
   purposes: Purpose[];
-  availability: "verified" | "unverified" | "retired";
+  /**
+   * "configured" means the operator marked the connection ready — it is a
+   * declaration, not a wire check: nothing probes the credential end to end.
+   * A real "verified" tier only exists once live probing lands.
+   */
+  availability: "configured" | "unverified" | "retired";
 }
 
 /** The provider namespace of a connection service (its model-id prefix). */
@@ -248,7 +253,7 @@ export function modelOptionsForPurpose(
         modelId,
         compatibleHarnesses: harnesses,
         purposes: ["coding"],
-        availability: connection.status === "ready" ? "verified" : "unverified",
+        availability: connection.status === "ready" ? "configured" : "unverified",
       });
     }
   }

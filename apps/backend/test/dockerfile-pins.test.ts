@@ -92,11 +92,32 @@ describe("Dockerfile pins", () => {
   });
 
   it("base image tag matches the @cloudflare/sandbox npm version", () => {
-    const from = DOCKERFILE.match(/^FROM docker\.io\/cloudflare\/sandbox:([0-9.]+)-opencode$/m);
+    const from = DOCKERFILE.match(
+      /^FROM docker\.io\/cloudflare\/sandbox:([0-9.]+)-opencode(@sha256:[0-9a-f]{64})?$/m,
+    );
     expect(from, "base image is not a versioned cloudflare/sandbox tag").not.toBeNull();
+    expect(
+      from![2],
+      "base image must be digest-pinned: FROM ...:tag@sha256:<64-hex>",
+    ).toBeDefined();
     const dep = PACKAGE_JSON.dependencies["@cloudflare/sandbox"];
     expect(dep).toBeDefined();
     // package.json may carry a semver range (^, ~) — the image pin is exact.
     expect(dep!.replace(/^[~^]/, "")).toBe(from![1]);
+  });
+
+  it("agy ACP zip is checksum-verified per arch", () => {
+    // The agy block must select a sha256 per arch (like devin/cursor) and gate
+    // `unzip` on `sha256sum -c`. Pins were computed locally for AGY 1.1.1
+    // (x86_64 681,969,407 B; arm64 656,572,786 B) — Google publishes none.
+    const agy = DOCKERFILE.match(/ARG AGY_ACP_VERSION=([\d.]+)[\s\S]*?unzip -o \/tmp\/agy\.zip/);
+    expect(agy, "agy download block not found").not.toBeNull();
+    const block = agy![0];
+    for (const machine of ["x86_64", "aarch64"]) {
+      expect(block, `agy block missing a 64-hex sha256 for ${machine}`).toMatch(
+        new RegExp(`${machine}\\) a=[a-z0-9_]+; s=[0-9a-f]{64};;`),
+      );
+    }
+    expect(block).toMatch(/echo "\$\{s\}  \/tmp\/agy\.zip" \| sha256sum -c -;\s*\\?\s*\n\s*unzip -o/);
   });
 });

@@ -2,7 +2,10 @@
 # The "-opencode" variant ships the sandbox container server plus git,
 # node, and miscellaneous dev tools. Harness CLIs are pinned on top so the
 # exact versions are deterministic regardless of what the base image baked in.
-FROM docker.io/cloudflare/sandbox:0.12.9-opencode
+# The @sha256 digest pins the multi-arch manifest list (amd64+arm64) fetched
+# via the Docker Registry v2 manifest API — pull-by-tag retag attacks can't
+# move it.
+FROM docker.io/cloudflare/sandbox:0.12.9-opencode@sha256:7b84b0163bd93f090504daf2f8e33d74a219a90774802f028adbb5b9de8107b5
 
 # One image carries every harness (opencode, Claude Code, Codex, Devin, Grok);
 # a run picks one at exec time. The credential invariant is unchanged: each
@@ -65,13 +68,19 @@ RUN set -eux; \
 # Google's release archive ships `agy_acp_server.par` + its
 # `localharness_external` helper; both must sit in the same directory.
 # Google publishes no checksums for these archives (t3code verifies the
-# byte count only) — the pin is the version+arch encoded in the URL.
+# byte count only), so the sha256s below were computed by downloading the
+# 1.1.1 x86_64 (681,969,407 B) and arm64 (656,572,786 B) zips from
+# dl.google.com on 2026-10-06 and are pinned here — the same model as the
+# Devin/Cursor blocks. Recompute both on version bump.
 ARG AGY_ACP_VERSION=1.1.1
 RUN set -eux; \
   command -v unzip >/dev/null || (apt-get update && apt-get install -y unzip && rm -rf /var/lib/apt/lists/*); \
   case "$(uname -m)" in \
-    x86_64) a=x86_64;; aarch64) a=arm64;; *) exit 1;; esac; \
+    x86_64) a=x86_64; s=38f62d01b32deb0907b3d39a71ec301fd36369f6ffd1cf262d4af385177f79df;; \
+    aarch64) a=arm64; s=ed69e64b308fcb123ab54bf3277bf9cb0d651064f885ea5aab0ff520c7175398;; \
+    *) exit 1;; esac; \
   curl -sSfL -o /tmp/agy.zip "https://dl.google.com/agy-extensions/releases/linux/agy-acp-server-agy_acp_server_${AGY_ACP_VERSION}-linux-${a}.zip"; \
+  echo "${s}  /tmp/agy.zip" | sha256sum -c -; \
   unzip -o /tmp/agy.zip -d /opt/agy; \
   rm /tmp/agy.zip; \
   chmod +x /opt/agy/agy_acp_server.par /opt/agy/localharness_external; \
