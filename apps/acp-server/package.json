@@ -1,0 +1,28 @@
+{
+  "name": "@shiba/acp-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "shiba-acp: Shiba as an ACP (Agent Client Protocol) agent — installable in Zed/JetBrains/T3, driving the deployment's approval-gated runs over HTTP.",
+  "type": "module",
+  "bin": {
+    "shiba-acp": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b && esbuild src/index.ts --bundle --platform=node --format=esm --target=node20 '--banner:js=#!/usr/bin/env node' --outfile=dist/index.js && chmod +x dist/index.js",
+    "typecheck": "tsc -b && tsc --noEmit -p tsconfig.test.json",
+    "test": "vitest run",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "@shiba/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.6",
+    "esbuild": "^0.25.0",
+    "typescript": "5.9.3",
+    "vitest": "5.0.1"
+  }
+}
