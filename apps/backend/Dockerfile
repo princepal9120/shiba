@@ -86,6 +86,13 @@ RUN set -eux; \
   chmod +x /opt/agy/agy_acp_server.par /opt/agy/localharness_external; \
   ln -sfn /opt/agy/agy_acp_server.par /usr/local/bin/agy
 
+# Computer-use surface (PLAN-V2-NEXT): xdotool drives the screen input,
+# scrot captures it. The desktop itself (X server, window manager) is a
+# heavier image follow-up — these tools are inert until it lands.
+RUN set -eux; \
+  apt-get update && apt-get install -y --no-install-recommends xdotool scrot && \
+  rm -rf /var/lib/apt/lists/*
+
 # Procoder commit gate — checksum-verified, version-pinned like the harnesses.
 # Available to every sandboxed agent so quality-gate runs can execute
 # `procoder check` inside the container. Bump requires the same T10 pass.

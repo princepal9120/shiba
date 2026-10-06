@@ -64,6 +64,37 @@ export const runStatusInputSchema = z.object({
   runId: z.string().min(1).describe("Run id, e.g. agent-tool:<approvalId>."),
 });
 
+const screenRunId = z.string().min(1).describe("Run id whose sandbox screen to drive — the run must be running.");
+
+/** PLAN-V2-NEXT computer-use tools: one screen action per call, on a live run's sandbox. */
+export const screenClickInputSchema = z.object({
+  runId: screenRunId,
+  x: z.number().int().min(0).describe("Horizontal pixel coordinate."),
+  y: z.number().int().min(0).describe("Vertical pixel coordinate."),
+  button: z.enum(["left", "middle", "right"]).optional().describe("Mouse button. Defaults to left."),
+});
+export const screenTypeInputSchema = z.object({
+  runId: screenRunId,
+  text: z.string().min(1).max(4000).describe("Literal text to type — sent verbatim, never interpreted."),
+});
+export const screenScrollInputSchema = z.object({
+  runId: screenRunId,
+  dx: z.number().int().describe("Horizontal scroll pixels (negative = left)."),
+  dy: z.number().int().describe("Vertical scroll pixels (negative = up)."),
+});
+export const screenKeyInputSchema = z.object({
+  runId: screenRunId,
+  keys: z.string().min(1).describe("xdotool key names, space-separated, e.g. \"ctrl+s\" or \"Return\"."),
+});
+export const screenShotInputSchema = z.object({
+  runId: screenRunId,
+});
+export type ScreenClickInput = z.infer<typeof screenClickInputSchema>;
+export type ScreenTypeInput = z.infer<typeof screenTypeInputSchema>;
+export type ScreenScrollInput = z.infer<typeof screenScrollInputSchema>;
+export type ScreenKeyInput = z.infer<typeof screenKeyInputSchema>;
+export type ScreenShotInput = z.infer<typeof screenShotInputSchema>;
+
 export type RunStatusInput = z.infer<typeof runStatusInputSchema>;
 
 export const listRunsInputSchema = z.object({

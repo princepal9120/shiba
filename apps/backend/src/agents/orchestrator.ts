@@ -22,6 +22,7 @@ import {
   type RunCommand,
   type RunDecision,
   runtimeSelectionSchema,
+  type RunSignal,
   type SideEffectKind,
   type SpineEvent,
   type SpineEventInput,
@@ -98,7 +99,19 @@ import {
   reclaimStaleRuns,
   recordReceipt,
 } from "../runs.js";
-import { destroyManagedContainer, type LeakHooks, leakedContainers } from "../sandbox/lifecycle.js";
+import {
+  acquireSandboxOps,
+  destroyManagedContainer,
+  type LeakHooks,
+  leakedContainers,
+} from "../sandbox/lifecycle.js";
+import {
+  type ScreenAction,
+  ScreenActionError,
+  screenActionArgv,
+  runScreenAction,
+  ScopedExecRefusal,
+} from "../screen-control.js";
 import { makeSandboxId, parseGitHubRepoUrl, redactSecrets } from "../security.js";
 import { DEFAULT_ORCHESTRATOR_MODEL, distillSession } from "../session-distill.js";
 import { evaluateSessionTriage } from "../session-triage.js";
@@ -1180,6 +1193,82 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       );
     });
     return runWorkerEffect(program);
+  }
+
+  /**
+   * `POST /api/runs/<id>/screen` (PLAN-V2-NEXT): one computer-use action
+   * inside the run's live sandbox — click/type/scroll/key/shot. Only a
+   * `running` run has a screen to drive; the action's xdotool argv go
+   * through scopedExec's verb allowlist and land on the run's exec
+   * signal trail plus a `run.progress` spine event, so every screen op
+   * is as inspectable as any other sandbox exec.
+   */
+  private async screenAction(
+    runId: string,
+    input: Record<string, unknown>,
+    agentPrincipal: string | null,
+  ): Promise<Response> {
+    const run = this.store.get(runId);
+    if (run === null || (agentPrincipal !== null && run.queuedBy !== agentPrincipal)) {
+      return Response.json({ error: "Run not found." }, { status: 404 });
+    }
+    if (run.status !== "running") {
+      return Response.json(
+        { error: `Run ${runId} is ${run.status} — only a running run has a live screen.` },
+        { status: 409 },
+      );
+    }
+    const action = input.action as ScreenAction | undefined;
+    if (typeof action !== "object" || action === null || Array.isArray(action)) {
+      return Response.json({ error: "action must be a JSON object." }, { status: 400 });
+    }
+    // Validate before touching the sandbox — a malformed action is a 400,
+    // never an exec attempt.
+    let argvPreview: string[][];
+    try {
+      argvPreview = screenActionArgv(action);
+    } catch (error) {
+      return Response.json(
+        { error: error instanceof ScreenActionError ? error.message : "Invalid screen action." },
+        { status: 400 },
+      );
+    }
+    const signals: RunSignal[] = [];
+    const summary = `screen_${action.type} (${argvPreview.length} command${argvPreview.length === 1 ? "" : "s"})`;
+    try {
+      const ops = await acquireSandboxOps(this.env, run.sandboxId);
+      const result = await runScreenAction(ops, action, signals);
+      // Persist the exec trail + spine note in one commit — the row
+      // shows what the screen did even when the caller disconnects.
+      const latest = this.store.get(runId);
+      if (latest !== null) {
+        this.emitSpine({
+          kind: "run.progress",
+          commandId: `screen:${crypto.randomUUID()}`,
+          runId,
+          at: Date.now(),
+          payload: { summary },
+        });
+        this.store.replace(runId, {
+          ...latest,
+          signals: [...(latest.signals ?? []), ...signals],
+        });
+      }
+      if (!result.ok) {
+        return Response.json({ ok: false, error: result.stderr ?? "screen action failed." }, { status: 502 });
+      }
+      return Response.json(result.screenshotBase64 !== undefined
+        ? { ok: true, screenshotBase64: result.screenshotBase64 }
+        : { ok: true });
+    } catch (error) {
+      if (error instanceof ScopedExecRefusal || error instanceof ScreenActionError) {
+        return Response.json({ error: error.message }, { status: 400 });
+      }
+      return Response.json(
+        { error: error instanceof Error ? error.message.slice(0, 500) : "Screen action failed." },
+        { status: 502 },
+      );
+    }
   }
 
   /**
@@ -2988,6 +3077,28 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         latestSeq,
         totalEvents,
       });
+    }
+    const screenMatch = url.pathname.match(/^\/api\/runs\/([^/]+)\/screen$/);
+    if (screenMatch !== null) {
+      if (request.method !== "POST") {
+        return Response.json({ error: "Method not allowed." }, { status: 405 });
+      }
+      let screenBody: unknown;
+      try {
+        screenBody = await request.json();
+      } catch {
+        return Response.json({ error: "Request body is not valid JSON." }, { status: 400 });
+      }
+      if (typeof screenBody !== "object" || screenBody === null || Array.isArray(screenBody)) {
+        return Response.json({ error: "Request body must be a JSON object." }, { status: 400 });
+      }
+      let screenRunId: string;
+      try {
+        screenRunId = decodeURIComponent(screenMatch[1]!);
+      } catch {
+        return Response.json({ error: "Invalid run ID." }, { status: 400 });
+      }
+      return this.screenAction(screenRunId, screenBody as Record<string, unknown>, agentPrincipal);
     }
     const forkMatch = url.pathname.match(/^\/api\/runs\/([^/]+)\/fork$/);
     if (forkMatch !== null) {

@@ -891,6 +891,34 @@ Audit findings T1-T7 / D9-D12-D13 against `devin/1791266355-tests-dx`.
   Worker suffices — no stale-instance check possible from tests);
   actual `pr-<n>` deploy/destroy cycle in CI.
 
+# 2026-10-04 — Computer-use surface: screen tools (PLAN-V2-NEXT)
+
+- `src/screen-control.ts` (new): typed `ScreenAction` → strict xdotool
+  argv (`mousemove`/`click`/`type`/`key`, `scrot`+`base64` for shots).
+  Model-controlled values validate before they become argv (bounded int
+  coords, closed button set, key-name alphabet); `type` text stays a
+  single argv element so metacharacters are literal. Everything execs
+  through `scopedExec` with a verb-prefixed `SCREEN_EXEC_ALLOWLIST` —
+  `exec.invoked`/`exec.settled` receipts land like every sandbox command.
+- `POST /api/runs/<id>/screen` on the orchestrator DO: 404 unknown or
+  cross-principal runs, 409 when the run isn't `running` (no live
+  screen), 400 malformed actions before any exec attempt. Success
+  appends the signals to the run row + emits `run.progress` with the
+  action summary — screen ops show up on `/api/spine` and ActivityView.
+- MCP: `screen_click`, `screen_type`, `screen_scroll`, `screen_key`,
+  `screen_shot` in `mcp-screen-tools.ts` under the `sandbox:exec` scope
+  (same gate as `queue_run`); `screen_shot` returns an MCP `image`
+  content block. Schemas in `@shiba/shared` (`screen*InputSchema`).
+  Worker gateway widened one segment for `/screen`.
+- `Dockerfile`: `xdotool` + `scrot` in the image package list.
+- Local verification: `vitest test/screen-control.test.ts` (15) — argv
+  validation (injection shapes rejected, text literal), ordered exec +
+  signal trail, nonzero-exit stop, DO 404/409/400/405 + persisted
+  signals + spine event + shot payload, `sandbox:exec` scope refusal.
+- Unverified (image-gated): xdotool/scrot actually driving a screen —
+  the sandbox image needs the packages (this PR adds them) plus an X
+  server/desktop session, which is a heavier image rebuild follow-up.
+
 # 2026-10-04 — Run fork: POST /api/runs/<id>/fork (PLAN-V2-NEXT)
 
 - `packages/shared`: `ForkLineage { runId, checkpointRef }` rides the
