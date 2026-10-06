@@ -10,7 +10,11 @@ import {
   applySpineEvent,
   approvalEventInput,
   decideRunTransition,
+  foldOutboxEvent,
   MAX_SPINE_EVENTS,
+  OUTBOX_DISPATCHED_KEEP,
+  OUTBOX_FAILED_KEEP,
+  type OutboxEntry,
   type PendingApproval,
   type QueuedRunInput,
   type Receipt,
@@ -21,11 +25,17 @@ import {
   type SpineEventInput,
   type SpineProjection,
   sideEffectRequestInput,
+  sideEffectResultInput,
   spineInputsFromDecider,
 } from "@shiba/shared";
 import { describe, expect, it } from "vitest";
 import { appendBatch, nextSeq } from "../src/orchestration/event-log.js";
-import { drainOutbox, dueEntries, MAX_OUTBOX_ATTEMPTS } from "../src/orchestration/outbox.js";
+import {
+  drainOutbox,
+  dueEntries,
+  exhaustedEntries,
+  MAX_OUTBOX_ATTEMPTS,
+} from "../src/orchestration/outbox.js";
 
 const make = (kind: ReceiptKind, message: string, at: number): Receipt => ({ at, kind, message });
 
@@ -267,5 +277,86 @@ describe("drainOutbox — the effect drainer", () => {
       throw new Error("network gone");
     });
     expect(results).toEqual([{ entry: outbox[0], ok: false, error: "network gone" }]);
+  });
+});
+
+describe("outbox retention — settled rows prune, owed rows never do", () => {
+  const request = (id: string, at: number): SpineEventInput =>
+    sideEffectRequestInput({
+      effectId: id,
+      effectKind: "slack.post",
+      target: "slack:C:T",
+      commandId: `post:${id}`,
+      at,
+    });
+  const result = (id: string, ok: boolean, at: number): SpineEventInput =>
+    sideEffectResultInput({
+      effectId: id,
+      effectKind: "slack.post",
+      target: "slack:C:T",
+      ok,
+      ...(ok ? {} : { error: "boom" }),
+      commandId: `drain:${id}`,
+      at,
+    });
+  const foldAll = (inputs: SpineEventInput[]): OutboxEntry[] =>
+    appendBatch([], inputs).reduce<OutboxEntry[] | undefined>(
+      (outbox, event) => foldOutboxEvent(outbox, event),
+      undefined,
+    )!;
+
+  it("dispatched rows keep a bounded newest tail", () => {
+    const inputs: SpineEventInput[] = [];
+    for (let i = 0; i < OUTBOX_DISPATCHED_KEEP + 10; i += 1) {
+      inputs.push(request(`fx:${i}`, i + 1), result(`fx:${i}`, true, i + 1));
+    }
+    const outbox = foldAll(inputs);
+    expect(outbox).toHaveLength(OUTBOX_DISPATCHED_KEEP);
+    expect(outbox.every((e) => e.status === "dispatched")).toBe(true);
+    // The newest tail survives; the oldest settled rows are pruned.
+    expect(outbox[0]!.id).toBe("fx:10");
+    expect(outbox[outbox.length - 1]!.id).toBe(`fx:${OUTBOX_DISPATCHED_KEEP + 9}`);
+  });
+
+  it("rows the drainer still owes are never pruned", () => {
+    const inputs: SpineEventInput[] = [];
+    // Saturate the settled tails first.
+    for (let i = 0; i < OUTBOX_DISPATCHED_KEEP + 10; i += 1) {
+      inputs.push(request(`ok:${i}`, i + 1), result(`ok:${i}`, true, i + 1));
+    }
+    for (let i = 0; i < OUTBOX_FAILED_KEEP + 10; i += 1) {
+      inputs.push(request(`dead:${i}`, i + 1));
+      for (let n = 0; n < MAX_OUTBOX_ATTEMPTS; n += 1) {
+        inputs.push(result(`dead:${i}`, false, i + 1));
+      }
+    }
+    // A pending row and a still-retryable failure ride at the end.
+    inputs.push(request("fx:pending", 500), request("fx:retry", 501), result("fx:retry", false, 502));
+    const outbox = foldAll(inputs);
+    const ids = outbox.map((e) => e.id);
+    expect(ids).toContain("fx:pending");
+    expect(ids).toContain("fx:retry");
+    // Nothing the drainer could still execute was dropped: due =
+    // pending|failed minus the attempts cap drainOutbox enforces.
+    const executable = dueEntries(outbox).filter((e) => e.attempts < MAX_OUTBOX_ATTEMPTS);
+    expect(executable.map((e) => e.id)).toEqual(["fx:pending", "fx:retry"]);
+    // The exhausted tail survived bounded — dead rows still inspectable.
+    expect(exhaustedEntries(outbox)).toHaveLength(OUTBOX_FAILED_KEEP);
+  });
+
+  it("exhausted failures keep a bounded triage tail", () => {
+    const inputs: SpineEventInput[] = [];
+    for (let i = 0; i < OUTBOX_FAILED_KEEP + 10; i += 1) {
+      inputs.push(request(`dead:${i}`, i + 1));
+      for (let n = 0; n < MAX_OUTBOX_ATTEMPTS; n += 1) {
+        inputs.push(result(`dead:${i}`, false, i + 1));
+      }
+    }
+    const outbox = foldAll(inputs);
+    expect(outbox).toHaveLength(OUTBOX_FAILED_KEEP);
+    expect(exhaustedEntries(outbox)).toHaveLength(OUTBOX_FAILED_KEEP);
+    // The newest failures stay inspectable; the oldest are gone.
+    expect(outbox[0]!.id).toBe("dead:10");
+    expect(outbox[outbox.length - 1]!.id).toBe(`dead:${OUTBOX_FAILED_KEEP + 9}`);
   });
 });

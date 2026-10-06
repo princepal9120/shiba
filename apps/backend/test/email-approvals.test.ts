@@ -262,6 +262,103 @@ describe("queueEmailApproval", () => {
     expect(result.approval_id).toBe(record.approvalId);
   });
 
+  it("429s once the pending queue is full — the email lane shares the run path's cap", async () => {
+    const { instance } = agentWithMailbox();
+    instance.state = {
+      ...instance.state,
+      pendingApprovals: Array.from({ length: 100 }, (_, i) => ({
+        threadKey: "default",
+        approvalId: `fill-${i}`,
+        repoUrl: "r",
+        task: "t",
+        status: "pending" as const,
+        createdAt: 0,
+      })),
+    };
+    const post = (body: unknown) =>
+      instance.onRequest(
+        new Request("https://internal/api/runs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }),
+      );
+    expect(
+      (await post({ kind: "email_send", mailbox: "a@shiba.dev", payload: { ...SEND_PAYLOAD } })).status,
+    ).toBe(429);
+    expect(
+      (await post({ kind: "email_delete", mailbox: "a@shiba.dev", payload: { ...DELETE_PAYLOAD } })).status,
+    ).toBe(429);
+    expect(instance.state.pendingApprovals).toHaveLength(100);
+  });
+
+  it("freezes only the executor's keys — caller-supplied extras never become durable state", async () => {
+    const { instance, env } = agentWithMailbox();
+    const result = await queueEmailApproval(env as never, {
+      kind: "email_send",
+      mailbox: "agent-a@shiba.dev",
+      payload: {
+        ...SEND_PAYLOAD,
+        // Outside the executor's contract — must not reach the record.
+        injected: "rides along",
+        meta: { deep: true },
+      },
+    });
+    const record = (instance.state.pendingApprovals ?? [])[0]!;
+    expect(result.approval_id).toBe(record.approvalId);
+    expect(record.payload).toEqual({ ...SEND_PAYLOAD, mailbox: "agent-a@shiba.dev" });
+  });
+
+  it("rejects over-limit and mistyped payload fields at intake", async () => {
+    const { instance } = agentWithMailbox();
+    const post = (body: unknown) =>
+      instance.onRequest(
+        new Request("https://internal/api/runs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }),
+      );
+    // A whitelisted key over its cap, and a whitelisted key of the wrong type.
+    expect(
+      (
+        await post({
+          kind: "email_send",
+          mailbox: "a@shiba.dev",
+          payload: { ...SEND_PAYLOAD, subject: "s".repeat(2_001) },
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await post({
+          kind: "email_send",
+          mailbox: "a@shiba.dev",
+          payload: { ...SEND_PAYLOAD, body_text: "b".repeat(100_001) },
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await post({
+          kind: "email_send",
+          mailbox: "a@shiba.dev",
+          payload: { ...SEND_PAYLOAD, draft_id: 123 },
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await post({
+          kind: "email_delete",
+          mailbox: "a@shiba.dev",
+          payload: { ...DELETE_PAYLOAD, from_addr: 42 },
+        })
+      ).status,
+    ).toBe(400);
+    expect(instance.state.pendingApprovals ?? []).toHaveLength(0);
+  });
+
   it("rejects malformed queues: bad mailbox, missing payload fields, non-run kind", async () => {
     const { instance } = agentWithMailbox();
     const post = (body: unknown) =>

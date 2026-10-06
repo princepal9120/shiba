@@ -594,3 +594,67 @@ Routing delivery to a registered address; Telegram/Discord webhook handshakes.
   name connectionId and the ACP lane ids; `queue_run` accepts
   codingModel/connectionId (parity with POST /api/runs).
   Gate: typecheck, lint, lint:imports, 1726 backend tests, build green.
+
+# 2026-10-06 — orchestrator-state audit lane: bounded approvals/outbox, floored sweep, incremental spine, gated polls
+
+Audit-lane fixes to durable-state growth and read-path cost in the
+orchestrator DO plus the dashboard pollers that drive it.
+
+- C1 — `packages/shared/approvals.ts`: `createPendingApproval` now
+  enforces the shared `MAX_PENDING_APPROVALS` ceiling itself (the
+  constant already lived in `steering.ts`) so no intake can mint past
+  the cap; run + email intakes still pre-check so their surfaces answer
+  429. `orchestrator.ts`: `queueEmailApprovalRecord` pre-checks the
+  count → 429, validates every whitelisted payload key as a bounded
+  string (`EMAIL_PAYLOAD_LIMITS` per key), and freezes only the
+  executor's keys (`EMAIL_SEND_PAYLOAD_KEYS`/
+  `EMAIL_DELETE_PAYLOAD_KEYS` + `mailbox`) — caller-supplied extras no
+  longer reach durable state.
+- C2 — `orchestrator.ts`: `postToThread` claims its effect id in a
+  per-lifetime `inFlightEffects` set before `ctx.waitUntil`, released in
+  both settle arms; `drainEffectOutbox` claims its batch and skips
+  claimed rows, so a mid-send read no longer double-posts. Rows left
+  claimed by a dead lifetime still replay on the next wake —
+  at-least-once honest.
+- P1 — `packages/shared/projector.ts`: `foldOutboxEvent` results pass
+  through `pruneOutboxEntries` — dispatched rows keep a 50-entry tail,
+  exhausted failures (`attempts >= MAX_OUTBOX_ATTEMPTS`, now shared via
+  `@shiba/shared`) keep 25; pending and still-retryable rows are never
+  dropped.
+- P3 — `approvals.ts`: `pruneApprovals` evicts decided records beyond
+  `DECIDED_APPROVALS_LIMIT` (the tail the listing serves) after the
+  expired-pending prune; `resolveApproval` + `listApprovals` call it, so
+  the listing's output is unchanged while state stays bounded.
+- P2 — `orchestrator.ts`: `reclaimRuns` split — `reclaimSweep` (stale
+  scan + leaked-container retries) is floored at 30s per DO lifetime on
+  read paths via `reclaimRunsForRead`; every call still drains the
+  effect outbox first, and alarm/resolve/teardown/DELETE sweep
+  unfloored through `reclaimRuns`.
+- P4 — `/api/spine` accepts `?since=<seq>` (400 on non-integer or
+  negative) returning only newer events + current outbox +
+  `earliestSeq`/`latestSeq`/`totalEvents` markers; `live-status.ts`
+  `useSpine` keeps a merged ref-buffer, appends tail events deduped by
+  seq capped at `MAX_SPINE_EVENTS`, and resets + resyncs when
+  `earliestSeq` shows the log rotated past the cursor.
+- P5 — `app.tsx`: `useStoredApprovals` and `useAgentPrincipals` take an
+  `enabled` flag — each 10s poller runs only while a view that renders
+  its data is mounted (approvals → approvals/tasks/dashboard,
+  principals → tasks/dashboard) and fires an immediate refresh on
+  re-entry.
+- P8 — `app.tsx`: the `sessions` memo no longer depends on composer
+  keystroke state (`task`, `repoUrl`, `pendingApprovals.length` removed;
+  only chat/tool/session inputs remain).
+- Tests — `email-approvals.test.ts` +3 (429 at capacity for both email
+  kinds, payload whitelist drops caller extras, over-limit/mistyped
+  intake → 400); `pending-approvals.test.ts` +2 (shared cap inside
+  `createPendingApproval`, decided-retention prune keeps the listing's
+  tail); `spine.test.ts` +3 (dispatched/failed retention bounds, owed
+  rows never pruned); `spine-route.test.ts` +3 (`?since` window +
+  markers + 400s, in-flight claim skips then retries honestly, read
+  floor still drains owed post-backs). `orchestrator.test.ts`: the
+  stale-run reclaim test now lapses the floor interval before the read
+  — the sweep still aborts the child + destroys the sandbox on access.
+- Gate: typecheck (incl. test tsconfig), lint, lint:imports, 1730
+  backend tests, build + docs:verify all green.
+- Unverified (credential-gated): live `/api/spine?since=` polling
+  against a running worker, reclaim-floor timing on prod DO lifetimes.

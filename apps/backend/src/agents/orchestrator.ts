@@ -11,11 +11,14 @@ import {
   foldOutboxEvent,
   HARNESS_IDS,
   isAgentRole,
+  type JsonValue,
   LOCAL_INTAKE_DASHBOARD,
   LOCAL_INTAKE_HEADER,
   LOCAL_RUNTIME_FLAG,
+  MAX_PENDING_APPROVALS,
   MAX_SPINE_EVENTS,
   type OutboxEntry,
+  pruneApprovals,
   type RunCommand,
   type RunDecision,
   runtimeSelectionSchema,
@@ -56,7 +59,7 @@ import { type ApprovedRoute, describeRoute, isApprovedRoute } from "../model-con
 import { readModelConfig, resolveCodingRoute, revalidateCodingRoute } from "../model-policy.js";
 import { type CodingTaskInput, formatAgentToolInput, parseAgentResult } from "../opencode-input.js";
 import { appendBatch } from "../orchestration/event-log.js";
-import { drainOutbox } from "../orchestration/outbox.js";
+import { drainOutbox, dueEntries } from "../orchestration/outbox.js";
 import {
   approvalEvidenceFor,
   type CommandReceipt,
@@ -65,7 +68,6 @@ import {
   isApprovalExpired,
   isJsonObject,
   type PendingApproval,
-  pruneExpiredApprovals,
   putCommandReceipt,
   type ResolveResult,
   recordApprovalExecution,
@@ -256,6 +258,41 @@ type DelegateInput = z.infer<typeof delegateInputSchema>;
 const STALE_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 
 /**
+ * Floor between full reclaim sweeps (stale-run scan + leaked-container
+ * retries) on the read path. Owed post-backs still drain on every call —
+ * this gates only the expensive sweep, at most once per interval per DO
+ * lifetime. The alarm path calls reclaimRuns directly, unfloored.
+ */
+const RECLAIM_SWEEP_INTERVAL_MS = 30 * 1000;
+
+/**
+ * The payload an email approval freezes is the executor's verbatim
+ * contract — executeEmailApproval reads exactly these keys per kind, so
+ * no other caller-supplied key may ride into durable DO state.
+ */
+const EMAIL_SEND_PAYLOAD_KEYS = [
+  "to_addr",
+  "subject",
+  "body_text",
+  "thread_id",
+  "in_reply_to_email_id",
+  "draft_id",
+] as const;
+const EMAIL_DELETE_PAYLOAD_KEYS = ["email_id", "subject", "from_addr"] as const;
+
+/** Per-key character bounds on the frozen payload — durable state, not a data pipe. */
+const EMAIL_PAYLOAD_LIMITS: Record<string, number> = {
+  to_addr: 320,
+  subject: 2_000,
+  body_text: 100_000,
+  thread_id: 400,
+  in_reply_to_email_id: 400,
+  draft_id: 400,
+  email_id: 400,
+  from_addr: 320,
+};
+
+/**
  * Accept a scraped "Pull request:" URL only when it points at a PR in the
  * run's own repository — transcript text is agent-influenced, so a link to
  * any other repo is rejected instead of posted to Slack.
@@ -285,6 +322,21 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
   private get runControllers(): Map<string, AbortController> {
     return (this.runControllersMap ??= new Map());
   }
+
+  /**
+   * Side-effect ids a synchronous send is already driving this
+   * lifetime — the outbox drainer skips these rows so an open
+   * postToThread send can't be re-driven mid-flight (a double post and
+   * a double-counted attempt). Volatile by design: rows a dead
+   * lifetime left pending still replay on the next wake.
+   */
+  private inFlightEffectsSet: Set<string> | undefined;
+  private get inFlightEffects(): Set<string> {
+    return (this.inFlightEffectsSet ??= new Set());
+  }
+
+  /** Stamp of the last full reclaim sweep — see RECLAIM_SWEEP_INTERVAL_MS. */
+  private lastReclaimSweepAt: number | undefined;
 
   /**
    * P9: spine inputs awaiting commit on the next durable write. The
@@ -1306,8 +1358,9 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         : "default";
     // Flood guard: pending approvals persist in DO state — an uncapped queue
     // lets one trigger token crowd out Slack, chat, and dashboard intake.
-    const MAX_PENDING = 100;
-    if (this.approvals.filter((a) => a.status === "pending").length >= MAX_PENDING) {
+    // createPendingApproval enforces the same cap, so a bypassing intake
+    // still can't mint past it.
+    if (this.approvals.filter((a) => a.status === "pending").length >= MAX_PENDING_APPROVALS) {
       return Response.json(
         { error: "Approval queue is full — resolve pending approvals first." },
         { status: 429 },
@@ -1413,6 +1466,28 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       }
       fields.to_addr = toAddr;
     }
+    // Bound every freezable key before it can become durable state:
+    // whitelisted keys must be in-contract strings under their per-key
+    // cap — anything else the caller sent simply never freezes.
+    const payloadKeys =
+      kind === "email_send" ? EMAIL_SEND_PAYLOAD_KEYS : EMAIL_DELETE_PAYLOAD_KEYS;
+    for (const key of payloadKeys) {
+      const value = fields[key];
+      if (value === undefined) continue;
+      if (typeof value !== "string") {
+        return Response.json(
+          { error: `payload.${key} must be a string when present.` },
+          { status: 400 },
+        );
+      }
+      const limit = EMAIL_PAYLOAD_LIMITS[key] ?? 2_000;
+      if (value.length > limit) {
+        return Response.json(
+          { error: `payload.${key} exceeds the ${limit}-character limit.` },
+          { status: 400 },
+        );
+      }
+    }
     // The same registration invariant the MCP path enforces via
     // requireMailbox: an approval's From must be a registered mailbox.
     const registration = await registeredMailbox(this.env, mailbox);
@@ -1477,6 +1552,21 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       kind === "email_send"
         ? `email send to ${String(fields.to_addr)}: ${subject}`
         : `email delete of ${String(fields.email_id)}${subject ? ` "${subject}"` : ""}`;
+    // The same flood guard the run intake enforces — the email lane
+    // must not mint past the pending ceiling either.
+    if (this.approvals.filter((a) => a.status === "pending").length >= MAX_PENDING_APPROVALS) {
+      return Response.json(
+        { error: "Approval queue is full — resolve pending approvals first." },
+        { status: 429 },
+      );
+    }
+    // Freeze only the executor's keys plus the owning mailbox — nothing
+    // else the caller sent may become durable state.
+    const payload: Record<string, JsonValue> = { mailbox };
+    for (const key of payloadKeys) {
+      const value = fields[key];
+      if (typeof value === "string") payload[key] = value;
+    }
     try {
       this.writeApprovals(
         createPendingApproval(this.approvals, {
@@ -1485,7 +1575,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
           repoUrl: mailbox,
           task: task.slice(0, 4000),
           kind,
-          payload: { ...fields, mailbox },
+          payload,
           createdAt: Date.now(),
         }),
       );
@@ -1633,7 +1723,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     // expired-pointer resolve (removed from `result.approvals` already)
     // and every other expired pending the prune filters out.
     const expiredSends = this.expiredEmailSends(now);
-    const approvals = pruneExpiredApprovals(result.approvals, now);
+    const approvals = pruneApprovals(result.approvals, now);
     const record =
       result.result === "approved"
         ? approvals.find(
@@ -1705,7 +1795,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
   private async mintChatGateApproval(input: DelegateInput, toolCallId: string): Promise<void> {
     if (this.approvals.some((a) => a.approvalId === toolCallId)) return;
     // Same flood bound as /api/approvals intake — pending records persist.
-    if (this.approvals.filter((a) => a.status === "pending").length >= 100) return;
+    if (this.approvals.filter((a) => a.status === "pending").length >= MAX_PENDING_APPROVALS) return;
     const { route } = await this.resolveRoute(input);
     this.setState({
       ...this.state,
@@ -1998,8 +2088,12 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         at: Date.now(),
       }),
     );
-    // Commit the request + outbox row before attempting the send.
+    // Commit the request + outbox row before attempting the send, and
+    // claim it in the same synchronous block — a drainer pass that
+    // snapshots pending rows mid-send must skip this one rather than
+    // re-drive it.
     this.setState({ ...this.state });
+    this.inFlightEffects.add(effectId);
     this.ctx.waitUntil(
       send
         .then(() => {
@@ -2014,6 +2108,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
             }),
           );
           this.setState({ ...this.state });
+          this.inFlightEffects.delete(effectId);
         })
         .catch((error: unknown) => {
           const message = error instanceof Error ? error.message : String(error);
@@ -2030,6 +2125,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
             }),
           );
           this.setState({ ...this.state });
+          this.inFlightEffects.delete(effectId);
         }),
     );
   }
@@ -2042,34 +2138,48 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
    * MAX_OUTBOX_ATTEMPTS stay `failed` for the operator to inspect.
    */
   private async drainEffectOutbox(): Promise<void> {
-    const results = await drainOutbox(this.state?.outbox, async (entry) => {
-      if (entry.effectKind === "chat.post") {
-        const chat = postToChatThread(this.env, this.name, entry.summary ?? "");
-        if (chat === null) return { ok: false, error: "no chat thread destination configured" };
-        try {
-          await chat;
-          return { ok: true };
-        } catch (error) {
-          return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    // Skip rows a synchronous send (or a still-running drain) is already
+    // driving this lifetime — they still read `pending` while the send is
+    // open, but re-driving one would double-post and double-count the
+    // attempt. The claim is volatile, so replay after a crash is intact.
+    const due = dueEntries(this.state?.outbox).filter(
+      (entry) => !this.inFlightEffects.has(entry.id),
+    );
+    if (due.length === 0) return;
+    for (const entry of due) this.inFlightEffects.add(entry.id);
+    let results: Awaited<ReturnType<typeof drainOutbox>>;
+    try {
+      results = await drainOutbox(due, async (entry) => {
+        if (entry.effectKind === "chat.post") {
+          const chat = postToChatThread(this.env, this.name, entry.summary ?? "");
+          if (chat === null) return { ok: false, error: "no chat thread destination configured" };
+          try {
+            await chat;
+            return { ok: true };
+          } catch (error) {
+            return { ok: false, error: error instanceof Error ? error.message : String(error) };
+          }
         }
-      }
-      if (entry.effectKind === "slack.post") {
-        const ids = parseSlackThreadName(this.name);
-        const token = this.env.SLACK_BOT_TOKEN?.trim();
-        if (!ids || !token) return { ok: false, error: "no Slack thread destination configured" };
-        try {
-          await postSlackMessage(token, {
-            channel: ids.channelId,
-            threadTs: ids.threadTs,
-            text: (entry.summary ?? "").slice(0, 3000),
-          });
-          return { ok: true };
-        } catch (error) {
-          return { ok: false, error: error instanceof Error ? error.message : String(error) };
+        if (entry.effectKind === "slack.post") {
+          const ids = parseSlackThreadName(this.name);
+          const token = this.env.SLACK_BOT_TOKEN?.trim();
+          if (!ids || !token) return { ok: false, error: "no Slack thread destination configured" };
+          try {
+            await postSlackMessage(token, {
+              channel: ids.channelId,
+              threadTs: ids.threadTs,
+              text: (entry.summary ?? "").slice(0, 3000),
+            });
+            return { ok: true };
+          } catch (error) {
+            return { ok: false, error: error instanceof Error ? error.message : String(error) };
+          }
         }
-      }
-      return { ok: false, error: `unsupported effect kind ${entry.effectKind}` };
-    });
+        return { ok: false, error: `unsupported effect kind ${entry.effectKind}` };
+      });
+    } finally {
+      for (const entry of due) this.inFlightEffects.delete(entry.id);
+    }
     if (results.length === 0) return;
     for (const { entry, ok, error } of results) {
       this.emitSpine(
@@ -2132,9 +2242,30 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
 
   /** Public: also the `schedule()` callback armed when a run starts. */
   async reclaimRuns(): Promise<void> {
-    // P9: owed side effects retry before any run is marked unknown —
-    // the completion notice must not be lost with the run's lease.
+    this.lastReclaimSweepAt = Date.now();
     await this.drainEffectOutbox();
+    await this.reclaimSweep();
+  }
+
+  /**
+   * Read-path reclaim: owed post-backs still drain on every call (the
+   * drainer early-returns on an empty outbox), but the full sweep is
+   * floored at RECLAIM_SWEEP_INTERVAL_MS per DO lifetime — a dashboard
+   * poll every few seconds must not re-scan the store each time.
+   */
+  private async reclaimRunsForRead(): Promise<void> {
+    await this.drainEffectOutbox();
+    if (Date.now() - (this.lastReclaimSweepAt ?? 0) < RECLAIM_SWEEP_INTERVAL_MS) return;
+    this.lastReclaimSweepAt = Date.now();
+    await this.reclaimSweep();
+  }
+
+  /**
+   * The expensive half of reclaim: the stale-run scan + leaked-container
+   * destroy retries. Callers that must always sweep (alarm, approved
+   * resolve, session teardown, DELETE) go through reclaimRuns.
+   */
+  private async reclaimSweep(): Promise<void> {
     const { runs, reclaimed } = reclaimStaleRuns(
       this.store.list(),
       Date.now(),
@@ -2343,7 +2474,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
   private listApprovals(agentPrincipal: string | null): Response {
     const now = Date.now();
     const expiredSends = this.expiredEmailSends(now);
-    const pruned = pruneExpiredApprovals(this.approvals, now);
+    const pruned = pruneApprovals(this.approvals, now);
     if (pruned.length !== this.approvals.length) {
       this.writeApprovals(pruned);
       this.releaseEmailApprovalDrafts(expiredSends, this.liveApprovalDrafts(now));
@@ -2640,10 +2771,29 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       if (request.method !== "GET") {
         return Response.json({ error: "Method not allowed." }, { status: 405 });
       }
+      // Incremental reads pass ?since=<seq>: only newer events ship, plus
+      // the log-window markers so the client detects a rotated log —
+      // earliestSeq above its cursor means events were pruned under it.
+      let since: number | null = null;
+      const sinceParam = url.searchParams.get("since");
+      if (sinceParam !== null) {
+        const parsed = Number(sinceParam);
+        if (!Number.isInteger(parsed) || parsed < 0) {
+          return Response.json(
+            { error: "since must be a non-negative integer." },
+            { status: 400 },
+          );
+        }
+        since = parsed;
+      }
       const events = this.state?.events ?? [];
       const outbox = this.state?.outbox ?? [];
+      const tail = since === null ? events : events.filter((event) => event.seq > since);
+      const earliestSeq = events.length > 0 ? events[0]!.seq : 0;
+      const latestSeq = events.length > 0 ? events[events.length - 1]!.seq : 0;
+      const totalEvents = events.length;
       if (agentPrincipal === null) {
-        return Response.json({ events, outbox });
+        return Response.json({ events: tail, outbox, earliestSeq, latestSeq, totalEvents });
       }
       // Agent principals see only events on runs they queued; an event with
       // no runId is orchestrator-internal and stays hidden.
@@ -2651,8 +2801,11 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         this.store.list().filter((run) => run.queuedBy === agentPrincipal).map((run) => run.runId),
       );
       return Response.json({
-        events: events.filter((e) => e.runId !== undefined && mine.has(e.runId)),
+        events: tail.filter((e) => e.runId !== undefined && mine.has(e.runId)),
         outbox: outbox.filter((e) => e.runId !== undefined && mine.has(e.runId)),
+        earliestSeq,
+        latestSeq,
+        totalEvents,
       });
     }
     const match = url.pathname.match(/^\/api\/runs(?:\/([^/]+))?$/);
@@ -2688,7 +2841,9 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     } catch {
       return Response.json({ error: "Invalid run ID." }, { status: 400 });
     }
-    await this.reclaimRuns();
+    // GET polls share a floored sweep; DELETE keeps the full reclaim —
+    // a cancel needs the store fresh before it fences the run.
+    await (request.method === "GET" ? this.reclaimRunsForRead() : this.reclaimRuns());
     if (request.method === "GET" && id === null) {
       const visible =
         agentPrincipal === null

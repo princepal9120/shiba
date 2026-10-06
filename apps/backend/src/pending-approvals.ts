@@ -13,6 +13,8 @@ export {
   isApprovalExpired,
   isJsonObject,
   MAX_COMMAND_RECEIPTS,
+  MAX_PENDING_APPROVALS,
+  pruneApprovals,
   pruneExpiredApprovals,
   putCommandReceipt,
   recordApprovalExecution,

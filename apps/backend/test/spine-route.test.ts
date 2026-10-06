@@ -7,6 +7,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CodingOrchestrator } from "../src/agents/orchestrator.js";
 import type { OrchestratorState } from "../src/agents/orchestrator.js";
 import type { SpineEvent, OutboxEntry } from "@shiba/shared";
+import { createRun, transitionRun } from "../src/runs.js";
+import { evidenceFor } from "./seeding.js";
 import { setSandboxHandleResolver } from "../src/sandbox/lifecycle.js";
 
 const mocks = vi.hoisted(() => ({
@@ -88,10 +90,16 @@ const resolveBody = (approvalId: string, approved = true) =>
     body: JSON.stringify({ threadKey: "default", approvalId, approved, decidedBy: "U1" }),
   });
 
+/** Let a fire-and-forget waitUntil chain settle (microtask drain). */
+async function flush() {
+  for (let i = 0; i < 20; i += 1) await Promise.resolve();
+}
+
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.destroy.mockResolvedValue(undefined);
   mocks.execute.mockResolvedValue("ok");
+  mocks.postSlackMessage.mockResolvedValue({});
 });
 
 describe("GET /api/spine", () => {
@@ -189,5 +197,154 @@ describe("GET /api/spine", () => {
       new Request("https://internal/api/spine", { method: "POST" }),
     );
     expect(response.status).toBe(405);
+  });
+
+  it("?since=<seq> returns only newer events plus the log-window markers", async () => {
+    const instance = agent();
+    const queued = await instance.onRequest(queueBody("fix"));
+    const { approvalId } = (await queued.json()) as { approvalId: string };
+    await instance.onRequest(resolveBody(approvalId));
+
+    const full = (await (await instance.onRequest(spineGet())).json()) as {
+      events: SpineEvent[];
+      earliestSeq: number;
+      latestSeq: number;
+      totalEvents: number;
+    };
+    expect(full.earliestSeq).toBe(1);
+    expect(full.latestSeq).toBe(full.events[full.events.length - 1]!.seq);
+    expect(full.totalEvents).toBe(full.events.length);
+
+    const cut = full.events[1]!.seq;
+    const tail = (await (
+      await instance.onRequest(new Request(`https://internal/api/spine?since=${cut}`))
+    ).json()) as { events: SpineEvent[]; earliestSeq: number; latestSeq: number };
+    expect(tail.events.every((e) => e.seq > cut)).toBe(true);
+    expect(tail.events[0]!.seq).toBe(cut + 1);
+    // The window markers describe the whole log — the dispatch working in
+    // the background may have appended between the two fetches.
+    expect(tail.earliestSeq).toBe(full.earliestSeq);
+    expect(tail.latestSeq).toBeGreaterThanOrEqual(full.latestSeq);
+    expect(tail.events.map((e) => e.seq)).toEqual(
+      expect.arrayContaining(full.events.filter((e) => e.seq > cut).map((e) => e.seq)),
+    );
+
+    for (const bad of ["-1", "1.5", "abc"]) {
+      const response = await instance.onRequest(
+        new Request(`https://internal/api/spine?since=${bad}`),
+      );
+      expect(response.status).toBe(400);
+    }
+  });
+});
+
+describe("outbox in-flight claims", () => {
+  it("the drainer skips a row whose send is still open, and retries it honestly after failure", async () => {
+    const instance = agent("slack:T1:C1:111.222");
+    type ThreadInternals = {
+      postToThread(text: string, context?: { runId?: string }): void;
+      reclaimRuns(): Promise<void>;
+    };
+    const threaded = instance as unknown as ThreadInternals;
+
+    // Hold the send open: the row commits pending while the send runs.
+    let release!: () => void;
+    const open = new Promise<Record<string, never>>((resolve) => {
+      release = () => resolve({});
+    });
+    mocks.postSlackMessage.mockImplementationOnce(() => open);
+    threaded.postToThread("hi", { runId: "r1" });
+    expect(instance.state.outbox?.[0]?.status).toBe("pending");
+
+    // A read-path reclaim mid-send must not re-drive the open send.
+    await threaded.reclaimRuns();
+    expect(mocks.postSlackMessage).toHaveBeenCalledTimes(1);
+
+    // Resolve the send — the row settles dispatched, still one call.
+    release();
+    await flush();
+    expect(instance.state.outbox?.[0]?.status).toBe("dispatched");
+    await threaded.reclaimRuns();
+    expect(mocks.postSlackMessage).toHaveBeenCalledTimes(1);
+
+    // A send that fails retries on the next drain — at-least-once intact.
+    mocks.postSlackMessage.mockRejectedValueOnce(new Error("slack down"));
+    threaded.postToThread("hi again", { runId: "r1" });
+    await flush();
+    expect(instance.state.outbox?.[1]?.status).toBe("failed");
+    await threaded.reclaimRuns();
+    expect(mocks.postSlackMessage).toHaveBeenCalledTimes(3);
+    expect(instance.state.outbox?.[1]?.status).toBe("dispatched");
+  });
+});
+
+describe("GET /api/runs reclaim floor", () => {
+  it("floors the full sweep per interval but still drains owed post-backs", async () => {
+    const instance = agent("slack:T1:C1:111.222");
+    const staleRun = transitionRun(
+      createRun({
+        runId: "r-stale",
+        sandboxId: "sbx-stale",
+        repoUrl: "https://github.com/o/r",
+        task: "t",
+        baseBranch: "main",
+        publishPullRequest: false,
+        approval: evidenceFor(
+          {
+            repoUrl: "https://github.com/o/r",
+            task: "t",
+            baseBranch: "main",
+            publishPullRequest: false,
+          },
+          "ap-stale",
+        ),
+        now: 0,
+      }),
+      "running",
+      undefined,
+      0,
+    );
+    instance.state = { ...instance.state, runs: [staleRun] };
+    const get = () => instance.onRequest(new Request("https://internal/api/runs"));
+
+    // First read on a fresh lifetime sweeps — the stale run is reclaimed.
+    expect((await get()).status).toBe(200);
+    await flush();
+    expect(instance.state.runs.find((r) => r.runId === "r-stale")?.status).toBe("unknown");
+
+    // A second stale run + an owed outbox row land inside the floor —
+    // the row replays like it survived a restart, so nothing claims it.
+    instance.state = {
+      ...instance.state,
+      runs: [...instance.state.runs, { ...staleRun, runId: "r-second" }],
+      outbox: [
+        ...(instance.state.outbox ?? []),
+        {
+          id: "fx:slack.post:owed",
+          effectKind: "slack.post",
+          target: "slack:C1:111.222",
+          status: "pending",
+          attempts: 0,
+          requestedAt: 0,
+        },
+      ],
+    };
+    expect((await get()).status).toBe(200);
+    await flush();
+    // Floored: no sweep — but the owed post still drained on the read.
+    expect(instance.state.runs.find((r) => r.runId === "r-second")?.status).toBe("running");
+    expect(
+      instance.state.outbox?.find((e) => e.id === "fx:slack.post:owed")?.status,
+    ).toBe("dispatched");
+
+    // Past the floor, the next read sweeps again.
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(Date.now() + 60_000);
+      expect((await get()).status).toBe(200);
+      expect(instance.state.runs.find((r) => r.runId === "r-second")?.status).toBe("unknown");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
