@@ -41,6 +41,7 @@ import { audit } from "./audit.js";
 import { registerEmailTools } from "./mcp-email-tools.js";
 import { registerMemoryTools } from "./mcp-memory-tools.js";
 import { registerRunTools } from "./mcp-run-tools.js";
+import { registerScreenTools } from "./mcp-screen-tools.js";
 import type { Env } from "./env.js";
 import { redactSecrets } from "./security.js";
 
@@ -283,6 +284,7 @@ function buildMcpServer(env: Env, mcpCtx: McpRequestContext): McpServer {
   registerEmailTools(registry, env);
   registerMemoryTools(registry, env);
   registerRunTools(registry, env);
+  registerScreenTools(registry, env);
   for (const tool of registry.tools()) {
     server.registerTool(
       tool.name,

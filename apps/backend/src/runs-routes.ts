@@ -54,7 +54,8 @@ export async function handleRuns(request: Request, env: Env): Promise<Response |
   // /api/spine rides this lane: the orchestrator's P9 event log + outbox
   // live on the same DO, behind the same dashboard auth and session scope.
   const isSpine = url.pathname === "/api/spine";
-  if (!isSpine && !/^\/api\/runs(?:\/[^/]+)?$/.test(url.pathname)) {
+  // /api/runs/<id>/screen is the one two-segment subroute the DO serves.
+  if (!isSpine && !/^\/api\/runs(?:\/[^/]+(?:\/screen)?)?$/.test(url.pathname)) {
     return null;
   }
   if (!(await isAuthorizedRequest(request, env))) {
