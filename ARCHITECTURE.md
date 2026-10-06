@@ -108,6 +108,17 @@ stateless `createMcpHandler` server (`mcp-gateway.ts` builds an SDK v2
 `McpServer` per request — same tools, scopes and D1 audit trail, no DO). The
 append-only **v8** migration deletes the now-unused class and namespace.
 
+**P9 event spine** (PLAN-V2-NEXT): inside `CodingOrchestrator`, run
+mutations flow `decide → appendEvents → apply` — a schema-validated
+`RunEvent` log (`packages/shared/src/events.ts`) with per-DO `seq` and
+`commandId`/`causationId` threading, a pure projector
+(`projector.ts`), and an effect outbox (`orchestration/outbox.ts`) the
+`reclaimRuns` path drains on every wake so post-backs owed survive a
+restart (at-least-once — a send that landed before the crash can repost
+once). `GET /api/spine` on the DO serves events + owed outbox for the
+dashboard's Activity feed; agent principals see only events on runs
+they queued.
+
 **Supporting stores** (not DOs): **R2** `ATTACHMENTS` (email bodies >256KB) ·
 **KV** `AGENT_TOKENS` (bearer tokens, keyed `tok_<sha256(raw)>`) · **D1**
 `AGENT_AUDIT` (MCP call audit) · **Vectorize** `MEMORY_VECTORS` (768-dim recall).
@@ -175,7 +186,8 @@ invariants as non-negotiable acceptance criteria, not as context.
 5  sandbox    ephemeral container: clone (scoped) → run the harness CLI
 6  egress     AI Gateway swaps the dummy key for the real provider key
 7  collect    diff, exit code, structured result envelope (error ≠ completed)
-8  publish    branch + PR; optional screenshot (planned, T33)
+8  publish    branch + PR; optional screenshot (T33, shipped — needs
+              WORKER_HOSTNAME for the public asset URL)
 9  cleanup    container destroyed; short sleep tail; result + receipts recorded
 ```
 
@@ -204,18 +216,51 @@ on the operator side.
 
 ## 7. Harnesses
 
-One image ships six agent binaries; a run selects exactly one.
+One image ships nine agent CLIs (`opencode`, `claude`, `codex`, `grok`,
+`devin`, `cursor-agent`, `gemini`, `agy`, `procoder`) plus two ACP adapter
+packages (`claude-agent-acp`, `codex-acp`). A run selects exactly one
+harness lane.
+
+API-key lanes (AI Gateway BYOK):
 
 | Harness | Binary | Default model | Credential |
 |---|---|---|---|
 | `opencode` | `opencode` | `google/gemini-3.5-flash-lite` | AI Gateway BYOK |
 | `claude-code` | `claude` | `anthropic/claude-sonnet-4-6` | AI Gateway BYOK |
-| `claude-subscription` (opt-in: `SHIBA_CLAUDE_SUBSCRIPTION=1`) | `claude` | `anthropic-subscription/claude-sonnet-4-6` | `CLAUDE_SUBSCRIPTION_TOKEN` secret on a dedicated egress branch — bypasses AI Gateway |
 | `codex` | `codex` | `openai/gpt-5.3-codex` | AI Gateway BYOK |
-| `codex-subscription` (opt-in: `SHIBA_CODEX_SUBSCRIPTION=1`) | `codex` | `openai-subscription/gpt-5.3-codex` | `CODEX_SUBSCRIPTION_AUTH_JSON` secret (auth.json contents) on a dedicated chatgpt.com egress branch — bypasses AI Gateway; container CODEX_HOME gets a stub auth.json in a per-account shadow overlay |
-| `antigravity-subscription` (opt-in: `SHIBA_ANTIGRAVITY_SUBSCRIPTION=1`) | `agy` (ACP server, pinned in image) | `google-subscription/gemini-3-pro` | In-container OAuth — no Worker credential. `POST /api/auth/antigravity-subscription/begin` boots an auth sandbox that prints the Google URL; the operator signs in and pastes the dead `127.0.0.1` redirect into `POST /api/antigravity/callback`, which forwards it to the container listener. Tokens live only in the per-account profile under `/root/.shiba/antigravity/` |
-| `devin` | `devin` | `devin/swe-2` | `DEVIN_API_KEY` secret |
+| `devin` | `devin` | `devin/swe-2-medium` | `DEVIN_API_KEY` secret (api.devin.ai + server.codeium.com egress) |
 | `grok` | `grok` | `xai/grok-4.6` (medium reasoning) | AI Gateway BYOK |
+| `cursor` | `cursor-agent` | `cursor/claude-4-5-sonnet` | AI Gateway BYOK — registered but not sandbox-runnable (no `supportedRuntimes` entry) |
+| `antigravity` | `agy` | `google/gemini-3.5-flash` | registered, likewise not sandbox-runnable |
+
+Subscription lanes (opt-in `SHIBA_*_SUBSCRIPTION=1`, dedicated egress
+branches that bypass AI Gateway):
+
+| Harness | Binary | Default model | Credential |
+|---|---|---|---|
+| `claude-subscription` | `claude` | `anthropic-subscription/claude-sonnet-4-6` | `CLAUDE_SUBSCRIPTION_TOKEN[_<ACCOUNT>]` secret |
+| `codex-subscription` | `codex` | `openai-subscription/gpt-5.3-codex` | `CODEX_SUBSCRIPTION_AUTH_JSON` secret (auth.json contents) on a dedicated chatgpt.com egress branch; container CODEX_HOME gets a stub auth.json in a per-account shadow overlay |
+| `antigravity-subscription` | `agy` (ACP server, pinned in image) | `google-subscription/gemini-3-pro` | In-container OAuth — no Worker credential. `POST /api/auth/antigravity-subscription/begin` boots an auth sandbox that prints the Google URL; the operator signs in and pastes the dead `127.0.0.1` redirect into `POST /api/antigravity/callback`, which forwards it to the container listener. Tokens live only in the per-account profile under `/root/.shiba/antigravity/` |
+| `cursor-subscription` | `cursor-agent` | `cursor-subscription/auto` | `CURSOR_SUBSCRIPTION_TOKEN[_<ACCOUNT>]` on the CLI's two egress hosts |
+| `devin-subscription` | `devin` | `devin-subscription/swe-2-medium` | `DEVIN_SUBSCRIPTION_TOKEN[_<ACCOUNT>]` on api.devin.ai + server.codeium.com |
+
+ACP lanes (PLAN-V2-NEXT — every ACP-capable agent the image ships,
+driven through the Agent Client Protocol by a shared CJS driver,
+`ACP_DRIVER_SOURCE` in `harness/acp.ts`):
+
+| Harness | Spawn | Default model |
+|---|---|---|
+| `claude-acp` | `claude-agent-acp` | `anthropic/claude-sonnet-4-6` |
+| `codex-acp` | `codex-acp` | `openai/gpt-5.3-codex` |
+| `gemini-acp` | `gemini --acp` | `google/gemini-3.5-flash` |
+| `opencode-acp` | `opencode acp` | `google/gemini-3.5-flash-lite` |
+| `devin-acp` | `devin acp` | `devin/swe-2-medium` |
+
+The driver spawns the adapter, speaks JSON-RPC (`session/new`,
+`session/prompt`, `session/set_model` with `-32601` tolerance,
+auto-answered permission requests with per-call timeouts), and emits the
+run lane's normal event stream — credentials ride the provider's existing
+BYOK/worker-secret lane, so ACP lanes add no new auth surface.
 
 Defaults live in `harness/index.ts` (`HARNESS_DEFAULT_MODELS`) and are
 overridable per deploy (`CODING_MODEL`, `CLAUDE_CODE_MODEL`, `CODEX_MODEL`,
@@ -229,12 +274,15 @@ Versions are pinned in the Dockerfile and mirrored in `harness/catalog.ts` —
 `AGENT_HARNESS`; an invalid harness throws *before* approval, never as an exec
 error inside the container. Grok runs its verified headless print mode
 (`--single` + `streaming-json`) pinned to the `api.x.ai` forwarder via
-`GROK_MODELS_BASE_URL`; the shared ACP transport was tried and dropped.
-Cursor stays a remote-executor connection — its API-key→token exchange
-stores tokens in the container and cannot hold the dummy-key invariant.
+`GROK_MODELS_BASE_URL`. ACP is now a first-class transport: the five
+`*-acp` lanes and the cursor lanes share the same embedded driver; bare
+`cursor`/`antigravity` remain registered-but-unrunnable (no sandbox
+`supportedRuntimes` entry) until their runnability is proven.
 
 **Caveat carried from `PLAN.md` §2.0:** only OpenCode has completed a live run.
-The other four are unit-tested against their documented stream formats.
+The other lanes are unit-tested against their documented stream formats;
+the ACP lanes additionally need the sandbox image rebuilt with their
+adapter CLIs before a live run can exercise them.
 
 ---
 
@@ -260,8 +308,11 @@ bring-your-own-agent differentiator, not the first adapter.
 
 Not bugs — deliberate or inherited, recorded so they are not rediscovered:
 
-- **`/mcp` is bearer-only.** No OAuth discovery, so third-party MCP clients
-  cannot connect. It gates other parity work (`PLAN.md` §17.3, T29).
+- **`/mcp` OAuth is shipped but young.** `oauth-mcp.ts` serves RFC 8414 +
+  RFC 9728 discovery, RFC 7591 dynamic registration, `authorize`+PKCE
+  (S256 only), `token` exchange with rotating refresh, and `revoke` —
+  static bearer tokens still work. The consent surface is new code, so
+  treat its edge cases as under-probed rather than settled.
 - **No interactive web chat.** The dashboard submits a task and polls; there is
   no conversational steering surface (§17.4).
 - **GitHub is the only repo provider — by decision.** The approval gate is
@@ -292,7 +343,7 @@ Not bugs — deliberate or inherited, recorded so they are not rediscovered:
 | the request pipeline | `apps/backend/src/index.ts` → `agents/orchestrator.ts` |
 | how a run executes | `agents/opencode-agent.ts` → `harness/index.ts` → `harness/types.ts` |
 | the security boundary | `egress.ts`, `sandbox.ts`, `security.ts` |
-| state and persistence | the eight `*-do.ts` / agent classes in §4 |
+| state and persistence | the nine DO classes in §4 (`*-do.ts` plus the agent classes) |
 | every ingress surface | `slack-routes.ts`, `chat-lane.ts`, `telegram.ts`, `discord.ts`, `email-handler.ts` |
 | what is planned and why | `PLAN.md` (§17 for parity roadmap, §4 for what was cut and why) |
 

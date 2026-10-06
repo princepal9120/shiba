@@ -73,6 +73,30 @@
 | T50 antigravity-subscription | **Done (2026-09-27).** `packages/shared/src/antigravity.ts` ports the t3code checks verbatim (§18.12's warning): the 16-key `removedEnvironmentKeys` list, profile layout (`GEMINI_HOME=/root/.shiba/antigravity/<account>`, acpDirectory/settings.json/tokenPath/tmp, 0700), `{auth:{type:"oauth-personal"}}`, `AGY_ACP_FORCE_FILE_STORAGE=1`, the browser-helper `BROWSER` shim, `parseAntigravityAuthorizationUrl` (accounts.google.com /o/oauth2/v2/auth, one state+redirect_uri+response_type, loopback redirect ≥1024), and `validateAntigravityCallbackUrl` (exact pending origin+path, single matching `state`, code XOR error, `iss` must be accounts.google.com). `harness/antigravity-subscription.ts` is a separate harness gated by `SHIBA_ANTIGRAVITY_SUBSCRIPTION=1` — the only provider with **no Worker credential**: `packages/auth/src/antigravity-subscription.ts` boots a dedicated `agy-auth-<account>` sandbox, writes the profile, spawns `agy --uid=` detached, parses the `__SHIBA_ANTIGRAVITY_AUTH_URL__` stdout line, and parks the T47 flow `waiting` with `pending:{redirectUri,state,sandboxId}`. `POST /api/antigravity/callback` (`src/antigravity.ts`, its own module) re-validates the pasted URL against the pending record and curls it into the container listener (`--noproxy '*' --max-time 10`, 2xx only) — single-use, owner-scoped, delivery≠auth (only the probe sets `succeeded`). `agy` binary pinned 1.1.1 in the Dockerfile (arch-conditional; Google publishes no checksums — pin is version+arch in URL). Admission gate, catalog `oauth-signin` row, orchestrator model var, alchemy configVars, wrangler docs wired; 47 tests; evidence in VERIFICATION.md. |
 | T51 local runtime adapter | **Done (2026-09-27).** `RuntimeAdapter.name` gains `"local"`; `claude-code`/`codex`/`opencode` declare `supportedRuntimes:["sandbox","local"]`. New `LocalDispatch` DO (`local-dispatch.ts`, migration v9) is a mailbox — POST /dispatch (schema-checked `localRunEnvelopeSchema` incl. verbatim `execAllowlist`/`setupAllowlist`), POST /claim (oldest pending, random claimToken, 45-min stale reaper), POST /result (claimToken-checked settle), /cancel, /status, /pending. `LocalRuntimeAdapter` (runtime.ts) posts the envelope then polls → `local.dispatched|claimed|settled` milestones, merges daemon receipts filtered through `RUN_SIGNAL_KINDS`, then identical `harness.verify`. New `/api/local/*` Worker surface (`handleLocalAdapter`) — dark unless `SHIBA_LOCAL_RUNTIME=1` + `LOCAL_ADAPTER_TOKEN` bearer (`timingSafeEqualString`). Intake voucher: `handleRuns` deletes any inbound `X-Shiba-Intake` and stamps `dashboard`; `queueSlackRun` refuses `runtime:"local"` without it (unknown→400, flag-off→403, non-dashboard→403, non-local harness→400); `executeDelegatedTask` re-checks flag + `isDashboardAgentName` + reserved-runtime equality. Daemon `scripts/shiba-local-daemon.mjs` (dep-free Node ≥20): clone→setup→spawn with localized env, receipts identical to `scopedExec`, diff/files/testCommand evidence → /result; provider credential never transits (dummy key dropped, `{env:...}` placeholders). 29 tests; evidence in VERIFICATION.md. |
 
+### 2.1 Shipped beyond the tracker (2026-10-05 note)
+
+Work that landed after rev 11 without tracker rows — recorded so the plan
+stops under-reporting the tree:
+
+- **T52 role routing** — `ROLE_MODEL_MAP` / `ROLE_MODEL__<ROLE>` env pins,
+  `agents/roles.ts`, `ApprovedRoute {purpose, connectionId, modelId, harness}`
+  on the gate.
+- **P9 event spine (PR #80)** — `packages/shared/src/events.ts` +
+  `projector.ts`, `src/orchestration/event-log.ts` + `outbox.ts`; every run
+  mutation flows decide→append→apply; `GET /api/spine` serves the log.
+- **ACP harness lanes (PR #81)** — `claude-acp|codex-acp|gemini-acp|
+  opencode-acp|devin-acp` via the shared `ACP_DRIVER_SOURCE` driver;
+  cursor lanes folded onto the same transport.
+- **Model-by-purpose routing** — ModelConfig DO + `/api/model-config`
+  (`{connections, policy, purposes}`) + composer's connection/model pickers.
+- **Dashboard IA overhaul (PR #79)** — nav regrouped to Workspace /
+  Capabilities / System; Missions, Gates, VM inspector, and the Runs page
+  deleted (Analytics carries the run record); new Skills manager +
+  saved-repos picker + post-signup wizard; better-auth dashboard lane
+  (PR #78) at `/api/auth/*` on AGENT_AUDIT D1.
+- **`/api/usage`** — account usage aggregates computed DO-side from the
+  run store.
+
 ### 2.0 Status as of rev 8 (2026-09-26)
 
 **Mailbox-scoped cloud-agent pairing (local, 2026-09-26):** the Inbox can assign a mailbox to the exact `/mcp` token principal. All thirteen email tools now restrict listing, direct address access, and ID-based probes to that principal's assigned mailboxes; unassigned mailboxes remain dashboard-only. Sends and deletes still queue human approval. Unit and Worker checks cover this; a live cloud-agent mailbox round trip remains unverified until an account-owned deployment.

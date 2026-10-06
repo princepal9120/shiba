@@ -659,3 +659,21 @@ Routing delivery to a registered address; Telegram/Discord webhook handshakes.
   env:load/env:scan all green.
 - Unverified (deploy-gated): real ACP lanes inside a sandbox, the OAuth
   consent round-trip in a browser against Access, `/api/usage` on prod.
+
+- Docs sync (audit lane E): ARCHITECTURE.md §7 rewritten to the current
+  17-lane registry (API-key / subscription / ACP groups — cursor and
+  antigravity marked registered-but-unrunnable), P9 spine paragraph added
+  to §4, §6 screenshot step marked shipped, §9 OAuth gap corrected to
+  shipped-but-young, §10 "eight" → nine DO classes. spec/GOAL.md: "eight
+  Durable Objects" → nine; concurrent cap "three" → five (max_instances).
+  README: harness section rewritten (nine CLIs + three lane groups),
+  devin default corrected to devin/swe-2-medium, dashboard-only dev path
+  documented (`pnpm -C apps/frontend dev` vs root `turbo run dev`).
+  PLAN.md: "shipped beyond the tracker" note (T52, P9 spine, ACP lanes,
+  model-config, IA overhaul, /api/usage). Docs site: architecture.md
+  binding claim corrected (D1/KV/R2/Vectorize are bound), dashboard.md
+  nav updated (Activity, Skills, Analytics; Missions/Gates/VM/Runs are
+  deleted — no ?tab= links) + model-config route described,
+  contributing.md pin table +4 rows (grok, cursor-agent, agy, procoder).
+  .env.example expanded from ~15 to all 59 schema vars as grouped
+  commented entries.
