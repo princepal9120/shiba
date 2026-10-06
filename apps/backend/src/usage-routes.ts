@@ -6,6 +6,7 @@
  * `USAGE_BUDGET_USD` supplies the optional daily budget line.
  */
 import { getAgentByName } from "agents/routing";
+import { AGENT_PRINCIPAL_HEADER, LOCAL_INTAKE_HEADER } from "@shiba/shared";
 import type { DelegatedRun } from "@shiba/shared";
 import type { Env } from "./env.js";
 import { isAuthorizedRequest } from "./request-auth.js";
@@ -31,6 +32,12 @@ export async function handleUsage(request: Request, env: Env): Promise<Response 
   // The DO answers /api/runs with the same scoping the dashboard list gets;
   // usage aggregates those records — the DO's write surface is untouched.
   const runsRequest = new Request(new URL("/api/runs", request.url), request);
+  // Same strip as handleRuns: the clone carries the caller's headers into
+  // the DO, where X-Agent-Principal (queuedBy + the /api/spine filter) and
+  // X-Shiba-Intake (the local-runtime voucher) read as worker-vouched. This
+  // lane forwards a read, never credentials — an inbound copy is a forgery.
+  runsRequest.headers.delete(AGENT_PRINCIPAL_HEADER);
+  runsRequest.headers.delete(LOCAL_INTAKE_HEADER);
   const runsResponse = await stub.fetch(runsRequest);
   if (!runsResponse.ok) {
     return runsResponse;

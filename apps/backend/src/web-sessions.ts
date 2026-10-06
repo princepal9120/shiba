@@ -260,10 +260,21 @@ export function isAuthorizedSessionAgent(
 
 /**
  * T51: whether this orchestrator DO name is a dashboard surface. The local
- * runtime is operator-initiated from the dashboard only — chat surfaces all
- * land on DOs this predicate rejects: `slack:*` thread DOs and the shared
- * `default` DO that MCP/email/automations intake posts to. Base user DOs
- * (`<userId>`) and named web sessions (`web:<userId>:<sessionId>`) count.
+ * runtime is operator-initiated from the dashboard only, so this predicate
+ * is a positive list of the two dashboard shapes — never a fallthrough:
+ *
+ * 1. `<userId>` — the base user DO (also what the authenticated /api/runs
+ *    route resolves to). A bare user id carries no lane prefix: anything
+ *    with a colon is a lane DO (`slack:*` threads, `discord:`/`telegram:`/
+ *    `web:<id>` chat conversations, any future `<lane>:` prefix), not a
+ *    user.
+ * 2. `web:<userId>:<sessionId>` — a named web session, in the strict
+ *    two-segment shape parseSessionAgentName accepts. A one-segment
+ *    `web:<id>` chat-thread DO parses to null and is refused like the
+ *    other chat lanes.
+ *
+ * The shared `default` DO that MCP/email/automations intake posts to has
+ * no prefix and is not a user id, so it stays a non-dashboard surface.
  *
  * Note the asymmetry: `<userId>` is dashboard-able only because the same
  * name is also what the authenticated `/api/runs` route resolves to — the
@@ -273,10 +284,11 @@ export function isAuthorizedSessionAgent(
  */
 export function isDashboardAgentName(agentName: string | undefined): boolean {
   if (typeof agentName !== "string" || agentName === "") return false;
-  if (agentName.startsWith(WEB_SESSION_PREFIX)) return true;
+  if (agentName.startsWith(WEB_SESSION_PREFIX)) {
+    return parseSessionAgentName(agentName) !== null;
+  }
   if (agentName === DEFAULT_SESSION_ID) return false;
-  if (agentName.startsWith("slack:")) return false;
-  return true;
+  return !agentName.includes(":");
 }
 
 /**
