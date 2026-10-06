@@ -28,6 +28,9 @@ export const HARNESS_IDS = [
   "gemini-acp",
   "opencode-acp",
   "devin-acp",
+  // The generic registry lane: any ACP_REGISTRY_ALLOWLIST-ed agent,
+  // `acp/<id>` as the model id.
+  "acp",
 ] as const;
 export type HarnessId = (typeof HARNESS_IDS)[number];
 

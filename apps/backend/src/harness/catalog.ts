@@ -67,6 +67,9 @@ const CATALOG_META: Record<
   "gemini-acp": { label: "Gemini CLI (ACP)", binary: "gemini", version: "0.62.0", docsUrl: "https://agentclientprotocol.com" },
   "opencode-acp": { label: "OpenCode (ACP)", binary: "opencode", version: "1.18.34", docsUrl: "https://agentclientprotocol.com" },
   "devin-acp": { label: "Devin (ACP)", binary: "devin", version: "3000.11.3", docsUrl: "https://agentclientprotocol.com" },
+  // The generic registry lane — binary/version are whatever the pinned
+  // snapshot says; the label carries the resolved id at dispatch.
+  acp: { label: "ACP registry agent", binary: "acp", version: "per-agent", docsUrl: "https://agentclientprotocol.com/get-started/registry" },
 };
 
 const GATEWAY_PROVIDER: Record<string, string> = {
@@ -87,12 +90,21 @@ const GATEWAY_PROVIDER: Record<string, string> = {
  * values never leave the Worker.
  */
 export function agentCliCatalog(
-  env: Pick<Env, "DEVIN_API_KEY" | "SHIBA_CLAUDE_SUBSCRIPTION" | "CLAUDE_SUBSCRIPTION_TOKEN" | "SHIBA_CODEX_SUBSCRIPTION" | "CODEX_SUBSCRIPTION_AUTH_JSON" | "SHIBA_ANTIGRAVITY_SUBSCRIPTION" | "SHIBA_CURSOR_SUBSCRIPTION" | "CURSOR_SUBSCRIPTION_TOKEN" | "SHIBA_DEVIN_SUBSCRIPTION" | "DEVIN_SUBSCRIPTION_TOKEN">,
+  env: Pick<Env, "DEVIN_API_KEY" | "SHIBA_CLAUDE_SUBSCRIPTION" | "CLAUDE_SUBSCRIPTION_TOKEN" | "SHIBA_CODEX_SUBSCRIPTION" | "CODEX_SUBSCRIPTION_AUTH_JSON" | "SHIBA_ANTIGRAVITY_SUBSCRIPTION" | "SHIBA_CURSOR_SUBSCRIPTION" | "CURSOR_SUBSCRIPTION_TOKEN" | "SHIBA_DEVIN_SUBSCRIPTION" | "DEVIN_SUBSCRIPTION_TOKEN" | "ACP_REGISTRY_ALLOWLIST">,
 ): AgentCliInfo[] {
   return sandboxHarnessNames(env).map((id) => {
     const meta = CATALOG_META[id];
     const credential: AgentCliCredential =
-      id === "devin" || id === "devin-acp"
+      id === "acp"
+        ? {
+            // No credential of ours rides a registry agent — admission is
+            // the operator's allowlist, credentials are the agent's own.
+            kind: "worker-secret",
+            label: "ACP_REGISTRY_ALLOWLIST",
+            configured: Boolean(env.ACP_REGISTRY_ALLOWLIST?.trim()),
+            setupHint: "set ACP_REGISTRY_ALLOWLIST (+ ACP_REGISTRY_JSON snapshot)",
+          }
+        : id === "devin" || id === "devin-acp"
         ? {
             kind: "worker-secret",
             label: "DEVIN_API_KEY",

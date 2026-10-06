@@ -86,6 +86,14 @@ RUN set -eux; \
   chmod +x /opt/agy/agy_acp_server.par /opt/agy/localharness_external; \
   ln -sfn /opt/agy/agy_acp_server.par /usr/local/bin/agy
 
+# ACP registry lane (PLAN-V2-NEXT): a generic installer for
+# binary-distributed agents — the resolver emits
+# `/opt/acp-agents/<id>/` paths; this script fetches + sha256-verifies +
+# unpacks an archive there so a registry binary agent needs no
+# per-agent Dockerfile block.
+COPY scripts/acp-install.sh /usr/local/bin/shiba-acp-install
+RUN chmod +x /usr/local/bin/shiba-acp-install
+
 # Computer-use surface (PLAN-V2-NEXT): xdotool drives the screen input,
 # scrot captures it. The desktop itself (X server, window manager) is a
 # heavier image follow-up — these tools are inert until it lands.

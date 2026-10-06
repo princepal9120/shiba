@@ -308,6 +308,11 @@ export const Worker = Cloudflare.Worker("Worker", {
       "CURSOR_SUBSCRIPTION_MODEL",
       "SHIBA_DEVIN_SUBSCRIPTION",
       "DEVIN_SUBSCRIPTION_MODEL",
+      // ACP registry lane (PLAN-V2-NEXT): the allowlist opens it;
+      // ACP_REGISTRY_JSON pins the registry snapshot resolution runs on.
+      "ACP_REGISTRY_ALLOWLIST",
+      "ACP_REGISTRY_JSON",
+      "ACP_MODEL",
       // T51 opt-in (§18.13): absent = the local runtime is dark.
       "SHIBA_LOCAL_RUNTIME",
       "CODEX_MODEL",

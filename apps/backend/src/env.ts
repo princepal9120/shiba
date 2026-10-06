@@ -298,6 +298,8 @@ export interface Env {
   DEVIN_SUBSCRIPTION_TOKEN?: string;
   /** Per-deploy model override for the devin-subscription lane. */
   DEVIN_SUBSCRIPTION_MODEL?: string;
+  /** Per-deploy default for the `acp` registry lane (an `acp/<id>` model id). */
+  ACP_MODEL?: string;
   /**
    * Optional. Devin account API key for the devin harness — injected as a
    * Bearer header by the egress forwarders on api.devin.ai and
@@ -338,4 +340,18 @@ export interface Env {
    * origin validation. Unset falls back to each request's own origin.
    */
   BETTER_AUTH_URL?: string;
+  /**
+   * Optional. Comma-separated ACP registry agent ids the generic `acp`
+   * harness may spawn (`*` = all). Absent or empty = the lane is dark —
+   * registry agents are arbitrary binaries, so admission is closed by
+   * default.
+   */
+  ACP_REGISTRY_ALLOWLIST?: string;
+  /**
+   * Optional. Operator-pinned snapshot of the ACP registry index
+   * (cdn.agentclientprotocol.com/registry/v1/latest/registry.json),
+   * stored verbatim as a JSON string. Resolution is offline: the worker
+   * never fetches the registry at admit time.
+   */
+  ACP_REGISTRY_JSON?: string;
 }
