@@ -918,3 +918,36 @@ Audit findings T1-T7 / D9-D12-D13 against `devin/1791266355-tests-dx`.
 - Unverified (image-gated): xdotool/scrot actually driving a screen —
   the sandbox image needs the packages (this PR adds them) plus an X
   server/desktop session, which is a heavier image rebuild follow-up.
+
+# 2026-10-04 — Run fork: POST /api/runs/<id>/fork (PLAN-V2-NEXT)
+
+- `packages/shared`: `ForkLineage { runId, checkpointRef }` rides the
+  frozen input — `DelegatedRun.forkedFrom`, `QueuedRunInput`,
+  `PendingApproval`, `CreateApprovalInput`, `RunInputFields`,
+  `runInputHash`, `createPendingApproval`, `createRun`, queue-mint and
+  queue-replay `sameInput` all cover it, so a fork's lineage is part of
+  what the human approved. New spine kind `run.forked` (payload
+  `{forkedFrom}`) appends to the log; the projector treats it as
+  log-only (lineage already lives on the minted run row).
+- `POST /api/runs/<id>/fork` on the orchestrator DO: validates the
+  parent run exists (404s, incl. cross-principal), requires a
+  `checkpoint.captured` signal on the parent (400s with a clear error —
+  no checkpoint, no fork), accepts `checkpoint` as a captured seq or
+  full ref (defaults to the parent's latest) and an optional `prompt`
+  task override, then mints a normal approval carrying the parent's
+  frozen input + `forkedFrom`. The parent's record is never touched;
+  concurrent forks mint independent approvals/runIds; `commandId`
+  dedupes retries. Worker gateway widened one segment for `/fork`.
+- Dispatch envelope: `mintApprovedRun` propagates `forkedFrom` into the
+  reserved run; `approvalEvidenceFor` hashes it; `fullInput` carries
+  `forkCheckpointRef` through `codingTaskInputSchema` so the executor
+  can restore the parent's worktree ref. Container-side `git
+  fetch+restore` of the ref is the documented follow-up (image seam).
+- Dashboard: `/api/runs` records expose `forkedFrom`; the Activity view
+  summarizes `run.forked` as "fork of <run> · cp <seq>".
+- Local verification: `vitest test/run-fork.test.ts` (11) — decide-level
+  mint/hash/replay, 404/400/principal-visibility/dedup route cases,
+  approval-gated mint carrying lineage, `run.forked` projector fold,
+  `forkedFrom` on the listed run record.
+- Unverified (credential-gated): live executor restoring the checkpoint
+  ref inside a sandbox (needs the image-side fetch/restore seam).

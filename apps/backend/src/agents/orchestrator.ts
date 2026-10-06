@@ -926,6 +926,11 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         ...(reserved.testCommand ? { testCommand: reserved.testCommand } : {}),
         ...(input.authAccount ? { authAccount: input.authAccount } : {}),
         ...(input.role !== undefined ? { role: input.role } : {}),
+        // Fork lineage rides the dispatch envelope — the executor restores
+        // the parent's checkpoint ref into the fork's clone.
+        ...(reserved.forkedFrom !== undefined
+          ? { forkCheckpointRef: reserved.forkedFrom.checkpointRef }
+          : {}),
       };
       // Chat-originated runs get the outcome back in the thread in the
       // coworker voice; the summary carries the PR link when one was published.
@@ -1516,6 +1521,152 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
   }
 
   /**
+   * `POST /api/runs/<id>/fork` (PLAN-V2-NEXT): mint a NEW approval-gated
+   * run that resumes from one of the parent's captured checkpoints.
+   *
+   * Lineage rides the frozen input (`forkedFrom`) so the approval card
+   * names what actually executes and the input hash covers it — a fork
+   * is a new decision, never a replay of the parent. Checkpoint refs
+   * come from the parent's `checkpoint.captured` signals (the only
+   * durable record of its worktree refs); `run.checkpointed` spine
+   * events are a log-only view of the same refs.
+   *
+   * Guards: parent must exist and be visible to the caller's principal;
+   * parent must have checkpoints; a named checkpoint must be one the
+   * parent actually captured. The parent's record is never touched —
+   * forks mint a sibling approval + a `run.forked` spine event.
+   */
+  private async forkRun(
+    parentRunId: string,
+    input: Record<string, unknown>,
+    agentPrincipal: string | null,
+  ): Promise<Response> {
+    // Fork dedup mirrors queue dedup: a retried POST returns the minted
+    // approvalId instead of minting a second sibling.
+    const forkCommandId =
+      typeof input.commandId === "string" && input.commandId.trim()
+        ? `fork:${input.commandId.trim().slice(0, 200)}`
+        : undefined;
+    if (forkCommandId !== undefined) {
+      const prior = this.commandReceipt(forkCommandId);
+      if (prior !== undefined && prior.approvalId !== undefined) {
+        return Response.json({ ok: true, approvalId: prior.approvalId, deduped: true });
+      }
+    }
+    const parent = this.store.get(parentRunId);
+    if (parent === null || (agentPrincipal !== null && parent.queuedBy !== agentPrincipal)) {
+      return Response.json({ error: "Run not found." }, { status: 404 });
+    }
+    const checkpoints = (parent.signals ?? [])
+      .filter((signal) => signal.kind === "checkpoint.captured" && typeof signal.detail === "string")
+      .map((signal) => signal.detail as string);
+    if (checkpoints.length === 0) {
+      return Response.json(
+        { error: `Run ${parentRunId} has no captured checkpoints to fork from.` },
+        { status: 400 },
+      );
+    }
+    // `checkpoint` may name a seq (2) or a full ref; absent = latest.
+    let checkpointRef: string;
+    const checkpointInput = input.checkpoint;
+    if (checkpointInput === undefined) {
+      checkpointRef = checkpoints[checkpoints.length - 1]!;
+    } else if (typeof checkpointInput === "number" && Number.isInteger(checkpointInput)) {
+      const wanted = `${parent.sandboxId}/${checkpointInput}`;
+      const found = checkpoints.find((ref) => ref.endsWith(`/${wanted}`));
+      if (found === undefined) {
+        return Response.json(
+          { error: `Checkpoint ${checkpointInput} not found on run ${parentRunId}.` },
+          { status: 400 },
+        );
+      }
+      checkpointRef = found;
+    } else if (typeof checkpointInput === "string" && checkpointInput.trim()) {
+      const wanted = checkpointInput.trim();
+      if (!checkpoints.includes(wanted)) {
+        return Response.json(
+          { error: `Checkpoint ${wanted.slice(0, 120)} is not one of run ${parentRunId}'s captured checkpoints.` },
+          { status: 400 },
+        );
+      }
+      checkpointRef = wanted;
+    } else {
+      return Response.json(
+        { error: "checkpoint must be a checkpoint seq number or a full checkpoint ref." },
+        { status: 400 },
+      );
+    }
+    // `prompt` replaces the parent's task verbatim — a fork carries its
+    // own instruction, not a mutation of the parent's.
+    let task = parent.task;
+    if (input.prompt !== undefined) {
+      if (typeof input.prompt !== "string" || !input.prompt.trim()) {
+        return Response.json({ error: "prompt must be a non-empty string." }, { status: 400 });
+      }
+      task = input.prompt;
+    }
+    const approvalId = crypto.randomUUID();
+    const forkedFrom = { runId: parent.runId, checkpointRef };
+    const threadKey =
+      typeof input.threadKey === "string" && input.threadKey.trim()
+        ? input.threadKey.trim()
+        : "default";
+    if (this.approvals.filter((a) => a.status === "pending").length >= MAX_PENDING_APPROVALS) {
+      return Response.json(
+        { error: "Approval queue is full — resolve pending approvals first." },
+        { status: 429 },
+      );
+    }
+    try {
+      this.emitSpine({
+        kind: "run.forked",
+        commandId: `fork:${approvalId}`,
+        ...(forkCommandId !== undefined ? { causationId: forkCommandId } : {}),
+        runId: parent.runId,
+        approvalId,
+        payload: { forkedFrom },
+        at: Date.now(),
+      });
+      this.setState({
+        ...this.state,
+        pendingApprovals: createPendingApproval(this.approvals, {
+          threadKey,
+          approvalId,
+          repoUrl: parent.repoUrl,
+          task: task.slice(0, 4000),
+          baseBranch: parent.baseBranch,
+          publishPullRequest: parent.publishPullRequest,
+          ...(parent.route !== undefined ? { route: parent.route } : {}),
+          ...(parent.authAccount !== undefined ? { authAccount: parent.authAccount } : {}),
+          ...(parent.runtime !== undefined ? { runtime: parent.runtime } : {}),
+          ...(parent.testCommand !== undefined ? { testCommand: parent.testCommand } : {}),
+          forkedFrom,
+          ...(agentPrincipal !== null ? { queuedBy: agentPrincipal } : {}),
+          createdAt: Date.now(),
+        }),
+        ...(forkCommandId !== undefined
+          ? {
+              commandReceipts: this.withCommandReceipt({
+                commandId: forkCommandId,
+                kind: "run.fork",
+                outcome: "queued",
+                approvalId,
+                threadKey,
+                at: Date.now(),
+              }),
+            }
+          : {}),
+      });
+    } catch (error) {
+      return Response.json(
+        { error: error instanceof Error ? error.message : "Could not queue fork approval." },
+        { status: 409 },
+      );
+    }
+    return Response.json({ ok: true, approvalId, forkedFrom });
+  }
+
+  /**
    * Email-kind approval (megaplan T7): the frozen send/delete payload is
    * stored verbatim plus its owning mailbox — the single source the
    * executor routes and sends against. `repoUrl`/`task` stay populated
@@ -1935,6 +2086,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       ...(record.authAccount ? { authAccount: record.authAccount } : {}),
       ...(record.runtime !== undefined ? { runtime: record.runtime } : {}),
       ...(record.testCommand !== undefined ? { testCommand: record.testCommand } : {}),
+      ...(record.forkedFrom !== undefined ? { forkedFrom: record.forkedFrom } : {}),
       ...(continuationKey !== undefined ? { continuationKey } : {}),
       decisionTap: (command, decision) => this.spineTap(command, decision),
       // T40: the run carries its approval evidence from birth — who decided,
@@ -1948,6 +2100,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         ...(record.authAccount ? { authAccount: record.authAccount } : {}),
         ...(record.runtime !== undefined ? { runtime: record.runtime } : {}),
         ...(record.testCommand !== undefined ? { testCommand: record.testCommand } : {}),
+        ...(record.forkedFrom !== undefined ? { forkedFrom: record.forkedFrom } : {}),
       }),
     });
   }
@@ -2946,6 +3099,28 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         return Response.json({ error: "Invalid run ID." }, { status: 400 });
       }
       return this.screenAction(screenRunId, screenBody as Record<string, unknown>, agentPrincipal);
+    }
+    const forkMatch = url.pathname.match(/^\/api\/runs\/([^/]+)\/fork$/);
+    if (forkMatch !== null) {
+      if (request.method !== "POST") {
+        return Response.json({ error: "Method not allowed." }, { status: 405 });
+      }
+      let forkBody: unknown;
+      try {
+        forkBody = await request.json();
+      } catch {
+        return Response.json({ error: "Request body is not valid JSON." }, { status: 400 });
+      }
+      if (typeof forkBody !== "object" || forkBody === null || Array.isArray(forkBody)) {
+        return Response.json({ error: "Request body must be a JSON object." }, { status: 400 });
+      }
+      let forkRunId: string;
+      try {
+        forkRunId = decodeURIComponent(forkMatch[1]!);
+      } catch {
+        return Response.json({ error: "Invalid run ID." }, { status: 400 });
+      }
+      return this.forkRun(forkRunId, forkBody as Record<string, unknown>, agentPrincipal);
     }
     const match = url.pathname.match(/^\/api\/runs(?:\/([^/]+))?$/);
     if (!match) {
