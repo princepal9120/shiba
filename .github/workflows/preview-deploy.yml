@@ -1,0 +1,87 @@
+name: Preview deploy (alchemy, pr-<n> stage)
+
+# PLAN-V2-NEXT preview-deploys phase: every same-repo PR gets an isolated
+# ALCHEMY_STAGE=pr-<n> deploy (worker/stores suffixed by alchemy.run.ts) and a
+# comment with its workers.dev URL. Fork PRs skip (no secrets + no trust);
+# the close job destroys the stage when the PR merges or closes.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  deploy-preview:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    env:
+      STAGE: pr-${{ github.event.pull_request.number }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Deploy preview stack via alchemy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ALCHEMY_STAGE: ${{ env.STAGE }}
+          ACCESS_EMAILS: ${{ secrets.ACCESS_EMAILS }}
+          WORKERS_SUBDOMAIN: ${{ secrets.WORKERS_SUBDOMAIN }}
+          SLACK_SIGNING_SECRET: ${{ secrets.SLACK_SIGNING_SECRET }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_APPROVERS: ${{ secrets.SLACK_APPROVERS }}
+          SLACK_CHANNEL_REPOS: ${{ secrets.SLACK_CHANNEL_REPOS }}
+          SLACK_APPROVALS_CHANNEL: ${{ secrets.SLACK_APPROVALS_CHANNEL }}
+          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+          AI_GATEWAY_TOKEN: ${{ secrets.AI_GATEWAY_TOKEN }}
+          DEVIN_API_KEY: ${{ secrets.DEVIN_API_KEY }}
+          CLAUDE_SUBSCRIPTION_TOKEN: ${{ secrets.CLAUDE_SUBSCRIPTION_TOKEN }}
+          CODEX_SUBSCRIPTION_AUTH_JSON: ${{ secrets.CODEX_SUBSCRIPTION_AUTH_JSON }}
+          LOCAL_ADAPTER_TOKEN: ${{ secrets.LOCAL_ADAPTER_TOKEN }}
+          INTERNAL_SIGNING_KEY: ${{ secrets.INTERNAL_SIGNING_KEY }}
+        # alchemy reads stage from ALCHEMY_STAGE at module level — never
+        # pass --stage. Preview stages skip the custom domain entirely and
+        # serve on <worker>.<subdomain>.workers.dev instead.
+        run: pnpm run deploy:alchemy
+      - name: Comment preview URL on the PR
+        if: always() && secrets.WORKERS_SUBDOMAIN != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREVIEW_HOST: shiba-ai-coworker-pr-${{ github.event.pull_request.number }}.${{ secrets.WORKERS_SUBDOMAIN }}.workers.dev
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} \
+            --repo ${{ github.repository }} \
+            --body "Preview deploy (stage \`${STAGE}\`): https://${PREVIEW_HOST}/app/"
+
+  destroy-preview:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    env:
+      STAGE: pr-${{ github.event.pull_request.number }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Destroy preview stack
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ALCHEMY_STAGE: ${{ env.STAGE }}
+          ACCESS_EMAILS: ${{ secrets.ACCESS_EMAILS }}
+          WORKERS_SUBDOMAIN: ${{ secrets.WORKERS_SUBDOMAIN }}
+        run: pnpm exec alchemy destroy

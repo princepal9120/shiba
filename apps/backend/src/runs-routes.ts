@@ -6,6 +6,8 @@
 import { getAgentByName } from "agents/routing";
 import { AGENT_PRINCIPAL_HEADER, LOCAL_INTAKE_DASHBOARD, LOCAL_INTAKE_HEADER } from "@shiba/shared";
 import type { Env } from "./env.js";
+import { signInternalRequest } from "./edge-identity.js";
+
 import { isAuthorizedRequest, resolveUserId } from "./request-auth.js";
 import { ORCHESTRATOR_NAME } from "./slack-routes.js";
 import {
@@ -96,5 +98,8 @@ export async function handleRuns(request: Request, env: Env): Promise<Response |
   // mcp-run-tools stamps it, on internal stub calls — never on this lane,
   // so an inbound copy is a forgery, not a credential to forward.
   rewritten.headers.delete(AGENT_PRINCIPAL_HEADER);
+  // Edge identity: sign the stamped intake voucher so the DO can verify the
+  // Worker minted it (no-op until INTERNAL_SIGNING_KEY is configured).
+  await signInternalRequest(rewritten, env);
   return stub.fetch(rewritten);
 }

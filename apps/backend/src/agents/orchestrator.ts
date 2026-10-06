@@ -45,6 +45,7 @@ import {
   releaseRestartedDraftClaim,
   unqueueEmailApprovalDraft,
 } from "../email-approvals.js";
+import { carriesVouchedHeaders, verifyInternalRequest } from "../edge-identity.js";
 import type { Env } from "../env.js";
 import {
   allowedHostsFor,
@@ -2403,6 +2404,20 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
    * case that cannot wait — a touch that just dropped expired sends
    * (or a DO restart, where the floor starts at zero anyway).
    */
+  private signingWarned = false;
+
+  private warnSigningDisabledOnce(): void {
+    // INTERNAL_SIGNING_KEY unset → header-trust fallback. Once per DO
+    // lifetime so operators see it without log spam.
+    if (this.signingWarned) return;
+    this.signingWarned = true;
+    console.warn(
+      "edge-identity: INTERNAL_SIGNING_KEY unset — trusting vouched headers " +
+        "(X-Agent-Principal / X-Shiba-Intake) unsigned. Set the secret on " +
+        "the Worker to require signed internal requests.",
+    );
+  }
+
   private sweepStaleDrafts(force = false): void {
     const now = Date.now();
     if (!force && now - (this.lastStaleSweepAt ?? 0) < STALE_SWEEP_INTERVAL_MS) {
@@ -2711,6 +2726,21 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
 
   override async onRequest(request: Request): Promise<Response> {
     const url = new URL(request.url);
+    // Edge identity: when INTERNAL_SIGNING_KEY is configured, any request
+    // carrying vouched headers must present a valid Worker signature —
+    // otherwise a forged X-Agent-Principal would scope/cancel as another
+    // principal. Requests without vouched headers pass unverified (same
+    // trust level as before). Unset key = header-trust fallback for dev.
+    const verification = await verifyInternalRequest(request, this.env);
+    if (!verification.ok) {
+      return Response.json(
+        { error: `Internal signature verification failed (${verification.reason}).` },
+        { status: 401 },
+      );
+    }
+    if (!verification.signed && carriesVouchedHeaders(request)) {
+      this.warnSigningDisabledOnce();
+    }
     // Worker-vouched agent identity: only mcp-run-tools sets this after
     // bearer auth, so it scopes reads/cancels to records that principal
     // queued. External callers never reach this DO without an Access or
