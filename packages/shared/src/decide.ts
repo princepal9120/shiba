@@ -25,7 +25,7 @@ import { MAX_RECEIPTS } from "./receipts.js";
 import type { Receipt, ReceiptKind } from "./receipts.js";
 import type { RunErrorCode } from "./run-errors.js";
 import { terminalStatusForError } from "./run-errors.js";
-import type { DelegatedRun, RunPatch } from "./runs.js";
+import type { DelegatedRun, ForkLineage, RunPatch } from "./runs.js";
 import { isActiveStatus, isTerminalStatus, normalizeRun } from "./runs.js";
 
 /** The creation payload a `queue` command carries — createRun's args. */
@@ -55,6 +55,8 @@ export interface QueuedRunInput {
   runtime?: RuntimeSelection;
   /** The test command — part of the approval-hashed input. */
   testCommand?: string[];
+  /** Run-fork lineage — part of the approval-hashed input. */
+  forkedFrom?: ForkLineage;
 }
 
 export type RunCommand =
@@ -131,6 +133,7 @@ function hashMatchesRun(evidence: ApprovalEvidence, run: RunInputFields): boolea
       ...(run.authAccount !== undefined ? { authAccount: run.authAccount } : {}),
       ...(run.runtime !== undefined ? { runtime: run.runtime } : {}),
       ...(run.testCommand !== undefined ? { testCommand: run.testCommand } : {}),
+      ...(run.forkedFrom !== undefined ? { forkedFrom: run.forkedFrom } : {}),
     })
   );
 }
@@ -176,6 +179,7 @@ export function decideRunTransition(state: RunMachineState, command: RunCommand)
           ...(command.input.authAccount !== undefined ? { authAccount: command.input.authAccount } : {}),
           ...(command.input.runtime !== undefined ? { runtime: command.input.runtime } : {}),
           ...(command.input.testCommand !== undefined ? { testCommand: command.input.testCommand } : {}),
+          ...(command.input.forkedFrom !== undefined ? { forkedFrom: command.input.forkedFrom } : {}),
           ...(approval !== undefined ? { approval } : {}),
           status: "pending",
           generation: 0,
@@ -215,7 +219,8 @@ export function decideRunTransition(state: RunMachineState, command: RunCommand)
             command.input.continuesKey === run.continuationKey) &&
           run.authAccount === command.input.authAccount &&
           run.runtime === command.input.runtime &&
-          JSON.stringify(run.testCommand ?? []) === JSON.stringify(command.input.testCommand ?? []);
+          JSON.stringify(run.testCommand ?? []) === JSON.stringify(command.input.testCommand ?? []) &&
+          JSON.stringify(run.forkedFrom ?? null) === JSON.stringify(command.input.forkedFrom ?? null);
         if (sameInput) {
           return { events: [{ type: "run.queued", commandId: command.commandId, at, run, replayed: true }] };
         }

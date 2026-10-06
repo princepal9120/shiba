@@ -19,6 +19,7 @@ import type {
   ApprovalEvidence,
   ApprovedRoute,
   DelegatedRun,
+  ForkLineage,
   Receipt,
   RunPatch,
   RunStatus,
@@ -35,7 +36,7 @@ import {
 } from "@shiba/shared";
 import { appendReceipt, makeReceipt } from "./receipts.js";
 
-export type { DelegatedRun, RunPatch, RunStatus } from "@shiba/shared";
+export type { DelegatedRun, ForkLineage, RunPatch, RunStatus } from "@shiba/shared";
 // Wire types and pure predicates live in @shiba/shared so the dashboard
 // consumes the same record shape; re-exported here for existing imports.
 export {
@@ -66,6 +67,8 @@ export function createRun(args: {
   /** T51: the approved runtime — "local" dispatches to the operator daemon. */
   runtime?: RuntimeSelection;
   testCommand?: string[];
+  /** Run-fork lineage — hashed into the approved input like every field. */
+  forkedFrom?: ForkLineage;
   /** T40: approval evidence stamped at queue time (the resolve path). */
   approval?: ApprovalEvidence;
   now?: number;
@@ -90,6 +93,7 @@ export function createRun(args: {
       ...(args.authAccount !== undefined ? { authAccount: args.authAccount } : {}),
       ...(args.runtime !== undefined ? { runtime: args.runtime } : {}),
       ...(args.testCommand !== undefined ? { testCommand: args.testCommand } : {}),
+      ...(args.forkedFrom !== undefined ? { forkedFrom: args.forkedFrom } : {}),
     },
     ...(args.approval !== undefined ? { approval: args.approval } : {}),
     at: now,
