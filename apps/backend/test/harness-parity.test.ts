@@ -92,6 +92,8 @@ describe("harness registry parity", () => {
       SHIBA_ANTIGRAVITY_SUBSCRIPTION: "1",
       SHIBA_CURSOR_SUBSCRIPTION: "1",
       SHIBA_DEVIN_SUBSCRIPTION: "1",
+      // The acp registry lane is allowlist-gated like a subscription.
+      ACP_REGISTRY_ALLOWLIST: "*",
     };
     const catalogIds = new Set(agentCliCatalog(allSubscriptionsEnabled).map(({ id }) => id));
 

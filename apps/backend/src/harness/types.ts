@@ -34,7 +34,11 @@ export type AgentHarnessName =
   | "codex-acp"
   | "gemini-acp"
   | "opencode-acp"
-  | "devin-acp";
+  | "devin-acp"
+  // The generic registry lane (PLAN-V2-NEXT): `acp/<agent-id>` as the
+  // coding model resolves any allowlisted ACP registry agent through
+  // acp-registry.ts. Env-bound at resolveHarness time.
+  | "acp";
 
 /**
  * T43 runtimes a harness can execute under. "sandbox" and the refused
@@ -79,6 +83,13 @@ export const PROVIDER_HOSTS: Record<string, string> = {
   // which the harness's egressOverrides swaps to the subscription branch.
   "cursor-subscription": "api2.cursor.sh",
   "devin-subscription": "api.devin.ai",
+  // The `acp` provider namespace has no single API host — a registry
+  // agent's own traffic belongs to whichever service that agent fronts.
+  // This row is the namespace's install anchor: `npx`-distributed agents
+  // pull from the npm registry; binary/uvx origins join at resolve time
+  // via the harness's extraEgress. The allowlist (ACP_REGISTRY_ALLOWLIST)
+  // is the admission boundary, not this host.
+  acp: "registry.npmjs.org",
 };
 
 /**
