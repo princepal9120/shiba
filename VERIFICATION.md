@@ -741,3 +741,62 @@ orchestrator DO plus the dashboard pollers that drive it.
   backend tests, build + docs:verify all green.
 - Unverified (credential-gated): live `/api/spine?since=` polling
   against a running worker, reclaim-floor timing on prod DO lifetimes.
+
+# 2026-10-06 — deps/supply-chain: audit advisories, image digest, agy checksums, stale pins, verified-label honesty
+
+Lane: deps/supply-chain (audit findings E1–E8).
+
+- E1 — `@cloudflare/puppeteer` transitive advisories cleared: scoped override
+  `@cloudflare/puppeteer>@puppeteer/browsers@3.2.2` drops
+  extract-zip@2.0.1 (GHSA-jmr9-qjv8-65gv + GHSA-7pqw-9j4j-h8q3, both
+  unpatched upstream) and the proxy-agent>pac-proxy-agent>get-uri>
+  basic-ftp chain (GHSA-c475-qrg2-pj4r) from the lockfile. Safe because the
+  package's cloudflare ESM entrypoint never imports the node launcher tree
+  that loads @puppeteer/browsers (`puppeteer.launch(env.BROWSER)` only) —
+  verified by reading lib/esm/puppeteer/*.
+- E2 — http-cache-semantics overridden to 4.3.0 (first release outside
+  <=4.2.0, GHSA-ch52-4w7c-c8xp). braces@3.0.3 has no upstream fix
+  (CVE-2026-93687): patched `lib/parse.js` with a MAX_DEPTH=1024 guard so
+  every downstream recursive walker (expand/compile/stringify) is bounded;
+  advisory recorded in auditConfig.ignoreGhsas with the mitigation named.
+- E3 — LGPL-3.0 `node-liblzma` removed via `ignoredOptionalDependencies`
+  (it was an optional dep of just-bash via @cloudflare/think, only serving
+  `tar --lzma` — dead weight in workerd anyway; just-bash degrades with a
+  clear error when absent). MPL-2.0 `lightningcss` remains dev/build-only —
+  flagged exception, not hidden.
+- E4 — sandbox base image digest-pinned:
+  `cloudflare/sandbox:0.12.9-opencode@sha256:7b84b0…8107b5` (manifest-list
+  digest via Docker Registry v2 API). dockerfile-pins.test.ts now requires
+  the @sha256 suffix.
+- E5 — agy ACP zip now checksum-verified per arch (same s=<sha> +
+  `sha256sum -c` pattern as devin/cursor blocks). Google publishes no
+  checksums; both hashes were computed locally against AGY 1.1.1 zips on
+  2026-10-06 (x86_64 681,969,407 B, arm64 656,572,786 B) and recorded in the
+  Dockerfile comment + test.
+- E6 — `@modelcontextprotocol/server` 2.0.0→2.3.1 workspace-wide override;
+  agents@0.23.0 declares the peer as exact 2.0.0, allowed via
+  peerDependencyRules after typecheck+tests passed on 2.3.1. The `ai`
+  7.0.102→7.0.128 bump was REVERTED as breaking: backend-only ai bumped
+  `agents`/`@cloudflare/ai-chat` into a second pnpm peer-variant, so
+  vi.mock (keyed on resolved module path) stopped covering the
+  frontend-context copies and dashboard.test.ts rendered the real hooks
+  (SSR suspension). The mcp-server override is deliberately global for the
+  same reason — a per-app bump re-splits the instances.
+- E7 — `@cloudflare/puppeteer` caret range → exact 1.4.0 (repo convention).
+- E8 — `ModelOption.availability`: `verified` → `configured`. `ready` is an
+  operator-declared flag, never a wire probe; the union now reads honestly
+  (`"configured" | "unverified" | "retired"`, same field name — wire shape
+  unchanged).
+
+Local verification: `pnpm install` clean; `pnpm typecheck` 5/5; `pnpm lint`
+exit 0 (warnings-only baseline); `pnpm lint:imports` green; `pnpm test`
+1748 pass / 3 skip / 0 fail; `pnpm build` green; `pnpm audit` 69→65 vulns
+(high 14→10, braces suppressed via local patch), `--prod` 4 remaining
+(source-map-js via agents>vite>postcss, sprintf-js unpatched-upstream,
+postcss-selector-parser dev-side — all pre-existing, outside this lane's
+findings). The dual-peer-variant regression described under E6 was caught
+by dashboard.test.ts locally and in CI, root-caused via readlink on both
+contexts' .pnpm dirs, and re-verified fixed (13/13 dashboard tests).
+
+Unverified (credential-gated): `docker build` of the pinned image; agy zip
+checksums re-verified at fetch time inside the image build only.

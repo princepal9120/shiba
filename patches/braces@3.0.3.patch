@@ -1,0 +1,29 @@
+diff --git a/lib/parse.js b/lib/parse.js
+--- a/lib/parse.js
++++ b/lib/parse.js
+@@ -23,6 +23,15 @@
+   CHAR_NO_BREAK_SPACE,
+   CHAR_ZERO_WIDTH_NOBREAK_SPACE
+ } = require('./constants');
++
++/**
++ * Bounds how deeply `{...}` blocks may nest. expand(), compile() and
++ * stringify() all walk the AST recursively, one stack frame per nesting
++ * level, so an unbounded parse let a deeply nested pattern exhaust the
++ * call stack (CVE-2026-93687 / GHSA-vfj7-8cjw-p6xm). 1024 stays far above
++ * real-world globs and far below the engine's stack limit.
++ */
++const MAX_DEPTH = 1024;
+ 
+ /**
+  * parse
+@@ -196,6 +205,9 @@
+ 
+     if (value === CHAR_LEFT_CURLY_BRACE) {
+       depth++;
++      if (depth > MAX_DEPTH) {
++        throw new SyntaxError(`Brace nesting depth (${depth}) exceeds max depth (${MAX_DEPTH})`);
++      }
+ 
+       const dollar = prev.value && prev.value.slice(-1) === '$' || block.dollar === true;
+       const brace = {
