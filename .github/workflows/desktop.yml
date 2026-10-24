@@ -4,6 +4,7 @@ on:
     paths:
       - apps/desktop/**
       - scripts/shiba-local-daemon.mjs
+      - scripts/link-operator-auth.mjs
       - packages/shared/src/desktop-bridge.ts
       - .github/workflows/desktop.yml
   push:
@@ -26,7 +27,8 @@ jobs:
       - run: pnpm --filter @shiba/desktop typecheck
       - run: pnpm --filter @shiba/desktop lint
       - run: pnpm --filter @shiba/desktop test
-      # Electron smoke (T65/T66); the script builds dist/ first. macOS runners have a display.
+      # Electron smoke (T65/T66). The script builds dist/, downloads the Electron
+      # binary once, then runs one e2e file at a time. macOS runners have a display.
       - run: pnpm --filter @shiba/desktop test:e2e
       # Unsigned build: signing secrets are never present on PRs.
       # dist/ is gitignored — compile main.js before packaging (REVIEW3 F4).
@@ -56,6 +58,7 @@ jobs:
       - run: pnpm --filter @shiba/desktop test
       # Signing + notarization secrets are added by a human in repo settings.
       - run: pnpm --filter @shiba/desktop build
+      # Tag builds are the electron-updater channel. Publish the GitHub release.
       - run: pnpm --filter @shiba/desktop exec electron-builder --publish always
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}

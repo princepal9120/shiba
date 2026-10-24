@@ -41,10 +41,16 @@ describe("harness registry (T22)", () => {
 describe("the selected harness reaches the adapter that runs it", () => {
   it("runs the harness AGENT_HARNESS selected, not the default", async () => {
     const execs: string[] = [];
+    const files = new Map<string, string>();
     const adapter = createRuntimeAdapter("sandbox", resolveHarness("codex"));
     const ops = {
       gitCheckout: async () => {},
-      writeFile: async () => { throw new Error("codex writes no config file"); },
+      writeFile: async (path: string, contents: string) => {
+        if (!path.endsWith(".agent-harness.mjs") && !path.endsWith(".job.json")) {
+          throw new Error("codex writes no config file");
+        }
+        files.set(path, contents);
+      },
       exec: async (command: string) => {
         execs.push(command);
         return { stdout: "", stderr: "", exitCode: 0 };
@@ -52,12 +58,14 @@ describe("the selected harness reaches the adapter that runs it", () => {
       readFile: async () => ({ kind: "utf8" as const, content: "" }),
     };
     await adapter.runCodingTask(ops, input("openai/gpt-5"), async () => {});
-    // T44: checkpoint git commands precede the harness exec — find the
-    // harness invocation itself; anything starting "opencode" means the
-    // selection was dropped and egress would block its provider.
-    const harnessExec = execs.find((c) => c.includes("'exec'") || c.includes("'run'"));
-    expect(harnessExec).toMatch(/^'codex' 'exec'/);
+    // The sandbox execs the session runner. The job names the selected
+    // harness; an opencode command would mean the selection was dropped.
+    const harnessExec = execs.find((command) => command.includes("agent-harness.mjs"));
+    expect(harnessExec).toMatch(/^'node'/);
     expect(harnessExec).not.toMatch(/opencode/);
+    const job = files.get("/workspace/run-abcdef12345678.job.json") ?? "";
+    expect(job).toContain('"provider":"codex"');
+    expect(job).toContain("gpt-5");
   });
 });
 
@@ -72,6 +80,7 @@ describe("per-run harness selection end to end", () => {
 
   it("the child runs the harness the approved input named, not the env default", async () => {
     const execs: string[] = [];
+    const files = new Map<string, string>();
     // What the orchestrator froze into the delegation input after the human
     // approved "codex" on a deployment whose AGENT_HARNESS is unset.
     const approved = { ...input("openai/gpt-5.3-codex"), harness: "codex" as const };
@@ -79,14 +88,19 @@ describe("per-run harness selection end to end", () => {
     const adapter = createRuntimeAdapter("sandbox", harness);
     const ops = {
       gitCheckout: async () => {},
-      writeFile: async () => { throw new Error("codex writes no config file"); },
+      writeFile: async (path: string, contents: string) => {
+        if (!path.endsWith(".agent-harness.mjs") && !path.endsWith(".job.json")) {
+          throw new Error("codex writes no config file");
+        }
+        files.set(path, contents);
+      },
       exec: async (command: string) => { execs.push(command); return { stdout: "", stderr: "", exitCode: 0 }; },
       readFile: async () => ({ kind: "utf8" as const, content: "" }),
     };
     await adapter.runCodingTask(ops, approved, async () => {});
-    const harnessExec = execs.find((c) => c.includes("'exec'"));
-    expect(harnessExec).toMatch(/^'codex' 'exec'/);
-    expect(harnessExec).toContain("gpt-5.3-codex");
+    const harnessExec = execs.find((command) => command.includes("agent-harness.mjs"));
+    expect(harnessExec).toMatch(/^'node'/);
+    expect(files.get("/workspace/run-abcdef12345678.job.json")).toContain("gpt-5.3-codex");
   });
 
   it("an unsupported provider for the approved harness fails at approval, not exec", () => {

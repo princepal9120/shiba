@@ -2434,6 +2434,7 @@ export function App(): React.JSX.Element {
               onSelectRun={(id) => setSelectedRunId(id)}
               loading={!runsDetailReady}
               error={runsError}
+              liveHarness
             />
           ) : mainView === "approvals" ? (
             <ApprovalsView
@@ -2448,6 +2449,7 @@ export function App(): React.JSX.Element {
               orchestratorName={orchestratorName}
               onRefresh={refreshRuns}
               reviewAfterPublishById={reviewAfterPublishById}
+              liveHarness
             />
           ) : mainView === "memory" ? (
             <div className="flex-1 flex flex-col h-full overflow-hidden bg-[var(--bg)] text-[var(--fg)]">

@@ -1,29 +1,49 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, powerMonitor, screen, session, shell } from "electron";
 import type { MenuItemConstructorOptions, Rectangle } from "electron";
-import { createApprovalsPoller } from "./approvals-poller.js";
-import type { ApprovalsPoller } from "./approvals-poller.js";
-import { createController } from "./controller.js";
-import type { Controller } from "./controller.js";
-import { createLogger } from "./logs.js";
-import type { Logger } from "./logs.js";
-import { emitStatusChanged, registerDesktopIpc } from "./pairing.js";
-import type { DesktopSupervisor } from "./pairing.js";
-import { handleDaemonMessage } from "./run-notify.js";
-import { captureShellEnv } from "./shell-env.js";
-import type { Env } from "./shell-env.js";
-import { forkDaemon, resolveDaemonPath, shouldConfirmQuit } from "./supervisor.js";
-import { buildTrayMenu, createTray } from "./tray.js";
-import { startUpdater } from "./updater.js";
 import {
-  decideNavigation,
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  Menu,
+  Notification,
+  powerMonitor,
+  screen,
+  session,
+  shell,
+} from "electron";
+import type { ApprovalsPoller } from "./approvals-poller.js";
+import { createApprovalsPoller } from "./approvals-poller.js";
+import { startClaudeLogin } from "./claude-login.js";
+import {
+  cancelCodexCallback,
+  receiveCodexCallback,
+  submitCodexCallback,
+} from "./codex-callback.js";
+import type { Controller } from "./controller.js";
+import { createController } from "./controller.js";
+import { parseDeepLink } from "./deep-link.js";
+import { dashboardPath, resolveConfiguredOrigin } from "./launch.js";
+import type { Logger } from "./logs.js";
+import { createLogger } from "./logs.js";
+import {
   DEFAULT_AUTH_HOSTS,
+  decideNavigation,
   isSetupSender,
   isTrustedSender,
   parseDeploymentUrl,
 } from "./navigation.js";
+import type { DesktopSupervisor } from "./pairing.js";
+import { emitStatusChanged, registerDesktopIpc } from "./pairing.js";
+import { handleDaemonMessage } from "./run-notify.js";
+import type { Env } from "./shell-env.js";
+import { captureShellEnv } from "./shell-env.js";
+import { registerShellIpc } from "./shell-ipc.js";
+import { forkDaemon, resolveDaemonPath, shouldConfirmQuit } from "./supervisor.js";
+import { buildTrayMenu, createTray } from "./tray.js";
+import { startUpdater } from "./updater.js";
 
 interface DesktopConfig {
   deploymentUrl?: string;
@@ -46,6 +66,8 @@ const SETUP_DIR = app.isPackaged
   : __dirname;
 const SETUP_FILE = path.join(SETUP_DIR, "setup.html");
 const SETUP_URL = `file://${SETUP_FILE}`;
+const DIFF_FILE = path.join(SETUP_DIR, "diff.html");
+const DIFF_URL = `file://${DIFF_FILE}`;
 
 let config: DesktopConfig = {};
 let mainWindow: BrowserWindow | null = null;
@@ -59,6 +81,9 @@ let daemonLog: Logger | null = null;
 let shellEnv: Env = {};
 let runRoot = path.join(os.homedir(), ".shiba-local");
 let shutdownStarted = false;
+let diffPatch = "";
+let diffWindow: BrowserWindow | null = null;
+const pendingLinks: string[] = [];
 
 const log = (line: string) => mainLog?.line(line);
 
@@ -80,10 +105,15 @@ function saveConfig(patch: Partial<DesktopConfig>): void {
   fs.renameSync(tmp, configPath());
 }
 
-/** SHIBA_DESKTOP_URL wins in dev only; a packaged app never reads it. */
+/** Dev URL override, then a saved self-hosted origin, then https://app.tryshiba.dev. */
 function configuredOrigin(): string {
-  const raw = (!app.isPackaged && process.env.SHIBA_DESKTOP_URL) || config.deploymentUrl || "";
-  return parseDeploymentUrl(raw, app.isPackaged) ?? "";
+  return resolveConfiguredOrigin({
+    packaged: app.isPackaged,
+    envUrl: process.env.SHIBA_DESKTOP_URL,
+    forceSetup: !app.isPackaged && process.env.SHIBA_DESKTOP_SETUP === "1",
+    savedUrl: config.deploymentUrl,
+    parse: parseDeploymentUrl,
+  });
 }
 
 const authHosts = () => config.authHosts ?? DEFAULT_AUTH_HOSTS;
@@ -91,8 +121,12 @@ const authHosts = () => config.authHosts ?? DEFAULT_AUTH_HOSTS;
 function restoredBounds(): Rectangle | undefined {
   const b = config.bounds;
   if (!b) return undefined;
-  const visible = screen.getAllDisplays().some(({ workArea: w }) =>
-    b.x < w.x + w.width && b.x + b.width > w.x && b.y < w.y + w.height && b.y + b.height > w.y);
+  const visible = screen
+    .getAllDisplays()
+    .some(
+      ({ workArea: w }) =>
+        b.x < w.x + w.width && b.x + b.width > w.x && b.y < w.y + w.height && b.y + b.height > w.y,
+    );
   return visible ? b : undefined;
 }
 
@@ -111,13 +145,17 @@ function loadSetup(error?: string): void {
 
 function loadDashboard(): void {
   const origin = configuredOrigin();
-  if (!origin) { loadSetup(); return; }
+  if (!origin) {
+    loadSetup();
+    return;
+  }
   void mainWindow?.loadURL(`${origin}/app/`);
 }
 
-function guardNavigation(win: BrowserWindow): void {
+function guardNavigation(win: BrowserWindow, allowFileUrl?: string): void {
   const wc = win.webContents;
   const gate = (event: { preventDefault(): void }, url: string) => {
+    if (allowFileUrl && sameFileUrl(url, allowFileUrl)) return;
     const decision = decideNavigation(url, configuredOrigin(), authHosts());
     if (decision === "allow") return;
     event.preventDefault();
@@ -134,14 +172,30 @@ function guardNavigation(win: BrowserWindow): void {
     // -3 = ERR_ABORTED (superseded navigation), not a real failure.
     if (!isMainFrame || code === -3) return;
     const origin = configuredOrigin();
-    if (origin && validatedUrl.startsWith(origin)) loadSetup(`Could not load ${origin}: ${description}`);
+    if (origin && validatedUrl.startsWith(origin))
+      loadSetup(`Could not load ${origin}: ${description}`);
   });
+}
+
+function sameFileUrl(target: string, fileUrl: string): boolean {
+  try {
+    const next = new URL(target);
+    const allowed = new URL(fileUrl);
+    return (
+      next.protocol === "file:" &&
+      allowed.protocol === "file:" &&
+      next.pathname === allowed.pathname
+    );
+  } catch {
+    return false;
+  }
 }
 
 function saveBoundsSoon(win: BrowserWindow): void {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    if (!win.isDestroyed() && !win.isMinimized() && !win.isFullScreen()) saveConfig({ bounds: win.getBounds() });
+    if (!win.isDestroyed() && !win.isMinimized() && !win.isFullScreen())
+      saveConfig({ bounds: win.getBounds() });
   }, 500);
 }
 
@@ -159,7 +213,10 @@ function createWindow(): void {
       nodeIntegration: false,
       webviewTag: false,
       // preload reads these; the page can't influence them (D4).
-      additionalArguments: [`--shiba-origin=${configuredOrigin()}`, `--shiba-version=${app.getVersion()}`],
+      additionalArguments: [
+        `--shiba-origin=${configuredOrigin()}`,
+        `--shiba-version=${app.getVersion()}`,
+      ],
     },
   });
   mainWindow = win;
@@ -185,8 +242,56 @@ function createWindow(): void {
   loadDashboard();
 }
 
+function presentDiff(patch: string): void {
+  diffPatch = patch;
+  if (diffWindow && !diffWindow.isDestroyed()) {
+    diffWindow.show();
+    void diffWindow.loadURL(DIFF_URL);
+    return;
+  }
+  const win = new BrowserWindow({
+    width: 960,
+    height: 720,
+    title: "Shiba diff",
+    webPreferences: {
+      preload: path.join(__dirname, "diff-preload.js"),
+      sandbox: true,
+      contextIsolation: true,
+      nodeIntegration: false,
+      webviewTag: false,
+    },
+  });
+  diffWindow = win;
+  guardNavigation(win, DIFF_URL);
+  win.on("closed", () => {
+    if (diffWindow !== win) return;
+    diffWindow = null;
+    diffPatch = "";
+  });
+  void win.loadURL(DIFF_URL);
+}
+
+function handleDeepLink(raw: string): void {
+  if (!mainWindow) {
+    pendingLinks.push(raw);
+    return;
+  }
+  const link = parseDeepLink(raw);
+  if (!link) return;
+  if (link.kind === "view") openPath(dashboardPath(link.view));
+  else if (link.kind === "pull-request") void shell.openExternal(link.url);
+  else submitCodexCallback(link.callbackUrl);
+}
+
+function flushDeepLinks(): void {
+  for (const raw of pendingLinks.splice(0)) handleDeepLink(raw);
+}
+
 function showWindow(): void {
-  if (!mainWindow) { createWindow(); return; }
+  if (!mainWindow) {
+    createWindow();
+    return;
+  }
   if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.show();
   mainWindow.focus();
@@ -206,7 +311,13 @@ function buildMenu(): void {
     {
       label: "File",
       submenu: [
-        { label: "Change Shiba URL…", click: () => { showWindow(); loadSetup(); } },
+        {
+          label: "Change Shiba URL…",
+          click: () => {
+            showWindow();
+            loadSetup();
+          },
+        },
         { type: "separator" },
         isMac ? { role: "close" } : { role: "quit" },
       ],
@@ -222,14 +333,22 @@ function configurePermissions(win: BrowserWindow): void {
   const allowed = (permission: string, url: string) =>
     permission === "clipboard-sanitized-write" && isTrustedSender(url, configuredOrigin());
   const ses = win.webContents.session;
-  ses.setPermissionRequestHandler((wc, permission, callback) => callback(allowed(permission, wc.getURL())));
+  ses.setPermissionRequestHandler((wc, permission, callback) =>
+    callback(allowed(permission, wc.getURL())),
+  );
   ses.setPermissionCheckHandler((wc, permission, requestingOrigin) =>
-    allowed(permission, requestingOrigin || wc?.getURL() || ""));
+    allowed(permission, requestingOrigin || wc?.getURL() || ""),
+  );
 }
 
 const sessionFetch = (url: string, init?: RequestInit) =>
   // Timeout: a hung probe would leave the controller's probing flag set forever.
-  session.defaultSession.fetch(url, { credentials: "include", redirect: "manual", signal: AbortSignal.timeout(15_000), ...init });
+  session.defaultSession.fetch(url, {
+    credentials: "include",
+    redirect: "manual",
+    signal: AbortSignal.timeout(15_000),
+    ...init,
+  });
 
 function notify(n: { title: string; body: string }, onClick: () => void): void {
   if (config.notifications === false || !Notification.isSupported()) return;
@@ -240,7 +359,10 @@ function notify(n: { title: string; body: string }, onClick: () => void): void {
 
 function openPath(pathAndQuery: string): void {
   const origin = configuredOrigin();
-  if (!origin) { loadSetup(); return; }
+  if (!origin) {
+    loadSetup();
+    return;
+  }
   showWindow();
   void mainWindow?.loadURL(`${origin}${pathAndQuery}`);
 }
@@ -263,10 +385,12 @@ function buildPoller(): void {
 
 function refreshTray(): void {
   if (!controller) return;
-  tray?.update(buildTrayMenu(controller.status(), {
-    notifications: config.notifications !== false,
-    startAtLogin: config.startAtLogin !== false,
-  }));
+  tray?.update(
+    buildTrayMenu(controller.status(), {
+      notifications: config.notifications !== false,
+      startAtLogin: config.startAtLogin !== false,
+    }),
+  );
 }
 
 function onStatus(status: Parameters<typeof emitStatusChanged>[1]): void {
@@ -318,26 +442,43 @@ async function checkForUpdates(): Promise<unknown> {
 
 function onTraySelect(id: string): void {
   switch (id) {
-    case "open": openPath("/app/"); return;
-    case "approvals": openPath("/app/?tab=approvals"); return;
-    case "connect": openPath("/app/?tab=remote"); return;
-    case "disconnect": return void disconnectLocal();
-    case "retry": return void controller?.retry();
+    case "open":
+      openPath("/app/");
+      return;
+    case "approvals":
+      openPath("/app/?tab=approvals");
+      return;
+    case "connect":
+      openPath("/app/?tab=remote");
+      return;
+    case "disconnect":
+      return void disconnectLocal();
+    case "retry":
+      return void controller?.retry();
     case "notifications": {
       saveConfig({ notifications: config.notifications === false });
       if (config.notifications === false) poller?.stop();
       else void poller?.start();
-      refreshTray(); return;
+      refreshTray();
+      return;
     }
     case "start-at-login": {
       saveConfig({ startAtLogin: config.startAtLogin === false });
       applyLoginItem();
-      refreshTray(); return;
+      refreshTray();
+      return;
     }
-    case "change-url": showWindow(); loadSetup(); return;
-    case "logs": return void shell.openPath(path.join(app.getPath("userData"), "logs"));
-    case "updates": return void checkForUpdates().catch((e) => log(`update check failed: ${String(e)}`));
-    case "quit": app.quit(); return;
+    case "change-url":
+      showWindow();
+      loadSetup();
+      return;
+    case "logs":
+      return void shell.openPath(path.join(app.getPath("userData"), "logs"));
+    case "updates":
+      return void checkForUpdates().catch((e) => log(`update check failed: ${String(e)}`));
+    case "quit":
+      app.quit();
+      return;
   }
 }
 
@@ -384,7 +525,9 @@ function registerIpc(): void {
     supervisor: supervisorFacade,
     getConfiguredOrigin: configuredOrigin,
     sessionFetch,
-    get runRoot() { return runRoot; },
+    get runRoot() {
+      return runRoot;
+    },
     confirmPairElsewhere: async (pairedTo) => {
       const { response } = await dialog.showMessageBox({
         type: "warning",
@@ -398,6 +541,23 @@ function registerIpc(): void {
     },
     readLocalConfig,
     log,
+  });
+  registerShellIpc({
+    ipcMain,
+    isTrustedSender,
+    isDiffSender: (frame) => isSetupSender(frame, DIFF_URL),
+    getConfiguredOrigin: configuredOrigin,
+    loadDashboardPath: openPath,
+    openExternal: (url) => shell.openExternal(url),
+    presentDiff,
+    readDiffPatch: () => diffPatch,
+    receiveCodex: (authorizationUrl) =>
+      receiveCodexCallback(authorizationUrl, async (url) => {
+        await shell.openExternal(url);
+        return true;
+      }),
+    cancelCodex: cancelCodexCallback,
+    startClaudeLogin: () => startClaudeLogin({ env: shellEnv }),
   });
 }
 
@@ -448,7 +608,11 @@ async function initIntegrations(): Promise<void> {
   else log("tray icon missing; running without a tray item");
   refreshTray();
   applyLoginItem();
-  startUpdater({ isPackaged: app.isPackaged, checkForUpdatesAndNotify: checkForUpdates, log: (...a) => log(a.map(String).join(" ")) });
+  startUpdater({
+    isPackaged: app.isPackaged,
+    checkForUpdatesAndNotify: checkForUpdates,
+    log: (...a) => log(a.map(String).join(" ")),
+  });
   powerMonitor.on("suspend", () => poller?.stop());
   powerMonitor.on("resume", () => {
     void controller?.probe();
@@ -482,10 +646,32 @@ function onBeforeQuit(event: Electron.Event): void {
   });
 }
 
+function registerProtocol(): void {
+  try {
+    if (app.isPackaged) {
+      app.setAsDefaultProtocolClient("shiba");
+      return;
+    }
+    const entry = process.argv[1];
+    if (!entry) return;
+    app.setAsDefaultProtocolClient("shiba", process.execPath, [path.resolve(entry)]);
+  } catch (error) {
+    log(`protocol registration failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on("second-instance", showWindow);
+  app.on("second-instance", (_event, argv) => {
+    const link = argv.find((arg) => arg.startsWith("shiba:"));
+    if (link) handleDeepLink(link);
+    else showWindow();
+  });
+  app.on("open-url", (event, url) => {
+    event.preventDefault();
+    handleDeepLink(url);
+  });
   app.on("before-quit", onBeforeQuit);
   app.on("activate", showWindow);
   app.on("window-all-closed", () => {
@@ -493,10 +679,12 @@ if (!app.requestSingleInstanceLock()) {
   });
   void app.whenReady().then(() => {
     config = loadConfig();
+    registerProtocol();
     buildMenu();
     registerIpc();
     createWindow();
     if (mainWindow) configurePermissions(mainWindow);
+    flushDeepLinks();
     void initIntegrations();
   });
 }

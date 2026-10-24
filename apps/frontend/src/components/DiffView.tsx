@@ -1,10 +1,17 @@
-import { useState, useMemo, type JSX } from "react";
 import { FileText, GitCompareArrows } from "lucide-react";
+import { type JSX, useMemo, useState } from "react";
+import type { VMRun } from "../types";
+import {
+  extractCompletedDiff,
+  formatTimeAgo,
+  parseRepoName,
+  statusChipClass,
+  statusLabel,
+} from "../ui-helpers";
 import { DiffViewer } from "./DiffViewer";
+import { HarnessSessionPanel } from "./HarnessSessionPanel";
 import { ReviewFindings } from "./ReviewFindings";
 import { SubagentTree } from "./SubagentTree";
-import { formatTimeAgo, parseRepoName, extractCompletedDiff, statusLabel, statusChipClass } from "../ui-helpers";
-import type { VMRun } from "../types";
 
 export interface DiffViewProps {
   runs: VMRun[];
@@ -13,6 +20,8 @@ export interface DiffViewProps {
   /** Full run payload still loading — empty/"no diff" claims are premature. */
   loading?: boolean;
   error?: string | null;
+  /** Poll the live session diff while a local harness run is in flight. */
+  liveHarness?: boolean;
 }
 
 function runHasDiff(run: VMRun): boolean {
@@ -31,6 +40,7 @@ export function DiffView({
   onSelectRun,
   loading = false,
   error = null,
+  liveHarness = false,
 }: DiffViewProps): JSX.Element {
   const [internalSelectedId, setInternalSelectedId] = useState<string>(() =>
     preferredRunId(runs, selectedRunId),
@@ -53,7 +63,7 @@ export function DiffView({
 
   const runsWithDiff = useMemo(
     () => runs.filter((r) => Boolean(extractCompletedDiff(r) ?? r.diff)),
-    [runs]
+    [runs],
   );
 
   const handleSelect = (runId: string) => {
@@ -103,6 +113,11 @@ export function DiffView({
 
       {/* Main Content */}
       <div className="flex-1 overflow-y-auto p-4 lg:p-8">
+        {liveHarness ? (
+          <div className="max-w-6xl mx-auto mb-4">
+            <HarnessSessionPanel enabled />
+          </div>
+        ) : null}
         {loading ? (
           <div className="flex flex-col items-center justify-center py-16 border border-dashed border-[var(--border-1)] rounded-[var(--radius-button)] bg-[var(--card)] max-w-3xl mx-auto p-8 text-center">
             <h3 className="text-sm font-semibold text-[var(--fg)] mb-1">Loading run details…</h3>
@@ -140,7 +155,7 @@ export function DiffView({
                   </span>
                   <span
                     className={`text-[10px] font-bold uppercase tracking-wider border rounded-[var(--radius-button)] px-2 py-0.5 ${statusChipClass(
-                      activeRun.status
+                      activeRun.status,
                     )}`}
                   >
                     {statusLabel(activeRun.status)}

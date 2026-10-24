@@ -83,6 +83,22 @@ export const localRunEnvelopeSchema = z.object({
   /** Wall-clock deadline the daemon honors; the run reclaims past it anyway. */
   deadlineAt: z.number().int().positive(),
   createdAt: z.number().int().positive(),
+  /**
+   * When set, the daemon drives Codex app-server or Claude Code through the
+   * session layer instead of `argv`. Absent on envelopes built before that
+   * layer — those still exec `argv`.
+   */
+  session: z
+    .object({
+      provider: z.enum(["codex", "claude"]),
+      model: z.string().min(1).max(128),
+      permissionMode: z.enum(["approval-required", "accept-edits", "plan", "bypass"]),
+      /** Executable. Absent means `codex` or `claude` on the daemon PATH. */
+      bin: z.string().min(1).max(PATH_MAX).optional(),
+      binArgs: z.array(z.string().min(1).max(PATH_MAX)).max(8).optional(),
+      resumeThreadId: z.string().min(1).max(256).optional(),
+    })
+    .optional(),
 });
 export type LocalRunEnvelope = z.infer<typeof localRunEnvelopeSchema>;
 
@@ -131,6 +147,21 @@ export interface LocalDispatchRecord {
   claimedBy?: string;
   result?: LocalRunResult;
   settledAt?: number;
+  /** Live session transcript the daemon appends while a claim is held. */
+  sessionEvents?: { seq: number; at: number; type: string; text: string }[];
+  /** Latest provider or checkpoint patch, capped by the dispatch DO. */
+  liveDiff?: string;
+  /** Tool approvals the dashboard decides while the CLI is blocked. */
+  harnessApprovals?: {
+    requestId: string;
+    kind: string;
+    title: string;
+    detail: string;
+    createdAt: number;
+    decision?: "allow" | "deny";
+  }[];
+  /** One-shot interrupt flag the daemon consumes. */
+  interrupt?: boolean;
 }
 
 /** A claimed record goes stale this long after its claim with no result —
@@ -184,6 +215,7 @@ export function buildLocalRunEnvelope(args: {
   setupAllowlist: string[][];
   deadlineAt: number;
   now?: number;
+  session?: LocalRunEnvelope["session"];
 }): LocalRunEnvelope {
   const { input, dummyKey, providerKeyEnv } = args;
   const env: Record<string, string> = {};
@@ -224,6 +256,7 @@ export function buildLocalRunEnvelope(args: {
     setupAllowlist: args.setupAllowlist,
     deadlineAt: args.deadlineAt,
     createdAt: args.now ?? Date.now(),
+    ...(args.session !== undefined ? { session: args.session } : {}),
   });
 }
 

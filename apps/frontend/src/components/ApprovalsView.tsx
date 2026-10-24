@@ -1,14 +1,12 @@
-import { useState, useMemo, type JSX } from "react";
+import { type JSX, useMemo, useState } from "react";
+import type { StoredApproval } from "../types";
+import type { PendingApproval } from "../ui-helpers";
 import { ApprovalCard } from "./ApprovalCard";
 import { AuditPanel } from "./AuditPanel";
+import { HarnessSessionPanel } from "./HarnessSessionPanel";
 import { LoadErrorState } from "./LoadErrorState";
 import { EmptyState, PageHeader } from "./surface";
-import {
-  StoredApprovalCard,
-  DecidedApprovalRow,
-} from "./WorkspacePanel";
-import type { PendingApproval } from "../ui-helpers";
-import type { StoredApproval } from "../types";
+import { DecidedApprovalRow, StoredApprovalCard } from "./WorkspacePanel";
 
 export interface ApprovalsViewProps {
   pendingApprovals: PendingApproval[];
@@ -22,6 +20,8 @@ export interface ApprovalsViewProps {
   orchestratorName?: string | null;
   onRefresh?: () => void;
   reviewAfterPublishById?: Record<string, boolean>;
+  /** Poll the live Codex/Claude session. Off unless the shell is showing this page for real. */
+  liveHarness?: boolean;
 }
 
 type OutcomeFilter = "all" | "approved" | "rejected" | "executed";
@@ -38,6 +38,7 @@ export function ApprovalsView({
   orchestratorName,
   onRefresh,
   reviewAfterPublishById,
+  liveHarness = false,
 }: ApprovalsViewProps): JSX.Element {
   const [outcomeFilter, setOutcomeFilter] = useState<OutcomeFilter>("all");
   const totalPending = pendingApprovals.length + storedApprovals.length;
@@ -83,6 +84,7 @@ export function ApprovalsView({
       {/* Main Content */}
       <div className="flex-1 overflow-y-auto p-4 lg:p-8">
         <div className="max-w-6xl mx-auto flex flex-col gap-6">
+          <HarnessSessionPanel enabled={liveHarness} />
           {storedApprovalsError !== null ? (
             <LoadErrorState
               message={`Approval queue: ${storedApprovalsError}`}
@@ -93,7 +95,10 @@ export function ApprovalsView({
           {/* Section 1: Pending Approvals */}
           <section aria-labelledby="pending-approvals-heading" className="flex flex-col gap-3">
             <div className="flex items-center justify-between pb-1 border-b border-[var(--border-1)]">
-              <h3 id="pending-approvals-heading" className="text-sm font-semibold text-[var(--fg)] flex items-center gap-2">
+              <h3
+                id="pending-approvals-heading"
+                className="text-sm font-semibold text-[var(--fg)] flex items-center gap-2"
+              >
                 <span>Waiting</span>
                 {totalPending > 0 ? (
                   <span className="size-2 rounded-full bg-[var(--warning-fg)]" aria-hidden="true" />

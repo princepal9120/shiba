@@ -23,7 +23,8 @@
       "!.agents",
       "!.codex",
       "!.playwright-mcp",
-      "!**/__probe.test.ts"
+      "!**/__probe.test.ts",
+      "!apps/backend/src/harness/agent-harness-source.ts"
     ]
   },
   "formatter": {

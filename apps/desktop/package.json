@@ -5,13 +5,13 @@
   "type": "commonjs",
   "main": "dist/main.js",
   "scripts": {
-    "build": "tsc -p tsconfig.json && node -e \"require('fs').copyFileSync('src/setup.html','dist/setup.html');require('fs').copyFileSync('src/setup.js','dist/setup.js')\"",
+    "build": "tsc -p tsconfig.json && node -e \"const fs=require('fs');for (const name of ['setup.html','setup.js','diff.html','diff.js']) fs.copyFileSync('src/'+name,'dist/'+name)\"",
     "start": "pnpm build && electron .",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
     "lint": "eslint src",
     "test": "vitest run",
-    "test:e2e": "pnpm build && vitest run --config vitest.e2e.config.mts",
-    "dist": "pnpm build && electron-builder",
+    "test:e2e": "pnpm build && node -e \"require('electron')\" && vitest run --config vitest.e2e.config.mts",
+    "dist": "pnpm build && electron-builder --publish never",
     "dist:local": "pnpm dist && ./scripts/adhoc-sign.sh release/mac-arm64/Shiba.app"
   },
   "dependencies": {

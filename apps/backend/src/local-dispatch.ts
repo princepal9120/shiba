@@ -22,18 +22,18 @@
  */
 import { DurableObject } from "cloudflare:workers";
 import {
+  type ConnectedComputer,
   LOCAL_CLAIM_STALE_MS,
   LOCAL_COMPUTER_PRUNE_MS,
   LOCAL_DISPATCH_DO_NAME,
   LOCAL_HEARTBEAT_STALE_MS,
-  localRunEnvelopeSchema,
-  localRunResultSchema,
-  type ConnectedComputer,
   type LocalDispatchRecord,
   type LocalDispatchStatus,
+  localRunEnvelopeSchema,
+  localRunResultSchema,
 } from "@shiba/shared";
 import { sha256Hex } from "./agent-tokens.js";
-import { HeartbeatRequestSchema, PairRequestSchema, decodeOrNull } from "./local-fleet-schema.js";
+import { decodeOrNull, HeartbeatRequestSchema, PairRequestSchema } from "./local-fleet-schema.js";
 import { randomHex } from "./mailbox-store.js";
 
 const RECORD_PREFIX = "run:";
@@ -46,14 +46,24 @@ export const LOCAL_MACHINE_HEADER = "X-Shiba-Machine-Id";
 /** Stored machine record: the adapter token lives only as its sha256 — never readable back. */
 type ComputerRecord = Omit<ConnectedComputer, "status"> & { tokenHash?: string };
 
-function toConnectedComputer({ tokenHash: _hash, ...record }: ComputerRecord, now: number): ConnectedComputer {
-  const status = now - record.lastHeartbeat > LOCAL_HEARTBEAT_STALE_MS ? "offline" : record.activeRunId !== undefined ? "busy" : "idle";
+function toConnectedComputer(
+  { tokenHash: _hash, ...record }: ComputerRecord,
+  now: number,
+): ConnectedComputer {
+  const status =
+    now - record.lastHeartbeat > LOCAL_HEARTBEAT_STALE_MS
+      ? "offline"
+      : record.activeRunId !== undefined
+        ? "busy"
+        : "idle";
   return { ...record, status };
 }
 
 export class LocalDispatch extends DurableObject {
   private async getRecord(sandboxId: string): Promise<LocalDispatchRecord | null> {
-    return (await this.ctx.storage.get<LocalDispatchRecord>(`${RECORD_PREFIX}${sandboxId}`)) ?? null;
+    return (
+      (await this.ctx.storage.get<LocalDispatchRecord>(`${RECORD_PREFIX}${sandboxId}`)) ?? null
+    );
   }
 
   private async putRecord(record: LocalDispatchRecord): Promise<void> {
@@ -64,6 +74,23 @@ export class LocalDispatch extends DurableObject {
     await this.ctx.storage.delete(`${RECORD_PREFIX}${sandboxId}`);
   }
 
+  /** The claim token is the write credential for live session traffic. */
+  private async claimedRecord(
+    body: Record<string, unknown>,
+  ): Promise<LocalDispatchRecord | Response> {
+    const sandboxId = typeof body.sandboxId === "string" ? body.sandboxId : "";
+    const claimToken = typeof body.claimToken === "string" ? body.claimToken : "";
+    const record = await this.getRecord(sandboxId);
+    if (record === null) return Response.json({ error: "Run not found." }, { status: 404 });
+    if (record.status !== "claimed" || record.claimToken !== claimToken || claimToken === "") {
+      return Response.json(
+        { error: `Run ${sandboxId} is not held by this claim.` },
+        { status: 409 },
+      );
+    }
+    return record;
+  }
+
   /**
    * A claimed record whose holder never settled is reaped past the run
    * deadline — the daemon may have died mid-run; the run row reclaims on
@@ -72,17 +99,30 @@ export class LocalDispatch extends DurableObject {
   private async reapStaleClaims(now: number): Promise<void> {
     const records = await this.ctx.storage.list<LocalDispatchRecord>({ prefix: RECORD_PREFIX });
     for (const record of records.values()) {
-      if (record.status === "claimed" && record.claimedAt !== undefined && now - record.claimedAt > LOCAL_CLAIM_STALE_MS) {
-        await this.putRecord({ ...record, status: "cancelled", claimToken: undefined, settledAt: now });
+      if (
+        record.status === "claimed" &&
+        record.claimedAt !== undefined &&
+        now - record.claimedAt > LOCAL_CLAIM_STALE_MS
+      ) {
+        await this.putRecord({
+          ...record,
+          status: "cancelled",
+          claimToken: undefined,
+          settledAt: now,
+        });
       }
       // Settled/cancelled records are audit tail — prune past 7 days.
-      if ((record.status === "settled" || record.status === "cancelled") && now - (record.settledAt ?? record.envelope.createdAt) > 7 * 24 * 60 * 60 * 1000) {
+      if (
+        (record.status === "settled" || record.status === "cancelled") &&
+        now - (record.settledAt ?? record.envelope.createdAt) > 7 * 24 * 60 * 60 * 1000
+      ) {
         await this.deleteRecord(record.envelope.sandboxId);
       }
     }
     const computers = await this.ctx.storage.list<ComputerRecord>({ prefix: COMPUTER_PREFIX });
     for (const [key, computer] of computers) {
-      if (now - computer.lastHeartbeat > LOCAL_COMPUTER_PRUNE_MS) await this.ctx.storage.delete(key);
+      if (now - computer.lastHeartbeat > LOCAL_COMPUTER_PRUNE_MS)
+        await this.ctx.storage.delete(key);
     }
     const nonces = await this.ctx.storage.list<number>({ prefix: PAIR_PREFIX });
     for (const [key, expiresAt] of nonces) {
@@ -117,11 +157,19 @@ export class LocalDispatch extends DurableObject {
       }
       const existing = await this.getRecord(parsed.data.sandboxId);
       if (existing !== null && existing.status !== "settled" && existing.status !== "cancelled") {
-        return Response.json({ error: `Run ${parsed.data.sandboxId} is already ${existing.status}.` }, { status: 409 });
+        return Response.json(
+          { error: `Run ${parsed.data.sandboxId} is already ${existing.status}.` },
+          { status: 409 },
+        );
       }
       const target = typeof body.targetMachineId === "string" ? body.targetMachineId.trim() : "";
-      if (target.length > 128) return Response.json({ error: "Invalid targetMachineId." }, { status: 400 });
-      const record: LocalDispatchRecord = { envelope: parsed.data, status: "pending", ...(target !== "" ? { targetMachineId: target } : {}) };
+      if (target.length > 128)
+        return Response.json({ error: "Invalid targetMachineId." }, { status: 400 });
+      const record: LocalDispatchRecord = {
+        envelope: parsed.data,
+        status: "pending",
+        ...(target !== "" ? { targetMachineId: target } : {}),
+      };
       await this.putRecord(record);
       return Response.json({ ok: true });
     }
@@ -136,7 +184,9 @@ export class LocalDispatch extends DurableObject {
       const pending = [...records.values()]
         .filter((record) => record.status === "pending")
         // Pinned runs need a per-machine token: no vouched id means unpinned only.
-        .filter((record) => record.targetMachineId === undefined || record.targetMachineId === machineId)
+        .filter(
+          (record) => record.targetMachineId === undefined || record.targetMachineId === machineId,
+        )
         .sort((a, b) => a.envelope.createdAt - b.envelope.createdAt)[0];
       if (pending === undefined) {
         return Response.json({ envelope: null });
@@ -144,7 +194,13 @@ export class LocalDispatch extends DurableObject {
       // Minted here, never accepted from the caller — the token is the
       // proof the settle side holds that this claim won the race.
       const claimToken = crypto.randomUUID();
-      await this.putRecord({ ...pending, status: "claimed", claimToken, claimedAt: now, ...(operator !== undefined ? { claimedBy: operator } : {}) });
+      await this.putRecord({
+        ...pending,
+        status: "claimed",
+        claimToken,
+        claimedAt: now,
+        ...(operator !== undefined ? { claimedBy: operator } : {}),
+      });
       return Response.json({ envelope: pending.envelope, claimToken });
     }
 
@@ -158,7 +214,10 @@ export class LocalDispatch extends DurableObject {
         return Response.json({ error: "Run not found." }, { status: 404 });
       }
       if (record.status !== "claimed" || record.claimToken !== claimToken || claimToken === "") {
-        return Response.json({ error: `Run ${sandboxId} is not held by this claim.` }, { status: 409 });
+        return Response.json(
+          { error: `Run ${sandboxId} is not held by this claim.` },
+          { status: 409 },
+        );
       }
       const parsed = localRunResultSchema.safeParse(body.result);
       if (!parsed.success) {
@@ -177,7 +236,12 @@ export class LocalDispatch extends DurableObject {
       if (record.status === "settled" || record.status === "cancelled") {
         return Response.json({ ok: true, status: record.status });
       }
-      await this.putRecord({ ...record, status: "cancelled", claimToken: undefined, settledAt: now });
+      await this.putRecord({
+        ...record,
+        status: "cancelled",
+        claimToken: undefined,
+        settledAt: now,
+      });
       return Response.json({ ok: true, status: "cancelled" as LocalDispatchStatus });
     }
 
@@ -187,9 +251,13 @@ export class LocalDispatch extends DurableObject {
       if (record === null) return Response.json({ error: "Run not found." }, { status: 404 });
       return Response.json({
         status: record.status,
-        ...(record.claimedAt !== undefined ? { claimedAt: record.claimedAt, claimedBy: record.claimedBy } : {}),
+        ...(record.claimedAt !== undefined
+          ? { claimedAt: record.claimedAt, claimedBy: record.claimedBy }
+          : {}),
         ...(record.result !== undefined ? { result: record.result } : {}),
         ...(record.settledAt !== undefined ? { settledAt: record.settledAt } : {}),
+        ...(record.sessionEvents !== undefined ? { sessionEvents: record.sessionEvents } : {}),
+        ...(record.liveDiff !== undefined ? { liveDiff: record.liveDiff } : {}),
       });
     }
 
@@ -213,7 +281,11 @@ export class LocalDispatch extends DurableObject {
     if (request.method === "POST" && url.pathname === "/pairing-nonce") {
       const body = await this.json(request);
       if (body instanceof Response) return body;
-      if (typeof body.nonce !== "string" || body.nonce === "" || typeof body.expiresAt !== "number") {
+      if (
+        typeof body.nonce !== "string" ||
+        body.nonce === "" ||
+        typeof body.expiresAt !== "number"
+      ) {
         return Response.json({ error: "Invalid pairing nonce." }, { status: 400 });
       }
       await this.ctx.storage.put(`${PAIR_PREFIX}${body.nonce}`, body.expiresAt);
@@ -224,9 +296,13 @@ export class LocalDispatch extends DurableObject {
       const body = await this.json(request);
       if (body instanceof Response) return body;
       const nonce = typeof body.nonce === "string" ? body.nonce : "";
-      const expiresAt = nonce === "" ? undefined : await this.ctx.storage.get<number>(`${PAIR_PREFIX}${nonce}`);
+      const expiresAt =
+        nonce === "" ? undefined : await this.ctx.storage.get<number>(`${PAIR_PREFIX}${nonce}`);
       if (expiresAt === undefined || now > expiresAt) {
-        return Response.json({ error: "Pairing token is expired or already used." }, { status: 401 });
+        return Response.json(
+          { error: "Pairing token is expired or already used." },
+          { status: 401 },
+        );
       }
       const pair = decodeOrNull(PairRequestSchema, body.pair);
       if (pair === null) return Response.json({ error: "Invalid pair request." }, { status: 400 });
@@ -253,7 +329,9 @@ export class LocalDispatch extends DurableObject {
       const tokenHash = typeof body.tokenHash === "string" ? body.tokenHash : "";
       // ponytail: linear scan of the fleet per daemon call; add a `token:<hash>` index if fleets grow past dozens.
       const computers = await this.ctx.storage.list<ComputerRecord>({ prefix: COMPUTER_PREFIX });
-      const match = [...computers.values()].find((computer) => tokenHash !== "" && computer.tokenHash === tokenHash);
+      const match = [...computers.values()].find(
+        (computer) => tokenHash !== "" && computer.tokenHash === tokenHash,
+      );
       if (match === undefined) return Response.json({ error: "Unauthorized." }, { status: 401 });
       return Response.json({ machineId: match.machineId });
     }
@@ -262,8 +340,11 @@ export class LocalDispatch extends DurableObject {
       const body = await this.json(request);
       if (body instanceof Response) return body;
       const heartbeat = decodeOrNull(HeartbeatRequestSchema, body);
-      if (heartbeat === null) return Response.json({ error: "Invalid heartbeat." }, { status: 400 });
-      const existing = await this.ctx.storage.get<ComputerRecord>(`${COMPUTER_PREFIX}${heartbeat.machineId}`);
+      if (heartbeat === null)
+        return Response.json({ error: "Invalid heartbeat." }, { status: 400 });
+      const existing = await this.ctx.storage.get<ComputerRecord>(
+        `${COMPUTER_PREFIX}${heartbeat.machineId}`,
+      );
       const record: ComputerRecord = {
         machineId: heartbeat.machineId,
         hostname: heartbeat.hostname,
@@ -287,6 +368,144 @@ export class LocalDispatch extends DurableObject {
       return Response.json({ computers: list });
     }
 
+    if (request.method === "POST" && url.pathname === "/events") {
+      const body = await this.json(request);
+      if (body instanceof Response) return body;
+      const held = await this.claimedRecord(body);
+      if (held instanceof Response) return held;
+      const incoming = Array.isArray(body.events)
+        ? body.events
+        : body.event !== undefined
+          ? [body.event]
+          : [];
+      const events = [...(held.sessionEvents ?? [])];
+      let liveDiff = held.liveDiff;
+      let next = events.reduce((max, event) => Math.max(max, event.seq), 0);
+      for (const item of incoming) {
+        if (item === null || typeof item !== "object") continue;
+        const row = item as Record<string, unknown>;
+        next += 1;
+        events.push({
+          seq: next,
+          at: now,
+          type: typeof row.type === "string" ? row.type.slice(0, 64) : "event",
+          text: typeof row.text === "string" ? row.text.slice(0, 500) : "",
+        });
+        if (typeof row.patch === "string" && row.patch !== "")
+          liveDiff = row.patch.slice(0, 100_000);
+      }
+      while (events.length > 200) events.shift();
+      await this.putRecord({
+        ...held,
+        sessionEvents: events,
+        ...(liveDiff !== undefined ? { liveDiff } : {}),
+      });
+      return Response.json({ ok: true });
+    }
+
+    if (request.method === "POST" && url.pathname === "/approval") {
+      const body = await this.json(request);
+      if (body instanceof Response) return body;
+      const held = await this.claimedRecord(body);
+      if (held instanceof Response) return held;
+      const approvals = [...(held.harnessApprovals ?? [])];
+      const approvalRequest = body.request;
+      if (
+        approvalRequest !== null &&
+        typeof approvalRequest === "object" &&
+        !Array.isArray(approvalRequest)
+      ) {
+        const row = approvalRequest as Record<string, unknown>;
+        const requestId = typeof row.requestId === "string" ? row.requestId.slice(0, 128) : "";
+        if (requestId === "")
+          return Response.json({ error: "requestId is required." }, { status: 400 });
+        if (!approvals.some((item) => item.requestId === requestId)) {
+          approvals.push({
+            requestId,
+            kind: typeof row.kind === "string" ? row.kind.slice(0, 64) : "command",
+            title: typeof row.title === "string" ? row.title.slice(0, 200) : requestId,
+            detail: typeof row.detail === "string" ? row.detail.slice(0, 2000) : "",
+            createdAt: now,
+          });
+        }
+      }
+      await this.putRecord({ ...held, harnessApprovals: approvals });
+      const requestId = typeof body.requestId === "string" ? body.requestId : "";
+      if (requestId === "") return Response.json({ ok: true });
+      const found = approvals.find((item) => item.requestId === requestId);
+      return Response.json(
+        found?.decision !== undefined ? { decision: found.decision } : { pending: true },
+      );
+    }
+
+    if (request.method === "POST" && url.pathname === "/control") {
+      const body = await this.json(request);
+      if (body instanceof Response) return body;
+      const held = await this.claimedRecord(body);
+      if (held instanceof Response) return held;
+      const interrupt = held.interrupt === true;
+      if (interrupt) await this.putRecord({ ...held, interrupt: false });
+      return Response.json({ interrupt });
+    }
+
+    if (request.method === "GET" && url.pathname === "/harness") {
+      const records = await this.ctx.storage.list<LocalDispatchRecord>({ prefix: RECORD_PREFIX });
+      const runs = [...records.values()]
+        .filter((record) => record.status === "claimed")
+        .map((record) => ({
+          sandboxId: record.envelope.sandboxId,
+          events: record.sessionEvents ?? [],
+          diff: record.liveDiff ?? "",
+          approvals: record.harnessApprovals ?? [],
+        }));
+      return Response.json({ runs });
+    }
+
+    if (request.method === "POST" && url.pathname === "/harness-decide") {
+      const body = await this.json(request);
+      if (body instanceof Response) return body;
+      const sandboxId = typeof body.sandboxId === "string" ? body.sandboxId : "";
+      const requestId = typeof body.requestId === "string" ? body.requestId : "";
+      const rawDecision = body.decision;
+      const decision: "allow" | "deny" | null =
+        rawDecision === "allow" || rawDecision === "deny" ? rawDecision : null;
+      if (sandboxId === "" || requestId === "" || decision === null) {
+        return Response.json(
+          { error: "sandboxId, requestId, and decision are required." },
+          { status: 400 },
+        );
+      }
+      const record = await this.getRecord(sandboxId);
+      if (record === null || record.status !== "claimed") {
+        return Response.json(
+          { error: "Run is not waiting on a harness approval." },
+          { status: 409 },
+        );
+      }
+      const approvals = (record.harnessApprovals ?? []).map((item) =>
+        item.requestId === requestId ? { ...item, decision } : item,
+      );
+      if (!approvals.some((item) => item.requestId === requestId)) {
+        return Response.json({ error: "Approval request not found." }, { status: 404 });
+      }
+      await this.putRecord({ ...record, harnessApprovals: approvals });
+      return Response.json({ ok: true });
+    }
+
+    if (request.method === "POST" && url.pathname === "/harness-control") {
+      const body = await this.json(request);
+      if (body instanceof Response) return body;
+      const sandboxId = typeof body.sandboxId === "string" ? body.sandboxId : "";
+      const record = await this.getRecord(sandboxId);
+      if (record === null || record.status !== "claimed") {
+        return Response.json({ error: "Run is not claimed." }, { status: 409 });
+      }
+      if (body.interrupt !== true)
+        return Response.json({ error: "interrupt is required." }, { status: 400 });
+      await this.putRecord({ ...record, interrupt: true });
+      return Response.json({ ok: true });
+    }
+
     if (request.method === "POST" && url.pathname === "/revoke-computer") {
       const body = await this.json(request);
       if (body instanceof Response) return body;
@@ -308,7 +527,9 @@ export class LocalDispatch extends DurableObject {
  * it cannot serve — callers check the flag first, and a missing binding is
  * a hard error, not a silent skip.
  */
-export function localDispatchStub(env: { LocalDispatch?: DurableObjectNamespace }): DurableObjectStub {
+export function localDispatchStub(env: {
+  LocalDispatch?: DurableObjectNamespace;
+}): DurableObjectStub {
   if (env.LocalDispatch === undefined) {
     throw new Error("LocalDispatch binding is not configured.");
   }

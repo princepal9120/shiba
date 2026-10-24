@@ -27,7 +27,7 @@
       "project": ["src/**/*.ts", "test/**/*.ts"]
     },
     "apps/desktop": {
-      "entry": ["src/main.ts", "src/preload.ts", "test/**/*.test.ts"],
+      "entry": ["src/main.ts", "src/preload.ts", "src/diff-preload.ts", "test/**/*.test.ts", "test/**/*.e2e.ts"],
       "project": ["src/**/*.ts", "test/**/*.ts"]
     },
     "apps/frontend": {

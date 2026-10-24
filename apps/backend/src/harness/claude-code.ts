@@ -8,21 +8,23 @@
  * The container gets the dummy key; the real one is injected at the
  * egress boundary.
  */
+
+import type { RunUsage } from "@shiba/shared";
 import type { CodingTaskInput, CodingTaskResult } from "../opencode-input.js";
 import { DUMMY_PROVIDER_KEY } from "../provider-gateway.js";
 import { boundTail } from "../security.js";
+import { classifySessionLine } from "./session-events.js";
 import {
+  type AgentHarness,
   assertSupportedModel,
   describeUsage,
-  PROVIDER_HOSTS,
-  PROVIDER_KEY_ENV,
-  type AgentHarness,
   type HarnessCapabilities,
   type HarnessEvent,
+  PROVIDER_HOSTS,
+  PROVIDER_KEY_ENV,
   type VerificationOutcome,
   verifyRunOutcome,
 } from "./types.js";
-import type { RunUsage } from "@shiba/shared";
 
 export const CLAUDE_CODE_PROVIDERS = ["anthropic"] as const;
 
@@ -44,6 +46,10 @@ export class ClaudeCodeEventError extends Error {}
  * throws so the run fails honestly rather than reporting success.
  */
 export function parseClaudeCodeEvent(line: string): HarnessEvent | null {
+  const session = classifySessionLine(line);
+  if (session.kind === "error") throw new ClaudeCodeErrorEvent(session.detail);
+  if (session.kind === "skip") return null;
+  if (session.kind === "event") return session.event;
   const trimmed = line.trim();
   if (!trimmed) return null;
   let event: unknown;
@@ -57,11 +63,12 @@ export function parseClaudeCodeEvent(line: string): HarnessEvent | null {
   }
   const record = event as Record<string, unknown>;
   if (record.is_error === true || record.subtype === "error") {
-    const detail = typeof record.result === "string"
-      ? record.result
-      : typeof record.error === "string"
-        ? record.error
-        : JSON.stringify(record);
+    const detail =
+      typeof record.result === "string"
+        ? record.result
+        : typeof record.error === "string"
+          ? record.error
+          : JSON.stringify(record);
     throw new ClaudeCodeErrorEvent(boundTail(detail, 500));
   }
   return claudeCodeEvent(record);
@@ -87,10 +94,19 @@ function claudeCodeEvent(record: Record<string, unknown>): HarnessEvent {
         }
       }
       if (delta !== undefined) {
-        return { kind: "usage", cumulative: false, usage: delta, text: boundTail(parts.join(" ").trim(), 500) };
+        return {
+          kind: "usage",
+          cumulative: false,
+          usage: delta,
+          text: boundTail(parts.join(" ").trim(), 500),
+        };
       }
       if (tools.length > 0) {
-        return { kind: "tool", name: tools.join(", "), text: boundTail(parts.join(" ").trim(), 500) };
+        return {
+          kind: "tool",
+          name: tools.join(", "),
+          text: boundTail(parts.join(" ").trim(), 500),
+        };
       }
       if (parts.length > 0) {
         return { kind: "text", text: boundTail(parts.join(" ").trim(), 500) };
@@ -104,11 +120,18 @@ function claudeCodeEvent(record: Record<string, unknown>): HarnessEvent {
     // cumulative total — it supersedes the summed assistant deltas.
     const usage = resultUsage(record);
     const text = boundTail(record.result.trim(), 500);
-    return usage !== undefined ? { kind: "usage", cumulative: true, usage, text } : { kind: "result", text };
+    return usage !== undefined
+      ? { kind: "usage", cumulative: true, usage, text }
+      : { kind: "result", text };
   }
   const type = typeof record.type === "string" ? record.type : "event";
-  const keys = Object.keys(record).filter((key) => key !== "type").slice(0, 6);
-  return { kind: "progress", text: boundTail(keys.length ? `${type} (${keys.join(", ")})` : type, 500) };
+  const keys = Object.keys(record)
+    .filter((key) => key !== "type")
+    .slice(0, 6);
+  return {
+    kind: "progress",
+    text: boundTail(keys.length ? `${type} (${keys.join(", ")})` : type, 500),
+  };
 }
 
 /** `input_tokens` excludes cache traffic — fold reads/writes into input. */
@@ -116,7 +139,9 @@ function claudeUsageBlock(usage: unknown): RunUsage | undefined {
   if (typeof usage !== "object" || usage === null) return undefined;
   const record = usage as Record<string, unknown>;
   const num = (key: string): number | undefined =>
-    typeof record[key] === "number" && Number.isFinite(record[key] as number) ? (record[key] as number) : undefined;
+    typeof record[key] === "number" && Number.isFinite(record[key] as number)
+      ? (record[key] as number)
+      : undefined;
   const input = num("input_tokens");
   const cacheRead = num("cache_read_input_tokens");
   const cacheWrite = num("cache_creation_input_tokens");
@@ -137,7 +162,9 @@ function assistantUsage(type: unknown, message: object): RunUsage | undefined {
 function resultUsage(record: Record<string, unknown>): RunUsage | undefined {
   const tokens = claudeUsageBlock(record.usage);
   const cost =
-    typeof record.total_cost_usd === "number" && Number.isFinite(record.total_cost_usd) && record.total_cost_usd >= 0
+    typeof record.total_cost_usd === "number" &&
+    Number.isFinite(record.total_cost_usd) &&
+    record.total_cost_usd >= 0
       ? record.total_cost_usd
       : undefined;
   if (tokens === undefined && cost === undefined) return undefined;
@@ -192,15 +219,29 @@ export class ClaudeCodeHarness implements AgentHarness {
   }
   /** T43 declared capabilities — the gates read this, not the name. */
   capabilities(_model?: string): HarnessCapabilities {
-    return { streamsText: true, emitsToolCalls: true, supportsResume: true, supportsSteering: false, supportsFileAttachments: false, canRunTests: true, supportsConversationRollback: false, execAllowlist: [["pnpm","test"],["npm","test"],["bun","test"],["pnpm","vitest","run"],["npx","vitest","run"]],
-      supportedRuntimes: ["sandbox", "local"] };
+    return {
+      streamsText: true,
+      emitsToolCalls: true,
+      supportsResume: true,
+      supportsSteering: false,
+      supportsFileAttachments: false,
+      canRunTests: true,
+      supportsConversationRollback: false,
+      execAllowlist: [
+        ["pnpm", "test"],
+        ["npm", "test"],
+        ["bun", "test"],
+        ["pnpm", "vitest", "run"],
+        ["npx", "vitest", "run"],
+      ],
+      supportedRuntimes: ["sandbox", "local"],
+    };
   }
 
   /** Deterministic outcome check — gates the completed claim (T43/T46 feed). */
   async verify(input: CodingTaskInput, result: CodingTaskResult): Promise<VerificationOutcome> {
     return verifyRunOutcome(input, result, this.capabilities(input.codingModel));
   }
-
 }
 
 /** The CLI takes a bare model id; the `provider/` prefix is ours. */
