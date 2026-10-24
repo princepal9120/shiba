@@ -145,7 +145,7 @@ export function spineInputsFromDecider(
     const input: SpineEventInput = { kind, commandId, at: event.at ?? at, runId };
     switch (event.type) {
       case "run.queued":
-        input.payload = { run: event.run as unknown as Record<string, unknown> };
+        input.payload = { run: withoutSealedEnv(event.run) as unknown as Record<string, unknown> };
         break;
       case "run.approved":
         input.payload = { approval: event.approval as unknown as Record<string, unknown> };
@@ -212,6 +212,13 @@ export function sideEffectResultInput(args: {
   };
 }
 
+/** T68: spine events and API listings are exported surfaces; the sealed env never rides them. */
+export function withoutSealedEnv<T extends { envSealed?: string }>(record: T): T {
+  const copy = { ...record };
+  delete copy.envSealed;
+  return copy;
+}
+
 export function approvalEventInput(args: {
   approval: PendingApproval;
   result?: "approved" | "rejected";
@@ -225,7 +232,7 @@ export function approvalEventInput(args: {
         commandId,
         at,
         approvalId: approval.approvalId,
-        payload: { approval: approval as unknown as Record<string, unknown> },
+        payload: { approval: withoutSealedEnv(approval) as unknown as Record<string, unknown> },
       }
     : {
         kind: "approval.answered",

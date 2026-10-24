@@ -67,6 +67,19 @@ describe("v1 core run facade", () => {
     expect((await handleRuns(fixture("/threads/r1/retry", "POST", {}, { ...run, status: "running" }).ctx))!.status).toBe(409);
     expect((await handleRuns(fixture("/threads/r1/retry", "POST", []).ctx))!.status).toBe(400);
   });
+  it("T68: refuses to retry a finished run whose env was discarded, rather than running without it", async () => {
+    const f = fixture("/threads/r1/retry", "POST", {}, { ...run, envNames: ["DATABASE_URL"], envDigest: "d".repeat(64) });
+    const response = await handleRuns(f.ctx);
+    expect(response!.status).toBe(409);
+    expect(await response!.json()).toEqual({ ok: false, error: "environment_discarded" });
+    expect(f.forward).not.toHaveBeenCalledWith("POST", "/api/runs", expect.anything());
+  });
+  it("carries the effort and the setup opt-in onto a retry", async () => {
+    const effortRoute = { ...(run.route ?? { purpose: "coding", connectionId: null, modelId: "openai/gpt-5", harness: "codex", policyVersion: 0 }), reasoningEffort: "high" as const };
+    const f = fixture("/threads/r1/retry", "POST", {}, { ...run, route: effortRoute, runSetup: true });
+    expect((await handleRuns(f.ctx))!.status).toBe(202);
+    expect(f.forward).toHaveBeenLastCalledWith("POST", "/api/runs", expect.objectContaining({ reasoningEffort: "high", runSetup: true }));
+  });
   it("paginates real milestones without claiming measured active duration", async () => {
     const first = await (await handleRuns(fixture("/threads/r1/runs/r1/activity?limit=1&pagination=cursor").ctx))!.json() as { nextCursor: string };
     expect(first).toMatchObject({ hasMore: true, activeDurationMs: null, activeDurationProvenance: "unknown", items: [{ toolName: "sandbox.ready" }] });

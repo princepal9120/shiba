@@ -86,6 +86,11 @@
 | T64 approvals + run notifications | **Built, unit-verified (2026-10-08).** `approvals-poller.ts` (GET-only, D1) and `run-notify.ts` (title + owner/repo only, D7). Not exercised against a live deployment. Evidence: `apps/web/docs/evidence/desktop/T64-T65-static.md`. |
 | T65 packaging, CI, assets | **Unsigned local build config only (2026-10-08).** `electron-builder.yml` (fuses per D8), `.github/workflows/desktop.yml`, `smoke.e2e.ts`, and icon/tray assets (`icon.png`, `icon.icns`, `trayTemplate.png`/`@2x`) from the mascot SVG. Signed/notarized build **pending human secrets.** Evidence: `apps/web/docs/evidence/desktop/T64-T65-static.md`, `apps/web/docs/evidence/desktop/T65-assets-bookkeeping.md`. |
 | T66 desktop docs + acceptance | **Docs written; acceptance remains "local prototype" (2026-10-08).** `remote-access.md` "Desktop app" section added. DESKTOP-PLAN §7 manual acceptance has no real-deployment dated entry yet — **blocked-for-manual.** Evidence: `apps/web/docs/evidence/desktop/T66-docs.md`. |
+| T67 reasoning effort per run | **Done in code (2026-10-24), not live-verified.** `ApprovedRoute.reasoningEffort` is hashed with the route, and the `HARNESS_REASONING_EFFORTS` map refuses unsupported combinations before a card exists. Argv: claude `--effort`, codex `-c model_reasoning_effort`, opencode `--variant`. The composer has an effort chip. Steering, fork, v1 retry and wake keep the effort. Two review passes; gate green. Evidence in VERIFICATION.md (2026-10-24). No real CLI was run with the flags. |
+| T72 repo setup `.shiba/setup.json` | **First slice done (2026-10-25), not run in a real sandbox.** Opt-in per run, hashed, and shown on the card. `scripts.initialize` runs via `sh -c` before the baseline checkpoint. Its effects are set aside in a local-only commit. An agent edit to a setup-touched path fails the run. Two review passes; gate green. `refresh`, `entries` and the Setup tab wait for T74. Evidence in VERIFICATION.md (2026-10-25). |
+| T71 `?prompt=` deep link | **Done (2026-10-25), unit-tested only.** `readPromptParam` prefills an empty composer (capped at 4000 chars), strips the param via `replaceState`, and never submits. The run-title half of T71 is not built. Evidence in VERIFICATION.md (2026-10-25). |
+| T87 voice dictation | **Done (2026-10-25), not tried in a real browser.** The composer mic uses the browser's speech recognition API and is hidden when unsupported. Final results append to the task; it stops on submit and on unmount. Evidence in VERIFICATION.md (2026-10-25). |
+| T68 per-run environment variables | **Done in code (2026-10-24), not live-verified.** Values are sealed under `MODEL_CREDENTIAL_KEY` with an HMAC digest; names + digest are hashed. The child opens them at sandbox start and scrubs them from output before truncation. A change that adds a value fails the run. The blob is discarded at terminal and never returned by the API. Two review passes; gate green. Evidence in VERIFICATION.md (2026-10-24). Residual: the encrypted blob stays in chat metadata (rotate the key to retire it). |
 
 ### 2.1 Shipped beyond the tracker (2026-10-05 note)
 
@@ -1448,6 +1453,114 @@ macOS-only Electron shell that loads `<origin>/app/` and supervises `scripts/shi
 - D6 navigation is allowlisted; other https URLs open in the system browser, everything else is denied.
 - D7 no secret leaves its home: no adapter token or task text in IPC, logs, notifications or URLs.
 - D8 hardened binary: Electron fuses, hardened runtime, only `clipboard-sanitized-write` permitted.
+
+## 22. Phase P12 — Capy parity (T67–T90)
+
+**Goal:** the open-source Capy. Close the product gap with Capy 0.5.0 ([public changelog](https://capy.ai/changelog), beta → 0.5.0) on shiba's own stack (Worker + DOs + Sandbox), without giving up what Capy can't offer: bring-your-own harness, the approval gate, and running entirely on the owner's Cloudflare account.
+
+**Rules for every task in this phase:**
+- Any field that changes what executes (model settings, env, files, machine) is part of the approved input. It either rides `ApprovedRoute` or enters `runInputHash`. No field reaches a container unapproved.
+- Unsupported combinations are refused at route/intake time, before a card exists. Never silently dropped at dispatch.
+- Cloudflare's `standard-4` (4 vCPU / 12 GiB) stays the machine ceiling. The UI says so; nothing pretends otherwise.
+- Shiba stays single-owner (`spec/GOAL.md`). Multi-member features wait for an explicit GOAL.md amendment.
+
+### Wave A — composer contract (Capy's new-thread request)
+
+### T67 · Reasoning effort per run
+Composer effort picker next to the model picker. `ApprovedRoute.reasoningEffort` (hashed with the route). `HARNESS_REASONING_EFFORTS` in `@shiba/shared` maps each harness to the levels its CLI accepts: claude `--effort`, codex `-c model_reasoning_effort`, opencode `--variant`. Other harnesses refuse any effort at route time. Steering carries the effort over when the new harness supports it. **Accept:** effort on the card, in the argv, in the hash; a bad combination is a 400 before a card exists.
+
+### T68 · Per-run environment variables
+Name/value pairs from the composer `+` menu (`^[A-Za-z_][A-Za-z0-9_]*$`, size-capped). Names that steer the harness, egress or TLS are refused: `SHIBA_*`, provider-key prefixes, `GITHUB_*`/`GIT_*`, `*_PROXY`, `NODE_EXTRA_CA_CERTS`, `LD_*`, `PATH`, `HOME`. The approval record and run carry only `envNames` + `envDigest`, both hashed. Values live in a separate orchestrator storage key per approval. Values must not ride the child envelope (`CodingTaskInput`), which is persisted in the child agent's chat history. They must not ride chat message metadata either: `shibaTask` is persisted and synced to clients. The dashboard first seals the values through `POST /api/run-env/seal` (AES-GCM under `MODEL_CREDENTIAL_KEY`, AAD = user + digest), and only `{sealed, names, digest}` travels after that. The child opens the sealed blob at sandbox start, checks the digest, and injects the values into the harness process env. Values are deleted when the run goes terminal. Sandbox runtime only at first; `runtime: "local"` refuses env. **Accept:** a value never appears in any API response, chat history, log line or receipt; a test proves it.
+
+*As built (2026-10-24):*
+- The digest is a keyed HMAC (HKDF subkey of `MODEL_CREDENTIAL_KEY`) over the owner and the values.
+- `envSealed` sits on the approval and the active run. `applyRunEvents` drops it on any terminal transition.
+- It is stripped from `serializeRun`, the approvals listing and spine payloads.
+- The child scrubs approved values (8 or more characters) out of every text output.
+- A diff or changed file holding a value fails the run, and the change is dropped. The oversize-diff R2 export refuses too.
+- Fork and v1 retry of a finished run with env refuse, rather than running without it.
+- Residual: the encrypted blob stays in the chat message metadata. Rotating the key retires it.
+
+### T69 · Attachments
+Upload through the Worker to R2 (the existing `ATTACHMENTS` bucket), capped per file and per message. Copied into the sandbox under `.shiba/attachments/` before the first turn, with each sha256 in the hash. The Sandbox SDK's `writeFile` accepts a `ReadableStream<Uint8Array>`, so the R2 object body streams straight in. Only `SandboxOps.writeFile` (string-only today) needs widening; there's no base64 round-trip. **Accept:** a file the agent reads is byte-identical to the approved upload.
+
+### T70 · Structured mentions
+`@` picker for runs, PRs, skills and repo files, sent as span-anchored `mentions[]`. The orchestrator resolves each mention into a context block on the run. **Accept:** a mentioned PR's diff summary reaches the harness prompt.
+
+### T71 · Run title + `?prompt=` deep link
+Optional title, otherwise derived from the first line. `/app/?prompt=` prefills the composer.
+
+### Wave B — machines
+
+### T72 · Repo setup file `.shiba/setup.json`
+`format_version: 1`, `scripts.initialize` / `scripts.refresh`, per-script timeouts, and named `entries`. Initialize runs before the first turn, and a failure is reported to the agent and the run. A Setup tab shows the output. **Accept:** a repo whose tests need setup passes without the agent rediscovering it.
+
+*As built (2026-10-25), first slice:*
+- Owner's decision: **opt-in per run**. `runSetup` is part of the approval hash, and the card shows it.
+- `scripts.initialize` runs through `scopedExec` with a one-call `[["sh","-c"]]` allowlist, before the baseline checkpoint, with the approved env and the per-run scrubber.
+- Its effects are folded into a local-only commit (hooks and signing off), so collection, the diff and the PR see only the agent's work.
+- An agent edit to a path setup changed fails the run.
+- Only the composer or `/api/runs` can opt in, never the model's tool call.
+- Timeout is capped at 900 s; the shape is strict; receipts are labeled.
+- Any failure fails the run before the harness starts.
+- Not yet built: `scripts.refresh` and named `entries` (accepted in the file, not run) and the Setup tab (T74). The local runtime refuses setup.
+
+### T73 · Per-run machine size
+One Sandbox container class per instance type, picked by `machineSize` (hashed). Composer ⚙ menu; config generated for every class. **Accept:** `nproc`/`free` inside the run match the approved size.
+
+### T74 · Setup entries as named terminals + port previews
+Each entry launches in its own session with a readiness port; the preview URL appears on the run.
+
+### T75 · Snapshot spike
+Decide whether Sandbox SDK backup/restore can give warm starts per repo. Output is a decision record, not code.
+
+### Wave C — run control
+
+### T76 · Edit a sent message, retry, switch version
+Edits re-freeze into a new approval; earlier versions stay readable.
+
+### T77 · Queue vs steer delivery in the UI
+A message sent mid-run queues above the composer, where it can be edited, sent now or discarded. Builds on `/api/runs/:id/steer`.
+
+### T78 · Compact-at per run + deployment default
+
+### T79 · Runs that wait for an event
+A run waits up to 7 days for a GitHub check, PR event, Slack message or webhook, then resumes. DO alarm + the existing automation trigger plumbing.
+
+### Wave D — MCP and plugins
+
+### T80 · Per-run MCP picker + per-tool enable/disable + test connection
+
+### T81 · Plugin bundles
+MCP servers + skills installed together from a curated, repo-hosted index. No marketplace backend.
+
+### Wave E — review depth
+
+### T82 · Review rules, ignore paths, review context files
+
+### T83 · Guided review overview
+One-sentence context, the steps the PR takes, and a before/after view.
+
+### T84 · Submit a GitHub review from the dashboard + per-file "reviewed"
+
+### Wave F — workspace UX
+
+### T85 · Command menu filters (`author:` `repo:` `status:` `label:` `since:`)
+
+### T86 · Web push notifications
+
+### T87 · Voice dictation
+Browser speech API first; a pluggable speech-to-text endpoint later.
+
+### T88 · Import Claude Code / Codex history as sessions
+
+### Wave G — multi-member (blocked on a GOAL.md decision)
+
+### T89 · Private runs and projects, members, ask for access
+
+### T90 · Per-member MCP and model accounts
+
+**Out of scope:** an OIDC issuer for cloud credentials, cloud phones, 3D/CAD viewers, drive share pages, billing/credits/referrals, an admin console, and machines beyond Cloudflare's ceiling.
 
 ## References
 

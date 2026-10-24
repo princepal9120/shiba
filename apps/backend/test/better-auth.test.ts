@@ -6,8 +6,13 @@
  * AGENT_AUDIT.
  */
 import { DatabaseSync } from "node:sqlite";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { Env } from "../src/env.js";
+
+// Cold-importing the whole Worker can outrun the 5s per-test budget under the parallel gate; pay it once here.
+beforeAll(async () => {
+  await import("../src/index.js");
+}, 60_000);
 import {
   handleBetterAuth,
   isBetterAuthConfigured,

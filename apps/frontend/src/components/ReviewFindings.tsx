@@ -28,6 +28,7 @@ export function ReviewFindings({
   const [retryPending, setRetryPending] = useState(false);
 
   const load = useCallback(() => {
+    let cancelled = false;
     setFetchState({ kind: "loading" });
     void fetch(`/api/v1/threads/${encodeURIComponent(threadId)}/pr/review`)
       .then(async (response) => {
@@ -39,18 +40,23 @@ export function ReviewFindings({
         return { kind: "ready" as const, round: body.round ?? null };
       })
       .then((next) => {
-        setFetchState(next);
+        if (!cancelled) setFetchState(next);
       })
       .catch((error: unknown) => {
-        setFetchState({
-          kind: "error",
-          message: error instanceof Error ? error.message : String(error),
-        });
+        if (!cancelled) {
+          setFetchState({
+            kind: "error",
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
       });
+    return () => {
+      cancelled = true;
+    };
   }, [threadId]);
 
   useEffect(() => {
-    load();
+    return load();
   }, [load]);
 
   const setTriage = (findingId: string, triage: FindingTriage) => {

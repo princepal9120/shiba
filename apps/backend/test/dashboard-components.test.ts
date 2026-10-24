@@ -130,6 +130,8 @@ describe("dashboard components SSR (T14 sweep)", () => {
           connectionId: "",
           onCodingModelChange: () => {},
           onConnectionChange: () => {},
+          reasoningEffort: "",
+          onReasoningEffortChange: () => {},
         },
         busy: false,
         isSubmitting: false,

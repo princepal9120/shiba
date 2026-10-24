@@ -1,6 +1,11 @@
 import { execFileSync } from "node:child_process";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { ExecutionContext } from "@cloudflare/workers-types";
+
+// Cold-importing the whole Worker can outrun the 5s per-test budget under the parallel gate; pay it once here.
+beforeAll(async () => {
+  await import("../src/index.js");
+}, 60_000);
 import { DEFAULT_ALLOWED_HOSTS } from "../src/sandbox/outbound-config.js";
 import { INACTIVITY_TIMEOUT_MS, outboundByHost, outboundHandlers } from "../src/sandbox.js";
 import { claudeCodeHarness } from "../src/harness/claude-code.js";

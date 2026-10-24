@@ -19,18 +19,66 @@ import {
   Cpu,
   Eraser,
   FolderGit2,
+  Gauge,
   GitBranch,
   GitPullRequest,
   Home,
   Laptop,
+  Lock,
+  Mic,
   Plus,
   Search,
   SlidersHorizontal,
   Sparkles,
+  Trash2,
   X,
 } from "lucide-react";
 import { Tooltip } from "./Tooltip";
 import type { SavedSkill } from "../saved";
+import { HARNESS_REASONING_EFFORTS, type ReasoningEffort } from "@shiba/shared";
+
+// Ambient types for browser Web Speech API.
+interface SpeechRecognitionResultItem {
+  readonly transcript: string;
+}
+
+interface SpeechRecognitionResultLike {
+  readonly isFinal?: boolean;
+  readonly length: number;
+  readonly [index: number]: SpeechRecognitionResultItem;
+}
+
+interface SpeechRecognitionEventLike {
+  readonly resultIndex: number;
+  readonly results: {
+    readonly length: number;
+    readonly [index: number]: SpeechRecognitionResultLike;
+  };
+}
+
+interface SpeechRecognitionInstance {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start: () => void;
+  stop: () => void;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((event: unknown) => void) | null;
+  onend: (() => void) | null;
+}
+
+type SpeechRecognitionConstructor = new () => SpeechRecognitionInstance;
+
+interface WindowWithSpeech {
+  SpeechRecognition?: SpeechRecognitionConstructor;
+  webkitSpeechRecognition?: SpeechRecognitionConstructor;
+}
+
+function getSpeechRecognitionClass(): SpeechRecognitionConstructor | null {
+  if (typeof window === "undefined") return null;
+  const win = window as unknown as WindowWithSpeech;
+  return win.SpeechRecognition ?? win.webkitSpeechRecognition ?? null;
+}
 
 /** Model-by-purpose routing controls — the picker's values and its option lists. */
 export interface ModelRoutingControl {
@@ -38,6 +86,8 @@ export interface ModelRoutingControl {
   connectionId: string;
   onCodingModelChange: (value: string) => void;
   onConnectionChange: (value: string) => void;
+  reasoningEffort: ReasoningEffort | "";
+  onReasoningEffortChange: (value: ReasoningEffort | "") => void;
   /** Coding-purpose models from /api/model-config (the "auto" floor plus registered connections). */
   modelSuggestions?: string[];
   connections?: { id: string; label: string; status: string; service?: string }[];
@@ -49,6 +99,8 @@ export interface TaskComposerProps {
   baseBranch: string;
   publishPullRequest: boolean;
   reviewAfterPublish?: boolean;
+  runSetup?: boolean;
+  onRunSetupChange?: (value: boolean) => void;
   harness: string;
   /** T63 — desktop "Run on" control. Rendered only when the shell reports a
    *  paired, ready daemon (localRunAvailable). "sandbox" keeps the chat path. */
@@ -79,6 +131,9 @@ export interface TaskComposerProps {
   onCustomAgentChange?: (id: string) => void;
   /** "docked" = compact bar under the timeline; "hero" = centered empty-state card. */
   variant?: "docked" | "hero";
+  /** Optional per-run environment variables */
+  envVars?: { name: string; value: string }[];
+  onEnvVarsChange?: (vars: { name: string; value: string }[]) => void;
 }
 
 // Keep the picker simple: the everyday harnesses plus Pi. Everything else stays
@@ -110,7 +165,11 @@ const LOCAL_HARNESS_OPTIONS: { value: string; label: string; desc: string }[] = 
   { value: "codex", label: "Codex", desc: "OpenAI Codex CLI" },
 ];
 
-type PopoverKind = "menu" | "repo" | "branch" | "harness" | "model" | "access" | "config" | null;
+type PopoverKind = "menu" | "repo" | "branch" | "harness" | "model" | "effort" | "access" | "config" | "env" | null;
+
+function formatEffort(level: string): string {
+  return level ? level.charAt(0).toUpperCase() + level.slice(1) : "";
+}
 
 /** owner/repo from a GitHub URL; falls back to the trimmed raw value. */
 function repoSlugOf(repoUrl: string): string {
@@ -207,6 +266,7 @@ export function TaskComposer({
   baseBranch,
   publishPullRequest,
   reviewAfterPublish = false,
+  runSetup = false,
   harness,
   runTarget = "sandbox",
   onRunTargetChange,
@@ -220,6 +280,7 @@ export function TaskComposer({
   onBaseBranchChange,
   onPublishPullRequestChange,
   onReviewAfterPublishChange,
+  onRunSetupChange,
   onHarnessChange,
   onSubmit,
   onClear,
@@ -231,6 +292,8 @@ export function TaskComposer({
   customAgentId = "",
   onCustomAgentChange,
   variant = "docked",
+  envVars = [],
+  onEnvVarsChange,
 }: TaskComposerProps): JSX.Element {
   const sendDisabled = busy || task.trim() === "" || repoUrl.trim() === "";
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -243,8 +306,118 @@ export function TaskComposer({
   const [modelFilter, setModelFilter] = useState("");
   const [modelDraft, setModelDraft] = useState("");
   const [branchDraft, setBranchDraft] = useState("");
+  const [draftName, setDraftName] = useState("");
+  const [draftValue, setDraftValue] = useState("");
   const baseId = useId();
   const idFor = (name: string) => `${baseId}-${name}`;
+
+  // T87 — voice dictation via Web Speech API.
+  const [listening, setListening] = useState(false);
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const taskRef = useRef(task);
+  taskRef.current = task;
+  const onTaskChangeRef = useRef(onTaskChange);
+  onTaskChangeRef.current = onTaskChange;
+
+  const stopListening = useCallback(() => {
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {
+        // Recognition already stopped
+      }
+      recognitionRef.current = null;
+    }
+    setListening(false);
+  }, []);
+
+  const toggleListening = useCallback(() => {
+    if (listening) {
+      stopListening();
+      return;
+    }
+    const SpeechClass = getSpeechRecognitionClass();
+    if (!SpeechClass) return;
+
+    try {
+      const recognition = new SpeechClass();
+      recognition.continuous = true;
+      recognition.interimResults = false;
+      recognition.lang =
+        typeof navigator !== "undefined" && navigator.language
+          ? navigator.language
+          : "en-US";
+
+      recognition.onresult = (event: SpeechRecognitionEventLike) => {
+        let transcript = "";
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const result = event.results[i];
+          if (result && (result.isFinal === undefined || result.isFinal)) {
+            const item = result[0];
+            if (item?.transcript) {
+              transcript += item.transcript;
+            }
+          }
+        }
+        const text = transcript.trim();
+        if (!text) return;
+        const currentTask = taskRef.current;
+        const nextTask = currentTask.trimEnd() ? `${currentTask.trimEnd()} ${text}` : text;
+        onTaskChangeRef.current(nextTask);
+      };
+
+      recognition.onerror = () => {
+        stopListening();
+      };
+
+      recognition.onend = () => {
+        setListening(false);
+        recognitionRef.current = null;
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+      setListening(true);
+    } catch {
+      stopListening();
+    }
+  }, [listening, stopListening]);
+
+  useEffect(() => {
+    return () => {
+      stopListening();
+    };
+  }, [stopListening]);
+
+  useEffect(() => {
+    if (isSubmitting) {
+      stopListening();
+    }
+  }, [isSubmitting, stopListening]);
+
+  const handleAddEnvVar = () => {
+    if (!draftName.trim() && !draftValue) return;
+    const next = [...envVars, { name: draftName.trim(), value: draftValue }];
+    onEnvVarsChange?.(next);
+    setDraftName("");
+    setDraftValue("");
+  };
+
+  const handleUpdateEnvVar = (index: number, field: "name" | "value", val: string) => {
+    const target = envVars[index];
+    if (!target) return;
+    const next = [...envVars];
+    next[index] = {
+      name: field === "name" ? val : target.name,
+      value: field === "value" ? val : target.value,
+    };
+    onEnvVarsChange?.(next);
+  };
+
+  const handleRemoveEnvVar = (index: number) => {
+    const next = envVars.filter((_, i) => i !== index);
+    onEnvVarsChange?.(next);
+  };
 
   const toggle = useCallback(
     (kind: Exclude<PopoverKind, null>) => {
@@ -282,6 +455,7 @@ export function TaskComposer({
     event.preventDefault();
     if (sendDisabled) return;
     setOpen(null);
+    stopListening();
     onSubmit(event);
   };
 
@@ -300,6 +474,11 @@ export function TaskComposer({
   const connections = routing.connections ?? [];
   const currentConnection = connections.find((c) => c.id === routing.connectionId);
   const modelSuggestions = routing.modelSuggestions ?? [];
+  const supportedEfforts = HARNESS_REASONING_EFFORTS[harness];
+  const selectedEffort =
+    routing.reasoningEffort && supportedEfforts?.includes(routing.reasoningEffort)
+      ? routing.reasoningEffort
+      : "";
 
   const repoSlug = repoSlugOf(repoUrl);
   const repoFilterLower = repoFilter.trim().toLowerCase();
@@ -313,6 +492,8 @@ export function TaskComposer({
   const modelKnown = routing.codingModel === "" || modelSuggestions.includes(routing.codingModel);
   const selectedSkills = skills.filter((skill) => selectedSkillIds.includes(skill.id));
   const selectedCustomAgent = customAgents.find((agent) => agent.id === customAgentId);
+  const namedEnvVars = envVars.filter((v) => v.name.trim() !== "");
+  const namedEnvCount = namedEnvVars.length;
 
   const pickRepo = (url: string) => {
     onRepoUrlChange(url);
@@ -543,26 +724,43 @@ export function TaskComposer({
         </div>
       ) : null}
 
-      {selectedSkills.length > 0 ? (
-        <fieldset className="flex items-center gap-1.5 flex-wrap" aria-label="Attached skills">
-          {selectedSkills.map((skill) => (
-            <span
-              key={skill.id}
-              className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-[var(--radius-button)] border border-[var(--primary-soft)] bg-[var(--primary-soft)] text-[var(--primary)]"
+      {selectedSkills.length > 0 || namedEnvCount > 0 ? (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {selectedSkills.length > 0 ? (
+            <fieldset className="flex items-center gap-1.5 flex-wrap" aria-label="Attached skills">
+              {selectedSkills.map((skill) => (
+                <span
+                  key={skill.id}
+                  className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-[var(--radius-button)] border border-[var(--primary-soft)] bg-[var(--primary-soft)] text-[var(--primary)]"
+                >
+                  <Sparkles aria-hidden="true" className="size-2.5" />
+                  {skill.name}
+                  <button
+                    type="button"
+                    aria-label={`Remove skill ${skill.name}`}
+                    onClick={() => onToggleSkill?.(skill.id)}
+                    className="hover:text-[var(--fg)] cursor-pointer"
+                  >
+                    <X aria-hidden="true" className="size-2.5" />
+                  </button>
+                </span>
+              ))}
+            </fieldset>
+          ) : null}
+          {namedEnvCount > 0 ? (
+            <button
+              type="button"
+              aria-label={`${namedEnvCount} ${
+                namedEnvCount === 1 ? "environment variable" : "environment variables"
+              } attached`}
+              onClick={() => setOpen("env")}
+              className="inline-flex items-center gap-1 text-[10px] font-mono font-medium px-2 py-0.5 rounded-[var(--radius-button)] border border-[var(--border-1)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--fg)] cursor-pointer transition-colors"
             >
-              <Sparkles aria-hidden="true" className="size-2.5" />
-              {skill.name}
-              <button
-                type="button"
-                aria-label={`Remove skill ${skill.name}`}
-                onClick={() => onToggleSkill?.(skill.id)}
-                className="hover:text-[var(--fg)] cursor-pointer"
-              >
-                <X aria-hidden="true" className="size-2.5" />
-              </button>
-            </span>
-          ))}
-        </fieldset>
+              <Lock aria-hidden="true" className="size-2.5 text-[var(--icon-muted)]" />
+              <span>ENV ×{namedEnvCount}</span>
+            </button>
+          ) : null}
+        </div>
       ) : null}
 
       {/* Bottom control row: + add menu, sliders thread-config, model chip, spacer, teal CTA */}
@@ -614,6 +812,20 @@ export function TaskComposer({
                   {selectedSkillIds.length > 0 ? (
                     <span className="font-mono text-[10px] text-[var(--primary)] font-semibold">
                       {selectedSkillIds.length}
+                    </span>
+                  ) : null}
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={menuRowClass}
+                  onClick={() => setOpen("env")}
+                >
+                  <Lock aria-hidden="true" className={menuIconClass} />
+                  <span className="flex-1">Environment variables</span>
+                  {namedEnvCount > 0 ? (
+                    <span className="font-mono text-[10px] text-[var(--primary)] font-semibold">
+                      {namedEnvCount}
                     </span>
                   ) : null}
                 </button>
@@ -675,6 +887,97 @@ export function TaskComposer({
                 )}
               </div>
             )}
+          </Popover>
+          <Popover
+            kind="env"
+            open={open === "env"}
+            onClose={close}
+            labelledBy={idFor("env-popover-title")}
+            className="left-0 w-80 sm:w-96"
+          >
+            <div className="p-3 flex flex-col gap-2.5 max-h-80 overflow-y-auto">
+              <div className="flex items-center justify-between">
+                <span id={idFor("env-popover-title")} className={sectionLabelClass}>
+                  Environment Variables
+                </span>
+                <span className="text-[10px] text-[var(--muted-foreground-2)] font-mono">
+                  Cloud only
+                </span>
+              </div>
+              {envVars.length > 0 ? (
+                <div className="flex flex-col gap-2">
+                  {envVars.map((row, idx) => (
+                    // Positional key: a name-derived key remounts the row and drops focus on every keystroke.
+                    // biome-ignore lint/suspicious/noArrayIndexKey: rows are controlled and positional
+                    <div key={idx} className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        value={row.name}
+                        onChange={(e) => handleUpdateEnvVar(idx, "name", e.target.value)}
+                        placeholder="NAME"
+                        className={`${inputClass} font-mono w-28 sm:w-32`}
+                      />
+                      <input
+                        type="password"
+                        autoComplete="off"
+                        value={row.value}
+                        onChange={(e) => handleUpdateEnvVar(idx, "value", e.target.value)}
+                        placeholder="value"
+                        className={`${inputClass} flex-1`}
+                      />
+                      <button
+                        type="button"
+                        aria-label={`Remove ${row.name || "variable"}`}
+                        onClick={() => handleRemoveEnvVar(idx)}
+                        className="p-1.5 text-[var(--muted-foreground-2)] hover:text-[var(--danger,red)] hover:bg-[var(--secondary)] rounded-[var(--radius-button)] transition-colors cursor-pointer shrink-0"
+                      >
+                        <Trash2 aria-hidden="true" className="size-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              <div className="flex items-center gap-1.5 pt-0.5">
+                <input
+                  type="text"
+                  value={draftName}
+                  onChange={(e) => setDraftName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleAddEnvVar();
+                    }
+                  }}
+                  placeholder="NAME"
+                  className={`${inputClass} font-mono w-28 sm:w-32`}
+                />
+                <input
+                  type="password"
+                  autoComplete="off"
+                  value={draftValue}
+                  onChange={(e) => setDraftValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleAddEnvVar();
+                    }
+                  }}
+                  placeholder="value"
+                  className={`${inputClass} flex-1`}
+                />
+              </div>
+
+              <div className="flex justify-end pt-1">
+                <button
+                  type="button"
+                  onClick={handleAddEnvVar}
+                  className="text-xs font-medium px-2.5 py-1.5 bg-[var(--primary)] text-[var(--primary-text)] rounded-[var(--radius-button)] hover:opacity-90 transition-opacity cursor-pointer"
+                >
+                  Add variable
+                </button>
+              </div>
+            </div>
           </Popover>
         </div>
 
@@ -759,6 +1062,23 @@ export function TaskComposer({
                   {reviewAfterPublish ? <Check aria-hidden="true" className={menuCheckClass} /> : null}
                 </button>
               ) : null}
+
+              <button
+                type="button"
+                role="menuitemcheckbox"
+                aria-checked={runSetup}
+                aria-label="Run repo setup"
+                className="flex items-center gap-2 text-xs text-[var(--fg)] hover:bg-[var(--secondary-hover)] p-1.5 rounded-[var(--radius-button)] transition-colors cursor-pointer text-left"
+                onClick={() => onRunSetupChange?.(!runSetup)}
+              >
+                <span className="flex-1 min-w-0">
+                  <span className="block">Run repo setup</span>
+                  <span className="block text-[10px] text-[var(--muted-foreground-2)]">
+                    Runs .shiba/setup.json initialize before the agent
+                  </span>
+                </span>
+                {runSetup ? <Check aria-hidden="true" className={menuCheckClass} /> : null}
+              </button>
 
               {onCustomAgentChange && customAgents.length > 0 ? (
                 <div className="border-t border-[var(--border-1)] pt-2 flex flex-col gap-1.5">
@@ -989,6 +1309,79 @@ export function TaskComposer({
           </Popover>
         </div>
 
+        {/* Effort Chip (Gauge icon + Effort label + Chevron) */}
+        {supportedEfforts && supportedEfforts.length > 0 ? (
+          <div className="relative">
+            <Tooltip
+              content={
+                selectedEffort
+                  ? `Reasoning effort: ${formatEffort(selectedEffort)}`
+                  : "Reasoning effort — default"
+              }
+              side="top"
+            >
+              <button
+                type="button"
+                id={idFor("effort-button")}
+                aria-haspopup="menu"
+                aria-expanded={open === "effort"}
+                aria-label={`Reasoning effort: ${selectedEffort || "default"}`}
+                onClick={() => toggle("effort")}
+                className={`${pillClass} border border-[var(--border-1)] bg-[var(--card)] hover:bg-[var(--secondary)] text-[var(--fg)]`}
+              >
+                <Gauge aria-hidden="true" className="size-3.5 text-[var(--icon-muted)] shrink-0" />
+                <span className={pillLabelClass}>
+                  {selectedEffort ? formatEffort(selectedEffort) : "Effort"}
+                </span>
+                {chevron}
+              </button>
+            </Tooltip>
+            <Popover
+              kind="effort"
+              open={open === "effort"}
+              onClose={close}
+              labelledBy={idFor("effort-button")}
+              className="left-0 w-44"
+            >
+              <div className="py-1">
+                <button
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={selectedEffort === ""}
+                  className={menuRowClass}
+                  onClick={() => {
+                    routing.onReasoningEffortChange("");
+                    setOpen(null);
+                  }}
+                >
+                  <span className="flex-1 truncate text-left">Default</span>
+                  {selectedEffort === "" ? (
+                    <Check aria-hidden="true" className={menuCheckClass} />
+                  ) : null}
+                </button>
+                {supportedEfforts.map((level) => (
+                  <button
+                    key={level}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={level === selectedEffort}
+                    className={menuRowClass}
+                    onClick={() => {
+                      routing.onReasoningEffortChange(level);
+                      setOpen(null);
+                    }}
+                  >
+                    <span className="flex-1 truncate text-left">{formatEffort(level)}</span>
+                    {level === selectedEffort ? (
+                      <Check aria-hidden="true" className={menuCheckClass} />
+                    ) : null}
+                  </button>
+                ))}
+              </div>
+            </Popover>
+          </div>
+        ) : null}
+
         <div className="flex-1 min-w-0 flex flex-col items-end justify-center gap-0.5">
           {isSubmitting ? (
             <span className="text-[10px] text-[var(--primary)] font-medium" data-testid="composer-status">
@@ -1000,6 +1393,25 @@ export function TaskComposer({
             </span>
           ) : null}
         </div>
+
+        {/* Voice dictation */}
+        {getSpeechRecognitionClass() ? (
+          <Tooltip content="Dictate — uses your browser's speech recognition" side="top">
+            <button
+              type="button"
+              onClick={toggleListening}
+              aria-label={listening ? "Stop voice input" : "Voice input"}
+              aria-pressed={listening}
+              className={`inline-flex items-center justify-center size-8 touch:min-h-11 touch:w-11 rounded-[var(--radius-button)] border transition-colors cursor-pointer ${
+                listening
+                  ? "bg-[var(--primary)] text-[var(--primary-text)] border-[var(--primary)]"
+                  : "text-[var(--muted-foreground-1)] hover:text-[var(--fg)] hover:bg-[var(--secondary)] border-[var(--border-1)]"
+              }`}
+            >
+              <Mic aria-hidden="true" className="size-4" />
+            </button>
+          </Tooltip>
+        ) : null}
 
         {/* Send */}
         <Tooltip content="Submit task to coding agent" shortcut="⌘↵" side="top">

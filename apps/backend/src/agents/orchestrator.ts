@@ -11,6 +11,8 @@ import {
   foldOutboxEvent,
   HARNESS_IDS,
   isAgentRole,
+  isReasoningEffort,
+  withoutSealedEnv,
   type JsonValue,
   LOCAL_INTAKE_DASHBOARD,
   LOCAL_INTAKE_HEADER,
@@ -19,6 +21,7 @@ import {
   MAX_SPINE_EVENTS,
   type OutboxEntry,
   pruneApprovals,
+  REASONING_EFFORTS,
   type RunCommand,
   type RunDecision,
   runtimeSelectionSchema,
@@ -82,6 +85,8 @@ import { mailboxDirectoryStub, mailboxStub, registeredMailbox } from "../mailbox
 import { ADDRESS_RE, type MailboxRecord } from "../mailbox-store.js";
 import { type ApprovedRoute, describeRoute, isApprovedRoute } from "../model-connections.js";
 import { orgIdFromIntake } from "../org-request-auth.js";
+import { openRunEnv } from "../run-env-seal.js";
+import { resolveRuntimeName } from "../runtime.js";
 import { assertRunPreflight } from "../run-preflight.js";
 import { readModelConfig, resolveCodingRoute, revalidateCodingRoute } from "../model-policy.js";
 import { initiatorUserIdFromOrchestratorName } from "../subscription-routing.js";
@@ -294,6 +299,13 @@ export const delegateInputSchema = z.object({
       "Model connection id (conn_*) from the deployment's connection catalog. " +
         "Defaults to the deployment's implicit gateway/secret default.",
     ),
+  reasoningEffort: z
+    .enum(REASONING_EFFORTS)
+    .optional()
+    .describe(
+      "Reasoning effort for the coding model. Only levels the harness supports are accepted " +
+        "(claude-code: low..max, codex: minimal..xhigh, opencode: low/medium/high). Defaults to the model's own.",
+    ),
   testCommand: testCommandSchema
     .optional()
     .describe(
@@ -324,6 +336,8 @@ export const delegateInputSchema = z.object({
 
 type DelegateInput = z.infer<typeof delegateInputSchema>;
 
+type FrozenRunEnv = { envNames: string[]; envDigest: string; envSealed: string };
+
 // Composer fields a chat message may pin via metadata.shibaTask. Declared without
 // .default() (zod 4 re-injects defaults under .partial()); runtime/role/authAccount/testCommand are never read.
 // Per-field .catch: one bad field drops only itself, not the whole pin.
@@ -336,6 +350,7 @@ const composerPinSchema = z.object({
   harness: z.enum(HARNESS_IDS).optional().catch(undefined),
   codingModel: z.string().min(1).optional().catch(undefined),
   connectionId: z.string().min(1).optional().catch(undefined),
+  reasoningEffort: z.enum(REASONING_EFFORTS).optional().catch(undefined),
   customAgentId: z.string().min(1).max(128).optional().catch(undefined),
   orgId: z.string().min(1).max(128).optional().catch(undefined),
 });
@@ -857,11 +872,49 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     return tools;
   }
 
+  /** T72: only the human's composer tick can opt a chat run into repo setup — never the model's tool call. */
+  private composerRunSetup(): boolean {
+    const last = this.messages?.filter((m) => m.role === "user").at(-1);
+    return (last?.metadata as { shibaTask?: { runSetup?: unknown } } | undefined)?.shibaTask?.runSetup === true;
+  }
+
+  /** T68: the sealed env the dashboard attached to the latest user message, if any. */
+  private composerEnv(): unknown {
+    const last = this.messages?.filter((m) => m.role === "user").at(-1);
+    return (last?.metadata as { shibaTask?: { environment?: unknown } } | undefined)?.shibaTask?.environment;
+  }
+
+  /**
+   * T68: accept a sealed env blob only if it opens for this orchestrator, and
+   * freeze the names from the opened values — never the client's own list.
+   */
+  private async intakeRunEnv(raw: unknown, runtime: string | undefined): Promise<FrozenRunEnv | undefined> {
+    if (raw === undefined || raw === null) return undefined;
+    const { sealed, digest } = (typeof raw === "object" ? raw : {}) as { sealed?: unknown; digest?: unknown };
+    if (typeof sealed !== "string" || typeof digest !== "string") {
+      throw new Error("environment must be the { sealed, digest } object returned by /api/runs/env-seal.");
+    }
+    // The child falls back to the deployment's RUNTIME, so refuse on the runtime it will actually use.
+    if ((runtime ?? resolveRuntimeName(this.env.RUNTIME)) === "local") {
+      throw new Error("Per-run environment variables are not supported on the local runtime yet.");
+    }
+    const values = await openRunEnv(this.env, this.name ?? "", sealed, digest);
+    return { envNames: Object.keys(values).sort(), envDigest: digest, envSealed: sealed };
+  }
+
   /** The latest user message's composer fields, so the card freezes what was typed, not the LLM's paraphrase. */
   // Known gap: a turn with several delegate_coding_task calls pins the same composer `task` on each card.
   private composerPin(): Partial<DelegateInput> {
     const last = this.messages?.filter((m) => m.role === "user").at(-1);
-    const parsed = composerPinSchema.safeParse((last?.metadata as { shibaTask?: unknown } | undefined)?.shibaTask);
+    const raw = (last?.metadata as { shibaTask?: unknown } | undefined)?.shibaTask;
+    // The per-field .catch would silently drop a bad effort the human picked; refuse it like /api/runs does.
+    const effort = (raw as { reasoningEffort?: unknown } | undefined)?.reasoningEffort;
+    if (effort !== undefined && !isReasoningEffort(effort)) {
+      throw new Error(
+        `Unknown reasoning effort ${JSON.stringify(String(effort).slice(0, 40))}: expected one of ${REASONING_EFFORTS.join(", ")}.`,
+      );
+    }
+    const parsed = composerPinSchema.safeParse(raw);
     if (!parsed.success) return {};
     return Object.fromEntries(Object.entries(parsed.data).filter(([, value]) => value !== undefined));
   }
@@ -913,6 +966,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         connectionId: input.connectionId?.trim() || null,
         model: codingModel,
         harness,
+        ...(input.reasoningEffort !== undefined ? { reasoningEffort: input.reasoningEffort } : {}),
       },
       { initiatorUserId: initiatorUserIdFromOrchestratorName(this.name) },
     );
@@ -1036,6 +1090,15 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       // now. Either way the route is revalidated just before dispatch — a
       // revoked connection fails the run honestly, never a substitution.
       const frozen = reserved.route;
+      // Fail closed: a stored route that no longer validates must not fall back to the defaults.
+      if (frozen !== undefined && !isApprovedRoute(frozen)) {
+        return yield* Effect.fail(toTaggedError("internal_error", "The approved route no longer validates; re-queue the run."));
+      }
+      if ((reserved.envDigest === undefined) !== (reserved.envSealed === undefined)) {
+        return yield* Effect.fail(
+          toTaggedError("internal_error", "The approved environment variables are missing; re-queue the run."),
+        );
+      }
       const {
         harness: resolvedHarness,
         codingModel,
@@ -1075,6 +1138,11 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         // the parent's checkpoint ref into the fork's clone.
         ...(reserved.forkedFrom !== undefined
           ? { forkCheckpointRef: reserved.forkedFrom.checkpointRef }
+          : {}),
+        ...(reserved.runSetup === true ? { runSetup: true } : {}),
+        // T68: read from the hashed run record; the child opens it with envOwner.
+        ...(reserved.envSealed !== undefined && reserved.envDigest !== undefined
+          ? { envSealed: reserved.envSealed, envDigest: reserved.envDigest, envOwner: this.name }
           : {}),
       };
       // Chat-originated runs get the outcome back in the thread in the
@@ -1514,6 +1582,9 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     harness?: unknown;
     codingModel?: unknown;
     connectionId?: unknown;
+    reasoningEffort?: unknown;
+    environment?: unknown;
+    runSetup?: unknown;
     authAccount?: unknown;
     runtime?: unknown;
     targetMachineId?: unknown;
@@ -1576,6 +1647,15 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       typeof input.connectionId === "string" && input.connectionId.trim()
         ? input.connectionId.trim()
         : undefined;
+    if (input.reasoningEffort !== undefined && !isReasoningEffort(input.reasoningEffort)) {
+      return Response.json(
+        {
+          error: `Unknown reasoning effort ${JSON.stringify(String(input.reasoningEffort).slice(0, 40))}: expected one of ${REASONING_EFFORTS.join(", ")}.`,
+        },
+        { status: 400 },
+      );
+    }
+    const reasoningEffort = input.reasoningEffort;
     const customAgentRef =
       typeof (input as { customAgentId?: unknown }).customAgentId === "string"
         ? (input as { customAgentId: string }).customAgentId.trim()
@@ -1673,6 +1753,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         harness: harnessOverride ? (harnessOverride as DelegateInput["harness"]) : undefined,
         codingModel: codingModelOverride,
         connectionId: connectionIdOverride,
+        ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
         ...(runtimeForPreflight ? { runtime: runtimeForPreflight } : {}),
         ...(role !== "" ? { role } : {}),
       });
@@ -1754,6 +1835,22 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         );
       }
     }
+    if (input.runSetup !== undefined && typeof input.runSetup !== "boolean") {
+      return Response.json({ error: "runSetup must be a boolean." }, { status: 400 });
+    }
+    const runSetup = input.runSetup === true;
+    if (runSetup && (runtime ?? resolveRuntimeName(this.env.RUNTIME)) === "local") {
+      return Response.json({ error: "Repo setup isn't supported on the local runtime yet." }, { status: 400 });
+    }
+    let runEnv: FrozenRunEnv | undefined;
+    try {
+      runEnv = await this.intakeRunEnv(input.environment, runtime);
+    } catch (error) {
+      return Response.json(
+        { error: error instanceof Error ? error.message : "Invalid environment variables." },
+        { status: 400 },
+      );
+    }
     const approvalId = crypto.randomUUID();
     const threadKey =
       typeof input.threadKey === "string" && input.threadKey.trim()
@@ -1803,6 +1900,8 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
             : {}),
           ...(taskSandboxProvider ? { sandboxProvider: taskSandboxProvider } : {}),
           ...(customAgentId ? { customAgentId } : {}),
+          ...(runEnv ?? {}),
+          ...(runSetup ? { runSetup: true } : {}),
           ...(intakeOrgId ? { orgId: intakeOrgId } : {}),
           createdAt: Date.now(),
         }),
@@ -1928,6 +2027,13 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       }
       task = input.prompt;
     }
+    // T68: a finished parent's sealed env is discarded; refuse rather than fork without it.
+    if (parent.envDigest !== undefined && parent.envSealed === undefined) {
+      return Response.json(
+        { error: "This run's environment variables were discarded when it finished. Start a new run with them." },
+        { status: 409 },
+      );
+    }
     const approvalId = crypto.randomUUID();
     const forkedFrom = { runId: parent.runId, checkpointRef };
     const threadKey =
@@ -1967,6 +2073,10 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
             ? { targetMachineId: parent.targetMachineId }
             : {}),
           ...(parent.testCommand !== undefined ? { testCommand: parent.testCommand } : {}),
+          ...(parent.envDigest !== undefined && parent.envSealed !== undefined
+            ? { envNames: parent.envNames ?? [], envDigest: parent.envDigest, envSealed: parent.envSealed }
+            : {}),
+          ...(parent.runSetup === true ? { runSetup: true } : {}),
           forkedFrom,
           ...(agentPrincipal !== null ? { queuedBy: agentPrincipal } : {}),
           createdAt: Date.now(),
@@ -2316,7 +2426,10 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     // answers from the receipt, never re-dispatches (T41).
     this.setState({
       ...this.state,
-      pendingApprovals: approvals,
+      // T68: once decided, the minted run (if any) holds the sealed env — the approval keeps no copy.
+      pendingApprovals: approvals.map((approval) =>
+        approval.approvalId === approvalId && approval.threadKey === threadKey ? withoutSealedEnv(approval) : approval,
+      ),
       runs: run ? [...this.store.list(), run] : this.store.list(),
       commandReceipts: this.withCommandReceipt({
         commandId,
@@ -2404,6 +2517,11 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       codingModel,
       connectionId,
     });
+    const runEnv = await this.intakeRunEnv(this.composerEnv(), input.runtime);
+    const runSetup = this.composerRunSetup();
+    if (runSetup && (input.runtime ?? resolveRuntimeName(this.env.RUNTIME)) === "local") {
+      throw new Error("Repo setup isn't supported on the local runtime yet.");
+    }
     this.setState({
       ...this.state,
       pendingApprovals: createPendingApproval(this.approvals, {
@@ -2417,6 +2535,8 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         route,
         ...(sandboxProvider ? { sandboxProvider } : {}),
         ...(customAgentId ? { customAgentId } : {}),
+        ...(runEnv ?? {}),
+        ...(runSetup ? { runSetup: true } : {}),
         ...(typeof input.authAccount === "string" && input.authAccount.trim()
           ? { authAccount: input.authAccount.trim().slice(0, 32) }
           : {}),
@@ -2469,6 +2589,10 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
       ...(record.role !== undefined ? { role: record.role } : {}),
       ...(record.sandboxProvider !== undefined ? { sandboxProvider: record.sandboxProvider } : {}),
       ...(record.customAgentId !== undefined ? { customAgentId: record.customAgentId } : {}),
+      ...(record.envDigest !== undefined
+        ? { envNames: record.envNames ?? [], envDigest: record.envDigest, envSealed: record.envSealed }
+        : {}),
+      ...(record.runSetup === true ? { runSetup: true } : {}),
       ...(continuationKey !== undefined ? { continuationKey } : {}),
       decisionTap: (command, decision) => this.spineTap(command, decision),
       // T40: the run carries its approval evidence from birth — who decided,
@@ -2491,6 +2615,8 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         ...(record.subagentPath !== undefined ? { subagentPath: record.subagentPath } : {}),
         ...(record.subagentSandbox !== undefined ? { subagentSandbox: record.subagentSandbox } : {}),
         ...denIdWireFields(resolveDenId(record)),
+        ...(record.envDigest !== undefined ? { envNames: record.envNames ?? [], envDigest: record.envDigest } : {}),
+        ...(record.runSetup === true ? { runSetup: true } : {}),
       }),
     });
   }
@@ -2762,6 +2888,11 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         task,
         baseBranch: coding.baseBranch,
         publishPullRequest: false,
+        // The follow-up runs on the model, effort and account the human already approved, not deployment defaults.
+        ...(coding.route !== undefined ? { route: coding.route } : {}),
+        ...(coding.authAccount !== undefined ? { authAccount: coding.authAccount } : {}),
+        // A CI fix usually needs the same environment the tests ran in.
+        ...(coding.runSetup === true ? { runSetup: true } : {}),
         createdAt: Date.now(),
       });
       this.writeApprovals(approvals);
@@ -3236,6 +3367,7 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
         harness?: string;
         codingModel?: string;
         connectionId?: string;
+        reasoningEffort?: DelegateInput["reasoningEffort"];
       }) => this.resolveRoute(input as DelegateInput),
       githubTokenConfigured: Boolean(this.env.GITHUB_TOKEN),
     };
@@ -3420,7 +3552,10 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
   /** Wire projection for API responses: errorCode -> {status, code, userMessage}. */
   private serializeRun(run: DelegatedRun): DelegatedRun & { errorWire?: RunErrorWire; timedOut?: boolean } {
     const timedOut = runTimedOut(run);
-    const projected = run.errorCode ? { ...run, errorWire: runErrorWire(run.errorCode) } : run;
+    // T68: the sealed env never leaves the DO through the API.
+    const visible = { ...run };
+    delete visible.envSealed;
+    const projected = visible.errorCode ? { ...visible, errorWire: runErrorWire(visible.errorCode) } : visible;
     return timedOut ? { ...projected, timedOut: true } : projected;
   }
 
@@ -3858,10 +3993,9 @@ export class CodingOrchestrator extends Think<Env, OrchestratorState> {
     this.sweepStaleDrafts(expiredSends.length > 0);
     // Agent principals see only records they queued; operator surfaces
     // (no principal header) keep the full listing.
-    const visible =
-      agentPrincipal === null
-        ? pruned
-        : pruned.filter((approval) => approval.queuedBy === agentPrincipal);
+    const visible = (
+      agentPrincipal === null ? pruned : pruned.filter((approval) => approval.queuedBy === agentPrincipal)
+    ).map(withoutSealedEnv);
     return Response.json({
       approvals: visible.filter((approval) => approval.status === "pending"),
       // Decided records leave the pending arm but stay listed — the

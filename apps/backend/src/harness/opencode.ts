@@ -148,6 +148,7 @@ export function buildOpencodeArgv(input: CodingTaskInput, workdir: string): stri
     "json",
     "--model",
     input.codingModel,
+    ...(input.route?.reasoningEffort ? ["--variant", input.route.reasoningEffort] : []),
     "--dir",
     workdir,
     input.task,

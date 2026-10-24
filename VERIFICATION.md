@@ -1,5 +1,98 @@
 # Verification Results
 
+**2026-10-25 — P12 Capy parity: T72 opt-in repo setup, plus T71 and T87 (branch `capy-parity`).**
+
+*T72 (owner chose opt-in per run):*
+- `runSetup` is part of the approval hash and threaded like `testCommand`: approval, queue input, hash check, replay compare, run record, mint evidence, dispatch envelope.
+- Steering, fork, v1 retry and PR-lifecycle wakes carry it. The composer's thread configuration has a "Run repo setup" checkbox, and the stored card shows `Setup: runs .shiba/setup.json initialize`.
+- `repo-setup.ts` reads `.shiba/setup.json`. The shape is strict: unknown keys are refused, `scripts.initialize` is at most 8000 chars, and `timeouts.initialize` is 1–900 s, default 600.
+- It runs `sh -c <initialize>` through `scopedExec` with a one-call `[["sh","-c"]]` allowlist, the approved env, and receipts labeled `.shiba/setup.json#initialize`. This happens **between clone and the baseline checkpoint**.
+- It then folds setup's effects into a **local-only commit** (`core.hooksPath=/dev/null`, `commit.gpgsign=false`, `--no-verify`). `git status`-based collection, the diff and the published PR tree therefore contain only the agent's changes; publishing builds from the remote base sha. An agent edit to a setup-touched path fails the run, which also closes the env-leak path through setup-written files. The check runs at collect time as `git diff-tree <setup-sha> -- <changed files>` and fails the run if git can't answer. Every set-aside git call has hooks and fsmonitor off and a 120 s timeout.
+- Only the composer tick or the authenticated `/api/runs` can set `runSetup`. It was removed from the model-facing delegate schema, and a non-boolean is a 400.
+- A missing or invalid file, or a non-zero exit, fails the run before the harness starts. A read error is reported apart from a missing file.
+- The local runtime is refused at intake (explicit runtime or deployment `RUNTIME`) and in the local adapter.
+
+*T71* `/app/?prompt=` prefills the composer (capped at 4000 chars), strips the param, and never submits. *T87* adds composer dictation through the browser's speech recognition API, hidden when unsupported.
+
+*Tests:* `repo-setup.test.ts` (24) covers parsing (including accepted `refresh`/`entries`), the opt-in gate, ordering before the baseline checkpoint and the harness, the failure paths, env passthrough, the local-only commit, the overlap check and its fail-closed git error, quiet set-aside git, the hash, and intake with the local refusal. `v1-core.test.ts` adds the v1-retry `environment_discarded` 409 and the effort/setup carry on retry.
+
+*Independent review:* two passes.
+- Pass 1 found 1 HIGH, 2 MED and 3 LOW, all fixed. HIGH: setup's effects reached the PR and skipped the env-leak guard. MED: the model's tool call could set `runSetup`, and the timeout could exceed the run deadline.
+- Pass 2 confirmed those fixed and raised 5 LOWs. Fixed: an unchecked `diff-tree` exit, a 1 MB cap on the path list, no timeouts on set-aside git, and hooks off only on the commit.
+- Kept by design: the overlap check also applies to runs that don't publish, because file contents still reach the API.
+
+*Gate (`pnpm typecheck && lint && lint:imports && test && build && test:built && check:ci`):* exit 0.
+
+| Package | Tests |
+| --- | --- |
+| Backend | 2625 passed, 3 skipped |
+| Frontend | 121 |
+| Desktop | 152 |
+| Sandbox | 34 |
+| Auth | 11 |
+| ACP server | 8 |
+| SDK | 6 |
+| shiba-login | 3 |
+
+**NOT VERIFIED:**
+- No real sandbox ran a setup script.
+- `scripts.refresh`, named `entries` and the Setup tab (T74) aren't built.
+- Dictation was not tried in a real browser.
+
+**2026-10-24 — P12 Capy parity: T67 reasoning effort + T68 per-run environment variables (branch `capy-parity`).**
+
+*T67:*
+- The effort chip lists only levels the selected harness accepts.
+- `reasoningEffort` rides the approval-hashed `ApprovedRoute` and shows on cards via `describeRoute`.
+- `resolveCodingRoute` refuses unsupported harness/level combinations before a card exists.
+- Argv: claude `--effort`, codex `-c model_reasoning_effort="…"`, opencode `--variant`. The flags were checked against current CLI docs and the Dockerfile pins (claude-code 2.1.284, codex 0.157.1, opencode 1.18.34).
+- Steering, forks, v1 retry and PR-lifecycle wakes keep the effort.
+- A replayed queue with a different effort is no longer treated as the same input; the decider's `sameRoute` now compares it.
+- `/api/runs` and the chat composer both refuse an unknown level.
+- Stored cards for `/api/runs`-queued runs now show the model route at all (they never did).
+
+*T68:*
+- **Sealing:** `POST /api/runs/env-seal` seals values with AES-GCM under `MODEL_CREDENTIAL_KEY`. The AAD covers the owner orchestrator plus an HMAC digest.
+- **Approval:** approvals and runs carry `envNames` + `envDigest`, both in `runInputHash`. The decider replay check compares `envDigest`.
+- **Child:** it opens the blob at sandbox start, passes the values under the harness env (harness keys win) and into the test command, and scrubs values of 8+ characters (raw and JSON-escaped) from all output before truncation. An added diff line or binary file holding a value fails the run and drops the change; the oversize-diff R2 export refuses too.
+- **Retention:** once the approval is decided, the minted run holds the only `envSealed`, and it is discarded on any terminal transition. It never appears in `serializeRun`, the approvals listing or spine payloads. Fork and v1 retry of a finished run with env refuse.
+- **Refusals:** reserved loader/toolchain/egress names, local runtime (including a deployment default `RUNTIME=local`), and deployments without the key.
+- **Composer:** + → Environment variables, with a masked value field. The dashboard seals values before sending, never stores them, and holds the send button during the seal round-trip.
+
+*Independent review (Sonnet code-reviewer), two passes:*
+- **Pass 1:** 9 findings (1 high, 4 medium, 4 low). The high: env values weren't scrubbed from run output.
+- **Pass 2, re-verifying the fixes:** 7 resolved and 2 partial, and the fixes had introduced 1 medium and 2 low new issues. All of these were then fixed:
+  - Output is scrubbed **before** truncation, including the JSON-escaped form.
+  - The decided approval keeps no blob; the minted run holds it, in the same state write.
+  - The leak guard checks only added diff lines and binary files, so values the repo already had no longer fail runs.
+  - The wake follow-up also carries `authAccount`.
+  - The reserved-name list is wider.
+- **By design:** fork and v1 retry of a finished env run return 409.
+
+*Gate (`pnpm typecheck && lint && lint:imports && test && build && test:built`, then `check:ci`):* exit 0.
+
+| Package | Tests |
+| --- | --- |
+| Backend | 2598 passed, 3 skipped |
+| Frontend | 109 |
+| Desktop | 152 |
+| Sandbox | 34 |
+| Auth | 11 |
+| ACP server | 8 |
+| SDK | 6 |
+| shiba-login | 3 |
+
+New tests: `reasoning-effort.test.ts`, `run-env.test.ts`, plus cases in `steering.test.ts`, `StoredApprovalCard.test.tsx` and `TaskComposer.test.tsx`. Two Worker cold-import tests (`better-auth`, `runtime`) now pre-warm the import in `beforeAll`; under the parallel gate they had timed out at 5 s.
+
+**NOT VERIFIED:**
+- No deploy and no live container run.
+- No real CLI was invoked with the new flags; the argv is checked by tests only.
+- Per-model effort validity (e.g. a provider refusing `minimal` for some model) is unchecked and would fail inside the container after approval.
+- The encrypted env blob remains in chat message metadata and in the DO state broadcast to the owner's own dashboard. Rotating `MODEL_CREDENTIAL_KEY` retires it.
+- The reserved-name list is a denylist and not exhaustive.
+- Values under 8 characters aren't scrubbed.
+- No tests yet for: the v1-retry 409, dispatch fail-closed, or the wake route/account carry. These are guard clauses, reviewed by probe only. The fork 409 and the fork carry are pinned in `run-fork.test.ts`; after that test was added, the backend suite alone ran 2602/2602.
+
 **2026-10-24 — Provider sign-in and dashboard loading.** Codex on the Providers page starts Sign in with ChatGPT (PKCE, paste the loopback callback). Claude pairs a local daemon (`claude auth login` stays on that machine); setup-token is an explicit opt-in. Fake confirmation codes and the plain `chatgpt.com` / `claude.ai/login` links are gone. Subscription preflight and the setup-token test do not require `AI_GATEWAY_TOKEN`. The plan token is attached in `forwardCodexPlan`, and the sandbox env holds `shiba-egress-placeholder`. Dashboard fetches wait until `/api/whoami` succeeds, so a signed-out page does not toast `Sessions request failed: 401`. Setup status bounds the gateway probe so Settings and Integrations leave the loading state. A workspace with no gateway token and no connected provider shows "Can't launch yet" instead of a ready/connected launch state. Login cards draw an inline mark so a missing asset is not a blank circle.
 
 **Not verified on app.tryshiba.dev:** no live ChatGPT consent, no paired daemon heartbeat, no real `claude setup-token` probe, no production task that opens a GitHub pull request. The task → approve → diff → stub PR path is the Phase 1 integration test with GitHub and the harness stubbed.

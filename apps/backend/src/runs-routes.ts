@@ -9,6 +9,7 @@ import type { Env } from "./env.js";
 import { signInternalRequest } from "./edge-identity.js";
 
 import { isAuthorizedRequest, resolveUserId } from "./request-auth.js";
+import { sealRunEnv } from "./run-env-seal.js";
 import { isApprover, parseApproverAllowlist } from "./slack-approval.js";
 import { ORCHESTRATOR_NAME } from "./slack-routes.js";
 import {
@@ -134,6 +135,17 @@ async function handleRunsInner(request: Request, env: Env): Promise<Response | n
     return resolved.error;
   }
   let targetAgentName = resolved.agentName;
+  // T68: seal per-run env values for the same DO the follow-up queue/chat lands on;
+  // the sealed blob is the only form the values travel in from here.
+  if (url.pathname === "/api/runs/env-seal") {
+    if (request.method !== "POST") return Response.json({ error: "Method not allowed." }, { status: 405 });
+    const body = (await request.json().catch(() => null)) as { environmentVariables?: unknown } | null;
+    try {
+      return Response.json(await sealRunEnv(env, resolved.agentName, body?.environmentVariables));
+    } catch (error) {
+      return Response.json({ error: error instanceof Error ? error.message : "Invalid environment variables." }, { status: 400 });
+    }
+  }
   // Email-kind approvals freeze draft claims + mailbox payloads, and claim
   // recovery (releaseRestartedDraftClaim, sweepStaleDrafts, Slack resolve)
   // assumes they live on the one shared instance queueEmailApproval pins —

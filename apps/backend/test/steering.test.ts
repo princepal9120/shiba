@@ -139,6 +139,26 @@ describe("T31 invariant — steering never bypasses the approval gate & cancels 
     expect(host.runs[0]!.status).toBe("cancelled");
   });
 
+  it("carries the run's sealed env and its effort onto the reapproval", async () => {
+    const run = makeRun({
+      route: { ...ROUTE, reasoningEffort: "high" },
+      envNames: ["DATABASE_URL"],
+      envDigest: "d".repeat(64),
+      envSealed: "v1.sealed",
+    });
+    const host = makeHost([run]);
+    const res = await handleSteeringRequest(host, run.runId, { message: "also cover the edge case" });
+    expect(res.status).toBe(202);
+    expect(host.approvals[0]).toMatchObject({
+      route: { reasoningEffort: "high" },
+      envNames: ["DATABASE_URL"],
+      envDigest: "d".repeat(64),
+      envSealed: "v1.sealed",
+    });
+    // The carry must read the pre-cancel record: the cancelled run itself has already discarded its blob.
+    expect(host.runs[0]!.envSealed).toBeUndefined();
+  });
+
   it("rejects combined task text over the cap before cancelling", async () => {
     const run = makeRun({ task: "x".repeat(4000) });
     const host = makeHost([run]);

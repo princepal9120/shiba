@@ -68,6 +68,12 @@ export interface QueuedRunInput {
   subagentSandbox?: import("./subagent.js").SubagentSandboxMode;
   captainId?: string;
   role?: import("./roles.js").AgentRole;
+  /** T68: names + digest are approval-hashed; `envSealed` carries the values. */
+  envNames?: string[];
+  envDigest?: string;
+  envSealed?: string;
+  /** T72: approval-hashed opt-in to the repo's setup script. */
+  runSetup?: boolean;
 }
 
 export type RunCommand =
@@ -155,6 +161,9 @@ function hashMatchesRun(evidence: ApprovalEvidence, run: RunInputFields): boolea
       ...(run.subagentSandbox !== undefined ? { subagentSandbox: run.subagentSandbox } : {}),
       ...(run.captainId !== undefined ? { captainId: run.captainId } : {}),
       ...(run.role !== undefined ? { role: run.role } : {}),
+      ...(run.envNames !== undefined ? { envNames: run.envNames } : {}),
+      ...(run.envDigest !== undefined ? { envDigest: run.envDigest } : {}),
+      ...(run.runSetup === true ? { runSetup: true } : {}),
     })
   );
 }
@@ -216,6 +225,10 @@ export function decideRunTransition(state: RunMachineState, command: RunCommand)
           ...(command.input.subagentSandbox !== undefined ? { subagentSandbox: command.input.subagentSandbox } : {}),
           ...(command.input.captainId !== undefined ? { captainId: command.input.captainId } : {}),
           ...(command.input.role !== undefined ? { role: command.input.role } : {}),
+          ...(command.input.envNames !== undefined ? { envNames: command.input.envNames } : {}),
+          ...(command.input.envDigest !== undefined ? { envDigest: command.input.envDigest } : {}),
+          ...(command.input.envSealed !== undefined ? { envSealed: command.input.envSealed } : {}),
+          ...(command.input.runSetup === true ? { runSetup: true } : {}),
           ...(approval !== undefined ? { approval } : {}),
           status: "pending",
           generation: 0,
@@ -235,7 +248,8 @@ export function decideRunTransition(state: RunMachineState, command: RunCommand)
             storedRoute.connectionId === inputRoute.connectionId &&
             storedRoute.modelId === inputRoute.modelId &&
             storedRoute.harness === inputRoute.harness &&
-            storedRoute.policyVersion === inputRoute.policyVersion);
+            storedRoute.policyVersion === inputRoute.policyVersion &&
+            storedRoute.reasoningEffort === inputRoute.reasoningEffort);
         // A replay is the same intent only when every field the queue froze
         // onto the record matches — identity (queuedBy), the approved route,
         // account-scoped auth/continuation keys, and the sandbox it named.
@@ -265,7 +279,9 @@ export function decideRunTransition(state: RunMachineState, command: RunCommand)
           run.subagentPath === command.input.subagentPath &&
           run.subagentSandbox === command.input.subagentSandbox &&
           run.captainId === command.input.captainId &&
-          run.role === command.input.role;
+          run.role === command.input.role &&
+          run.envDigest === command.input.envDigest &&
+          (run.runSetup === true) === (command.input.runSetup === true);
         if (sameInput) {
           return { events: [{ type: "run.queued", commandId: command.commandId, at, run, replayed: true }] };
         }
@@ -526,6 +542,8 @@ export function applyRunEvents(
       }
     }
   }
+  // T68: a finished run never dispatches again, so its sealed env is not retained.
+  if (run !== null && isTerminalStatus(run.status) && run.envSealed !== undefined) delete run.envSealed;
   return run;
 }
 

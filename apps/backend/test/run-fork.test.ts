@@ -180,6 +180,24 @@ describe("POST /api/runs/<id>/fork", () => {
     expect((await forkApproval({ runtime: "sandbox", targetMachineId: "m-1" })).targetMachineId).toBeUndefined();
   });
 
+  it("T68: refuses to fork a parent whose sealed env was discarded, and carries it from one that still holds it", async () => {
+    const instance = agent();
+    const parent = await seedParent(instance, true);
+    const env = { envNames: ["DATABASE_URL"], envDigest: "d".repeat(64) };
+    instance.state.runs = [{ ...parent, ...env } as typeof parent];
+    expect((await instance.onRequest(forkBody("run-parent"))).status).toBe(409);
+    expect(instance.state.pendingApprovals ?? []).toHaveLength(0);
+
+    instance.state.runs = [{ ...parent, ...env, envSealed: "v1.blob" } as typeof parent];
+    const res = await instance.onRequest(forkBody("run-parent"));
+    expect(res.status).toBe(200);
+    const { approvalId } = (await res.json()) as { approvalId: string };
+    expect(instance.state.pendingApprovals?.find((a) => a.approvalId === approvalId)).toMatchObject({
+      ...env,
+      envSealed: "v1.blob",
+    });
+  });
+
   it("404s when the parent run is missing", async () => {
     const instance = agent();
     const res = await instance.onRequest(forkBody("run-nope"));

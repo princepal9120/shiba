@@ -56,6 +56,7 @@ import type { RunSignal } from "@shiba/shared";
 import { boundTail, parseGitHubRepoUrl, redactSecrets } from "../security.js";
 import { captureBrowserE2eEvidence, formatBrowserE2ePrSection } from "../browser-e2e/capture.js";
 import { captureRunPreview } from "../screenshot.js";
+import { guardRunEnvLeak, openRunEnv, runEnvDiffLeakName, runEnvScrubber } from "../run-env-seal.js";
 import { postSlackMessage } from "../slack.js";
 import { SlackProgressReporter } from "../slack-persona.js";
 import { messageText, renderRunTranscript } from "../transcript.js";
@@ -304,6 +305,12 @@ export class OpenCodeAgent extends AIChatAgent<Env> {
                 };
               }
             }
+            // T68: a wrong owner or digest fails to open — the run fails rather than running unapproved env.
+            const runEnv =
+              runInput.envSealed === undefined
+                ? undefined
+                : await openRunEnv(this.env, runInput.envOwner ?? "", runInput.envSealed, runInput.envDigest ?? "");
+            this.envScrub = runEnv !== undefined ? runEnvScrubber(runEnv) : null;
             const hosts = allowedHostsFor(harness, runInput.codingModel, runInput);
             const overrides = harness.egressOverrides?.(runInput);
             const effectiveOrgId = runInput.orgId || "self-hosted";
@@ -314,14 +321,20 @@ export class OpenCodeAgent extends AIChatAgent<Env> {
             result = await adapter.runCodingTask(ops, runInput, emit, {
               signal,
               signals: runSignals,
+              ...(runEnv !== undefined && this.envScrub !== null ? { env: runEnv, scrub: this.envScrub } : {}),
               // T44: an oversize diff lands in R2 instead of being truncated
               // away — the settle receipt carries this key.
               exportDiff: async (diff) => {
+                const leaked = runEnv !== undefined ? runEnvDiffLeakName(diff, runEnv) : undefined;
+                if (leaked !== undefined) {
+                  throw new Error(`The change contains the value of approved environment variable ${leaked}; refusing to export it.`);
+                }
                 const key = `diffs/${input.sandboxId}.patch`;
                 await this.env.ATTACHMENTS.put(key, diff, { httpMetadata: { contentType: "text/plain" } });
                 return key;
               },
             });
+            if (runEnv !== undefined) result = guardRunEnvLeak(result, runEnv);
           }
           checkCancelled();
           // UNINTERRUPTIBLE: publish + result commit. Once the remote PR write
@@ -395,10 +408,14 @@ export class OpenCodeAgent extends AIChatAgent<Env> {
     return createUIMessageStreamResponse({ stream });
   }
 
+  /** T68: set once the run's sealed env opens; every safeText output passes through it. */
+  private envScrub: ((text: string) => string) | null = null;
+
   private safeText(text: string, maxChars: number): string {
     const token = this.env.GITHUB_TOKEN;
     const withoutToken = token ? text.split(token).join("[redacted]") : text;
-    return boundTail(redactSecrets(withoutToken), maxChars);
+    const withoutEnv = this.envScrub ? this.envScrub(withoutToken) : withoutToken;
+    return boundTail(redactSecrets(withoutEnv), maxChars);
   }
 
   private uiResult(result: CodingTaskResult): CodingTaskResult {

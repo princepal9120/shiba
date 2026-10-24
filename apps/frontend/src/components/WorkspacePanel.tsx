@@ -4,6 +4,7 @@
  * it after the views became full pages — and is deleted.
  */
 import { type JSX } from "react";
+import { describeRoute } from "@shiba/shared";
 import { formatTimeAgo, statusChipClass } from "../ui-helpers";
 import type { StoredApproval } from "../types";
 
@@ -69,6 +70,7 @@ export function StoredApprovalCard({
       ...(approval.reviewAfterPublish !== undefined
         ? { reviewAfterPublish: approval.reviewAfterPublish }
         : {}),
+      ...(approval.runSetup !== undefined ? { runSetup: approval.runSetup } : {}),
       ...(approval.testCommand?.length ? { testCommand: approval.testCommand } : {}),
     } satisfies Record<string, unknown>);
   return (
@@ -88,6 +90,21 @@ export function StoredApprovalCard({
       {approval.reviewAfterPublish ? (
         <p className="text-[11px] text-[var(--fg)] break-words mb-1">
           After the PR opens, a read-only review will run and Shiba will post its findings as a PR review.
+        </p>
+      ) : null}
+      {approval.route ? (
+        <p className="text-[11px] font-mono text-[var(--muted-foreground-2)] break-words mb-1">
+          <span className="font-semibold text-[var(--fg)]">Model:</span> {describeRoute(approval.route)}
+        </p>
+      ) : null}
+      {approval.envNames?.length ? (
+        <p className="text-[11px] font-mono text-[var(--muted-foreground-2)] break-words mb-1">
+          <span className="font-semibold text-[var(--fg)]">Env:</span> {approval.envNames.join(", ")}
+        </p>
+      ) : null}
+      {approval.runSetup ? (
+        <p className="text-[11px] font-mono text-[var(--muted-foreground-2)] break-words mb-1">
+          <span className="font-semibold text-[var(--fg)]">Setup:</span> runs .shiba/setup.json initialize
         </p>
       ) : null}
       {approval.testCommand?.length ? (

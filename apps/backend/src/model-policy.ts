@@ -11,6 +11,7 @@
  * connection, or a model outside the connection's namespace throws *before*
  * the approval card is minted — never inside a container.
  */
+import { HARNESS_REASONING_EFFORTS, type ReasoningEffort } from "@shiba/shared";
 import type { Env } from "./env.js";
 import { HARNESS_NAMES } from "./harness/index.js";
 import { modelConfigStub } from "./model-config-do.js";
@@ -89,9 +90,14 @@ export async function readModelConfig(env: Pick<Env, "ModelConfig">): Promise<Mo
  */
 export function resolveCodingRoute(
   snapshot: ModelConfigSnapshot,
-  requested: { connectionId?: string | null; model: string; harness: string },
+  requested: { connectionId?: string | null; model: string; harness: string; reasoningEffort?: ReasoningEffort },
   initiator?: RunInitiatorContext,
 ): ApprovedRoute {
+  const effort = requested.reasoningEffort;
+  if (effort !== undefined && !(HARNESS_REASONING_EFFORTS[requested.harness] ?? []).includes(effort)) {
+    throw new Error(`Harness "${requested.harness}" does not support reasoning effort "${effort}".`);
+  }
+  const effortField = effort !== undefined ? { reasoningEffort: effort } : {};
   let connectionId = requested.connectionId ?? null;
   if (connectionId === null) {
     const sole = soleReadyConnection(snapshot);
@@ -108,6 +114,7 @@ export function resolveCodingRoute(
       modelId: requested.model,
       harness: requested.harness,
       policyVersion: snapshot.policy.version,
+      ...effortField,
     };
   }
   const connection = snapshot.connections.find((entry) => entry.id === connectionId);
@@ -125,6 +132,7 @@ export function resolveCodingRoute(
     modelId: requested.model,
     harness: requested.harness,
     policyVersion: snapshot.policy.version,
+    ...effortField,
   };
 }
 

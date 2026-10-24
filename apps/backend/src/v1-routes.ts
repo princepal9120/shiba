@@ -255,7 +255,7 @@ export async function handleV1(request: Request, env: Env, deps: V1RouteDeps = {
     }
   }
   const input: Record<string, unknown> = { repoUrl, task };
-  for (const key of ["baseBranch", "publishPullRequest", "harness", "codingModel", "role", "reviewAfterPublish"]) {
+  for (const key of ["baseBranch", "publishPullRequest", "harness", "codingModel", "reasoningEffort", "runSetup", "role", "reviewAfterPublish"]) {
     if (body[key] !== undefined) input[key] = body[key];
   }
   if (requestId) {

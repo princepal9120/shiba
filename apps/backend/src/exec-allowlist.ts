@@ -38,6 +38,8 @@ export interface ScopedExecOptions {
   allowlist: readonly (readonly string[])[];
   /** Receipt collector — exec.invoked and exec.settled land here. */
   signals?: RunSignal[];
+  /** Shown in receipts instead of the command, when the command carries repo-authored text. */
+  receiptLabel?: string;
 }
 
 /** Default output cap for scoped (non-harness) commands. */
@@ -100,13 +102,14 @@ function receipt(command: string, extra: Record<string, unknown>): string {
  */
 export async function scopedExec(ops: SandboxOps, command: string, opts: ScopedExecOptions): Promise<ExecResult> {
   const signals = opts.signals;
-  signals?.push({ kind: "exec.invoked", at: Date.now(), detail: receipt(command, {}) });
+  const shown = opts.receiptLabel ?? command;
+  signals?.push({ kind: "exec.invoked", at: Date.now(), detail: receipt(shown, {}) });
 
   const argv = tokenizeCommand(command);
   const allowed = argv !== null && opts.allowlist.some((prefix) => matchesPrefix(argv, prefix));
   if (!allowed) {
-    signals?.push({ kind: "exec.settled", at: Date.now(), detail: receipt(command, { refused: true }) });
-    throw new ScopedExecRefusal(command);
+    signals?.push({ kind: "exec.settled", at: Date.now(), detail: receipt(shown, { refused: true }) });
+    throw new ScopedExecRefusal(shown);
   }
 
   const cap = opts.maxOutputChars ?? SCOPED_EXEC_OUTPUT_CAP;
@@ -124,7 +127,7 @@ export async function scopedExec(ops: SandboxOps, command: string, opts: ScopedE
     signals?.push({
       kind: "exec.settled",
       at: Date.now(),
-      detail: receipt(command, { exit: result.exitCode, ms: Date.now() - started, truncated }),
+      detail: receipt(shown, { exit: result.exitCode, ms: Date.now() - started, truncated }),
     });
     return {
       stdout: boundTail(result.stdout, cap),
@@ -135,7 +138,7 @@ export async function scopedExec(ops: SandboxOps, command: string, opts: ScopedE
     signals?.push({
       kind: "exec.settled",
       at: Date.now(),
-      detail: receipt(command, { thrown: true, ms: Date.now() - started }),
+      detail: receipt(shown, { thrown: true, ms: Date.now() - started }),
     });
     throw error;
   }

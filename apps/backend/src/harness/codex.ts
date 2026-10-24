@@ -132,6 +132,8 @@ export class CodexHarness implements AgentHarness {
       "--json",
       "--model",
       stripProvider(input.codingModel),
+      // -c values parse as TOML, so the level is a quoted string.
+      ...(input.route?.reasoningEffort ? ["-c", `model_reasoning_effort="${input.route.reasoningEffort}"`] : []),
       "--cd",
       workdir,
       input.task,

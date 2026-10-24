@@ -77,6 +77,16 @@ const codingTaskInputSchema = z.object({
    */
   forkCheckpointRef: z.string().regex(/^refs\/shiba\/checkpoints\//).optional(),
   /**
+   * T68: approved env, sealed for `envOwner` (the orchestrator name) and
+   * bound to `envDigest`. This envelope is persisted in the child's chat
+   * history, so the values only ever appear here sealed.
+   */
+  /** T72: the human opted in to running the repo's `.shiba/setup.json` initialize. */
+  runSetup: z.boolean().optional(),
+  envSealed: z.string().min(1).optional(),
+  envDigest: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  envOwner: z.string().min(1).max(200).optional(),
+  /**
    * T51: the approved runtime. `"local"` runs on the operator's machine
    * via the dispatch mailbox — admissible only from a dashboard intake
    * under SHIBA_LOCAL_RUNTIME=1; every chat surface refuses it at intake.

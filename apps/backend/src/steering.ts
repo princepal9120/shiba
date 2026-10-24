@@ -17,6 +17,7 @@
  */
 import {
   createPendingApproval,
+  HARNESS_REASONING_EFFORTS,
   isApprovalExpired,
   isActiveStatus,
   normalizeRun,
@@ -32,6 +33,7 @@ import type {
   ApprovedRoute,
   DelegatedRun,
   PendingApproval,
+  ReasoningEffort,
   SteeringNote,
 } from "@shiba/shared";
 import { appendReceipt, makeReceipt } from "./receipts.js";
@@ -87,6 +89,7 @@ export interface SteeringHost {
     harness?: string;
     codingModel?: string;
     connectionId?: string;
+    reasoningEffort?: ReasoningEffort;
   }): Promise<{ route: ApprovedRoute }>;
   githubTokenConfigured?: boolean;
   now?(): number;
@@ -175,14 +178,20 @@ export async function handleSteeringRequest(
     try {
       // Partial override preservation: unspecified route fields fall back
       // to the frozen route on the run, never to deployment defaults.
+      const harness = input.harness ?? run.route?.harness;
+      const effort = run.route?.reasoningEffort;
       const resolved = await host.resolveRoute({
         repoUrl: plan.effective.repoUrl,
         task: plan.effective.task,
         baseBranch: plan.effective.baseBranch,
         publishPullRequest: plan.effective.publishPullRequest,
-        harness: input.harness ?? run.route?.harness,
+        harness,
         codingModel: input.codingModel ?? run.route?.modelId,
         connectionId: input.connectionId ?? run.route?.connectionId ?? undefined,
+        // The approved effort carries over only where the new harness can honor it.
+        ...(effort !== undefined && harness !== undefined && (HARNESS_REASONING_EFFORTS[harness] ?? []).includes(effort)
+          ? { reasoningEffort: effort }
+          : {}),
       });
       route = resolved.route;
     } catch (error) {
@@ -225,6 +234,11 @@ export async function handleSteeringRequest(
         baseBranch: plan.effective.baseBranch,
         publishPullRequest: plan.effective.publishPullRequest,
         ...(route !== undefined ? { route } : {}),
+        // T68: same orchestrator, so the sealed env still opens; the new card shows its names for re-approval.
+        ...(run.envDigest !== undefined
+          ? { envNames: run.envNames ?? [], envDigest: run.envDigest, envSealed: run.envSealed }
+          : {}),
+        ...(run.runSetup === true ? { runSetup: true } : {}),
         ...(by !== undefined ? { queuedBy: by } : run.queuedBy !== undefined ? { queuedBy: run.queuedBy } : {}),
         createdAt: now,
       }),

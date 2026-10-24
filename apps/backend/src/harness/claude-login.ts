@@ -66,7 +66,8 @@ export class ClaudeLoginHarness implements AgentHarness {
 
   buildArgv(input: CodingTaskInput, workdir: string): string[] {
     const model = input.codingModel.includes("/") ? input.codingModel.split("/").slice(1).join("/") : input.codingModel;
-    return ["claude", "--print", "--model", model, "--add-dir", workdir, input.task];
+    const effort = input.route?.reasoningEffort ? ["--effort", input.route.reasoningEffort] : [];
+    return ["claude", "--print", "--model", model, ...effort, "--add-dir", workdir, input.task];
   }
 
   parseEvent(line: string): HarnessEvent | null {

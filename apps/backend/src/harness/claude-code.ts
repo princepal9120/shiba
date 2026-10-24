@@ -181,6 +181,7 @@ export class ClaudeCodeHarness implements AgentHarness {
       "acceptEdits",
       "--model",
       stripProvider(input.codingModel),
+      ...(input.route?.reasoningEffort ? ["--effort", input.route.reasoningEffort] : []),
       "--add-dir",
       workdir,
       input.task,

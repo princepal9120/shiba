@@ -117,6 +117,8 @@ export async function handleRuns(ctx: V1Context): Promise<Response | null> {
     return Response.json({ ok: true, result: { threadId: id, runId: id, status: runStatus(stopped) } }, { status: 202 });
   }
   if (isActiveStatus(run.status)) return Response.json({ ok: false, error: "run_active" }, { status: 409 });
+  // T68: a finished run's sealed env is discarded, so a retry can't carry it — refuse rather than run without it.
+  if (run.envDigest !== undefined) return Response.json({ ok: false, error: "environment_discarded" }, { status: 409 });
   const key = ctx.request.headers.get("Idempotency-Key") ?? body.clientOperationId;
   if (key !== undefined && (typeof key !== "string" || !key.trim() || key.length > 128)) {
     return Response.json({ ok: false, error: "invalid_idempotency_key" }, { status: 400 });
@@ -133,6 +135,8 @@ export async function handleRuns(ctx: V1Context): Promise<Response | null> {
       ...(run.route
         ? { harness: run.route.harness, codingModel: run.route.modelId, connectionId: run.route.connectionId }
         : {}),
+      ...(run.route?.reasoningEffort ? { reasoningEffort: run.route.reasoningEffort } : {}),
+      ...(run.runSetup === true ? { runSetup: true } : {}),
       ...(run.authAccount ? { authAccount: run.authAccount } : {}),
       ...(run.runtime ? { runtime: run.runtime } : {}),
       ...(run.targetMachineId ? { targetMachineId: run.targetMachineId } : {}),
