@@ -55,12 +55,10 @@ const PIN_SOURCE: Record<string, { npm?: string; arg?: string }> = {
   codex: { npm: "@openai/codex" },
   grok: { npm: "@xai-official/grok" },
   pi: { npm: "@earendil-works/pi-coding-agent" },
-  devin: { arg: "DEVIN_CLI_VERSION" },
   "claude-acp": { npm: "@agentclientprotocol/claude-agent-acp" },
   "codex-acp": { npm: "@agentclientprotocol/codex-acp" },
   "gemini-acp": { npm: "@google/gemini-cli" },
   "opencode-acp": { npm: "opencode-ai" },
-  "devin-acp": { arg: "DEVIN_CLI_VERSION" },
 };
 
 describe("Dockerfile pins", () => {

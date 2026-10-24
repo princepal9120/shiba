@@ -9,28 +9,29 @@ import {
   forwardClaudeSubscription,
   forwardCodexPlan,
   forwardCodexSubscription,
+  forwardAntigravityUser,
   forwardCursorSubscription,
-  forwardDevinApi,
-  forwardDevinInference,
-  forwardDevinSubscription,
+  forwardCursorUser,
   forwardGitHubScoped,
   forwardGoogle,
   forwardDeepSeek,
   forwardOpenAI,
   forwardOpenCodeGo,
   forwardXAI,
+  forwardXaiUser,
 } from "../egress.js";
 import type { NamedOutboundHandler, OutboundConfig, OutboundHostRule } from "./outbound-config.js";
 
-const BUILTIN_FORWARDERS: Record<string, (request: Request, env: EgressEnv, orgId?: string) => Promise<Response>> = {
+const BUILTIN_FORWARDERS: Record<
+  string,
+  (request: Request, env: EgressEnv, ctx?: OutboundHandlerCtx) => Promise<Response>
+> = {
   "generativelanguage.googleapis.com": forwardGoogle,
   "api.anthropic.com": forwardAnthropic,
   "api.openai.com": forwardOpenAI,
   "api.x.ai": forwardXAI,
   "opencode.ai": forwardOpenCodeGo,
   "api.deepseek.com": forwardDeepSeek,
-  "api.devin.ai": forwardDevinApi,
-  "server.codeium.com": forwardDevinInference,
 };
 
 function namedHandler(
@@ -49,8 +50,12 @@ function namedHandler(
       return forwardCodexPlan;
     case "cursorSubscription":
       return forwardCursorSubscription;
-    case "devinSubscription":
-      return forwardDevinSubscription;
+    case "cursorUser":
+      return forwardCursorUser;
+    case "antigravityUser":
+      return forwardAntigravityUser;
+    case "xaiUser":
+      return forwardXaiUser;
     default:
       return () => Promise.resolve(new Response("Unknown outbound handler.", { status: 500 }));
   }
@@ -99,7 +104,7 @@ export async function dispatchOutboundRequest(
     if (!forward) {
       return new Response("Invalid provider destination.", { status: 403 });
     }
-    return forward(request, env, config.orgId);
+    return forward(request, env, config.orgId ? { orgId: config.orgId } : undefined);
   }
   const handler = namedHandler(rule.handler);
   const ctx: OutboundHandlerCtx = {

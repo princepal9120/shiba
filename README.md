@@ -56,11 +56,20 @@ At runtime the Worker serves **`app-public/`** via the `ASSETS` binding with `no
 
 Requirements: Node.js **22.13.0+**, pnpm **10.0.0+**, and a **running Docker engine** for Sandbox containers.
 
+### Run Shiba locally (Worker + dashboard + OAuth loopback)
+
 ~~~sh
-pnpm shiba dev
+pnpm install
+cp apps/backend/.dev.vars.example apps/backend/.dev.vars   # if missing
+pnpm dev
 ~~~
 
-Same as `bash scripts/dev.sh`: checks prerequisites, writes `apps/backend/.dev.vars` from the example (minting local secrets without overwriting yours), applies local D1 migrations, builds the Sandbox image, and runs `wrangler dev` on **http://127.0.0.1:8788/app/**. Then add **`GITHUB_TOKEN`** and **AI Gateway BYOK** (or `AI_GATEWAY_TOKEN`) in `.dev.vars`; run `npx wrangler login` once if Wrangler needs Cloudflare for containers.
+- **`pnpm dev`** starts **wrangler** on **http://127.0.0.1:8788**, OAuth loopback listeners (`127.0.0.1:51121` Antigravity, `127.0.0.1:56121` xAI — they POST callbacks to the Worker for dashboard polling), and **Vite** on **http://localhost:5173** (proxies `/api` to the Worker). Use **`pnpm shiba dev`** when you also need a Sandbox image build and containers (**http://127.0.0.1:8788/app/** without Vite).
+- In **`.dev.vars`**: set **`GITHUB_TOKEN`** (repo + PR scope), **`MODEL_CREDENTIAL_KEY`** (32+ chars for encrypted provider tokens), and **`GOOGLE_ANTIGRAVITY_CLIENT_SECRET`** when signing in Gemini/Antigravity. Optional: **`AI_GATEWAY_TOKEN`** if your gateway is auth-gated.
+- Open **Providers** and connect **Codex** (device code), **Claude** (daemon or setup-token), **Cursor** (browser + Finish), **Grok** and **Antigravity** (browser; loopback completes without pasting the callback URL when `pnpm dev` or `pnpm shiba dev` is running).
+- **Task flow**: compose a task → approve the delegation card → inspect the diff → approve publish/PR. Each step waits for you.
+
+`pnpm shiba dev` (same as `bash scripts/dev.sh`) also mints local secrets, applies D1 migrations, builds the Sandbox image, and starts OAuth loopback before `wrangler dev`. Run `npx wrangler login` once if Wrangler needs Cloudflare for container pulls.
 
 Preview steps: `pnpm shiba dev --dry-run`. API/UI smoke without Docker: see [local development](apps/web/src/content/docs/docs/local-development.md).
 
@@ -221,8 +230,6 @@ Subscription lanes carry their own provider namespace (`<provider>-subscription/
 Claude "Connect with sign-in" pairs a local daemon when one is available (`claude auth login` stays on that machine). Otherwise the card asks for a `claude setup-token` paste, stored encrypted per user and attached at egress. Gemini, Grok, and OpenCode take a key pasted on the card (Gemini, xAI, OpenCode, or DeepSeek). That key is encrypted per user and sent straight to the provider. Nothing is configured shows Not connected. A deployment gateway token is optional and not required for these lanes.
 
 The credential invariant holds for every lane — the container receives a dummy key and the real one is injected outside it at the egress boundary. `allowedHosts` is narrowed per run to the *selected* harness's provider host plus git, never the union across harnesses. Only OpenCode has been exercised against a live CLI — the other lanes' event parsers are asserted from their documented stream formats until T10 proves otherwise, and the ACP lanes additionally need the sandbox image rebuilt before a live run can reach them.
-
-The `devin` harness is not an AI Gateway provider: the CLI authenticates to Cognition's own backends (`api.devin.ai` for the control plane, `server.codeium.com` for inference on Pro accounts) with an account API key. Set `DEVIN_API_KEY` as a Worker secret (`npx wrangler secret put DEVIN_API_KEY --config apps/backend/wrangler.jsonc`); the container's `credentials.toml` carries a dummy and the egress forwarders swap in the real Bearer. Models are `devin/<alias>` — `devin/swe-2-medium` is the default (the free tier on Devin Pro; bare `swe-2` is a family name the pinned CLI does not resolve); `DEVIN_MODEL` sets the deploy default.
 
 The computer adapter deliberately refuses execution — `@cloudflare/computer` is preview-only, so Sandbox remains the default.
 

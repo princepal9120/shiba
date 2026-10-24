@@ -42,8 +42,6 @@ export function describeHarness(harness: string | undefined): string {
       return "opencode";
     case "codex":
       return "codex";
-    case "devin":
-      return "devin";
     default:
       return "the coding agent";
   }

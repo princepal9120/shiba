@@ -9,15 +9,15 @@ FROM docker.io/cloudflare/sandbox:0.12.9-opencode@sha256:7b84b0163bd93f090504daf
 
 COPY --from=docker.io/cloudflare/sandbox:1.0.1 /usr/local/bin/sandbox-shim /usr/local/bin/sandbox-shim
 
-# One image carries every harness (opencode, Claude Code, Codex, Devin, Grok, Pi);
+# One image carries every harness (opencode, Claude Code, Codex, Grok, Pi);
 # a run picks one at exec time. The credential invariant is unchanged: each
 # gets the dummy key, and the real credential is swapped in at the Worker's
 # egress boundary. Bumping any of these versions requires re-running the T10
 # live acceptance checklist — the harness event parsers couple to the formats.
 # The ACP lanes (PLAN-V2-NEXT): the registry's adapters, all Apache-2.0 —
 # claude-agent-acp/codex-acp are their own entrypoints; gemini-cli ships
-# `--acp` natively; opencode ≥1.18.34 ships the `acp` subcommand; the Devin
-# CLI ships `acp` at 3000.11.3. `command -v` probes below fail the build if
+# `--acp` natively; opencode ≥1.18.34 ships the `acp` subcommand.
+# `command -v` probes below fail the build if
 # an adapter renames its bin.
 RUN npm i -g opencode-ai@1.18.34 @anthropic-ai/claude-code@2.1.284 @openai/codex@0.157.1 @xai-official/grok@1.0.41 \
     @earendil-works/pi-coding-agent@1.3.0 @agentclientprotocol/claude-agent-acp@0.86.0 @agentclientprotocol/codex-acp@2.1.1 @google/gemini-cli@0.62.0 \
@@ -25,26 +25,7 @@ RUN npm i -g opencode-ai@1.18.34 @anthropic-ai/claude-code@2.1.284 @openai/codex
   && command -v claude-agent-acp codex-acp && opencode acp --help >/dev/null \
   && gemini --help 2>&1 | grep -q -- '--acp'
 
-# Devin CLI — checksum-verified against the published manifest
-# (https://static.devin.ai/cli/current/manifest.json), version-pinned like the
-# other harnesses. The tarball ships bin/devin plus man pages; only the binary
-# is needed. Bump requires the same T10 pass.
-# 3000.11.3 is the first registry-listed release that ships `devin acp`.
-ARG DEVIN_CLI_VERSION=3000.11.3
-RUN set -eux; \
-  case "$(uname -m)" in \
-    x86_64) t=x86_64-unknown-linux; s=83b3b113c01bf2a3e9e100db08d77e6b086806a7754f091e20831bdfe215157e;; \
-    aarch64) t=aarch64-unknown-linux; s=21a2d7a8dea67987067cde7eb3fe7193a48daa8f8c3d50d414c603c4a2b67f15;; \
-    *) exit 1;; \
-  esac; \
-  curl -sSfL -o /tmp/devin.tar.gz "https://static.devin.ai/cli/${DEVIN_CLI_VERSION}/devin-${DEVIN_CLI_VERSION}-${t}.tar.gz"; \
-  echo "${s}  /tmp/devin.tar.gz" | sha256sum -c -; \
-  tar -xzf /tmp/devin.tar.gz -C /usr/local bin/devin; \
-  rm /tmp/devin.tar.gz; \
-  /usr/local/bin/devin --version; \
-  /usr/local/bin/devin acp --help </dev/null >/dev/null 2>&1 || { echo "devin acp probe failed"; exit 1; }
-
-# Cursor Agent CLI — checksum-verified, version-pinned like the Devin CLI.
+# Cursor Agent CLI — checksum-verified, version-pinned like the other CLIs.
 # The tarball ships dist-package/ (the cursor-agent binary plus its native
 # .node deps); the binary needs its siblings, so the whole package lands in
 # /opt and only a symlink reaches PATH. Version format is Cursor's own

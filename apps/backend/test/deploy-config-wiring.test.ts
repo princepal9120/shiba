@@ -43,7 +43,6 @@ describe("deploy config wiring", () => {
   it.each([
     "SHIBA_CODEX_SUBSCRIPTION",
     "SHIBA_CURSOR_SUBSCRIPTION",
-    "SHIBA_DEVIN_SUBSCRIPTION",
     "SHIBA_ANTIGRAVITY_SUBSCRIPTION",
   ])("registers %s dark in wrangler vars, alchemy env and configVars", (flag) => {
     expect(WRANGLER).toContain(`"${flag}": "0"`);

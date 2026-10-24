@@ -45,7 +45,7 @@ Model identifiers are defaults, not availability guarantees. Choose a currently 
 
 The current source registry and Dockerfile include six always-on harnesses: `opencode`, `claude-code`, `codex`, `devin`, `grok`, and `pi`. OpenCode and Pi support Google, Anthropic, OpenAI, and xAI model providers; Pi runs headlessly with `--mode json` and its provider-specific API key env vars, while `grok` runs the Grok CLI with `--single` and streaming-json pinned to `api.x.ai` via `GROK_MODELS_BASE_URL`. Provider selection, dummy keys, and provider-host egress are implemented and unit-tested. Cursor stays a remote-executor connection, not an installed harness: its API-key→token exchange stores tokens inside the container, which cannot hold the dummy-key invariant. The dated `VERIFICATION.md` records OpenCode as the only harness exercised in the local end-to-end container run; that run's provider request returned 401. It records no cloud end-to-end run and no successful inference. Do not present unit tests or image binary checks as live harness acceptance.
 
-OpenCode, Claude Code, Codex, and Pi provider traffic uses the account-owned AI Gateway path; configure provider credentials there. `AI_GATEWAY_TOKEN` is an optional Worker secret for gateway authentication. Devin is different: its API key is a Worker-side `DEVIN_API_KEY` secret, injected by the egress proxy for Devin hosts and not stored in the container. The dummy container key is not a real credential. Keep keys out of repository files, logs, and task text.
+OpenCode, Claude Code, Codex, and Pi provider traffic uses the account-owned AI Gateway path; configure provider credentials there. `AI_GATEWAY_TOKEN` is an optional Worker secret for gateway authentication. Keep keys out of repository files, logs, and task text.
 
 ### Claude subscription (deprecated opt-in)
 
@@ -68,10 +68,6 @@ Setting `SHIBA_ANTIGRAVITY_SUBSCRIPTION=1` registers `antigravity-subscription`,
 ### Cursor subscription (opt-in)
 
 Setting `SHIBA_CURSOR_SUBSCRIPTION=1` opens the `cursor-subscription` connect lane, which connects the operator's own Cursor account instead of relying on a container-held `CURSOR_API_KEY`. To connect an account, create a Cursor Agent API key in cursor.com settings and store it as a Worker secret — `CURSOR_SUBSCRIPTION_TOKEN`, or `CURSOR_SUBSCRIPTION_TOKEN_<ACCOUNT>` for a named account — then drive the lifecycle under `/api/auth/cursor-subscription` (begin, verify, clear). The token is a deployment secret: it stays outside the sandbox, is attached only at the egress boundary on the two hosts the CLI calls (`api2.cursor.sh`, `repo2.cursor.sh`), and appears in no log, command line, or UI response. Verification exercises the key on the same wire runs use — the `api2.cursor.sh` credential exchange the CLI itself performs; a 401/403 marks the credential rejected. Signing out stops in-flight subscription runs and refuses new ones. Your own Cursor plan terms apply.
-
-### Devin subscription (opt-in)
-
-Setting `SHIBA_DEVIN_SUBSCRIPTION=1` opens the `devin-subscription` connect lane, which connects the operator's own Devin account credential instead of the deployment-wide `DEVIN_API_KEY`. To connect an account, run `devin auth login` on your own machine and store the resulting API key/session token as a Worker secret — `DEVIN_SUBSCRIPTION_TOKEN`, or `DEVIN_SUBSCRIPTION_TOKEN_<ACCOUNT>` for a named account — then drive the lifecycle under `/api/auth/devin-subscription` (begin, verify, clear). The token stays outside the sandbox and is attached only at the egress boundary (`Bearer` on `api.devin.ai`, the CLI's own `Basic` form on `server.codeium.com`); verification issues `GET /v3/self` through that same branch — a 401/403 marks the credential rejected. Your own Devin plan terms apply.
 
 Subscription credentials are not the default provider-key path — API credentials via AI Gateway are. The `claude-subscription` opt-in above is the deliberate exception: it exists for the single-tenant operator driving their own credential, and stays dark unless they set the flag. Check the provider's current terms before enabling it. The assistant/model used to edit this repository is independent of these application settings.
 
@@ -99,7 +95,6 @@ Intake is provably dashboard-only: `runtime: "local"` is refused at intake on ev
 | `GITHUB_WEBHOOK_SECRET` | HMAC verification for GitHub webhook automations |
 | `GITHUB_PROJECT_TOKEN`, `GITHUB_PROJECT_NUMBER` | Optional Projects v2 board sync — a PAT with `project` scope and the board number; published PRs are added to the board and moved to "In review" |
 | `AI_GATEWAY_TOKEN` | Optional gateway authorization credential |
-| `DEVIN_API_KEY` | Required for Devin API access |
 | `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, `SLACK_APPROVERS` | Optional Slack integration and approver allowlist |
 | `SLACK_CHANNEL_REPOS` | Optional channel-to-repository mapping |
 | `TRIGGER_TOKEN` | Bearer token for `POST /api/trigger` (e.g. iPhone Apple Shortcuts); unset disables the route |

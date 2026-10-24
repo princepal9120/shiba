@@ -188,7 +188,6 @@ export const Worker = Cloudflare.Worker("Worker", {
     SHIBA_CHATGPT_SIWC_SANDBOX_OAUTH: "0",
     SHIBA_CODEX_DEVICE_AUTH: "0",
     SHIBA_CURSOR_SUBSCRIPTION: "0",
-    SHIBA_DEVIN_SUBSCRIPTION: "0",
     SHIBA_ANTIGRAVITY_SUBSCRIPTION: "0",
     // Must match the Sandbox container's instanceType.
     INSTANCE_TYPE: "standard-1",
@@ -236,6 +235,9 @@ export const Worker = Cloudflare.Worker("Worker", {
     }),
     ChatGptAuth: Cloudflare.DurableObject("ChatGptAuth", {
       className: "ChatGptAuth",
+    }),
+    UserProviderOAuth: Cloudflare.DurableObject("UserProviderOAuth", {
+      className: "UserProviderOAuth",
     }),
 
     // Megaplan stores — wrangler keeps `__PENDING__` ids until the resources
@@ -294,7 +296,6 @@ export const Worker = Cloudflare.Worker("Worker", {
       "SLACK_CHANNEL_REPOS",
       "TYPESAFE_API_KEY",
       "AI_GATEWAY_TOKEN",
-      "DEVIN_API_KEY",
       // T48: the operator's `claude setup-token` output; per-account secrets
       // (CLAUDE_SUBSCRIPTION_TOKEN_<ACCOUNT>) resolve by name at egress.
       "CLAUDE_SUBSCRIPTION_TOKEN",
@@ -304,9 +305,7 @@ export const Worker = Cloudflare.Worker("Worker", {
       // cursor-subscription: the operator's Cursor Agent API key; per-account
       // secrets (CURSOR_SUBSCRIPTION_TOKEN_<ACCOUNT>) resolve by name.
       "CURSOR_SUBSCRIPTION_TOKEN",
-      // devin-subscription: the operator's Devin API key/session token;
-      // per-account secrets (DEVIN_SUBSCRIPTION_TOKEN_<ACCOUNT>) resolve by name.
-      "DEVIN_SUBSCRIPTION_TOKEN",
+      "GOOGLE_ANTIGRAVITY_CLIENT_SECRET",
       // T51: the bearer the `shiba local` daemon presents on /api/local/*.
       "LOCAL_ADAPTER_TOKEN",
       // Built-in dashboard auth signing secret (better-auth.ts): absent =
@@ -342,7 +341,7 @@ export const Worker = Cloudflare.Worker("Worker", {
     // of gpt-5.6-sol's 2026-10-14 Codex retirement (PLAN.md §20.2). The
     // reviewer pin keeps #99's Sol review lane (opencode-go/gpt-6.1-sol).
     ROLE_MODEL_MAP:
-      "{\"orchestrator\":{\"harness\":\"codex\",\"model\":\"openai/gpt-6-sol\"},\"explorer\":{\"harness\":\"devin\",\"model\":\"devin/swe-2-medium\"},\"fixer\":{\"harness\":\"claude-code\",\"model\":\"anthropic/claude-sonnet-5-5\"},\"reviewer\":{\"harness\":\"opencode\",\"model\":\"opencode-go/gpt-6.1-sol\"},\"designer\":{\"harness\":\"claude-code\",\"model\":\"anthropic/claude-opus-5-5\"}}",
+      "{\"orchestrator\":{\"harness\":\"codex\",\"model\":\"openai/gpt-6-sol\"},\"explorer\":{\"harness\":\"codex\",\"model\":\"openai/gpt-6-sol\"},\"fixer\":{\"harness\":\"claude-code\",\"model\":\"anthropic/claude-sonnet-5-5\"},\"reviewer\":{\"harness\":\"opencode\",\"model\":\"opencode-go/gpt-6.1-sol\"},\"designer\":{\"harness\":\"claude-code\",\"model\":\"anthropic/claude-opus-5-5\"}}",
     ...configVars([
       "REQUIRE_ACCESS",
       "AUTOMATIONS_ENABLED",
@@ -361,11 +360,9 @@ export const Worker = Cloudflare.Worker("Worker", {
       // credential var exists — OAuth tokens live in the container profile.
       "SHIBA_ANTIGRAVITY_SUBSCRIPTION",
       "ANTIGRAVITY_SUBSCRIPTION_MODEL",
-      // cursor/devin subscription lanes: absent = the auth surface is dark.
+      // cursor subscription lane: absent = the auth surface is dark.
       "SHIBA_CURSOR_SUBSCRIPTION",
       "CURSOR_SUBSCRIPTION_MODEL",
-      "SHIBA_DEVIN_SUBSCRIPTION",
-      "DEVIN_SUBSCRIPTION_MODEL",
       // ACP registry lane (PLAN-V2-NEXT): the allowlist opens it;
       // ACP_REGISTRY_JSON pins the registry snapshot resolution runs on.
       "ACP_REGISTRY_ALLOWLIST",
@@ -374,7 +371,6 @@ export const Worker = Cloudflare.Worker("Worker", {
       // T51 opt-in (§18.13): absent = the local runtime is dark.
       "SHIBA_LOCAL_RUNTIME",
       "CODEX_MODEL",
-      "DEVIN_MODEL",
       "GROK_MODEL",
       "PI_MODEL",
       // T52: per-role routing pins (agents/roles.ts) — absent = roles

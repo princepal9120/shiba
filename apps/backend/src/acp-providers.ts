@@ -9,6 +9,8 @@ import {
   isAcpProviderId,
 } from "@shiba/shared";
 import type { Env } from "./env.js";
+import { userProviderOAuthStub } from "./user-provider-oauth-do.js";
+import { userProviderOAuthReady } from "./user-provider-oauth-store.js";
 import { ACP_LANES, HARNESS_DEFAULT_MODELS, HARNESSES } from "./harness/index.js";
 import { gatewayOperatorSteps } from "./provider-sign-in.js";
 import {
@@ -47,7 +49,7 @@ interface ProviderDefinition {
   spawn: readonly string[];
   docsUrl: string;
   oauth: boolean;
-  subscription: "claude-subscription" | "codex-subscription" | null;
+  subscription: "claude-subscription" | "codex-subscription" | "cursor-subscription" | null;
   credentialEnv: readonly string[];
 }
 
@@ -58,6 +60,7 @@ interface StoredConnection {
   userCode?: string;
   verificationUri?: string;
   signInKind?: AcpSignInKind;
+  oauthState?: string;
   operatorSteps?: string[];
   expiresAt?: number;
   testedAt?: number;
@@ -75,6 +78,7 @@ const DISCONNECTED: AcpProviderConnection = {
   testedAt: null,
   testOk: null,
   signInKind: null,
+  oauthState: null,
   operatorSteps: [],
 };
 
@@ -135,17 +139,17 @@ export const ACP_PROVIDER_REGISTRY: readonly ProviderDefinition[] = [
   },
   {
     id: "gemini",
-    label: "Gemini CLI",
+    label: "Gemini (Antigravity)",
     blurb:
-      "Gemini CLI in ACP mode (`gemini --acp`). Paste a Gemini API key. Egress sends it to Google. The sandbox only sees a placeholder.",
+      "Google Antigravity / Cloud Code Assist via the agy ACP agent. Connect with Google OAuth, or paste a Gemini API key for gemini --acp.",
     adapter: "gemini",
     packageName: "@google/gemini-cli",
     license: "Apache-2.0",
-    harness: "gemini-acp",
+    harness: "antigravity-subscription",
     protocol: "acp",
-    spawn: ACP_LANES["gemini-acp"].spec.spawn,
-    docsUrl: "https://github.com/google-gemini/gemini-cli",
-    oauth: false,
+    spawn: ["agy", "--no-interactive"],
+    docsUrl: "https://antigravity.google",
+    oauth: true,
     subscription: null,
     credentialEnv: ["AI_GATEWAY_TOKEN"],
   },
@@ -153,7 +157,7 @@ export const ACP_PROVIDER_REGISTRY: readonly ProviderDefinition[] = [
     id: "grok",
     label: "Grok",
     blurb:
-      "The pinned Grok CLI speaks streaming JSON, not ACP. Tasks use the grok harness. Paste an xAI API key. Egress sends it to xAI.",
+      "Grok via the pinned CLI. Connect with your xAI account, or paste an API key. Egress attaches credentials; the sandbox only sees a placeholder.",
     adapter: "grok",
     packageName: "@xai-official/grok",
     license: "see package",
@@ -161,25 +165,25 @@ export const ACP_PROVIDER_REGISTRY: readonly ProviderDefinition[] = [
     protocol: "cli",
     spawn: ["grok", "--single"],
     docsUrl: "https://docs.x.ai",
-    oauth: false,
+    oauth: true,
     subscription: null,
     credentialEnv: ["AI_GATEWAY_TOKEN"],
   },
   {
-    id: "opencode",
-    label: "OpenCode",
+    id: "cursor",
+    label: "Cursor",
     blurb:
-      "OpenCode's ACP server (`opencode acp`). Paste an OpenCode or DeepSeek API key. Egress sends it to the provider.",
-    adapter: "opencode",
-    packageName: "opencode-ai",
-    license: "MIT",
-    harness: "opencode-acp",
+      "Cursor Agent (`cursor-agent` ACP). Connect with your Cursor account, or use a deployment API key. Tokens stay on the Worker at egress.",
+    adapter: "cursor-agent",
+    packageName: "cursor-agent",
+    license: "see package",
+    harness: "cursor-subscription",
     protocol: "acp",
-    spawn: ACP_LANES["opencode-acp"].spec.spawn,
-    docsUrl: "https://opencode.ai/docs/",
-    oauth: false,
-    subscription: null,
-    credentialEnv: ["AI_GATEWAY_TOKEN"],
+    spawn: ["cursor-agent", "--force", "acp"],
+    docsUrl: "https://docs.cursor.com",
+    oauth: true,
+    subscription: "cursor-subscription",
+    credentialEnv: ["CURSOR_SUBSCRIPTION_TOKEN"],
   },
 ];
 
@@ -230,6 +234,7 @@ export interface SignInSession {
   userCode?: string;
   verificationUri?: string;
   signInKind?: AcpSignInKind;
+  oauthState?: string;
   operatorSteps?: string[];
   expiresAt?: number;
 }
@@ -400,8 +405,36 @@ function publicConnection(record: StoredConnection | null, now: number): AcpProv
     testedAt: record.testedAt ?? null,
     testOk: record.testOk ?? null,
     signInKind: expired ? null : (record.signInKind ?? null),
+    oauthState:
+      expired || record.phase !== "waiting" ? null : (record.oauthState ?? null),
     operatorSteps: expired ? ["Choose Connect with sign-in again."] : (record.operatorSteps ?? []),
   };
+}
+
+/** Pending OAuth state for loopback dev polling — only while waiting. */
+export async function waitingProviderOauthState(
+  env: Env,
+  org: string,
+  id: AcpProviderId,
+): Promise<string | null> {
+  const record = await readRecord(env, org, id);
+  if (record === null || record.phase !== "waiting") return null;
+  const state = record.oauthState?.trim() ?? "";
+  return state === "" ? null : state;
+}
+
+function effectiveHarness(provider: ProviderDefinition, record: StoredConnection | null): AgentHarnessName {
+  if (provider.id === "gemini" && record?.authMode === "api-key") {
+    return "gemini-acp";
+  }
+  return provider.harness;
+}
+
+function effectiveSpawn(provider: ProviderDefinition, harness: AgentHarnessName): string[] {
+  if (harness === "gemini-acp") {
+    return [...ACP_LANES["gemini-acp"].spec.spawn];
+  }
+  return [...provider.spawn];
 }
 
 function toCard(
@@ -410,6 +443,7 @@ function toCard(
   defaultId: AcpProviderId | null,
   now: number,
 ): AcpProviderCard {
+  const harness = effectiveHarness(provider, record);
   return {
     id: provider.id,
     label: provider.label,
@@ -417,12 +451,12 @@ function toCard(
     adapter: provider.adapter,
     packageName: provider.packageName,
     license: provider.license,
-    harness: provider.harness,
+    harness,
     protocol: provider.protocol,
-    spawn: [...provider.spawn],
-    defaultModel: HARNESS_DEFAULT_MODELS[provider.harness] as string,
+    spawn: effectiveSpawn(provider, harness),
+    defaultModel: HARNESS_DEFAULT_MODELS[harness] as string,
     docsUrl: provider.docsUrl,
-    capabilities: capabilities(provider.harness, {
+    capabilities: capabilities(harness, {
       oauth: provider.oauth,
       apiKey: true,
       acp: provider.protocol === "acp",
@@ -458,6 +492,7 @@ function storedFromSession(session: SignInSession, now: number): StoredConnectio
     ...(session.userCode ? { userCode: session.userCode } : {}),
     ...(session.verificationUri ? { verificationUri: session.verificationUri } : {}),
     ...(session.signInKind ? { signInKind: session.signInKind } : {}),
+    ...(session.oauthState ? { oauthState: session.oauthState } : {}),
     ...(session.operatorSteps ? { operatorSteps: session.operatorSteps } : {}),
     ...(session.pending ? { expiresAt: session.expiresAt ?? now + DEVICE_TTL_MS } : {}),
     updatedAt: now,
@@ -663,6 +698,21 @@ export async function disconnectProvider(
   const pasteKind = pasteProviderKind(provider.id);
   if (pasteKind) await deleteUserProviderSecret(env, org, pasteKind);
   if (provider.id === "claude") await deleteUserProviderSecret(env, org, "claude-setup");
+  if (userProviderOAuthReady(env)) {
+    const oauth =
+      provider.id === "gemini"
+        ? "antigravity"
+        : provider.id === "grok"
+          ? "xai"
+          : provider.id === "cursor"
+            ? "cursor"
+            : null;
+    if (oauth !== null) {
+      await userProviderOAuthStub(env, org).fetch(`https://user-provider-oauth.internal/logout?provider=${oauth}`, {
+        method: "DELETE",
+      });
+    }
+  }
   await deleteRecord(env, org, provider.id);
   if ((await readDefault(env, org)) === provider.id) {
     await writeDefault(env, org, null);

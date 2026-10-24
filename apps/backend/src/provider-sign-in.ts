@@ -20,6 +20,9 @@ import { chatGptAuthStub } from "./chatgpt-auth-do.js";
 import { localDispatchStub } from "./local-dispatch.js";
 import { modelCredentialKeyConfigured } from "./subscription-credentials.js";
 import { assertPastableSecret, putUserProviderSecret } from "./user-provider-keys.js";
+import type { UserOAuthProvider } from "./provider-oauth/types.js";
+import { userProviderOAuthStub } from "./user-provider-oauth-do.js";
+import { userProviderOAuthReady } from "./user-provider-oauth-store.js";
 
 const SIGN_IN_TTL_MS = 15 * 60 * 1000;
 const QUIET_AUTH_PHASES = new Set(["idle", "cleared", "failed"]);
@@ -37,6 +40,7 @@ export interface SignInSession {
   userCode?: string;
   verificationUri?: string;
   signInKind?: AcpSignInKind;
+  oauthState?: string;
   operatorSteps?: string[];
   expiresAt?: number;
 }
@@ -63,6 +67,24 @@ export const CLAUDE_DAEMON_STEPS = [
   "Install Claude Code on your computer and run: claude auth login",
   "Run the pairing command shown on this card.",
   "After that computer reports in, choose Finish sign-in. Run the task with runtime Local and harness Claude Code.",
+];
+
+const GEMINI_ANTIGRAVITY_STEPS = [
+  "Connect with sign-in. The card opens Google OAuth for Antigravity / Cloud Code Assist.",
+  "With pnpm dev or pnpm shiba dev, the loopback listener on 127.0.0.1:51121 completes sign-in automatically.",
+  "Otherwise paste the full http://127.0.0.1:51121/callback URL, then choose Finish sign-in.",
+];
+
+const GROK_OAUTH_STEPS = [
+  "Connect with sign-in. The card opens xAI OAuth for your Grok account.",
+  "With pnpm dev or pnpm shiba dev, the loopback listener on 127.0.0.1:56121 completes sign-in automatically.",
+  "Otherwise paste the http://127.0.0.1:56121/callback URL, then choose Finish sign-in.",
+];
+
+const CURSOR_OAUTH_STEPS = [
+  "Connect with sign-in. Approve the login at cursor.com in your browser.",
+  "Return here and choose Finish sign-in. The Worker polls Cursor until the account is linked.",
+  "Tokens stay encrypted for you and attach at egress for cursor-agent runs.",
 ];
 
 const CLAUDE_SETUP_STEPS = [
@@ -462,6 +484,137 @@ async function beginClaudeSetupToken(env: Env, org: string, lanes: SignInLanes):
   }
 }
 
+function userOAuthProvider(providerId: string): UserOAuthProvider | null {
+  if (providerId === "gemini") return "antigravity";
+  if (providerId === "grok") return "xai";
+  if (providerId === "cursor") return "cursor";
+  return null;
+}
+
+function oauthSteps(provider: UserOAuthProvider): string[] {
+  if (provider === "antigravity") return GEMINI_ANTIGRAVITY_STEPS;
+  if (provider === "xai") return GROK_OAUTH_STEPS;
+  return CURSOR_OAUTH_STEPS;
+}
+
+async function beginUserOAuth(env: Env, org: string, provider: UserOAuthProvider): Promise<SignInSession> {
+  const steps = oauthSteps(provider);
+  if (!userProviderOAuthReady(env)) {
+    return {
+      ok: false,
+      pending: false,
+      message: "Per-user OAuth storage is not ready on this deployment (MODEL_CREDENTIAL_KEY + UserProviderOAuth).",
+      operatorSteps: steps,
+    };
+  }
+  const response = await userProviderOAuthStub(env, org).fetch(
+    `https://user-provider-oauth.internal/begin?provider=${provider}`,
+    { method: "POST" },
+  );
+  const body = (await response.json().catch(() => null)) as {
+    verificationUri?: unknown;
+    signInKind?: unknown;
+    oauthState?: unknown;
+    error?: unknown;
+  } | null;
+  if (!response.ok) {
+    return {
+      ok: false,
+      pending: false,
+      message: safeMessage(body, "Sign-in could not start."),
+      operatorSteps: steps,
+    };
+  }
+  const verificationUri = typeof body?.verificationUri === "string" ? body.verificationUri : "";
+  if (verificationUri === "") {
+    return {
+      ok: false,
+      pending: false,
+      message: "Sign-in did not return an authorize URL. Start again.",
+      operatorSteps: steps,
+    };
+  }
+  const signInKind =
+    typeof body?.signInKind === "string" ? (body.signInKind as SignInSession["signInKind"]) : undefined;
+  const oauthState = typeof body?.oauthState === "string" ? body.oauthState : undefined;
+  return {
+    ok: true,
+    pending: true,
+    signInKind,
+    oauthState,
+    verificationUri,
+    expiresAt: Date.now() + SIGN_IN_TTL_MS,
+    message: steps[0] ?? "Continue sign-in in your browser.",
+    operatorSteps: steps,
+  };
+}
+
+async function completeUserOAuth(
+  env: Env,
+  org: string,
+  provider: UserOAuthProvider,
+  callbackUrl: string | null,
+): Promise<SignInVerdict> {
+  const steps = oauthSteps(provider);
+  if (!userProviderOAuthReady(env)) {
+    return { ok: false, message: "Per-user OAuth storage is not configured.", operatorSteps: steps };
+  }
+  const response = await userProviderOAuthStub(env, org).fetch(
+    `https://user-provider-oauth.internal/complete?provider=${provider}`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ callbackUrl: callbackUrl ?? "" }),
+    },
+  );
+  const body = (await response.json().catch(() => null)) as {
+    connected?: unknown;
+    pending?: unknown;
+    message?: unknown;
+    error?: unknown;
+  } | null;
+  if (body?.pending === true) {
+    return {
+      ok: false,
+      pending: true,
+      message: typeof body.message === "string" ? body.message : "Still waiting. Try Finish sign-in again.",
+      operatorSteps: steps,
+    };
+  }
+  if (!response.ok || body?.connected !== true) {
+    return {
+      ok: false,
+      message: safeMessage(body, "Sign-in could not be completed."),
+      operatorSteps: steps,
+    };
+  }
+  return {
+    ok: true,
+    message: typeof body?.message === "string" ? body.message : "Account connected.",
+  };
+}
+
+async function inspectUserOAuth(env: Env, org: string, provider: UserOAuthProvider): Promise<SignInVerdict> {
+  const steps = oauthSteps(provider);
+  if (!userProviderOAuthReady(env)) {
+    return { ok: false, message: "Per-user OAuth is not configured.", operatorSteps: steps };
+  }
+  const response = await userProviderOAuthStub(env, org).fetch(
+    `https://user-provider-oauth.internal/status?provider=${provider}`,
+  );
+  if (!response.ok) {
+    return { ok: false, message: "Connection status could not be read.", operatorSteps: steps };
+  }
+  const body = (await response.json().catch(() => null)) as { connected?: unknown } | null;
+  if (body?.connected === true) {
+    return {
+      ok: true,
+      message: "OAuth account is connected for this user. Egress attaches tokens; the sandbox only sees a placeholder.",
+    };
+  }
+  return { ok: false, message: "No OAuth account is connected for this user.", operatorSteps: steps };
+}
+
 async function inspectClaude(env: Env, lanes: SignInLanes): Promise<SignInVerdict> {
   const ready = readyClaudeDaemon(await listComputers(env));
   if (ready) {
@@ -522,6 +675,10 @@ export async function beginProviderSignIn(
     }
     return claudePasteSession(ctx);
   }
+  const oauthProvider = userOAuthProvider(provider.id);
+  if (oauthProvider !== null && ctx.mode === "oauth") {
+    return beginUserOAuth(env, org, oauthProvider);
+  }
   return {
     ok: false,
     pending: false,
@@ -556,6 +713,10 @@ export async function completeProviderSignIn(
       operatorSteps: CLAUDE_SETUP_STEPS,
     };
   }
+  const oauthProvider = userOAuthProvider(provider.id);
+  if (oauthProvider !== null) {
+    return completeUserOAuth(env, org, oauthProvider, callbackUrl);
+  }
   return { ok: false, message: `${provider.label} has no sign-in to finish.` };
 }
 
@@ -567,6 +728,8 @@ export async function inspectProviderSignIn(
 ): Promise<SignInVerdict> {
   if (provider.id === "codex") return inspectCodex(env, org);
   if (provider.id === "claude") return inspectClaude(env, lanes);
+  const oauthProvider = userOAuthProvider(provider.id);
+  if (oauthProvider !== null) return inspectUserOAuth(env, org, oauthProvider);
   return { ok: false, message: `${provider.label} has no subscription lane.` };
 }
 

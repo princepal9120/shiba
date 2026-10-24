@@ -59,7 +59,7 @@ describe("worker /api/providers", () => {
       "codex",
       "gemini",
       "grok",
-      "opencode",
+      "cursor",
     ]);
     expect(body.providers.find((provider) => provider.id === "claude")?.protocol).toBe("acp");
   });

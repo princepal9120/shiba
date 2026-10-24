@@ -5,21 +5,23 @@
  * credentials are proxied. The container gets the dummy key; the real one is
  * injected at the egress boundary.
  */
+
+import type { RunUsage } from "@shiba/shared";
 import type { CodingTaskInput, CodingTaskResult } from "../opencode-input.js";
 import { DUMMY_PROVIDER_KEY } from "../provider-gateway.js";
 import { boundTail } from "../security.js";
+import { classifySessionLine } from "./session-events.js";
 import {
+  type AgentHarness,
   assertSupportedModel,
   describeUsage,
-  PROVIDER_HOSTS,
-  PROVIDER_KEY_ENV,
-  type AgentHarness,
   type HarnessCapabilities,
   type HarnessEvent,
+  PROVIDER_HOSTS,
+  PROVIDER_KEY_ENV,
   type VerificationOutcome,
   verifyRunOutcome,
 } from "./types.js";
-import type { RunUsage } from "@shiba/shared";
 
 export const CODEX_PROVIDERS = ["openai"] as const;
 
@@ -39,6 +41,10 @@ export class CodexEventError extends Error {}
  * cannot be reported as a successful one.
  */
 export function parseCodexEvent(line: string): HarnessEvent | null {
+  const session = classifySessionLine(line);
+  if (session.kind === "error") throw new CodexErrorEvent(session.detail);
+  if (session.kind === "skip") return null;
+  if (session.kind === "event") return session.event;
   const trimmed = line.trim();
   if (!trimmed) return null;
   let event: unknown;
@@ -52,18 +58,20 @@ export function parseCodexEvent(line: string): HarnessEvent | null {
   }
   const record = event as Record<string, unknown>;
   if (record.type === "error" || typeof record.error === "string") {
-    const detail = typeof record.error === "string"
-      ? record.error
-      : typeof record.message === "string"
-        ? record.message
-        : JSON.stringify(record);
+    const detail =
+      typeof record.error === "string"
+        ? record.error
+        : typeof record.message === "string"
+          ? record.message
+          : JSON.stringify(record);
     throw new CodexErrorEvent(boundTail(detail, 500));
   }
-  const text = typeof record.text === "string" && record.text.trim()
-    ? record.text.trim()
-    : typeof record.message === "string" && record.message.trim()
-      ? record.message.trim()
-      : "";
+  const text =
+    typeof record.text === "string" && record.text.trim()
+      ? record.text.trim()
+      : typeof record.message === "string" && record.message.trim()
+        ? record.message.trim()
+        : "";
   if (text) return { kind: "text", text: boundTail(text, 500) };
   if (record.type === "turn.completed") {
     // turn.completed carries the turn's cumulative usage block — the
@@ -85,7 +93,9 @@ function turnUsage(usage: unknown): RunUsage | undefined {
   if (typeof usage !== "object" || usage === null) return undefined;
   const record = usage as Record<string, unknown>;
   const num = (key: string): number | undefined =>
-    typeof record[key] === "number" && Number.isFinite(record[key] as number) ? (record[key] as number) : undefined;
+    typeof record[key] === "number" && Number.isFinite(record[key] as number)
+      ? (record[key] as number)
+      : undefined;
   const input = num("input_tokens");
   const cached = num("cached_input_tokens");
   const cacheWrite = num("cache_write_input_tokens");
@@ -103,7 +113,9 @@ function turnUsage(usage: unknown): RunUsage | undefined {
 
 function summarize(record: Record<string, unknown>): string {
   const type = typeof record.type === "string" ? record.type : "event";
-  const keys = Object.keys(record).filter((key) => key !== "type").slice(0, 6);
+  const keys = Object.keys(record)
+    .filter((key) => key !== "type")
+    .slice(0, 6);
   return keys.length ? `${type} (${keys.join(", ")})` : type;
 }
 
@@ -143,15 +155,29 @@ export class CodexHarness implements AgentHarness {
   }
   /** T43 declared capabilities — the gates read this, not the name. */
   capabilities(_model?: string): HarnessCapabilities {
-    return { streamsText: true, emitsToolCalls: true, supportsResume: true, supportsSteering: false, supportsFileAttachments: false, canRunTests: true, supportsConversationRollback: false, execAllowlist: [["pnpm","test"],["npm","test"],["bun","test"],["pnpm","vitest","run"],["npx","vitest","run"]],
-      supportedRuntimes: ["sandbox", "local"] };
+    return {
+      streamsText: true,
+      emitsToolCalls: true,
+      supportsResume: true,
+      supportsSteering: false,
+      supportsFileAttachments: false,
+      canRunTests: true,
+      supportsConversationRollback: false,
+      execAllowlist: [
+        ["pnpm", "test"],
+        ["npm", "test"],
+        ["bun", "test"],
+        ["pnpm", "vitest", "run"],
+        ["npx", "vitest", "run"],
+      ],
+      supportedRuntimes: ["sandbox", "local"],
+    };
   }
 
   /** Deterministic outcome check — gates the completed claim (T43/T46 feed). */
   async verify(input: CodingTaskInput, result: CodingTaskResult): Promise<VerificationOutcome> {
     return verifyRunOutcome(input, result, this.capabilities(input.codingModel));
   }
-
 }
 
 /** The CLI takes a bare model id; the `provider/` prefix is ours. */

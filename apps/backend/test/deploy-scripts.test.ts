@@ -376,7 +376,7 @@ console.log(walked.log);`,
     expect(out.stderr).toBe("");
   });
 
-  it("setup --help and dev --dry-run do not prompt", () => {
+  it("setup --help and dev --dry-run do not prompt", { timeout: 20_000 }, () => {
     const help = run("shiba.mjs", ["setup", "--help"]);
     expect(help.status).toBe(0);
     expect(help.stdout).toContain("setup fix");

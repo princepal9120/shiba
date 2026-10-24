@@ -21,9 +21,9 @@ function conn(overrides: Partial<Connection> = {}): Connection {
 
 describe("probeModelConnection", () => {
   it("reports missing Worker secrets for service connections", async () => {
-    const result = await probeModelConnection({} as Env, conn({ service: "devin", authMode: "worker-service-secret" }));
+    const result = await probeModelConnection({} as Env, conn({ service: "cursor", authMode: "worker-service-secret" }));
     expect(result.ok).toBe(false);
-    expect(result.message).toContain("DEVIN_API_KEY");
+    expect(result.message).toContain("CURSOR_API_KEY");
   });
 
   it("HEADs the AI Gateway for BYOK services", async () => {

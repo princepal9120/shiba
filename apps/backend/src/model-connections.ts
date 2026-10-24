@@ -32,7 +32,6 @@ export const CONNECTION_SERVICES = [
   /** Per-user ChatGPT plan via codex-subscription + Worker egress (SIWC OSS path). */
   "openai-subscription",
   "google",
-  "devin",
   "opencode-go",
   // Grok rides the AI Gateway BYOK lane: the connection owns the gateway's
   // "grok" provider credential, and its models live in the xai/* namespace
@@ -72,7 +71,6 @@ export const SERVICE_AUTH_MODE: Record<ConnectionService, ConnectionAuthMode> = 
   // the same gateway provider; the separate service id exists so the fleet
   // lane keeps its own connection record and credential reference.
   luan: "gateway-byok",
-  devin: "worker-service-secret",
   // Cursor Cloud Agents is a remote execution service, not an inference
   // endpoint: no harness drives it, and it is not in PROVIDER_HOSTS.
   cursor: "worker-service-secret",
@@ -86,7 +84,6 @@ export const SERVICE_AUTH_MODE: Record<ConnectionService, ConnectionAuthMode> = 
 /** Which env secret's *presence* a worker-service-secret connection reports. */
 /** @public */
 export const SERVICE_SECRET_ENV: Partial<Record<ConnectionService, string>> = {
-  devin: "DEVIN_API_KEY",
   cursor: "CURSOR_API_KEY",
 };
 

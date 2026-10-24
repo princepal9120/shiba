@@ -22,21 +22,18 @@ export type AgentHarnessName =
   | "claude-login"
   | "codex"
   | "codex-subscription"
-  | "devin"
   | "grok"
   | "pi"
   | "cursor"
   | "antigravity"
   | "antigravity-subscription"
   | "cursor-subscription"
-  | "devin-subscription"
   // ACP (Agent Client Protocol) lanes — the same transport cursor uses,
   // parameterized by spawn argv in acp.ts.
   | "claude-acp"
   | "codex-acp"
   | "gemini-acp"
   | "opencode-acp"
-  | "devin-acp"
   // The generic registry lane (PLAN-V2-NEXT): `acp/<agent-id>` as the
   // coding model resolves any allowlisted ACP registry agent through
   // acp-registry.ts. Env-bound at resolveHarness time.
@@ -56,10 +53,6 @@ export const PROVIDER_HOSTS: Record<string, string> = {
   anthropic: "api.anthropic.com",
   openai: "api.openai.com",
   xai: "api.x.ai",
-  // Devin is a service harness, not a raw LLM provider: the CLI authenticates
-  // to Cognition's control plane, which also fronts the model traffic for
-  // Pro accounts (server.codeium.com is added by the adapter's egressHosts).
-  devin: "api.devin.ai",
   // OpenCode Go is a key-authenticated subscription endpoint (spec
   // MODEL-CONNECTIONS-ARCHITECTURE.md §3). Its API key is held as an AI
   // Gateway BYOK credential for the opencode-go custom provider; the
@@ -84,7 +77,6 @@ export const PROVIDER_HOSTS: Record<string, string> = {
   // BYOK namespaces use — routing differs at the per-run egress handler,
   // which the harness's egressOverrides swaps to the subscription branch.
   "cursor-subscription": "api2.cursor.sh",
-  "devin-subscription": "api.devin.ai",
   // The `acp` provider namespace has no single API host — a registry
   // agent's own traffic belongs to whichever service that agent fronts.
   // This row is the namespace's install anchor: `npx`-distributed agents
@@ -125,16 +117,10 @@ export const PROVIDER_KEY_ENV: Record<string, string> = {
   anthropic: "ANTHROPIC_API_KEY",
   openai: "OPENAI_API_KEY",
   xai: "XAI_API_KEY",
-  // The Devin CLI reads its key from credentials.toml, not the environment;
-  // the dummy still rides along so a future env-auth path stays covered.
-  devin: "DEVIN_API_KEY",
   // OpenCode Go authenticates with its issued API key; the container holds
   // the dummy and the gateway injects the real one at egress.
   "opencode-go": "OPENCODE_GO_API_KEY",
   cursor: "CURSOR_API_KEY",
-  // The Devin CLI reads its key from credentials.toml, not the environment;
-  // the dummy still rides along so a future env-auth path stays covered.
-  "devin-subscription": "DEVIN_API_KEY",
 };
 
 /** Hosts every harness needs regardless of provider. */

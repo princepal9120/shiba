@@ -9,15 +9,23 @@
  * clone → configure → run → collect; only config, argv, and event parsing
  * are harness-dispatched (default: OpenCode).
  */
-import type { CodingTaskInput, CodingTaskResult } from "./opencode-input.js";
+
 import type { RunSignal, RunSignalKind, RunUsage } from "@shiba/shared";
 import {
   buildLocalRunEnvelope,
+  type LocalRunResult,
   mergeRunUsage,
   RUN_SIGNAL_KINDS,
-  type LocalRunResult,
 } from "@shiba/shared";
+import { ScopedExecRefusal, scopedExec } from "./exec-allowlist.js";
+import {
+  captureCheckpoint,
+  checkpointRef,
+  diffCheckpoints,
+  pruneCheckpoints,
+} from "./git-checkpoint.js";
 import { AcpErrorEvent, AcpEventError } from "./harness/acp.js";
+import { AGENT_HARNESS_SOURCE } from "./harness/agent-harness-source.js";
 import { AntigravityErrorEvent } from "./harness/antigravity.js";
 import { AntigravityUsageLimitError } from "./harness/antigravity-subscription.js";
 import { ClaudeCodeErrorEvent } from "./harness/claude-code.js";
@@ -25,16 +33,30 @@ import { ClaudeUsageLimitError } from "./harness/claude-subscription.js";
 import { CodexErrorEvent } from "./harness/codex.js";
 import { CodexUsageLimitError } from "./harness/codex-subscription.js";
 import { CursorErrorEvent } from "./harness/cursor.js";
-import { DevinErrorEvent } from "./harness/devin.js";
 import { GrokErrorEvent } from "./harness/grok.js";
+import {
+  OpenCodeErrorEvent as OpenCodeErrorEventImpl,
+  opencodeHarness,
+} from "./harness/opencode.js";
 import { PiErrorEvent, PiEventError } from "./harness/pi.js";
-import { OpenCodeErrorEvent as OpenCodeErrorEventImpl, opencodeHarness } from "./harness/opencode.js";
 import { HARNESS_RETRY, withRetry } from "./harness/retry.js";
 import type { AgentHarness } from "./harness/types.js";
-import { boundTail, redactSecrets, shellJoin, shellQuote } from "./security.js";
+import type { CodingTaskInput, CodingTaskResult } from "./opencode-input.js";
 import { DUMMY_PROVIDER_KEY } from "./provider-gateway.js";
-import { ScopedExecRefusal, scopedExec } from "./exec-allowlist.js";
-import { captureCheckpoint, checkpointRef, diffCheckpoints, pruneCheckpoints } from "./git-checkpoint.js";
+import { boundTail, redactSecrets, shellJoin, shellQuote } from "./security.js";
+
+function sessionProvider(name: string): "codex" | "claude" | null {
+  if (name === "codex") return "codex";
+  if (name === "claude-code" || name === "claude-subscription" || name === "claude-login")
+    return "claude";
+  return null;
+}
+
+/** `provider/model` → the bare id the CLI accepts. */
+function bareModelId(model: string): string {
+  const slash = model.indexOf("/");
+  return slash > 0 ? model.slice(slash + 1) : model;
+}
 
 export const MAX_DIFF_CHARS = 120_000;
 export const MAX_STDERR_TAIL_CHARS = 8_000;
@@ -79,9 +101,10 @@ export interface SandboxOps {
       maxOutputChars?: number;
     },
   ): Promise<ExecResult>;
-  readFile(path: string, opts?: { maxBytes?: number; signal?: AbortSignal }): Promise<
-    { kind: "utf8"; content: string } | { kind: "base64"; content: string }
-  >;
+  readFile(
+    path: string,
+    opts?: { maxBytes?: number; signal?: AbortSignal },
+  ): Promise<{ kind: "utf8"; content: string } | { kind: "base64"; content: string }>;
 }
 
 export interface ProgressEvent {
@@ -160,15 +183,22 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
     ops: SandboxOps,
     input: CodingTaskInput,
     emit: ProgressEmitter,
-    opts?: { signal?: AbortSignal; signals?: RunSignal[]; exportDiff?: (diff: string) => Promise<string> },
+    opts?: {
+      signal?: AbortSignal;
+      signals?: RunSignal[];
+      exportDiff?: (diff: string) => Promise<string>;
+    },
   ): Promise<CodingTaskResult> {
     const workdir = `/workspace/${input.sandboxId}`;
     const configValue = this.harness.configFile(input, input.sandboxId);
-    const configFiles = configValue === null ? [] : Array.isArray(configValue) ? configValue : [configValue];
+    const configFiles =
+      configValue === null ? [] : Array.isArray(configValue) ? configValue : [configValue];
     const config = configFiles[0] ?? null;
     const signals = opts?.signals ?? [];
     const milestone = (kind: RunSignalKind, detail?: string) => {
-      signals.push(detail !== undefined ? { kind, at: Date.now(), detail } : { kind, at: Date.now() });
+      signals.push(
+        detail !== undefined ? { kind, at: Date.now(), detail } : { kind, at: Date.now() },
+      );
     };
 
     // T45: every exec this run sends to the sandbox goes through the scoped
@@ -176,6 +206,9 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
     // own argv prefix + its declared execAllowlist), timeout, output cap, receipts.
     const capabilities = this.harness.capabilities(input.codingModel);
     const harnessArgv = this.harness.buildArgv(input, workdir);
+    const sessionKind = sessionProvider(this.harness.name);
+    const sessionScript =
+      sessionKind === null ? null : `/workspace/${input.sandboxId}.agent-harness.mjs`;
     // The harness's own argv prefix leads the allowlist (see
     // EXEC_INTERPRETERS): interpreter-prefixed argv like `node driver.cjs`
     // contributes interpreter + script, a bare binary just itself.
@@ -187,6 +220,7 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
     const allowlist: readonly (readonly string[])[] = [
       ["git"],
       harnessExecPrefix,
+      ...(sessionScript !== null ? [["node", sessionScript] as const] : []),
       ...capabilities.execAllowlist,
     ];
     const scoped: SandboxOps = {
@@ -205,7 +239,11 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
     };
 
     throwIfAborted(opts?.signal);
-    await emit({ phase: "clone", message: `Cloning ${input.repoUrl} (branch ${input.baseBranch}).`, fraction: 0.05 });
+    await emit({
+      phase: "clone",
+      message: `Cloning ${input.repoUrl} (branch ${input.baseBranch}).`,
+      fraction: 0.05,
+    });
     // The ops handle being bound is the readiness claim; egress pinning
     // runs inside this first call as one retried unit with the clone.
     milestone("sandbox.ready", input.sandboxId);
@@ -227,7 +265,11 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
       return failureResult(`Baseline checkpoint failed: ${shortError(error)}`, 0, "", signals);
     }
 
-    await emit({ phase: "configure", message: `Writing isolated ${this.harness.name} config.`, fraction: 0.15 });
+    await emit({
+      phase: "configure",
+      message: `Writing isolated ${this.harness.name} config.`,
+      fraction: 0.15,
+    });
     throwIfAborted(opts?.signal);
     try {
       // T49: directory-shaped harnesses materialize their home layout first
@@ -242,7 +284,12 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
           signal: opts?.signal,
         });
         if (result.exitCode !== 0) {
-          return failureResult(`Home layout setup failed (${argv.join(" ")}): ${boundTail(result.stderr, 500)}`, 0, "", signals);
+          return failureResult(
+            `Home layout setup failed (${argv.join(" ")}): ${boundTail(result.stderr, 500)}`,
+            0,
+            "",
+            signals,
+          );
         }
       }
       for (const file of configFiles) {
@@ -253,23 +300,46 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
       return failureResult(`Config write failed: ${shortError(error)}`, 0, "", signals);
     }
 
-    await emit({ phase: "code", message: `Running ${this.harness.name} headlessly.`, fraction: 0.25 });
+    await emit({
+      phase: "code",
+      message: `Running ${this.harness.name} headlessly.`,
+      fraction: 0.25,
+    });
     throwIfAborted(opts?.signal);
-    const argv = harnessArgv;
+    let argv = harnessArgv;
+    if (sessionScript !== null && sessionKind !== null) {
+      const jobPath = `/workspace/${input.sandboxId}.job.json`;
+      // The job file is the prompt and the mode. Provider keys stay in the
+      // process env the sandbox already injects; they are not written here.
+      const job = {
+        provider: sessionKind,
+        cwd: workdir,
+        model: bareModelId(input.codingModel),
+        prompt: input.task,
+        permissionMode: "accept-edits",
+        checkpoints: true,
+        logDir: "/tmp/shiba-sessions",
+      };
+      await ops.writeFile(sessionScript, AGENT_HARNESS_SOURCE);
+      await ops.writeFile(jobPath, `${JSON.stringify(job)}\n`);
+      argv = ["node", sessionScript, jobPath];
+    }
     let run: ExecResult;
     const output = streamProgress(this.harness, emit, opts?.signal);
     try {
       milestone("harness.started", this.harness.name);
       // Only thrown errors are retry candidates: a returned nonzero
       // exitCode is the harness's verdict, not a transient failure.
-      run = await withRetry(HARNESS_RETRY, () =>
-        scoped.exec(shellJoin(argv), {
-          cwd: workdir,
-          timeoutMs: OPENCODE_TIMEOUT_MS,
-          signal: opts?.signal,
-          onOutput: output.onData,
-          env: this.harness.env(input, config?.path ?? null),
-        }),
+      run = await withRetry(
+        HARNESS_RETRY,
+        () =>
+          scoped.exec(shellJoin(argv), {
+            cwd: workdir,
+            timeoutMs: OPENCODE_TIMEOUT_MS,
+            signal: opts?.signal,
+            onOutput: output.onData,
+            env: this.harness.env(input, config?.path ?? null),
+          }),
         opts?.signal,
       );
       // The harness process resolved — idle covers clean exits and
@@ -293,7 +363,6 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
         error instanceof PiErrorEvent ||
         error instanceof PiEventError ||
         error instanceof CursorErrorEvent ||
-        error instanceof DevinErrorEvent ||
         error instanceof AcpErrorEvent ||
         error instanceof AcpEventError ||
         error instanceof ClaudeUsageLimitError ||
@@ -303,7 +372,13 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
       ) {
         return failureResult(error.message, 0, "", signals, output.usage);
       }
-      return failureResult(`${this.harness.name} execution failed: ${shortError(error)}`, 0, "", signals, output.usage);
+      return failureResult(
+        `${this.harness.name} execution failed: ${shortError(error)}`,
+        0,
+        "",
+        signals,
+        output.usage,
+      );
     }
     const stderrTail = redactSecrets(boundTail(run.stderr, MAX_STDERR_TAIL_CHARS));
     if (run.exitCode !== 0) {
@@ -329,14 +404,19 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
         () =>
           collectChanges(scoped, workdir, {
             signal: opts?.signal,
-            diffSource: () => diffCheckpoints(scoped, workdir, baselineRef, settleRef, opts?.signal),
+            diffSource: () =>
+              diffCheckpoints(scoped, workdir, baselineRef, settleRef, opts?.signal),
             exportDiff: opts?.exportDiff,
             onDiffExported: (key) => milestone("diff.exported", key),
           }),
         opts?.signal,
       );
       milestone("collect.complete", `${collection.changedFiles.length} files`);
-      await emit({ phase: "collect", message: `Done: ${collection.changedFiles.length} changed files.`, fraction: 1 });
+      await emit({
+        phase: "collect",
+        message: `Done: ${collection.changedFiles.length} changed files.`,
+        fraction: 1,
+      });
       const completed: CodingTaskResult = {
         status: "completed",
         exitCode: 0,
@@ -345,7 +425,12 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
         diff: collection.diff,
         files: collection.files,
         signals,
-        summary: summarizeRun(this.harness.name, input, collection.changedFiles, boundTail(run.stdout, MAX_STDOUT_TAIL_CHARS)),
+        summary: summarizeRun(
+          this.harness.name,
+          input,
+          collection.changedFiles,
+          boundTail(run.stdout, MAX_STDOUT_TAIL_CHARS),
+        ),
         // Only what the harness stream actually reported — never estimated.
         ...(output.usage !== undefined ? { usage: output.usage } : {}),
       };
@@ -355,7 +440,11 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
       if (input.testCommand !== undefined && input.testCommand.length > 0) {
         try {
           throwIfAborted(opts?.signal);
-          await emit({ phase: "collect", message: `Running test command: ${input.testCommand.join(" ")}`, fraction: 0.9 });
+          await emit({
+            phase: "collect",
+            message: `Running test command: ${input.testCommand.join(" ")}`,
+            fraction: 0.9,
+          });
           const testRun = await scoped.exec(shellJoin(input.testCommand), {
             cwd: workdir,
             timeoutMs: TEST_COMMAND_TIMEOUT_MS,
@@ -366,17 +455,34 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
           completed.testEvidence = {
             command: shellJoin(input.testCommand),
             exitCode: testRun.exitCode,
-            outputTail: boundTail(`${testRun.stdout}\n${testRun.stderr}`.trim(), TEST_EVIDENCE_TAIL_CHARS),
+            outputTail: boundTail(
+              `${testRun.stdout}\n${testRun.stderr}`.trim(),
+              TEST_EVIDENCE_TAIL_CHARS,
+            ),
           };
           if (testRun.exitCode !== 0) {
-            await emit({ phase: "collect", message: `Test command exited ${testRun.exitCode}.`, fraction: 0.92 });
+            await emit({
+              phase: "collect",
+              message: `Test command exited ${testRun.exitCode}.`,
+              fraction: 0.92,
+            });
           }
         } catch (error) {
           if (!(error instanceof ScopedExecRefusal)) {
-            return failureResult(`Test command failed to execute: ${shortError(error)}`, run.exitCode, stderrTail, signals, output.usage);
+            return failureResult(
+              `Test command failed to execute: ${shortError(error)}`,
+              run.exitCode,
+              stderrTail,
+              signals,
+              output.usage,
+            );
           }
           // Refused: receipt recorded; verify below reports the real reason.
-          await emit({ phase: "collect", message: "Test command refused by the exec allowlist.", fraction: 0.92 });
+          await emit({
+            phase: "collect",
+            message: "Test command refused by the exec allowlist.",
+            fraction: 0.92,
+          });
         }
       }
       // T43 verify gate — load-bearing: an exit-0 run with an empty diff is NOT
@@ -384,11 +490,23 @@ export class SandboxRuntimeAdapter implements RuntimeAdapter {
       // receipt. Deterministic evidence only; this feeds T46's proof gate.
       const verification = await this.harness.verify(input, completed);
       if (!verification.ok) {
-        return failureResult(`Verification failed: ${verification.reason}`, run.exitCode, stderrTail, signals, output.usage);
+        return failureResult(
+          `Verification failed: ${verification.reason}`,
+          run.exitCode,
+          stderrTail,
+          signals,
+          output.usage,
+        );
       }
       return completed;
     } catch (error) {
-      return failureResult(`Change collection failed: ${shortError(error)}`, run.exitCode, stderrTail, signals, output.usage);
+      return failureResult(
+        `Change collection failed: ${shortError(error)}`,
+        run.exitCode,
+        stderrTail,
+        signals,
+        output.usage,
+      );
     }
   }
 }
@@ -405,18 +523,23 @@ export class ComputerPreviewAdapter implements RuntimeAdapter {
  * client wraps the DO stub; tests inject an in-memory one.
  */
 export interface LocalDispatchClient {
-  dispatch(envelope: import("@shiba/shared").LocalRunEnvelope, targetMachineId?: string): Promise<void>;
+  dispatch(
+    envelope: import("@shiba/shared").LocalRunEnvelope,
+    targetMachineId?: string,
+  ): Promise<void>;
   status(sandboxId: string): Promise<{
     status: "pending" | "claimed" | "settled" | "cancelled";
     claimedAt?: number;
     claimedBy?: string;
     result?: LocalRunResult;
+    sessionEvents?: { seq: number; at: number; type: string; text: string }[];
+    liveDiff?: string;
   }>;
   cancel(sandboxId: string): Promise<void>;
 }
 
 export const LOCAL_DISPATCH_MESSAGE =
-  "runtime \"local\" requires SHIBA_LOCAL_RUNTIME=1 on the deployment and " +
+  'runtime "local" requires SHIBA_LOCAL_RUNTIME=1 on the deployment and ' +
   "an operator daemon polling /api/local — see configuration.md.";
 
 /** The adapter's own poll cadence and the total mailbox budget. */
@@ -453,7 +576,9 @@ export class LocalRuntimeAdapter implements RuntimeAdapter {
   ): Promise<CodingTaskResult> {
     const signals = opts?.signals ?? [];
     const milestone = (kind: RunSignalKind, detail?: string) => {
-      signals.push(detail !== undefined ? { kind, at: Date.now(), detail } : { kind, at: Date.now() });
+      signals.push(
+        detail !== undefined ? { kind, at: Date.now(), detail } : { kind, at: Date.now() },
+      );
     };
     if (!this.harness.capabilities(input.codingModel).supportedRuntimes.includes("local")) {
       return failureResult(
@@ -465,11 +590,13 @@ export class LocalRuntimeAdapter implements RuntimeAdapter {
     }
     const workdir = `/workspace/${input.sandboxId}`;
     const configValue = this.harness.configFile(input, input.sandboxId);
-    const configFiles = configValue === null ? [] : Array.isArray(configValue) ? configValue : [configValue];
+    const configFiles =
+      configValue === null ? [] : Array.isArray(configValue) ? configValue : [configValue];
     const env = this.harness.env(input, configFiles[0]?.path ?? null);
     const dummyKeys = Object.entries(env)
       .filter(([, value]) => value === DUMMY_PROVIDER_KEY)
       .map(([key]) => key);
+    const sessionKindLocal = sessionProvider(this.harness.name);
     const deadlineAt = Date.now() + LOCAL_MAILBOX_TIMEOUT_MS;
     const envelope = buildLocalRunEnvelope({
       input: {
@@ -492,10 +619,23 @@ export class LocalRuntimeAdapter implements RuntimeAdapter {
         .execAllowlist.map((prefix) => [...prefix]),
       setupAllowlist: SETUP_COMMAND_ALLOWLIST.map((prefix) => [...prefix]),
       deadlineAt,
+      ...(sessionKindLocal !== null
+        ? {
+            session: {
+              provider: sessionKindLocal,
+              model: bareModelId(input.codingModel),
+              permissionMode: "approval-required" as const,
+            },
+          }
+        : {}),
     });
 
     throwIfAborted(opts?.signal);
-    await emit({ phase: "clone", message: `Dispatching ${this.harness.name} to the local runtime.`, fraction: 0.05 });
+    await emit({
+      phase: "clone",
+      message: `Dispatching ${this.harness.name} to the local runtime.`,
+      fraction: 0.05,
+    });
     try {
       await this.client.dispatch(envelope, input.targetMachineId);
     } catch (error) {
@@ -507,6 +647,7 @@ export class LocalRuntimeAdapter implements RuntimeAdapter {
     // settles on its own clock; the abort path cancels the record so a
     // late claim can never start a cancelled run.
     let seenClaimed = false;
+    let seenEventSeq = 0;
     for (;;) {
       if (opts?.signal?.aborted) {
         await this.client.cancel(input.sandboxId).catch(() => undefined);
@@ -530,7 +671,16 @@ export class LocalRuntimeAdapter implements RuntimeAdapter {
       if (status.status === "claimed" && !seenClaimed) {
         seenClaimed = true;
         milestone("local.claimed", status.claimedBy ?? "operator");
-        await emit({ phase: "code", message: `Daemon${status.claimedBy ? ` ${status.claimedBy}` : ""} claimed the run.`, fraction: 0.25 });
+        await emit({
+          phase: "code",
+          message: `Daemon${status.claimedBy ? ` ${status.claimedBy}` : ""} claimed the run.`,
+          fraction: 0.25,
+        });
+      }
+      for (const event of status.sessionEvents ?? []) {
+        if (event.seq <= seenEventSeq || event.text.trim() === "") continue;
+        seenEventSeq = event.seq;
+        await emit({ phase: "code", message: event.text, fraction: 0.5 });
       }
       if (status.status === "cancelled") {
         return failureResult("Local run was cancelled before a daemon settled it.", 0, "", signals);
@@ -541,7 +691,11 @@ export class LocalRuntimeAdapter implements RuntimeAdapter {
         // milestones — verify() reads exec.settled from the same list.
         for (const signal of status.result.signals ?? []) {
           if ((RUN_SIGNAL_KINDS as readonly string[]).includes(signal.kind)) {
-            signals.push({ kind: signal.kind as RunSignalKind, at: signal.at, ...(signal.detail !== undefined ? { detail: signal.detail } : {}) });
+            signals.push({
+              kind: signal.kind as RunSignalKind,
+              at: signal.at,
+              ...(signal.detail !== undefined ? { detail: signal.detail } : {}),
+            });
           }
         }
         const result = status.result;
@@ -570,12 +724,21 @@ export class LocalRuntimeAdapter implements RuntimeAdapter {
           summary: boundTail(result.summary, 8000),
           ...(result.testEvidence !== undefined ? { testEvidence: result.testEvidence } : {}),
         };
-        await emit({ phase: "collect", message: `Done: ${result.changedFiles.length} changed files.`, fraction: 1 });
+        await emit({
+          phase: "collect",
+          message: `Done: ${result.changedFiles.length} changed files.`,
+          fraction: 1,
+        });
         // T43 verify gate — identical to the sandbox path: the daemon's
         // report is evidence, not truth.
         const verification = await this.harness.verify(input, completed);
         if (!verification.ok) {
-          return failureResult(`Verification failed: ${verification.reason}`, result.exitCode, stderrTail, signals);
+          return failureResult(
+            `Verification failed: ${verification.reason}`,
+            result.exitCode,
+            stderrTail,
+            signals,
+          );
         }
         return completed;
       }
@@ -587,7 +750,9 @@ export class LocalRuntimeAdapter implements RuntimeAdapter {
 export function resolveRuntimeName(raw: string | undefined): "sandbox" | "computer" | "local" {
   if (raw === undefined || raw === "") return "sandbox";
   if (raw === "sandbox" || raw === "computer" || raw === "local") return raw;
-  throw new Error(`Unknown RUNTIME ${JSON.stringify(raw)}: expected "sandbox", "computer", or "local".`);
+  throw new Error(
+    `Unknown RUNTIME ${JSON.stringify(raw)}: expected "sandbox", "computer", or "local".`,
+  );
 }
 
 /**
@@ -661,7 +826,11 @@ interface OutputStream {
  * Event parsing is harness-dispatched; error events propagate so the run
  * fails honestly.
  */
-function streamProgress(harness: AgentHarness, emit: ProgressEmitter, _signal?: AbortSignal): OutputStream {
+function streamProgress(
+  harness: AgentHarness,
+  emit: ProgressEmitter,
+  _signal?: AbortSignal,
+): OutputStream {
   let buffer = "";
   // Index into buffer that is already known newline-free; searching resumes
   // there instead of rescanning the pending line on every chunk (linear).
@@ -703,7 +872,9 @@ function streamProgress(harness: AgentHarness, emit: ProgressEmitter, _signal?: 
             // Bounded, honest overflow: report the drop and discard the
             // partial record until its delimiter rather than emitting
             // fabricated events or buffering without bound.
-            emitText(`[${harness.name}] oversized output line dropped (exceeded ${MAX_STREAM_LINE_CHARS} chars).`);
+            emitText(
+              `[${harness.name}] oversized output line dropped (exceeded ${MAX_STREAM_LINE_CHARS} chars).`,
+            );
             buffer = "";
             searchFrom = 0;
             dropping = true;
@@ -719,9 +890,10 @@ function streamProgress(harness: AgentHarness, emit: ProgressEmitter, _signal?: 
           // Usage events carry real reported numbers: per-step deltas sum,
           // a cumulative report replaces (it already includes the deltas).
           if (event.kind === "usage") {
-            stream.usage = event.cumulative === true
-              ? { ...event.usage }
-              : mergeRunUsage(stream.usage, event.usage);
+            stream.usage =
+              event.cumulative === true
+                ? { ...event.usage }
+                : mergeRunUsage(stream.usage, event.usage);
           }
           if (event?.text.trim()) emitText(`[${harness.name}] ${event.text}`);
         } catch (error) {
@@ -734,7 +906,6 @@ function streamProgress(harness: AgentHarness, emit: ProgressEmitter, _signal?: 
             error instanceof PiErrorEvent ||
             error instanceof PiEventError ||
             error instanceof CursorErrorEvent ||
-            error instanceof DevinErrorEvent ||
             error instanceof AcpErrorEvent ||
             error instanceof AcpEventError ||
             error instanceof ClaudeUsageLimitError ||
@@ -758,7 +929,12 @@ function streamProgress(harness: AgentHarness, emit: ProgressEmitter, _signal?: 
   return stream;
 }
 
-function summarizeRun(harnessName: string, input: CodingTaskInput, changedFiles: string[], stdoutTail: string): string {
+function summarizeRun(
+  harnessName: string,
+  input: CodingTaskInput,
+  changedFiles: string[],
+  stdoutTail: string,
+): string {
   const header = `${harnessName} completed for ${input.repoUrl} (${input.baseBranch}): ${changedFiles.length} changed files.`;
   if (changedFiles.length === 0) {
     return `${header} No file changes detected.`;
@@ -959,7 +1135,7 @@ async function collectChanges(
     if (read.kind === "utf8") {
       totalChars += content.length;
     } else {
-      totalChars += Math.ceil(content.length * 3 / 4);
+      totalChars += Math.ceil((content.length * 3) / 4);
     }
     if (totalChars > MAX_TOTAL_FILE_CHARS) {
       throw new Error(

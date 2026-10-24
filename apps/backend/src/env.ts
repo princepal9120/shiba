@@ -42,6 +42,12 @@ export interface Env {
   ModelConfig: DurableObjectNamespace;
   /** Per-user ChatGPT SIWC refresh + sign-in state. */
   ChatGptAuth?: DurableObjectNamespace;
+  /** Per-user Antigravity / Cursor / xAI OAuth on the Providers card. */
+  UserProviderOAuth?: DurableObjectNamespace;
+  /** Google OAuth client id for Antigravity sign-in (defaults to the public Antigravity IDE client). */
+  GOOGLE_ANTIGRAVITY_CLIENT_ID?: string;
+  /** Google OAuth client secret for Antigravity token exchange — Worker secret, never in the container. */
+  GOOGLE_ANTIGRAVITY_CLIENT_SECRET?: string;
   /** Private launch/contributor registrations. */
   Waitlist: DurableObjectNamespace;
   /**
@@ -123,8 +129,6 @@ export interface Env {
   CLAUDE_CODE_MODEL?: string;
   /** Optional default model for the codex harness, e.g. openai/gpt-5.3-codex. */
   CODEX_MODEL?: string;
-  /** Optional default model for the devin harness, e.g. devin/swe-2. */
-  DEVIN_MODEL?: string;
   /** Optional default model for the grok harness, e.g. xai/grok-4.6. */
   GROK_MODEL?: string;
   /** Optional default model for the pi harness, e.g. anthropic/claude-sonnet-4-6. */
@@ -356,6 +360,11 @@ export interface Env {
    */
   MODEL_CREDENTIAL_KEY?: string;
   /**
+   * Local dev only: shared secret between `scripts/oauth-loopback.mjs` and
+   * `/api/dev/oauth-loopback` POST (minted into `.dev.vars` by `pnpm dev`).
+   */
+  SHIBA_DEV_OAUTH_LOOPBACK_SECRET?: string;
+  /**
    * When "1", ChatGptAuth may run OAuth exchange/refresh inside a short-lived
    * auth sandbox when Worker fetches to auth.openai.com get a bot challenge.
    */
@@ -395,31 +404,8 @@ export interface Env {
   CURSOR_SUBSCRIPTION_TOKEN?: string;
   /** Per-deploy model override for the cursor-subscription lane. */
   CURSOR_SUBSCRIPTION_MODEL?: string;
-  /**
-   * Opt-in flag: "1" opens the /api/auth/devin-subscription lane.
-   * Absent the surface is dark — 404 as if unregistered.
-   */
-  SHIBA_DEVIN_SUBSCRIPTION?: string;
-  /**
-   * Credential: the operator's Devin API key/session token, stored as a
-   * Wrangler secret and read only by the subscription egress branch —
-   * the container holds a dummy credentials.toml, never the token.
-   * Named accounts: DEVIN_SUBSCRIPTION_TOKEN_<ACCOUNT> (resolved by name,
-   * not declared here). Distinct from DEVIN_API_KEY, the deployment-wide
-   * credential the plain devin harness uses.
-   */
-  DEVIN_SUBSCRIPTION_TOKEN?: string;
-  /** Per-deploy model override for the devin-subscription lane. */
-  DEVIN_SUBSCRIPTION_MODEL?: string;
   /** Per-deploy default for the `acp` registry lane (an `acp/<id>` model id). */
   ACP_MODEL?: string;
-  /**
-   * Optional. Devin account API key for the devin harness — injected as a
-   * Bearer header by the egress forwarders on api.devin.ai and
-   * server.codeium.com. Never sent to containers; the sandboxed CLI holds a
-   * dummy credentials.toml. Unset means devin runs fail auth honestly.
-   */
-  DEVIN_API_KEY?: string;
   /** Optional. Verifies incoming GitHub webhook signatures. */
   GITHUB_WEBHOOK_SECRET?: string;
   /**

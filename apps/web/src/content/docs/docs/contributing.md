@@ -67,7 +67,6 @@ of them requires re-running the live acceptance checklist (T10).
 | `@cloudflare/sandbox` | `0.12.9` | Must match the base image tag in `Dockerfile`; verify the SDK egress behavior and credential boundary rather than asserting an absolute isolation guarantee. |
 | `@anthropic-ai/claude-code` | `2.1.284` | Pinned image CLI; unit-tested config/argv/parser does not establish live API execution. 2.1.284 is where the `sonnet` alias starts resolving to Sonnet 5.5. |
 | `@openai/codex` | `0.157.1` | Pinned image CLI; unit-tested config/argv/parser does not establish live API execution. |
-| Devin CLI | `3000.11.3` | Checksum-pinned image binary; uses `DEVIN_API_KEY` via Worker egress, not AI Gateway BYOK. First release that ships `devin acp` — the build probes the subcommand. |
 | `@agentclientprotocol/claude-agent-acp` | `0.86.0` | Pinned ACP adapter for `claude-acp`; driver protocol (session/new, set_model, prompt) depends on it. |
 | `@agentclientprotocol/codex-acp` | `2.1.1` | Pinned ACP adapter for `codex-acp`; same driver-protocol dependency. |
 | `@google/gemini-cli` | `0.62.0` | Pinned image CLI; the `gemini-acp` lane spawns `gemini --acp`, build-probed via `--help`. |

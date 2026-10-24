@@ -53,11 +53,10 @@ const testKv = {
 
 export function productionEnvStubs(): Pick<
   Env,
-  "ModelConfig" | "Mailbox" | "MEMORY_ENABLED" | "AI_GATEWAY_TOKEN" | "AGENT_TOKENS" | "DEVIN_API_KEY"
+  "ModelConfig" | "Mailbox" | "MEMORY_ENABLED" | "AI_GATEWAY_TOKEN" | "AGENT_TOKENS"
 > {
   return {
     AI_GATEWAY_TOKEN: "test-gateway-token",
-    DEVIN_API_KEY: "test-devin-key",
     AGENT_TOKENS: testKv,
     ModelConfig: {
       idFromName: () => ({}) as DurableObjectId,

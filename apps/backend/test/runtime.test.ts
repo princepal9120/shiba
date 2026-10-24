@@ -6,7 +6,7 @@ import { INACTIVITY_TIMEOUT_MS, outboundByHost, outboundHandlers } from "../src/
 import { claudeCodeHarness } from "../src/harness/claude-code.js";
 import { ClaudeUsageLimitError } from "../src/harness/claude-subscription.js";
 import { CodexUsageLimitError } from "../src/harness/codex-subscription.js";
-import { devinHarness } from "../src/harness/devin.js";
+import { grokHarness } from "../src/harness/grok.js";
 import { AntigravityUsageLimitError } from "../src/harness/antigravity-subscription.js";
 import type { AgentHarness } from "../src/harness/types.js";
 import type { EgressEnv } from "../src/egress.js";
@@ -414,22 +414,22 @@ describe("streamed opencode progress", () => {
     expect(events.filter((message) => message.startsWith("[claude-code]"))).toEqual([]);
   });
 
-  it("fails a Devin run on an auth error event", async () => {
+  it("fails a Grok run on an auth error event", async () => {
     const ops = makeFakeOps();
     const baseExec = ops.exec;
     ops.exec = async (command, opts) => {
-      if (!command.startsWith("'devin'")) return baseExec(command, opts);
-      opts?.onOutput?.("stdout", "Not logged in\n");
+      if (!command.startsWith("'grok'")) return baseExec(command, opts);
+      opts?.onOutput?.("stdout", '{"type":"error","error":"auth failed"}\n');
       return { stdout: "", stderr: "", exitCode: 0 };
     };
-    const adapter = new SandboxRuntimeAdapter(devinHarness);
+    const adapter = new SandboxRuntimeAdapter(grokHarness);
     const result = await adapter.runCodingTask(
       ops,
-      { ...INPUT, codingModel: "devin/swe-2" },
+      { ...INPUT, codingModel: "xai/grok-4.6" },
       () => {},
     );
     expect(result.status).toBe("error");
-    expect(result.summary).toContain("Not logged in");
+    expect(result.summary).toContain("auth failed");
     expect(result.summary).not.toContain("malformed event line");
   });
 
@@ -438,18 +438,18 @@ describe("streamed opencode progress", () => {
     new CodexUsageLimitError("quota exhausted"),
     new AntigravityUsageLimitError("quota exhausted"),
   ])("fails a run on %s instead of masking the usage limit", async (usageError) => {
-    const harness = Object.create(devinHarness) as AgentHarness;
+    const harness = Object.create(grokHarness) as AgentHarness;
     harness.parseEvent = () => { throw usageError; };
     const ops = makeFakeOps();
     const baseExec = ops.exec;
     ops.exec = async (command, opts) => {
-      if (!command.startsWith("'devin'")) return baseExec(command, opts);
-      opts?.onOutput?.("stdout", "usage limit\n");
+      if (!command.startsWith("'grok'")) return baseExec(command, opts);
+      opts?.onOutput?.("stdout", '{"type":"assistant","content":"usage limit"}\n');
       return { stdout: "", stderr: "", exitCode: 0 };
     };
     const result = await new SandboxRuntimeAdapter(harness).runCodingTask(
       ops,
-      { ...INPUT, codingModel: "devin/swe-2" },
+      { ...INPUT, codingModel: "xai/grok-4.6" },
       () => {},
     );
     expect(result.status).toBe("error");

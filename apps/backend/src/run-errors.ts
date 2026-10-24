@@ -61,7 +61,6 @@ const HARNESS_ERROR_NAMES = new Set([
   "OpenCodeErrorEvent",
   "ClaudeCodeErrorEvent",
   "CodexErrorEvent",
-  "DevinErrorEvent",
   "GrokErrorEvent",
   "PiErrorEvent",
   "PiEventError",

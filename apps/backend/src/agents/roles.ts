@@ -33,7 +33,7 @@
  * keep them in step with `wrangler.jsonc` or delete them, but do not read
  * them as defaults:
  *   orchestrator → codex                    (OpenAI-class planning)
- *   explorer     → devin                    (swe-2)
+ *   explorer     → codex                    (gpt-6-sol)
  *   fixer        → claude-code              (sonnet-5-5)
  *   reviewer     → opencode                 (opencode-go/gpt-6.1-sol — Sol on
  *                                            the opencodex lane; the pin wins
@@ -56,12 +56,10 @@ const HARNESS_MODEL_ENV: Partial<Record<AgentHarnessName, keyof Env>> = {
   "claude-subscription": "CLAUDE_SUBSCRIPTION_MODEL",
   codex: "CODEX_MODEL",
   "codex-subscription": "CODEX_SUBSCRIPTION_MODEL",
-  devin: "DEVIN_MODEL",
   grok: "GROK_MODEL",
   pi: "PI_MODEL",
   "antigravity-subscription": "ANTIGRAVITY_SUBSCRIPTION_MODEL",
   "cursor-subscription": "CURSOR_SUBSCRIPTION_MODEL",
-  "devin-subscription": "DEVIN_SUBSCRIPTION_MODEL",
 };
 
 const ROLE_MODEL_VARS: Record<AgentRole, keyof Env> = {

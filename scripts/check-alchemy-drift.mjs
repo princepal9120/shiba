@@ -673,6 +673,15 @@ for (const path of signaturePaths) {
     drift.push(`SIGNATURE_AUTHENTICATED "${path}" is missing from ACCESS_BYPASS_PATHS — machine callers will 403 at the edge`);
   }
 }
+const migrationTags = (cfg.migrations ?? []).map((entry) => entry.tag).filter(Boolean);
+const v13Index = migrationTags.indexOf("v13");
+const alchemyV22Index = migrationTags.indexOf("alchemy:v22");
+if (v13Index >= 0 && alchemyV22Index >= 0 && v13Index < alchemyV22Index) {
+  drift.push(
+    'migrations: tag "v13" (UserProviderOAuth) must be listed after "alchemy:v22" so already-deployed scripts apply it in order',
+  );
+}
+
 if (drift.length > 0) {
   for (const line of drift) console.error(`check-alchemy-drift: ${line}`);
   process.exit(1);

@@ -1,4 +1,4 @@
-export const ACP_PROVIDER_IDS = ["claude", "codex", "gemini", "grok", "opencode"] as const;
+export const ACP_PROVIDER_IDS = ["claude", "codex", "gemini", "grok", "cursor"] as const;
 export type AcpProviderId = (typeof ACP_PROVIDER_IDS)[number];
 
 export interface AcpProviderCapabilities {
@@ -15,7 +15,15 @@ export type AcpConnectionPhase = "disconnected" | "waiting" | "connected" | "fai
 export type AcpAuthMode = "oauth" | "api-key";
 
 /** How a waiting or connected sign-in was started. Never a locally invented device code. */
-export const ACP_SIGN_IN_KINDS = ["chatgpt-device", "chatgpt-pkce", "claude-daemon", "claude-setup-token"] as const;
+export const ACP_SIGN_IN_KINDS = [
+  "chatgpt-device",
+  "chatgpt-pkce",
+  "claude-daemon",
+  "claude-setup-token",
+  "antigravity-pkce",
+  "cursor-pkce",
+  "xai-pkce",
+] as const;
 export type AcpSignInKind = (typeof ACP_SIGN_IN_KINDS)[number];
 
 export interface AcpProviderConnection {
@@ -30,6 +38,8 @@ export interface AcpProviderConnection {
   testedAt: number | null;
   testOk: boolean | null;
   signInKind?: AcpSignInKind | null;
+  /** PKCE OAuth state while sign-in is waiting (local loopback polling). */
+  oauthState?: string | null;
   /** Exact operator steps when the lane cannot connect, or the remaining steps while it is waiting. */
   operatorSteps?: string[];
 }

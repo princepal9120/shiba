@@ -110,6 +110,18 @@ export class GrokHarness implements AgentHarness {
     return [PROVIDER_HOSTS[provider] as string];
   }
 
+  egressOverrides(input: CodingTaskInput) {
+    const userId = input.initiatorUserId?.trim() ?? "";
+    if (userId === "") return [];
+    return [
+      {
+        host: PROVIDER_HOSTS.xai as string,
+        handler: "xaiUser" as const,
+        params: { userId },
+      },
+    ];
+  }
+
   /** Configured entirely by env; there is no file to write. */
   configFile(): null {
     return null;

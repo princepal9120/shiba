@@ -9,7 +9,7 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
 
 **Verification status:** `VERIFICATION.md` records one local `wrangler dev` end-to-end exercise with OpenCode on 2026-09-19. The provider call returned 401, so model inference and successful task completion were not verified. The 2026-09-24 verification says no live cloud end-to-end run has been performed. Claude Code, Codex, and Devin have unit coverage only; no local or cloud harness end-to-end run is recorded for them.
 
-**Credential boundary:** OpenCode, Claude Code, Codex, and Pi use API-key provider traffic through AI Gateway; subscription credentials are not proxied. OpenCode supports xAI/Grok (`xai/<model>`) through the same BYOK egress path. Devin uses its own `DEVIN_API_KEY` service credential.
+**Credential boundary:** OpenCode, Claude Code, Codex, and Pi use API-key provider traffic through AI Gateway; subscription credentials are not proxied. OpenCode supports xAI/Grok (`xai/<model>`) through the same BYOK egress path.
 
 <CardGrid>
   <Card title="OpenCode" icon="setting">
@@ -26,11 +26,6 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
     `openai/*` models, e.g. `openai/gpt-5.3-codex`. Stream format: `codex exec --json`.
 
     [Read Codex Guide →](/docs/agents/codex/)
-  </Card>
-  <Card title="Devin CLI" icon="puzzle">
-    `devin/*` models (default `devin/swe-2`); uses Devin's CLI and service API key.
-
-    [Read Devin Guide →](/docs/agents/devin/)
   </Card>
   <Card title="Pi" icon="puzzle">
     `anthropic/*`, `openai/*`, `google/*`, and `xai/*` models (default `anthropic/claude-sonnet-4-6`); runs headlessly with JSON events and the AI Gateway BYOK credential.

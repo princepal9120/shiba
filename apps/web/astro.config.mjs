@@ -73,7 +73,6 @@ export default defineConfig({
 						{ label: 'Overview & Harnesses', slug: 'docs/claude-code' },
 						{ label: 'Claude Code', slug: 'docs/agents/claude-code' },
 						{ label: 'Codex', slug: 'docs/agents/codex' },
-						{ label: 'Devin CLI', slug: 'docs/agents/devin' },
 						{ label: 'OpenCode', slug: 'docs/agents/opencode' },
 					],
 				},

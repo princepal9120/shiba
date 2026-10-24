@@ -38,9 +38,6 @@
 # Required when the gateway is auth-gated or has no BYOK key stored.
 # AI_GATEWAY_TOKEN=
 
-# Devin harness API key (Worker egress only; not AI Gateway BYOK).
-# DEVIN_API_KEY=
-
 # --- Dashboard auth (loopback dev: leave Access/Better Auth unset) -----------
 
 # Set to any value to enforce Cloudflare Access on /app and /api locally too.
@@ -105,17 +102,24 @@
 
 # E2B_API_KEY=
 
-# --- Subscription harness credentials (opt-in via wrangler vars) -------------
+# --- Providers (per-user OAuth — opencodex-style local dev) ---------------
 
-# Store only when the matching SHIBA_*_SUBSCRIPTION flag is enabled in wrangler.
+# Minted by `pnpm dev` / `pnpm shiba dev` — loopback OAuth POST to the Worker.
+# SHIBA_DEV_OAUTH_LOOPBACK_SECRET=
+
+# Required for Dashboard Providers sign-in (encrypts tokens in D1). 64 hex chars.
+# MODEL_CREDENTIAL_KEY=
+# Antigravity / Gemini card: Google OAuth client secret (Worker egress exchange).
+# GOOGLE_ANTIGRAVITY_CLIENT_SECRET=
+
+# --- Optional deployment-wide subscription secrets (not needed for Providers OAuth) ---
+
+# Only when matching SHIBA_*_SUBSCRIPTION=1 in wrangler and you are not using
+# per-user sign-in on the Providers card.
 # CLAUDE_SUBSCRIPTION_TOKEN=
 # CODEX_SUBSCRIPTION_AUTH_JSON=
-# 64 hex chars — per-user encrypted ChatGPT auth.json (Settings → Models).
-# MODEL_CREDENTIAL_KEY=
-# Set 1 to allow Worker-secret codex-subscription fallback (single-operator).
-# SHIBA_SINGLE_USER=
 # CURSOR_SUBSCRIPTION_TOKEN=
-# DEVIN_SUBSCRIPTION_TOKEN=
+# SHIBA_SINGLE_USER=1
 
 # --- Gmail read-only connection (optional) -----------------------------------
 

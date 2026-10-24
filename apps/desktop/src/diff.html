@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'" />
+<title>Shiba diff</title>
+<style>
+  body { font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; margin: 0; background: #fafafa; color: #111; }
+  header { padding: 12px 16px; border-bottom: 1px solid #ddd; font-family: -apple-system, system-ui, sans-serif; }
+  h1 { font-size: 14px; margin: 0; }
+  p { margin: 4px 0 0; color: #555; font-size: 12px; }
+  pre { margin: 0; padding: 16px; white-space: pre; overflow: auto; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #111; color: #eee; }
+    header { border-color: #333; }
+    p { color: #aaa; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Diff</h1>
+  <p>The run's diff also stays on the Pull requests tab in Shiba.</p>
+</header>
+<pre id="patch">Loading…</pre>
+<script src="diff.js"></script>
+</body>
+</html>

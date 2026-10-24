@@ -213,8 +213,6 @@ describe("ModelConfig DO", () => {
 
   it("maps service-catalog services to worker-service-secret auth", async () => {
     const { register } = makeDo();
-    const devin = await register({ service: "devin", displayName: "devin" });
-    expect(devin.connection?.authMode).toBe("worker-service-secret");
     const cursor = await register({ service: "cursor", displayName: "cursor" });
     expect(cursor.connection?.authMode).toBe("worker-service-secret");
   });
@@ -422,10 +420,6 @@ describe("compatibleHarnesses + validateConnectionModel", () => {
     expect(validateConnectionModel(conn(), "openai/gpt-5", "claude-code")).toBe(
       'Model "openai/gpt-5" does not belong to the anthropic connection.',
     );
-    // The devin provider exists, but opencode cannot run devin models.
-    const unrunnable = validateConnectionModel(conn({ service: "devin" }), "devin/auto", "opencode");
-    expect(unrunnable).toContain("The opencode harness cannot run devin models");
-    expect(unrunnable).toContain("supported: devin");
     // A valid pair passes.
     expect(validateConnectionModel(conn(), "anthropic/claude-sonnet-4", "claude-code")).toBeNull();
   });

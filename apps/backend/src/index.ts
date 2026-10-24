@@ -49,6 +49,7 @@ import { handleV1 } from "./v1-routes.js";
 import { handleUsage } from "./usage-routes.js";
 import { handleScreenshot } from "./screenshots-routes.js";
 import { handleE2eEvidence } from "./e2e-evidence-routes.js";
+import { handleDevOAuthLoopback } from "./dev-oauth-loopback-routes.js";
 import { handleWebSessions } from "./sessions-routes.js";
 import { redactSecrets } from "./security.js";
 import { handleBetterAuth, isBetterAuthConfigured } from "./better-auth.js";
@@ -66,6 +67,7 @@ import { handleWaitlist } from "./waitlist.js";
 import { Waitlist } from "./waitlist-do.js";
 import { ModelConfig } from "./model-config-do.js";
 import { ChatGptAuth } from "./chatgpt-auth-do.js";
+import { UserProviderOAuth } from "./user-provider-oauth-do.js";
 import {
   isAuthorizedSessionAgent,
   parseSessionAgentName,
@@ -76,6 +78,7 @@ import {
 export {
   Automations,
   ChatGptAuth,
+  UserProviderOAuth,
   CodingOrchestrator,
   LocalDispatch,
   Mailbox,
@@ -208,6 +211,10 @@ export default {
       // request. The gate then composes both identity systems.
       const betterAuthResponse = await handleBetterAuth(request, env);
       if (betterAuthResponse) return betterAuthResponse;
+      const devOAuthLoopbackResponse = await handleDevOAuthLoopback(request, env);
+      if (devOAuthLoopbackResponse) {
+        return devOAuthLoopbackResponse;
+      }
       if (request.method === "GET" || request.method === "HEAD") {
         const section = url.pathname.split("/")[1] ?? "";
         if (MARKETING_SECTIONS.has(section)) {

@@ -67,7 +67,6 @@ for (const [name, hint] of [
   ["SLACK_APPROVALS_CHANNEL", "channel id that hosts approval cards"],
   ["GITHUB_WEBHOOK_SECRET", "GitHub webhook secret (automations)"],
   ["TYPESAFE_API_KEY", "TypeSafe key (optional)"],
-  ["DEVIN_API_KEY", "Devin API key (optional)"],
   ["LOCAL_ADAPTER_TOKEN", "bearer for the `shiba local` daemon (optional)"],
   ["BETTER_AUTH_SECRET", "dashboard login secret, >=32 chars (`openssl rand -base64 48`; blank = no built-in login)"],
   ["TELEGRAM_BOT_TOKEN", "Telegram bot token from @BotFather (optional)"],
@@ -82,7 +81,6 @@ for (const [name, hint] of [
   ["CLAUDE_SUBSCRIPTION_TOKEN", "`claude setup-token` output"],
   ["CODEX_SUBSCRIPTION_AUTH_JSON", "`codex login` auth.json contents, verbatim"],
   ["CURSOR_SUBSCRIPTION_TOKEN", "Cursor Agent API key"],
-  ["DEVIN_SUBSCRIPTION_TOKEN", "Devin API key/session token"],
 ]) {
   await ask(name, hint);
 }
@@ -93,11 +91,10 @@ for (const [name, hint] of [
   ["SHIBA_CODEX_SUBSCRIPTION", "ChatGPT/Codex subscription runs"],
   ["SHIBA_ANTIGRAVITY_SUBSCRIPTION", "Antigravity (Gemini) subscription runs"],
   ["SHIBA_CURSOR_SUBSCRIPTION", "Cursor subscription connect lane"],
-  ["SHIBA_DEVIN_SUBSCRIPTION", "Devin subscription connect lane"],
   ["SHIBA_LOCAL_RUNTIME", "allow runs on your local machine via the daemon"],
   ["AUTOMATIONS_ENABLED", "scheduled automations"],
   ["MEMORY_ENABLED", "memory subsystem (Vectorize)"],
-  ["AGENT_HARNESS", "default harness: opencode | claude-code | codex | devin | grok | *-subscription | acp", "opencode"],
+  ["AGENT_HARNESS", "default harness: opencode | claude-code | codex | grok | *-subscription | acp", "opencode"],
   ["ACP_REGISTRY_ALLOWLIST", "ACP registry agent ids allowed to run, comma-separated or * (blank = lane dark)"],
   ["ACP_REGISTRY_JSON", "pinned ACP registry.json snapshot (optional; needed only when the lane is on)"],
   ["TELEGRAM_APPROVERS", "Telegram approver user ids, comma-separated (optional)"],

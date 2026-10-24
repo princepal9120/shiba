@@ -1,6 +1,6 @@
 # T65 packaging config — D8 hardening lives in electronFuses below.
-# Unsigned locally via pnpm --filter @shiba/desktop dist (CSC_IDENTITY_AUTO_DISCOVERY=false);
-# signed/notarized releases are tag-triggered in .github/workflows/desktop.yml.
+# Unsigned locally via pnpm --filter @shiba/desktop dist (CSC_IDENTITY_AUTO_DISCOVERY=false).
+# Packaging always passes --publish never. A human publishes a release.
 appId: dev.shiba.desktop
 productName: Shiba
 directories:
@@ -14,10 +14,20 @@ files:
 asarUnpack:
   - dist/setup.html
   - dist/setup.js
+  - dist/diff.html
+  - dist/diff.js
+protocols:
+  - name: Shiba
+    schemes:
+      - shiba
 extraResources:
   # Outside the asar so main can fork it, but sealed by the macOS signature.
   - from: ../../scripts/shiba-local-daemon.mjs
     to: daemon/shiba-local-daemon.mjs
+  - from: ../../scripts/link-operator-auth.mjs
+    to: daemon/link-operator-auth.mjs
+  - from: ../../scripts/agent-harness.mjs
+    to: daemon/agent-harness.mjs
 electronFuses:
   runAsNode: false
   enableNodeOptionsEnvironmentVariable: false

@@ -1,6 +1,7 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "globalDependencies": ["tsconfig.json"],
+  "globalPassThroughEnv": ["SHIBA_DESKTOP_URL", "SHIBA_DESKTOP_SETUP"],
   "tasks": {
     "build": {
       "dependsOn": [

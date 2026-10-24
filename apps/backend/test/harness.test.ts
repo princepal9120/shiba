@@ -2,7 +2,6 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { ClaudeCodeErrorEvent, claudeCodeHarness, parseClaudeCodeEvent } from "../src/harness/claude-code.js";
 import { CodexErrorEvent, codexHarness, parseCodexEvent } from "../src/harness/codex.js";
-import { DevinErrorEvent, devinHarness, parseDevinEvent } from "../src/harness/devin.js";
 import { GrokErrorEvent, grokHarness, parseGrokEvent } from "../src/harness/grok.js";
 import { PiErrorEvent, PiEventError, parsePiEvent, piHarness } from "../src/harness/pi.js";
 import { agentCliCatalog } from "../src/harness/catalog.js";
@@ -41,10 +40,16 @@ describe("harness registry (T22)", () => {
 describe("the selected harness reaches the adapter that runs it", () => {
   it("runs the harness AGENT_HARNESS selected, not the default", async () => {
     const execs: string[] = [];
+    const files = new Map<string, string>();
     const adapter = createRuntimeAdapter("sandbox", resolveHarness("codex"));
     const ops = {
       gitCheckout: async () => {},
-      writeFile: async () => { throw new Error("codex writes no config file"); },
+      writeFile: async (path: string, contents: string) => {
+        if (!path.endsWith(".agent-harness.mjs") && !path.endsWith(".job.json")) {
+          throw new Error("codex writes no config file");
+        }
+        files.set(path, contents);
+      },
       exec: async (command: string) => {
         execs.push(command);
         return { stdout: "", stderr: "", exitCode: 0 };
@@ -52,12 +57,14 @@ describe("the selected harness reaches the adapter that runs it", () => {
       readFile: async () => ({ kind: "utf8" as const, content: "" }),
     };
     await adapter.runCodingTask(ops, input("openai/gpt-5"), async () => {});
-    // T44: checkpoint git commands precede the harness exec — find the
-    // harness invocation itself; anything starting "opencode" means the
-    // selection was dropped and egress would block its provider.
-    const harnessExec = execs.find((c) => c.includes("'exec'") || c.includes("'run'"));
-    expect(harnessExec).toMatch(/^'codex' 'exec'/);
+    // The sandbox execs the session runner. The job names the selected
+    // harness; an opencode command would mean the selection was dropped.
+    const harnessExec = execs.find((command) => command.includes("agent-harness.mjs"));
+    expect(harnessExec).toMatch(/^'node'/);
     expect(harnessExec).not.toMatch(/opencode/);
+    const job = files.get("/workspace/run-abcdef12345678.job.json") ?? "";
+    expect(job).toContain('"provider":"codex"');
+    expect(job).toContain("gpt-5");
   });
 });
 
@@ -72,6 +79,7 @@ describe("per-run harness selection end to end", () => {
 
   it("the child runs the harness the approved input named, not the env default", async () => {
     const execs: string[] = [];
+    const files = new Map<string, string>();
     // What the orchestrator froze into the delegation input after the human
     // approved "codex" on a deployment whose AGENT_HARNESS is unset.
     const approved = { ...input("openai/gpt-5.3-codex"), harness: "codex" as const };
@@ -79,14 +87,19 @@ describe("per-run harness selection end to end", () => {
     const adapter = createRuntimeAdapter("sandbox", harness);
     const ops = {
       gitCheckout: async () => {},
-      writeFile: async () => { throw new Error("codex writes no config file"); },
+      writeFile: async (path: string, contents: string) => {
+        if (!path.endsWith(".agent-harness.mjs") && !path.endsWith(".job.json")) {
+          throw new Error("codex writes no config file");
+        }
+        files.set(path, contents);
+      },
       exec: async (command: string) => { execs.push(command); return { stdout: "", stderr: "", exitCode: 0 }; },
       readFile: async () => ({ kind: "utf8" as const, content: "" }),
     };
     await adapter.runCodingTask(ops, approved, async () => {});
-    const harnessExec = execs.find((c) => c.includes("'exec'"));
-    expect(harnessExec).toMatch(/^'codex' 'exec'/);
-    expect(harnessExec).toContain("gpt-5.3-codex");
+    const harnessExec = execs.find((command) => command.includes("agent-harness.mjs"));
+    expect(harnessExec).toMatch(/^'node'/);
+    expect(files.get("/workspace/run-abcdef12345678.job.json")).toContain("gpt-5.3-codex");
   });
 
   it("an unsupported provider for the approved harness fails at approval, not exec", () => {
@@ -335,66 +348,6 @@ describe("usage reporting — only what a harness stream emits", () => {
   });
 });
 
-describe("devin harness", () => {
-  it("resolves by name and defaults to the free swe-2 model", () => {
-    expect(resolveHarness("devin").name).toBe("devin");
-    expect(resolveHarness("DEVIN").name).toBe("devin");
-    expect(HARNESS_DEFAULT_MODELS.devin).toBe("devin/swe-2-medium");
-  });
-
-  it("runs headless with the bare model alias and bypass inside the sandbox", () => {
-    expect(devinHarness.buildArgv(input("devin/swe-2"), "/workspace/x")).toEqual([
-      "devin", "-p", "--model", "swe-2",
-      "--permission-mode", "bypass",
-      "--respect-workspace-trust", "false",
-      "--", "Fix it.",
-    ]);
-  });
-
-  it("writes a dummy credentials.toml under the container XDG dir", () => {
-    const file = devinHarness.configFile(input("devin/swe-2"), "run-x");
-    expect(file).not.toBeNull();
-    expect(file?.path).toBe("/workspace/.xdg-data/devin/credentials.toml");
-    expect(file?.contents).toContain('windsurf_api_key = "dummy-egress-swapped"');
-    expect(file?.contents).toContain('devin_api_url = "https://api.devin.ai"');
-    expect(file?.contents).not.toMatch(/devin-key-secret|sk-/);
-  });
-
-  it("gets a dummy env key and redirects XDG_DATA_HOME", () => {
-    const env = devinHarness.env(input("devin/swe-2"), "/workspace/.xdg-data/devin/credentials.toml");
-    expect(env.XDG_DATA_HOME).toBe("/workspace/.xdg-data");
-    expect(env.DEVIN_API_KEY).toBeTruthy();
-    expect(env.DEVIN_API_KEY).not.toContain("devin-key-secret");
-  });
-
-  it("narrows egress to both Devin hosts plus git — never the provider union", () => {
-    expect(devinHarness.egressHosts("devin/swe-2")).toEqual(["api.devin.ai", "server.codeium.com"]);
-    expect(allowedHostsFor(devinHarness, "devin/swe-2")).toEqual([
-      "api.devin.ai",
-      "server.codeium.com",
-      "github.com",
-      "codeload.github.com",
-    ]);
-  });
-
-  it("refuses non-devin models and providerless ids", () => {
-    expect(() => devinHarness.buildArgv(input("google/gemini-3.5-flash-lite"), "/x")).toThrow(/devin harness supports/);
-    expect(() => devinHarness.buildArgv(input("swe-2"), "/x")).toThrow(/provider\/model/);
-  });
-
-  it("passes plain-text lines through and drops the login banner", () => {
-    expect(parseDevinEvent("Editing src/a.ts")).toEqual({ kind: "text", text: "Editing src/a.ts" });
-    expect(parseDevinEvent("   ")).toBeNull();
-    expect(parseDevinEvent("Welcome to Devin CLI!")).toBeNull();
-    expect(parseDevinEvent(" ✓ Logged in as someone@example.com.")).toBeNull();
-  });
-
-  it("throws on auth failures rather than reporting success", () => {
-    expect(() => parseDevinEvent("Not logged in.")).toThrow(DevinErrorEvent);
-    expect(() => parseDevinEvent("Login failed. Browser auth error")).toThrow(DevinErrorEvent);
-  });
-});
-
 describe("grok harness", () => {
   it("runs headless --single mode with the bare model id on the api.x.ai forwarder", () => {
     expect(grokHarness.configFile()).toBeNull();
@@ -629,14 +582,12 @@ describe("agent cli catalog", () => {
       "claude-code",
       "claude-login",
       "codex",
-      "devin",
       "grok",
       "pi",
       "claude-acp",
       "codex-acp",
       "gemini-acp",
       "opencode-acp",
-      "devin-acp",
     ]);
     expect(catalog.find((a) => a.id === "grok")?.version).toBe("1.0.41");
     expect(catalog.find((a) => a.id === "grok")?.defaultModel).toBe("xai/grok-4.6");
@@ -644,17 +595,6 @@ describe("agent cli catalog", () => {
     expect(catalog.find((a) => a.id === "pi")?.defaultModel).toBe("anthropic/claude-sonnet-4-6");
     expect(HARNESS_MODEL_ENV.pi).toBe("PI_MODEL");
     expect(HARNESS_DEFAULT_MODELS.pi).toBe("anthropic/claude-sonnet-4-6");
-    expect(catalog.find((a) => a.id === "devin")?.version).toBe("3000.11.3");
-    expect(catalog.find((a) => a.id === "devin")?.defaultModel).toBe("devin/swe-2-medium");
-  });
-
-  it("reports devin's secret presence without exposing the value", () => {
-    const unset = agentCliCatalog({}).find((a) => a.id === "devin");
-    expect(unset?.credential.configured).toBe(false);
-    expect(unset?.credential.setupHint).toContain("DEVIN_API_KEY");
-    const set = agentCliCatalog({ DEVIN_API_KEY: "real-secret" }).find((a) => a.id === "devin");
-    expect(set?.credential.configured).toBe(true);
-    expect(JSON.stringify(set)).not.toContain("real-secret");
   });
 
   it("marks gateway-backed harnesses as not introspectable", () => {

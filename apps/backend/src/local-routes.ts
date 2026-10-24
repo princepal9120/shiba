@@ -8,6 +8,9 @@
  *   GET  /api/local/status?sandboxId=    → record status + result
  *   GET  /api/local/pending              → pending/claimed inventory
  *   POST /api/local/heartbeat {machineId, hostname, …} → fleet upsert (T52)
+ *   POST /api/local/events    {sandboxId, claimToken, event} → live transcript
+ *   POST /api/local/approval  {sandboxId, claimToken, request|requestId}
+ *   POST /api/local/control   {sandboxId, claimToken} → consume interrupt
  *   POST /api/local/pair      {pairingToken, …} → {adapterToken, machineId};
  *        NO bearer — the HMAC-signed, single-use pairing token is the credential.
  * Bearer is either the deployment's LOCAL_ADAPTER_TOKEN or a per-machine
@@ -20,21 +23,32 @@ import { sha256Hex } from "./agent-tokens.js";
 import { pairingSecret, verifyPairingToken } from "./computers-routes.js";
 import type { Env } from "./env.js";
 import { LOCAL_MACHINE_HEADER, localDispatchStub } from "./local-dispatch.js";
-import { HeartbeatRequestSchema, PairRequestSchema, decodeOrNull } from "./local-fleet-schema.js";
+import { decodeOrNull, HeartbeatRequestSchema, PairRequestSchema } from "./local-fleet-schema.js";
 import { timingSafeEqualString } from "./security.js";
 
 export function isLocalRuntimePath(pathname: string): boolean {
   return pathname === "/api/local" || pathname.startsWith("/api/local/");
 }
 
-const DAEMON_VERBS = new Set(["claim", "result", "status", "pending", "heartbeat"]);
+const DAEMON_VERBS = new Set([
+  "claim",
+  "result",
+  "status",
+  "pending",
+  "heartbeat",
+  "events",
+  "approval",
+  "control",
+]);
 
 const forwardJson = (stub: DurableObjectStub, path: string, body: unknown) =>
-  stub.fetch(new Request(`https://local-dispatch/${path}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  }));
+  stub.fetch(
+    new Request(`https://local-dispatch/${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  );
 
 export async function handleLocalAdapter(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
@@ -50,11 +64,13 @@ export async function handleLocalAdapter(request: Request, env: Env): Promise<Re
   const stub = localDispatchStub(env);
 
   if (sub === "pair") {
-    if (request.method !== "POST" || secret === undefined) return Response.json({ error: "Not found." }, { status: 404 });
+    if (request.method !== "POST" || secret === undefined)
+      return Response.json({ error: "Not found." }, { status: 404 });
     const pair = decodeOrNull(PairRequestSchema, await request.json().catch(() => null));
     if (pair === null) return Response.json({ error: "Invalid pair request." }, { status: 400 });
     const verified = await verifyPairingToken(secret, pair.pairingToken, Date.now());
-    if (verified === null) return Response.json({ error: "Pairing token is invalid or expired." }, { status: 401 });
+    if (verified === null)
+      return Response.json({ error: "Pairing token is invalid or expired." }, { status: 401 });
     return forwardJson(stub, "pair", { nonce: verified.nonce, pair });
   }
 

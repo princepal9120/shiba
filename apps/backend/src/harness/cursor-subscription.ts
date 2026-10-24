@@ -64,6 +64,15 @@ export class CursorSubscriptionHarness implements AgentHarness {
    * Params carry the account name, never the token.
    */
   egressOverrides(input: CodingTaskInput) {
+    const userId = input.initiatorUserId?.trim() ?? "";
+    if (userId !== "") {
+      const account = cursorSubscriptionAccount(input);
+      return CURSOR_EGRESS_HOSTS.map((host) => ({
+        host,
+        handler: "cursorUser" as const,
+        params: { userId, account },
+      }));
+    }
     const account = cursorSubscriptionAccount(input);
     return CURSOR_EGRESS_HOSTS.map((host) => ({
       host,

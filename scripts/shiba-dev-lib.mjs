@@ -22,6 +22,7 @@ export const AUTO_GENERATE_KEYS = [
   "LOCAL_ADAPTER_TOKEN",
   "GITHUB_WEBHOOK_SECRET",
   "TRIGGER_TOKEN",
+  "SHIBA_DEV_OAUTH_LOOPBACK_SECRET",
 ];
 
 export function randomHex(bytes) {
@@ -232,8 +233,9 @@ export function nextStepsBanner({ port = DEFAULT_PORT, generatedKeys = [] } = {}
     "",
     "Next steps:",
     "  1. Add GITHUB_TOKEN to apps/backend/.dev.vars (fine-grained PAT: repo Contents + Pull requests).",
-    "  2. Add model access: AI Gateway BYOK in your Cloudflare account (gateway id default), or set AI_GATEWAY_TOKEN if the gateway is auth-gated.",
-    "  3. For container pulls against Cloudflare registry: npx wrangler login (once per machine).",
+    "  2. Sign in on Providers (Codex, Claude, Cursor, Grok, Antigravity) — OAuth loopback on :51121 and :56121 is already running.",
+    "  3. For the full dashboard + Worker together: pnpm dev (Vite :5173 proxies /api to :8788).",
+    "  4. Add model access: AI Gateway BYOK or AI_GATEWAY_TOKEN; npx wrangler login once for container pulls.",
     "",
   ];
   if (generatedKeys.length > 0) {

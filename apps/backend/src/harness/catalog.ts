@@ -6,8 +6,7 @@
  *
  * Credential reporting is honest by construction: gateway-backed harnesses
  * authenticate through AI Gateway BYOK, which the Worker cannot introspect
- * (configured: null → "AI Gateway" chip); the devin harness needs the
- * DEVIN_API_KEY Worker secret, whose presence IS observable (never the value).
+ * (configured: null → "AI Gateway" chip).
  */
 import type { Env } from "../env.js";
 import { modelCredentialKeyConfigured } from "../subscription-credentials.js";
@@ -21,7 +20,7 @@ export interface AgentCliCredential {
    * owns an OAuth sign-in (T50 antigravity-subscription).
    */
   kind: "ai-gateway-byok" | "worker-secret" | "oauth-signin";
-  /** Human-readable credential label, e.g. "DEVIN_API_KEY" or "AI Gateway BYOK (anthropic)". */
+  /** Human-readable credential label, e.g. "AI Gateway BYOK (anthropic)". */
   label: string;
   /** true = secret present, false = missing, null = not introspectable (gateway-managed). */
   configured: boolean | null;
@@ -55,21 +54,18 @@ const CATALOG_META: Record<
   "claude-login": { label: "Claude Code (/login)", binary: "claude", version: "2.1.284", docsUrl: "https://code.claude.com/docs/en/legal-and-compliance" },
   codex: { label: "Codex", binary: "codex", version: "0.157.1", docsUrl: "https://github.com/openai/codex" },
   "codex-subscription": { label: "Codex (subscription)", binary: "codex", version: "0.157.1", docsUrl: "https://github.com/openai/codex" },
-  devin: { label: "Devin", binary: "devin", version: "3000.11.3", docsUrl: "https://cli.devin.ai/docs" },
   grok: { label: "Grok", binary: "grok", version: "1.0.41", docsUrl: "https://docs.x.ai" },
   pi: { label: "Pi", binary: "pi", version: "1.3.0", docsUrl: "https://github.com/earendil-works/pi" },
   cursor: { label: "Cursor", binary: "cursor-agent", version: "0.50.0", docsUrl: "https://docs.cursor.com" },
   antigravity: { label: "Antigravity", binary: "agy", version: "1.0.0", docsUrl: "https://antigravity.google" },
   "antigravity-subscription": { label: "Antigravity (subscription)", binary: "agy", version: "1.1.1", docsUrl: "https://antigravity.google" },
   "cursor-subscription": { label: "Cursor (subscription)", binary: "cursor-agent", version: "2026.10.01-e373342", docsUrl: "https://docs.cursor.com" },
-  "devin-subscription": { label: "Devin (subscription)", binary: "devin", version: "3000.11.3", docsUrl: "https://cli.devin.ai/docs" },
   // ACP lanes — binaries are the registry's npx/binary entrypoints, all
   // Apache-2.0 or MIT, version-pinned in the Dockerfile.
   "claude-acp": { label: "Claude Agent (ACP)", binary: "claude-agent-acp", version: "0.86.0", docsUrl: "https://agentclientprotocol.com" },
   "codex-acp": { label: "Codex (ACP)", binary: "codex-acp", version: "2.1.1", docsUrl: "https://agentclientprotocol.com" },
   "gemini-acp": { label: "Gemini CLI (ACP)", binary: "gemini", version: "0.62.0", docsUrl: "https://agentclientprotocol.com" },
   "opencode-acp": { label: "OpenCode (ACP)", binary: "opencode", version: "1.18.34", docsUrl: "https://agentclientprotocol.com" },
-  "devin-acp": { label: "Devin (ACP)", binary: "devin", version: "3000.11.3", docsUrl: "https://agentclientprotocol.com" },
   // The generic registry lane — binary/version are whatever the pinned
   // snapshot says; the label carries the resolved id at dispatch.
   acp: { label: "ACP registry agent", binary: "acp", version: "per-agent", docsUrl: "https://agentclientprotocol.com/get-started/registry" },
@@ -94,7 +90,7 @@ const GATEWAY_PROVIDER: Record<string, string> = {
  * values never leave the Worker.
  */
 export function agentCliCatalog(
-  env: Pick<Env, "DEVIN_API_KEY" | "SHIBA_CLAUDE_SUBSCRIPTION" | "CLAUDE_SUBSCRIPTION_TOKEN" | "SHIBA_CODEX_SUBSCRIPTION" | "CODEX_SUBSCRIPTION_AUTH_JSON" | "MODEL_CREDENTIAL_KEY" | "SHIBA_ANTIGRAVITY_SUBSCRIPTION" | "SHIBA_CURSOR_SUBSCRIPTION" | "CURSOR_SUBSCRIPTION_TOKEN" | "SHIBA_DEVIN_SUBSCRIPTION" | "DEVIN_SUBSCRIPTION_TOKEN" | "ACP_REGISTRY_ALLOWLIST">,
+  env: Pick<Env, "SHIBA_CLAUDE_SUBSCRIPTION" | "CLAUDE_SUBSCRIPTION_TOKEN" | "SHIBA_CODEX_SUBSCRIPTION" | "CODEX_SUBSCRIPTION_AUTH_JSON" | "MODEL_CREDENTIAL_KEY" | "SHIBA_ANTIGRAVITY_SUBSCRIPTION" | "SHIBA_CURSOR_SUBSCRIPTION" | "CURSOR_SUBSCRIPTION_TOKEN" | "ACP_REGISTRY_ALLOWLIST">,
 ): AgentCliInfo[] {
   return sandboxHarnessNames(env).map((id) => {
     const meta = CATALOG_META[id];
@@ -107,13 +103,6 @@ export function agentCliCatalog(
             label: "ACP_REGISTRY_ALLOWLIST",
             configured: Boolean(env.ACP_REGISTRY_ALLOWLIST?.trim()),
             setupHint: "set ACP_REGISTRY_ALLOWLIST (+ ACP_REGISTRY_JSON snapshot)",
-          }
-        : id === "devin" || id === "devin-acp"
-        ? {
-            kind: "worker-secret",
-            label: "DEVIN_API_KEY",
-            configured: Boolean(env.DEVIN_API_KEY),
-            setupHint: "npx wrangler secret put DEVIN_API_KEY",
           }
         : id === "claude-subscription"
           ? {
@@ -146,13 +135,6 @@ export function agentCliCatalog(
                   label: "CURSOR_SUBSCRIPTION_TOKEN",
                   configured: Boolean(env.CURSOR_SUBSCRIPTION_TOKEN),
                   setupHint: "Cursor Agent API key from cursor.com settings, then npx wrangler secret put CURSOR_SUBSCRIPTION_TOKEN",
-                }
-            : id === "devin-subscription"
-              ? {
-                  kind: "worker-secret",
-                  label: "DEVIN_SUBSCRIPTION_TOKEN",
-                  configured: Boolean(env.DEVIN_SUBSCRIPTION_TOKEN),
-                  setupHint: "devin auth login, then npx wrangler secret put DEVIN_SUBSCRIPTION_TOKEN",
                 }
           : {
               kind: "ai-gateway-byok",

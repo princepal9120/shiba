@@ -3,7 +3,7 @@
  * Shiba operator CLI — `pnpm shiba dev` / `pnpm shiba doctor` / `pnpm shiba setup`.
  * Node stdlib only. Never prints secret values.
  */
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { stdin as input, stdout as output } from "node:process";
@@ -297,6 +297,29 @@ async function cmdDev() {
     port,
     persistTo,
     containers,
+  });
+
+  ensureDevVars();
+  const devVarsPath = resolve(REPO_ROOT, DEV_VARS_PATH);
+  const loopbackSecret =
+    process.env.SHIBA_DEV_OAUTH_LOOPBACK_SECRET?.trim() ??
+    (existsSync(devVarsPath)
+      ? (parseDevVars(readFileSync(devVarsPath, "utf8")).get("SHIBA_DEV_OAUTH_LOOPBACK_SECRET")?.trim() ?? "")
+      : "");
+  const oauthLoopback = spawn("node", ["scripts/oauth-loopback.mjs"], {
+    cwd: REPO_ROOT,
+    stdio: "inherit",
+    detached: false,
+    env: {
+      ...process.env,
+      SHIBA_WORKER_URL: `http://127.0.0.1:${port}`,
+      SHIBA_DEV_OAUTH_LOOPBACK_SECRET: loopbackSecret,
+    },
+  });
+  oauthLoopback.on("exit", (code) => {
+    if (code !== 0 && code !== null) {
+      console.error(`[oauth-loopback] exited ${code}`);
+    }
   });
 
   let generatedKeys = [];

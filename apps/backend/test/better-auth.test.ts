@@ -138,7 +138,7 @@ describe("better-auth lane predicates", () => {
     expect(isBetterAuthPath("/api/auth/get-session")).toBe(true);
     expect(isBetterAuthPath("/api/auth")).toBe(false);
     expect(isBetterAuthPath("/api/other")).toBe(false);
-    for (const provider of ["claude", "codex", "cursor", "devin", "antigravity"]) {
+    for (const provider of ["claude", "codex", "cursor", "antigravity"]) {
       expect(isBetterAuthPath(`/api/auth/${provider}-subscription`)).toBe(false);
       expect(isBetterAuthPath(`/api/auth/${provider}-subscription/status`)).toBe(false);
     }

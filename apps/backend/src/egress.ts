@@ -7,6 +7,7 @@
  */
 import type { Env as WorkerEnv } from "./env.js";
 import { chatGptAuthStub } from "./chatgpt-auth-do.js";
+import { userProviderOAuthStub } from "./user-provider-oauth-do.js";
 import { parseResolvedCodexCredential, resolveCodexSubscriptionAuthJson } from "./codex-subscription-credential.js";
 import { sanitizeContainerHeaders, stripCredentialParams } from "./provider-gateway.js";
 import { getDecryptedOrgModelKey } from "./org-model-keys-store.js";
@@ -18,15 +19,14 @@ export type EgressEnv = Pick<
   | "GATEWAY_ID"
   | "AI_GATEWAY_TOKEN"
   | "GITHUB_TOKEN"
-  | "DEVIN_API_KEY"
   | "CLAUDE_SUBSCRIPTION_TOKEN"
   | "CODEX_SUBSCRIPTION_AUTH_JSON"
   | "CURSOR_SUBSCRIPTION_TOKEN"
-  | "DEVIN_SUBSCRIPTION_TOKEN"
   | "MODEL_CREDENTIAL_KEY"
   | "SHIBA_SINGLE_USER"
   | "AGENT_AUDIT"
   | "ChatGptAuth"
+  | "UserProviderOAuth"
 > & {
   /** Present when a user has saved a provider key. */
   AGENT_TOKENS?: WorkerEnv["AGENT_TOKENS"];
@@ -477,251 +477,149 @@ export async function forwardCursorSubscription(
   }
 }
 
-/**
- * Devin CLI is not an AI Gateway provider — it authenticates to Cognition's
- * own backends with an account API key. The container holds a dummy key in
- * credentials.toml; here the real DEVIN_API_KEY replaces whatever
- * Authorization header repository code sent, exactly like the GitHub
- * forwarder. Wire capture (WINDSURF_API_SERVER_URL against a local echo
- * server) shows the CLI sends `Authorization: Basic <key>-<key>` — key
- * doubled — on every Connect RPC, so mirror that scheme exactly.
- */
-async function forwardDevin(request: Request, env: EgressEnv, host: string, apiKey = env.DEVIN_API_KEY): Promise<Response> {
-  const target = new URL(request.url);
-  if (target.protocol !== "https:" || target.hostname !== host) {
-    return new Response("Invalid Devin destination.", { status: 403 });
-  }
-  target.username = "";
-  target.password = "";
-  target.search = stripCredentialParams(target.search);
-  const headers = outboundHeaders(request);
-  if (apiKey) {
-    // Verified per-host: api.devin.ai/v3/* takes Bearer (Basic -> 403), while
-    // server.codeium.com Connect RPCs take the CLI's own `Basic <key>-<key>`
-    // form.
-    headers.set(
-      "Authorization",
-      host === "api.devin.ai"
-        ? `Bearer ${apiKey}`
-        : `Basic ${apiKey}-${apiKey}`,
-    );
-  }
-  let body =
-    request.method === "GET" || request.method === "HEAD"
-      ? undefined
-      : await request.arrayBuffer();
-  if (body && apiKey && host === "server.codeium.com") {
-    body = rewriteDevinBody(body, apiKey, headers.get("content-type") ?? "");
-  }
-  if (body) headers.delete("content-length");
-  try {
-    const response = await fetch(target, {
-      method: request.method,
-      headers,
-      body,
-      redirect: "manual",
-    });
-    if (response.status >= 400) {
-      const upstream = await response.clone().text();
-      console.warn(
-        `devin egress ${request.method} ${target.pathname} -> ${response.status} ` +
-          `key=${apiKey ? "set" : "missing"} sentAuth=${headers.get("authorization") ? "yes" : "no"} ` +
-          `body=${upstream.slice(0, 300)}`,
-      );
-    }
-    return response;
-  } catch {
-    return new Response("Devin request failed.", { status: 502 });
-  }
-}
-
-const DEVIN_DUMMY_KEY = "dummy-egress-swapped";
-
-/**
- * Unary Connect bodies are raw protobuf; streaming bodies (`connect+proto`)
- * are [1 flag][4 byte big-endian len][message] frames. Rewrite the embedded
- * key inside each frame and fix the frame length.
- */
-function rewriteDevinBody(body: ArrayBuffer, apiKey: string, contentType: string): ArrayBuffer {
-  if (!contentType.includes("connect+")) return rewriteDevinKey(body, apiKey);
-  const bytes = new Uint8Array(body);
-  const view = new DataView(body);
-  const out: number[] = [];
-  let i = 0;
-  while (i + 5 <= bytes.length) {
-    const frameLen = view.getUint32(i + 1);
-    if (i + 5 + frameLen > bytes.length) break; // truncated tail: pass through raw
-    const frame = bytes.subarray(i + 5, i + 5 + frameLen);
-    const fixed = new Uint8Array(rewriteDevinKey(frame.buffer.slice(frame.byteOffset, frame.byteOffset + frameLen) as ArrayBuffer, apiKey));
-    out.push(bytes[i]!, (fixed.length >> 24) & 0xff, (fixed.length >> 16) & 0xff, (fixed.length >> 8) & 0xff, fixed.length & 0xff);
-    for (const b of fixed) out.push(b);
-    i += 5 + frameLen;
-  }
-  for (; i < bytes.length; i++) out.push(bytes[i]!);
-  return new Uint8Array(out).buffer;
-}
-
-/**
- * The CLI also embeds windsurf_api_key inside every Connect-RPC protobuf body
- * (the server checks it there — a wrong body value answers 401
- * "invalid api key"). The key field can sit inside nested messages, so a flat
- * byte-replace corrupts every enclosing LEN prefix. Walk the wire format
- * instead: replace the placeholder string, then re-emit every ancestor
- * length varint.
- */
-function encodeVarint(len: number): number[] {
-  const out: number[] = [];
-  do {
-    let b = len & 0x7f;
-    len >>= 7;
-    if (len) b |= 0x80;
-    out.push(b);
-  } while (len);
-  return out;
-}
-
-function readVarint(bytes: Uint8Array, i: number): { value: number; next: number } | undefined {
-  let value = 0;
-  let shift = 0;
-  while (i < bytes.length && shift < 35) {
-    const b = bytes[i++]!;
-    value += (b & 0x7f) * 2 ** shift;
-    if ((b & 0x80) === 0) return { value, next: i };
-    shift += 7;
-  }
-  return undefined;
-}
-
-function rewriteDevinKey(body: ArrayBuffer, apiKey: string): ArrayBuffer {
-  const enc = new TextEncoder();
-  const dummy = enc.encode(DEVIN_DUMMY_KEY);
-  // The CLI embeds the credential both bare and in its doubled `key-key`
-  // Basic-auth form; the longer match must win.
-  const dummyDouble = enc.encode(`${DEVIN_DUMMY_KEY}-${DEVIN_DUMMY_KEY}`);
-  const real = enc.encode(apiKey);
-  const realDouble = enc.encode(`${apiKey}-${apiKey}`);
-  const contains = (buf: Uint8Array, needle: Uint8Array): boolean => {
-    outer: for (let i = 0; i + needle.length <= buf.length; i++) {
-      for (let j = 0; j < needle.length; j++) if (buf[i + j] !== needle[j]) continue outer;
-      return true;
-    }
-    return false;
+async function loadUserOAuthAccess(
+  env: EgressEnv,
+  userId: string,
+  provider: "antigravity" | "cursor" | "xai",
+): Promise<{ accessToken: string; projectId?: string } | null> {
+  if (userId === "" || !env.UserProviderOAuth) return null;
+  const response = await userProviderOAuthStub(env, userId).fetch(
+    `https://user-provider-oauth.internal/access?provider=${provider}`,
+  );
+  if (!response.ok) return null;
+  const body = (await response.json().catch(() => null)) as {
+    accessToken?: unknown;
+    projectId?: unknown;
+  } | null;
+  if (typeof body?.accessToken !== "string" || body.accessToken === "") return null;
+  return {
+    accessToken: body.accessToken,
+    ...(typeof body.projectId === "string" && body.projectId !== "" ? { projectId: body.projectId } : {}),
   };
-  const is = (buf: Uint8Array, v: Uint8Array) =>
-    buf.length === v.length && buf.every((b, j) => b === v[j]);
-  // Returns the re-encoded message, or undefined when no placeholder lived
-  // inside it. Throws when `buf` is not well-formed protobuf.
-  const rewriteMessage = (buf: Uint8Array): Uint8Array | undefined => {
-    const parts: number[][] = [];
-    let changed = false;
-    let i = 0;
-    while (i < buf.length) {
-      const tagStart = i;
-      const tag = readVarint(buf, i);
-      if (!tag) throw new Error("tag");
-      const wt = tag.value & 7;
-      i = tag.next;
-      if (wt === 2) {
-        const len = readVarint(buf, i);
-        if (!len || len.next + len.value > buf.length) throw new Error("len");
-        const value = buf.subarray(len.next, len.next + len.value);
-        let emitted = value;
-        if (is(value, dummy)) {
-          emitted = real;
-          changed = true;
-        } else if (is(value, dummyDouble)) {
-          emitted = realDouble;
-          changed = true;
-        } else if (contains(value, dummy)) {
-          try {
-            const nested = rewriteMessage(value);
-            if (nested) {
-              emitted = nested;
-              changed = true;
-            }
-          } catch {
-            // A wt-2 value that mentions the placeholder but does not parse
-            // as a message is raw string data — leave it untouched.
-          }
-        }
-        parts.push(
-          Array.from(buf.subarray(tagStart, tag.next)),
-          encodeVarint(emitted.length),
-          Array.from(emitted),
-        );
-        i = len.next + len.value;
-      } else if (wt === 0) {
-        const v = readVarint(buf, i);
-        if (!v) throw new Error("varint");
-        i = v.next;
-        parts.push(Array.from(buf.subarray(tagStart, i)));
-      } else if (wt === 5 || wt === 1) {
-        const w = wt === 5 ? 4 : 8;
-        if (i + w > buf.length) throw new Error("fixed");
-        i += w;
-        parts.push(Array.from(buf.subarray(tagStart, i)));
-      } else {
-        throw new Error("wt");
-      }
-    }
-    if (!changed) return undefined;
-    return Uint8Array.from(parts.flat());
-  };
-  try {
-    const out = rewriteMessage(new Uint8Array(body));
-    return out ? (out.buffer as ArrayBuffer) : body;
-  } catch {
-    return body;
-  }
 }
 
-/** api.devin.ai — Devin control plane (sessions, billing, org). */
-export function forwardDevinApi(request: Request, env: EgressEnv): Promise<Response> {
-  return forwardDevin(request, env, "api.devin.ai");
-}
-
-/** server.codeium.com — inference backend Devin Pro accounts talk to. */
-export function forwardDevinInference(request: Request, env: EgressEnv): Promise<Response> {
-  return forwardDevin(request, env, "server.codeium.com");
-}
-
-/**
- * The devin-subscription egress branch: same wire as forwardDevinApi /
- * forwardDevinInference, but the credential is the operator's
- * DEVIN_SUBSCRIPTION_TOKEN[_<ACCOUNT>] rather than the deployment-wide
- * DEVIN_API_KEY — per-host auth schemes are unchanged (Bearer on
- * api.devin.ai, `Basic <key>-<key>` on server.codeium.com, protobuf body
- * rewrite). Deny-by-default like every subscription branch: wrong
- * host/protocol or userinfo → 403, non-GET/POST → 405, no secret → 503.
- */
-export async function forwardDevinSubscription(
+/** Per-user Antigravity / Cloud Code Assist OAuth at egress. */
+export async function forwardAntigravityUser(
   request: Request,
   env: EgressEnv,
   ctx?: OutboundHandlerCtx,
 ): Promise<Response> {
   const params = (ctx?.params ?? {}) as Record<string, unknown>;
-  const account = typeof params.account === "string" && params.account !== "" ? params.account : "default";
-  const secretName =
-    account === "default"
-      ? "DEVIN_SUBSCRIPTION_TOKEN"
-      : `DEVIN_SUBSCRIPTION_TOKEN_${account.toUpperCase().replace(/-/g, "_")}`;
-  const token = (env as Record<string, unknown>)[secretName];
+  const userId = typeof params.userId === "string" ? params.userId.trim() : "";
+  const auth = await loadUserOAuthAccess(env, userId, "antigravity");
+  const target = new URL(request.url);
+  const allowed =
+    target.hostname === "cloudcode-pa.googleapis.com" ||
+    target.hostname === "daily-cloudcode-pa.googleapis.com" ||
+    target.hostname === "dl.google.com" ||
+    target.hostname === "generativelanguage.googleapis.com";
+  if (target.protocol !== "https:" || !allowed || target.username !== "" || target.password !== "") {
+    return new Response("Invalid Antigravity destination.", { status: 403 });
+  }
+  target.search = stripCredentialParams(target.search);
+  const headers = outboundHeaders(request);
+  if (!auth) {
+    // antigravity-subscription installs this handler whenever userId is set,
+    // but the in-container agy profile lane authenticates with its own bearer
+    // on Cloud Code hosts when the dashboard OAuth record is absent.
+    const cloudCodeHost =
+      target.hostname === "cloudcode-pa.googleapis.com" ||
+      target.hostname === "daily-cloudcode-pa.googleapis.com";
+    if (cloudCodeHost) {
+      const profileAuth = request.headers.get("authorization");
+      if (profileAuth) headers.set("Authorization", profileAuth);
+    }
+    try {
+      return await fetch(target, {
+        method: request.method,
+        headers,
+        body: request.method === "POST" ? request.body : undefined,
+        redirect: "manual",
+      });
+    } catch {
+      return new Response("Subscription request failed.", { status: 502 });
+    }
+  }
+  headers.set("Authorization", `Bearer ${auth.accessToken}`);
+  if (auth.projectId) headers.set("x-goog-user-project", auth.projectId);
+  try {
+    return await fetch(target, {
+      method: request.method,
+      headers,
+      body: request.method === "POST" ? request.body : undefined,
+      redirect: "manual",
+    });
+  } catch {
+    return new Response("Subscription request failed.", { status: 502 });
+  }
+}
+
+/** Per-user Cursor OAuth at egress (api2 + repo2). */
+export async function forwardCursorUser(
+  request: Request,
+  env: EgressEnv,
+  ctx?: OutboundHandlerCtx,
+): Promise<Response> {
+  const params = (ctx?.params ?? {}) as Record<string, unknown>;
+  const userId = typeof params.userId === "string" ? params.userId.trim() : "";
+  const auth = await loadUserOAuthAccess(env, userId, "cursor");
   const target = new URL(request.url);
   if (
     target.protocol !== "https:" ||
-    (target.hostname !== "api.devin.ai" && target.hostname !== "server.codeium.com") ||
+    (target.hostname !== "api2.cursor.sh" && target.hostname !== "repo2.cursor.sh") ||
     target.username !== "" ||
     target.password !== ""
   ) {
-    return new Response("Invalid subscription destination.", { status: 403 });
+    return new Response("Invalid Cursor destination.", { status: 403 });
   }
-  if (request.method !== "GET" && request.method !== "POST") {
-    return new Response("Method not allowed.", { status: 405 });
+  if (!auth) {
+    const account = typeof params.account === "string" && params.account !== "" ? params.account : "default";
+    return forwardCursorSubscription(request, env, { ...ctx, params: { account } });
   }
-  if (typeof token !== "string" || token.trim() === "") {
-    return new Response(`${secretName} is not configured on this deployment.`, { status: 503 });
+  target.search = stripCredentialParams(target.search);
+  const headers = outboundHeaders(request);
+  headers.set("Authorization", `Bearer ${auth.accessToken}`);
+  try {
+    return await fetch(target, {
+      method: request.method,
+      headers,
+      body: request.method === "POST" ? request.body : undefined,
+      redirect: "manual",
+    });
+  } catch {
+    return new Response("Subscription request failed.", { status: 502 });
   }
-  return forwardDevin(request, env, target.hostname, token);
+}
+
+/** Per-user xAI / Grok OAuth at egress. */
+export async function forwardXaiUser(
+  request: Request,
+  env: EgressEnv,
+  ctx?: OutboundHandlerCtx,
+): Promise<Response> {
+  const params = (ctx?.params ?? {}) as Record<string, unknown>;
+  const userId = typeof params.userId === "string" ? params.userId.trim() : "";
+  const auth = await loadUserOAuthAccess(env, userId, "xai");
+  const target = new URL(request.url);
+  if (target.protocol !== "https:" || target.hostname !== "api.x.ai" || target.username !== "" || target.password !== "") {
+    return new Response("Invalid xAI destination.", { status: 403 });
+  }
+  if (!auth) {
+    return forwardXAI(request, env, ctx?.orgId);
+  }
+  target.search = stripCredentialParams(target.search);
+  const headers = outboundHeaders(request);
+  headers.set("Authorization", `Bearer ${auth.accessToken}`);
+  try {
+    return await fetch(target, {
+      method: request.method,
+      headers,
+      body: request.method === "POST" ? request.body : undefined,
+      redirect: "manual",
+    });
+  } catch {
+    return new Response("Subscription request failed.", { status: 502 });
+  }
 }
 
 async function forwardGitHub(request: Request, env: EgressEnv): Promise<Response> {

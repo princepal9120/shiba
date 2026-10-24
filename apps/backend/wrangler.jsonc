@@ -40,7 +40,6 @@
     "SHIBA_CHATGPT_SIWC_SANDBOX_OAUTH": "0",
     "SHIBA_CODEX_DEVICE_AUTH": "0",
     "SHIBA_CURSOR_SUBSCRIPTION": "0",
-    "SHIBA_DEVIN_SUBSCRIPTION": "0",
     "SHIBA_ANTIGRAVITY_SUBSCRIPTION": "0",
     // Sandbox SDK 1.0: passed to container start(); not a wrangler containers[] field.
     "INSTANCE_TYPE": "standard-1",
@@ -57,14 +56,13 @@
     //
     // Model ids verified against primary sources 2026-10-06 (PLAN.md §19.0):
     //   gpt-6-sol          OpenAI GPT-6 Sol; needs Codex CLI >= 0.156.1 (pinned 0.157.1)
-    //   swe-2-medium       Cognition SWE-2, Devin-only (cognition.com/blog/swe-2)
     //   claude-sonnet-5-5  Anthropic, released 2026-09-28
     //   claude-opus-5-5    Claude 5.5 family flagship
     //   opencode-go/gpt-6.1-sol  reviewer: #99's Sol review lane (opencode-go gateway)
     //
     // gpt-5.6-sol retires from Codex 2026-10-14; it is in RETIRED_MODELS
     // (agents/roles.ts) so a stale override throws at intake (PLAN.md §20.2).
-    "ROLE_MODEL_MAP": "{\"orchestrator\":{\"harness\":\"codex\",\"model\":\"openai/gpt-6-sol\"},\"explorer\":{\"harness\":\"devin\",\"model\":\"devin/swe-2-medium\"},\"fixer\":{\"harness\":\"claude-code\",\"model\":\"anthropic/claude-sonnet-5-5\"},\"reviewer\":{\"harness\":\"opencode\",\"model\":\"opencode-go/gpt-6.1-sol\"},\"designer\":{\"harness\":\"claude-code\",\"model\":\"anthropic/claude-opus-5-5\"}}",
+    "ROLE_MODEL_MAP": "{\"orchestrator\":{\"harness\":\"codex\",\"model\":\"openai/gpt-6-sol\"},\"explorer\":{\"harness\":\"codex\",\"model\":\"openai/gpt-6-sol\"},\"fixer\":{\"harness\":\"claude-code\",\"model\":\"anthropic/claude-sonnet-5-5\"},\"reviewer\":{\"harness\":\"opencode\",\"model\":\"opencode-go/gpt-6.1-sol\"},\"designer\":{\"harness\":\"claude-code\",\"model\":\"anthropic/claude-opus-5-5\"}}",
     // T48: Claude subscription harness stays registered by default; its
     // Wrangler secret is still required before runs can authenticate.
     //   SHIBA_CLAUDE_SUBSCRIPTION=1  registers the claude-subscription harness
@@ -84,11 +82,6 @@
     //   CURSOR_SUBSCRIPTION_MODEL    per-deploy model override
     //   CURSOR_SUBSCRIPTION_TOKEN[_<ACCOUNT>]  the operator's Cursor Agent
     //   API key — a Wrangler secret, read only at egress.
-    //   SHIBA_DEVIN_SUBSCRIPTION=1   opens the /api/auth/devin-subscription
-    //   lane.
-    //   DEVIN_SUBSCRIPTION_MODEL     per-deploy model override
-    //   DEVIN_SUBSCRIPTION_TOKEN[_<ACCOUNT>]  the operator's Devin API
-    //   key/session token — a Wrangler secret, read only at egress.
     //   SHIBA_LOCAL_RUNTIME=1   admits runtime:"local" at the dashboard
     //   intake and opens /api/local for the operator daemon (T51).
     //   LOCAL_ADAPTER_TOKEN     bearer the `shiba local` daemon presents on
@@ -149,6 +142,7 @@
       { "name": "ModelConfig", "class_name": "ModelConfig" },
       { "name": "LocalDispatch", "class_name": "LocalDispatch" },
       { "name": "ChatGptAuth", "class_name": "ChatGptAuth" },
+      { "name": "UserProviderOAuth", "class_name": "UserProviderOAuth" },
     ],
   },
   // Email attachment bodies >256KB go here, keyed `emailId/partId`
@@ -218,5 +212,6 @@
     { "tag": "v12", "new_sqlite_classes": ["ChatGptAuth"] },
     // Live script tag after the Oct 20 alchemy deploy; all classes above already exist.
     { "tag": "alchemy:v22" },
+    { "tag": "v13", "new_sqlite_classes": ["UserProviderOAuth"] },
   ],
 }

@@ -9,9 +9,6 @@ import {
   forwardCodexPlan,
   forwardCodexSubscription,
   forwardCursorSubscription,
-  forwardDevinApi,
-  forwardDevinInference,
-  forwardDevinSubscription,
   forwardGitHubScoped,
   forwardGoogle,
   forwardOpenAI,
@@ -31,7 +28,6 @@ export const outboundHandlers: Record<string, HostHandler> = {
   codexSubscription: forwardCodexSubscription,
   codexPlan: forwardCodexPlan,
   cursorSubscription: forwardCursorSubscription,
-  devinSubscription: forwardDevinSubscription,
 };
 
 export const outboundByHost: Record<string, HostHandler> = {
@@ -40,7 +36,5 @@ export const outboundByHost: Record<string, HostHandler> = {
   "api.openai.com": forwardOpenAI,
   "api.x.ai": forwardXAI,
   "opencode.ai": forwardOpenCodeGo,
-  "api.devin.ai": forwardDevinApi,
-  "server.codeium.com": forwardDevinInference,
   "github.com": denyUnscopedGitHub,
 };

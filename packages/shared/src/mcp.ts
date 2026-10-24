@@ -18,8 +18,6 @@ export const HARNESS_IDS = [
   "claude-login",
   "codex",
   "codex-subscription",
-  "devin",
-  "devin-subscription",
   "grok",
   "pi",
   "antigravity-subscription",
@@ -29,7 +27,6 @@ export const HARNESS_IDS = [
   "codex-acp",
   "gemini-acp",
   "opencode-acp",
-  "devin-acp",
   // The generic registry lane: any ACP_REGISTRY_ALLOWLIST-ed agent,
   // `acp/<id>` as the model id.
   "acp",

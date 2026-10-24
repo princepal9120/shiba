@@ -12,13 +12,12 @@ import { CODEX_DEVICE_AUTH_HOSTS, usesCodexDeviceAuth } from "./codex-device-aut
 import type { CodingTaskInput } from "../opencode-input.js";
 import { cursorHarness } from "./cursor.js";
 import { cursorSubscriptionHarness } from "./cursor-subscription.js";
-import { CONTAINER_XDG_DATA, devinCredentialsConfig, devinHarness } from "./devin.js";
-import { devinSubscriptionHarness } from "./devin-subscription.js";
 import { grokHarness } from "./grok.js";
 import { piHarness } from "./pi.js";
 import { buildOpencodeConfig, OPENCODE_PROVIDERS, opencodeHarness } from "./opencode.js";
 import type { Env } from "../env.js";
 import { modelCredentialKeyConfigured } from "../subscription-credentials.js";
+import { userProviderOAuthReady } from "../user-provider-oauth-store.js";
 import { GIT_EGRESS_HOSTS, type AgentHarness, type AgentHarnessName, type RuntimeName } from "./types.js";
 
 /**
@@ -81,21 +80,6 @@ export const ACP_LANES = {
     },
     mirrorOf: "opencode",
   },
-  "devin-acp": {
-    spec: {
-      label: "Devin ACP",
-      spawn: ["devin", "acp"],
-      providers: ["devin"],
-      // api.devin.ai comes from the provider host; the CLI's inference
-      // backend (server.codeium.com, Pro accounts) is the second egress host.
-      extraEgress: ["server.codeium.com"],
-      // `devin acp` authenticates from credentials.toml, not the env var —
-      // same dummy file the devin lane writes (real key swaps in at egress).
-      extraConfig: () => [devinCredentialsConfig()],
-      extraEnv: () => ({ XDG_DATA_HOME: CONTAINER_XDG_DATA }),
-    },
-    mirrorOf: "devin",
-  },
 } satisfies Record<AcpHarnessName, AcpLane>;
 
 /**
@@ -129,14 +113,12 @@ const REGISTRY = {
   "claude-login": claudeLoginHarness,
   codex: codexHarness,
   "codex-subscription": codexSubscriptionHarness,
-  devin: devinHarness,
   grok: grokHarness,
   pi: piHarness,
   cursor: cursorHarness,
   antigravity: antigravityHarness,
   "antigravity-subscription": antigravitySubscriptionHarness,
   "cursor-subscription": cursorSubscriptionHarness,
-  "devin-subscription": devinSubscriptionHarness,
   ...ACP_HARNESSES,
 } satisfies Record<AgentHarnessName, AgentHarness>;
 
@@ -148,7 +130,6 @@ type HarnessGateEnv = {
   SHIBA_CODEX_SUBSCRIPTION?: string;
   SHIBA_ANTIGRAVITY_SUBSCRIPTION?: string;
   SHIBA_CURSOR_SUBSCRIPTION?: string;
-  SHIBA_DEVIN_SUBSCRIPTION?: string;
   ACP_REGISTRY_ALLOWLIST?: string;
   ACP_REGISTRY_JSON?: string;
 } | undefined;
@@ -164,11 +145,11 @@ const HARNESS_GATES: Partial<Record<AgentHarnessName, (env: HarnessGateEnv) => b
   "codex-subscription": (env) =>
     env?.SHIBA_CODEX_SUBSCRIPTION === "1" || modelCredentialKeyConfigured(env as Env),
   // T50: the OAuth-in-container flow is opt-in separately (§18.12).
-  "antigravity-subscription": (env) => env?.SHIBA_ANTIGRAVITY_SUBSCRIPTION === "1",
-  // Worker-secret subscription keys (CURSOR_SUBSCRIPTION_TOKEN /
-  // DEVIN_SUBSCRIPTION_TOKEN), opt-in like the other subscription harnesses.
-  "cursor-subscription": (env) => env?.SHIBA_CURSOR_SUBSCRIPTION === "1",
-  "devin-subscription": (env) => env?.SHIBA_DEVIN_SUBSCRIPTION === "1",
+  "antigravity-subscription": (env) =>
+    env?.SHIBA_ANTIGRAVITY_SUBSCRIPTION === "1" || userProviderOAuthReady(env as Env),
+  // Worker-secret subscription keys (CURSOR_SUBSCRIPTION_TOKEN), opt-in like
+  // the other subscription harnesses.
+  "cursor-subscription": (env) => env?.SHIBA_CURSOR_SUBSCRIPTION === "1" || userProviderOAuthReady(env as Env),
   // Registry agents are arbitrary binaries — the lane stays dark until an
   // operator pins a snapshot (ACP_REGISTRY_JSON) AND names allowed ids.
   acp: (env) => acpRegistryEnabled(env),
@@ -291,10 +272,6 @@ const CORE_DEFAULT_MODELS = {
   // ChatGPT-subscription models carry the openai-subscription namespace:
   // the provider prefix is the auth-path distinction, not a different vendor.
   "codex-subscription": "openai-subscription/gpt-5.3-codex",
-  // SWE-2 medium is the free tier on Devin Pro; bare "swe-2" is a family
-  // name the pinned CLI (3000.11.3) does not resolve, and "swe" is the
-  // family alias.
-  devin: "devin/swe-2-medium",
   grok: "xai/grok-4.6",
   pi: "anthropic/claude-sonnet-4-6",
   cursor: "cursor/claude-4-5-sonnet",
@@ -305,7 +282,6 @@ const CORE_DEFAULT_MODELS = {
   // "auto" is cursor-agent's own model picker — the subscription lane's
   // sensible default since the operator's plan governs what resolves.
   "cursor-subscription": "cursor-subscription/auto",
-  "devin-subscription": "devin-subscription/swe-2-medium",
 } satisfies Record<NonAcpHarnessName, string>;
 
 export const HARNESS_DEFAULT_MODELS: Record<string, string> = {
@@ -333,14 +309,12 @@ const CORE_MODEL_ENV = {
   "claude-login": "CLAUDE_CODE_MODEL",
   codex: "CODEX_MODEL",
   "codex-subscription": "CODEX_SUBSCRIPTION_MODEL",
-  devin: "DEVIN_MODEL",
   grok: "GROK_MODEL",
   pi: "PI_MODEL",
   cursor: "CODING_MODEL",
   antigravity: "CODING_MODEL",
   "antigravity-subscription": "ANTIGRAVITY_SUBSCRIPTION_MODEL",
   "cursor-subscription": "CURSOR_SUBSCRIPTION_MODEL",
-  "devin-subscription": "DEVIN_SUBSCRIPTION_MODEL",
 } satisfies Record<NonAcpHarnessName, StringEnvKey | undefined>;
 
 export const HARNESS_MODEL_ENV: Record<AgentHarnessName, StringEnvKey | undefined> = {

@@ -37,6 +37,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
+import { copyOperatorAuth } from "./link-operator-auth.mjs";
 
 const LOCAL_RUN_ROOT_TOKEN = "${SHIBA_LOCAL_RUN_ROOT}";
 const MAX_STDERR_TAIL_CHARS = 8_000;
@@ -71,13 +72,16 @@ function parseArgs(argv) {
     else if (argv[i] === "--poll" && argv[i + 1]) {
       args.pollMs = Math.max(500, Number(argv[++i]) || DEFAULT_POLL_MS);
     } else if (argv[i] === "--help" || argv[i] === "-h") {
-      console.log("Usage: shiba-local-daemon [--once] [--poll <ms>] [--connect <workerUrl> --pair <token>]\n  Env: SHIBA_WORKER_URL, LOCAL_ADAPTER_TOKEN, SHIBA_LOCAL_RUN_ROOT");
+      console.log(
+        "Usage: shiba-local-daemon [--once] [--poll <ms>] [--connect <workerUrl> --pair <token>]\n  Env: SHIBA_WORKER_URL, LOCAL_ADAPTER_TOKEN, SHIBA_LOCAL_RUN_ROOT",
+      );
       process.exit(0);
     } else {
       fail(`Unknown argument ${argv[i]}`);
     }
   }
-  if (Boolean(args.connect) !== Boolean(args.pair)) fail("--connect and --pair must be given together.");
+  if (Boolean(args.connect) !== Boolean(args.pair))
+    fail("--connect and --pair must be given together.");
   return args;
 }
 
@@ -101,7 +105,10 @@ async function post(sub, body) {
     body: JSON.stringify(body),
   });
   const text = await res.text();
-  if (!res.ok) throw Object.assign(new Error(`${sub}: HTTP ${res.status} ${text.slice(0, 300)}`), { status: res.status });
+  if (!res.ok)
+    throw Object.assign(new Error(`${sub}: HTTP ${res.status} ${text.slice(0, 300)}`), {
+      status: res.status,
+    });
   return text === "" ? {} : JSON.parse(text);
 }
 
@@ -154,7 +161,9 @@ async function acquireLock() {
     let handle;
     try {
       handle = await fs.open(lockPath, "wx");
-      await handle.writeFile(JSON.stringify({ pid: process.pid, at: Date.now(), bootAt: bootAt() }));
+      await handle.writeFile(
+        JSON.stringify({ pid: process.pid, at: Date.now(), bootAt: bootAt() }),
+      );
       await handle.close();
       // process.exit skips async cleanup — release must be synchronous.
       process.on("exit", () => {
@@ -246,8 +255,20 @@ function matchesPrefix(argv, prefix) {
 // below are intentional local-harness credentials, not daemon control tokens.
 function childEnvironment(harness) {
   const allowed = [
-    "PATH", "HOME", "TMPDIR", "TMP", "TEMP", "LANG", "LC_ALL", "TERM",
-    "USER", "LOGNAME", "SHELL", "SystemRoot", "COMSPEC", "PATHEXT",
+    "PATH",
+    "HOME",
+    "TMPDIR",
+    "TMP",
+    "TEMP",
+    "LANG",
+    "LC_ALL",
+    "TERM",
+    "USER",
+    "LOGNAME",
+    "SHELL",
+    "SystemRoot",
+    "COMSPEC",
+    "PATHEXT",
   ];
   const providerKeys = {
     claude: ["ANTHROPIC_API_KEY"],
@@ -381,7 +402,7 @@ async function collectResult(envelope, root) {
   return { changedFiles, diff: boundTail(diff.stdout, 2_000_000), files };
 }
 
-async function execute(envelope) {
+async function execute(envelope, claimToken) {
   const startedAt = Date.now();
   const root = path.join(runRoot, "runs", envelope.sandboxId);
   const cloneDir = substitute(envelope.cloneDir, root);
@@ -407,24 +428,36 @@ async function execute(envelope) {
     );
     if (clone.exitCode !== 0) {
       // Branch may not exist remotely; clone default then checkout.
-      const fallback = await runProcess(
-        ["git", "clone", envelope.repoUrl, cloneDir],
-        { timeoutMs: Math.min(remaining(), 5 * 60 * 1000) },
-      );
+      const fallback = await runProcess(["git", "clone", envelope.repoUrl, cloneDir], {
+        timeoutMs: Math.min(remaining(), 5 * 60 * 1000),
+      });
       if (fallback.exitCode !== 0) {
         return errorResult(`git clone failed: ${fallback.stderr.slice(0, 1000)}`);
       }
       const checkout = await runProcess(
-        ["git", "-C", cloneDir, "checkout", "-B", envelope.baseBranch, `origin/${envelope.baseBranch}`],
+        [
+          "git",
+          "-C",
+          cloneDir,
+          "checkout",
+          "-B",
+          envelope.baseBranch,
+          `origin/${envelope.baseBranch}`,
+        ],
         { timeoutMs: 60_000 },
       );
       if (checkout.exitCode !== 0) {
-        return errorResult(`git checkout ${envelope.baseBranch} failed: ${checkout.stderr.slice(0, 500)}`);
+        return errorResult(
+          `git checkout ${envelope.baseBranch} failed: ${checkout.stderr.slice(0, 500)}`,
+        );
       }
     }
 
     // 2. setup ops — the same prefix allowlist the sandbox adapter applies.
     await fs.mkdir(homeDir, { recursive: true });
+    // Subscription CLIs read auth from the run HOME. Copy those files
+    // read-only. Never symlink the operator's ~/.claude or ~/.codex.
+    await copyOperatorAuth(homeDir, process.env.HOME);
     for (const argv of envelope.setupCommands) {
       const resolved = argv.map((part) => substitute(part, root));
       const result = await scopedLocalExec(resolved, envelope.setupAllowlist, {
@@ -447,22 +480,103 @@ async function execute(envelope) {
     }
     milestone("config.written", `${envelope.configFiles.length} files`);
 
-    // 4. the harness process — unscoped argv comes pre-authorized (it is the
-    // approved invocation); env carries {env:VAR} references the CLI
-    // resolves against THIS machine's environment.
+    // 4. the harness process. A session envelope drives Codex or Claude
+    // through the session layer; older envelopes still exec argv.
     milestone("harness.started", envelope.harness);
-    const argv = envelope.argv.map((part) => substitute(part, root));
-    const run = await runProcess(argv, {
-      cwd: cloneDir,
-      env,
-      timeoutMs: remaining(),
-      onChild: (child) => {
-        activeHarnessChild = child;
-      },
-      onStdout: (chunk) => process.stdout.write(chunk),
-      onStderr: (chunk) => process.stderr.write(chunk),
-    });
-    activeHarnessChild = undefined;
+    let run;
+    if (envelope.session) {
+      const { eventText, runSessionJob } = await import("./agent-harness.mjs");
+      const texts = [];
+      const session = envelope.session;
+      const outcome = await runSessionJob({
+        provider: session.provider,
+        model: session.model,
+        permissionMode: session.permissionMode,
+        cwd: cloneDir,
+        // Session JSONL stays under the run home. The worktree diff must not
+        // pick up the log as a changed file.
+        logDir: homeDir,
+        prompt: envelope.task,
+        env,
+        checkpoints: true,
+        emitStdout: false,
+        ...(session.bin ? { bin: substitute(session.bin, root) } : {}),
+        ...(session.binArgs
+          ? { binArgs: session.binArgs.map((part) => substitute(part, root)) }
+          : {}),
+        ...(session.resumeThreadId ? { resumeThreadId: session.resumeThreadId } : {}),
+        onChild: (child) => {
+          activeHarnessChild = child;
+        },
+        onEvent: (event) => {
+          const text = eventText(event);
+          if (text) texts.push(text);
+          const body = {
+            sandboxId: envelope.sandboxId,
+            claimToken,
+            event: {
+              type: event.type,
+              text: text.slice(0, 500),
+              ...(typeof event.patch === "string" && event.patch !== ""
+                ? { patch: event.patch.slice(0, 100_000) }
+                : {}),
+            },
+          };
+          void post("events", body).catch((error) => {
+            console.error(`shiba-local: event post failed: ${error.message}`);
+          });
+        },
+        onApproval: async (request) => {
+          await post("approval", {
+            sandboxId: envelope.sandboxId,
+            claimToken,
+            request: {
+              requestId: request.requestId,
+              kind: request.kind,
+              title: request.title,
+              detail: request.detail,
+            },
+          });
+          const deadline = Date.now() + Math.min(remaining(), 10 * 60 * 1000);
+          while (Date.now() < deadline) {
+            const polled = await post("approval", {
+              sandboxId: envelope.sandboxId,
+              claimToken,
+              requestId: request.requestId,
+            });
+            if (polled.decision === "allow" || polled.decision === "deny") return polled.decision;
+            await new Promise((resolve) => setTimeout(resolve, 300));
+          }
+          return "deny";
+        },
+        control: async () => {
+          try {
+            return await post("control", { sandboxId: envelope.sandboxId, claimToken });
+          } catch {
+            return {};
+          }
+        },
+      });
+      activeHarnessChild = undefined;
+      run = {
+        exitCode: outcome.exitCode,
+        stderr: outcome.status === "completed" ? "" : outcome.summary,
+        stdout: texts.join("\n"),
+      };
+    } else {
+      const argv = envelope.argv.map((part) => substitute(part, root));
+      run = await runProcess(argv, {
+        cwd: cloneDir,
+        env,
+        timeoutMs: remaining(),
+        onChild: (child) => {
+          activeHarnessChild = child;
+        },
+        onStdout: (chunk) => process.stdout.write(chunk),
+        onStderr: (chunk) => process.stderr.write(chunk),
+      });
+      activeHarnessChild = undefined;
+    }
     milestone("harness.idle", `exitCode:${run.exitCode}`);
     const stderrTail = boundTail(run.stderr, MAX_STDERR_TAIL_CHARS);
     if (run.exitCode !== 0) {
@@ -491,7 +605,11 @@ async function execute(envelope) {
       status: "completed",
       exitCode: 0,
       summary: boundTail(
-        run.stdout.split("\n").filter((line) => line.trim() !== "").slice(-20).join("\n") ||
+        run.stdout
+          .split("\n")
+          .filter((line) => line.trim() !== "")
+          .slice(-20)
+          .join("\n") ||
           `${envelope.harness} completed with ${collection.changedFiles.length} changed files.`,
         16_384,
       ),
@@ -530,7 +648,9 @@ async function execute(envelope) {
 /** Names only — the fleet view shows pills, not version strings. */
 function probeHarnesses() {
   return PROBED_HARNESSES.filter(
-    (name) => spawnSync(name, ["--version"], { timeout: 5_000, stdio: "ignore", env: childEnvironment() }).status === 0,
+    (name) =>
+      spawnSync(name, ["--version"], { timeout: 5_000, stdio: "ignore", env: childEnvironment() })
+        .status === 0,
   );
 }
 
@@ -563,9 +683,19 @@ async function pair(url, pairingToken) {
   workerUrl = url.replace(/\/+$/, "");
   let paired;
   try {
-    paired = await post("pair", { pairingToken, hostname, platform, daemonVersion: DAEMON_VERSION, harnesses });
+    paired = await post("pair", {
+      pairingToken,
+      hostname,
+      platform,
+      daemonVersion: DAEMON_VERSION,
+      harnesses,
+    });
   } catch (error) {
-    fail(error.status === 401 ? "pairing token expired, reused, or invalid — mint a new one in Remote Access." : `pairing failed: ${error.message}`);
+    fail(
+      error.status === 401
+        ? "pairing token expired, reused, or invalid — mint a new one in Remote Access."
+        : `pairing failed: ${error.message}`,
+    );
   }
   await writeConfig({ workerUrl, adapterToken: paired.adapterToken, machineId: paired.machineId });
   console.log(`shiba-local: paired as ${paired.machineId}; saved ${configPath}`);
@@ -577,7 +707,14 @@ function revoked() {
 
 async function heartbeat() {
   try {
-    await post("heartbeat", { machineId, hostname, platform, daemonVersion: DAEMON_VERSION, harnesses, ...(activeRunId ? { activeRunId } : {}) });
+    await post("heartbeat", {
+      machineId,
+      hostname,
+      platform,
+      daemonVersion: DAEMON_VERSION,
+      harnesses,
+      ...(activeRunId ? { activeRunId } : {}),
+    });
     report({ state: "heartbeat", ok: true });
   } catch (error) {
     report({ state: "heartbeat", ok: false });
@@ -598,8 +735,12 @@ async function postResult(body) {
       if (error.status === 401) revoked();
       const transient = error.status === undefined || error.status >= 500 || error.status === 429;
       if (!transient || attempt >= RESULT_ATTEMPTS || stopping) throw error;
-      console.error(`shiba-local: result post attempt ${attempt} failed, retrying: ${error.message}`);
-      await new Promise((r) => setTimeout(r, 1_000 * 2 ** (attempt - 1) * (0.75 + Math.random() * 0.5)));
+      console.error(
+        `shiba-local: result post attempt ${attempt} failed, retrying: ${error.message}`,
+      );
+      await new Promise((r) =>
+        setTimeout(r, 1_000 * 2 ** (attempt - 1) * (0.75 + Math.random() * 0.5)),
+      );
       if (stopping) throw error;
     }
   }
@@ -615,10 +756,17 @@ async function main() {
   const config = await readConfig();
   workerUrl = (process.env.SHIBA_WORKER_URL ?? config.workerUrl ?? "").replace(/\/+$/, "");
   const adapterToken = process.env.LOCAL_ADAPTER_TOKEN ?? config.adapterToken ?? "";
-  if (workerUrl === "") fail("SHIBA_WORKER_URL is required (e.g. https://shiba.example.com), or pair with --connect/--pair.");
-  if (adapterToken === "") fail("LOCAL_ADAPTER_TOKEN is required — the deployment's daemon bearer — or pair with --connect/--pair.");
+  if (workerUrl === "")
+    fail(
+      "SHIBA_WORKER_URL is required (e.g. https://shiba.example.com), or pair with --connect/--pair.",
+    );
+  if (adapterToken === "")
+    fail(
+      "LOCAL_ADAPTER_TOKEN is required — the deployment's daemon bearer — or pair with --connect/--pair.",
+    );
   AUTH = { Authorization: `Bearer ${adapterToken}` };
-  machineId = (process.env.LOCAL_ADAPTER_TOKEN ? undefined : config.machineId) ?? (await localMachineId());
+  machineId =
+    (process.env.LOCAL_ADAPTER_TOKEN ? undefined : config.machineId) ?? (await localMachineId());
   await reapDeadWorkspaces();
   await heartbeat();
   setInterval(heartbeat, HEARTBEAT_MS).unref();
@@ -650,26 +798,51 @@ async function main() {
     }
     idlePolls = 0;
     const { envelope } = claim;
-    console.log(`shiba-local: claimed ${envelope.sandboxId} (${envelope.harness}) — ${envelope.repoUrl}@${envelope.baseBranch}`);
-    report({ state: "claimed", runId: envelope.sandboxId, harness: envelope.harness, repoUrl: envelope.repoUrl });
+    console.log(
+      `shiba-local: claimed ${envelope.sandboxId} (${envelope.harness}) — ${envelope.repoUrl}@${envelope.baseBranch}`,
+    );
+    report({
+      state: "claimed",
+      runId: envelope.sandboxId,
+      harness: envelope.harness,
+      repoUrl: envelope.repoUrl,
+    });
     let result;
     activeRunId = envelope.sandboxId;
     heldClaim = { sandboxId: envelope.sandboxId, claimToken: claim.claimToken };
     try {
-      result = await execute(envelope);
+      result = await execute(envelope, claim.claimToken);
     } catch (error) {
-      result = errorResult(`daemon error: ${error instanceof Error ? error.message : String(error)}`);
+      result = errorResult(
+        `daemon error: ${error instanceof Error ? error.message : String(error)}`,
+      );
     } finally {
       activeRunId = undefined;
     }
     if (stopping) return new Promise(() => {});
     try {
       await postResult({ sandboxId: envelope.sandboxId, claimToken: claim.claimToken, result });
-      console.log(`shiba-local: settled ${envelope.sandboxId} — ${result.status} (exit ${result.exitCode})`);
-      report({ state: "settled", runId: envelope.sandboxId, status: result.status, exitCode: result.exitCode, repoUrl: envelope.repoUrl, posted: true });
+      console.log(
+        `shiba-local: settled ${envelope.sandboxId} — ${result.status} (exit ${result.exitCode})`,
+      );
+      report({
+        state: "settled",
+        runId: envelope.sandboxId,
+        status: result.status,
+        exitCode: result.exitCode,
+        repoUrl: envelope.repoUrl,
+        posted: true,
+      });
     } catch (error) {
       console.error(`shiba-local: result post failed for ${envelope.sandboxId}: ${error.message}`);
-      report({ state: "settled", runId: envelope.sandboxId, status: result.status, exitCode: result.exitCode, repoUrl: envelope.repoUrl, posted: false });
+      report({
+        state: "settled",
+        runId: envelope.sandboxId,
+        status: result.status,
+        exitCode: result.exitCode,
+        repoUrl: envelope.repoUrl,
+        posted: false,
+      });
       // The DO holds the claim stale-window; the record reaps at 45min.
     }
     heldClaim = undefined;
@@ -692,8 +865,14 @@ async function gracefulStop(code) {
   activeHarnessChild?.kill("SIGTERM");
   try {
     await Promise.race([
-      post("result", { sandboxId: held.sandboxId, claimToken: held.claimToken, result: errorResult("daemon stopped") }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("stop budget exceeded")), 3_000)),
+      post("result", {
+        sandboxId: held.sandboxId,
+        claimToken: held.claimToken,
+        result: errorResult("daemon stopped"),
+      }),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("stop budget exceeded")), 3_000),
+      ),
     ]);
   } catch {}
   await releaseLease(held.sandboxId).catch(() => {});

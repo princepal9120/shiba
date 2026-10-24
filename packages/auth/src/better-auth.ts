@@ -46,7 +46,7 @@ export const AUTH_HANDLER_DEADLINE_MS = 12_000;
 
 /** `/api/auth/<provider>-subscription*` belongs to the T47–T50 connect lanes. */
 const SUBSCRIPTION_AUTH_PATH =
-  /^\/api\/auth\/(?:claude|codex|cursor|devin|antigravity)-subscription(?:\/|$)/;
+  /^\/api\/auth\/(?:claude|codex|cursor|antigravity)-subscription(?:\/|$)/;
 
 export function isBetterAuthPath(pathname: string): boolean {
   return (

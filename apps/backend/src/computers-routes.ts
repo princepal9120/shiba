@@ -5,9 +5,17 @@
  *   GET  /api/computers               → {computers: ConnectedComputer[]}
  *   POST /api/computers/revoke        {machineId} → {ok:true}
  *   POST /api/computers/pairing-token → {token, expiresAt, connectCommand}
+ *   GET  /api/computers/harness       → live session events, approvals, diff
+ *   POST /api/computers/harness/decide  {sandboxId, requestId, decision}
+ *   POST /api/computers/harness/control {sandboxId, interrupt:true}
  * Dark (404) unless SHIBA_LOCAL_RUNTIME=1 and the LocalDispatch DO is bound.
  */
-import { LOCAL_ADAPTER_TOKEN_ENV, LOCAL_PAIRING_TTL_MS, LOCAL_RUNTIME_FLAG, type PairingTokenResponse } from "@shiba/shared";
+import {
+  LOCAL_ADAPTER_TOKEN_ENV,
+  LOCAL_PAIRING_TTL_MS,
+  LOCAL_RUNTIME_FLAG,
+  type PairingTokenResponse,
+} from "@shiba/shared";
 import type { Env } from "./env.js";
 import { localDispatchStub } from "./local-dispatch.js";
 import { randomHex } from "./mailbox-store.js";
@@ -20,7 +28,10 @@ export function pairingSecret(env: Env): string | undefined {
 }
 
 const toBase64Url = (bytes: Uint8Array): string =>
-  btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
 
 function fromBase64Url(text: string): Uint8Array<ArrayBuffer> | null {
   try {
@@ -34,26 +45,54 @@ function fromBase64Url(text: string): Uint8Array<ArrayBuffer> | null {
 }
 
 const hmacKey = (secret: string, usage: "sign" | "verify") =>
-  crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, [usage]);
+  crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    [usage],
+  );
 
 /** `base64url({n, exp}).base64url(hmac_sha256(payload, secret))` — the nonce is what the DO burns on use. */
-export async function signPairingToken(secret: string, nonce: string, expiresAt: number): Promise<string> {
-  const payload = toBase64Url(new TextEncoder().encode(JSON.stringify({ n: nonce, exp: expiresAt })));
-  const signature = await crypto.subtle.sign("HMAC", await hmacKey(secret, "sign"), new TextEncoder().encode(payload));
+export async function signPairingToken(
+  secret: string,
+  nonce: string,
+  expiresAt: number,
+): Promise<string> {
+  const payload = toBase64Url(
+    new TextEncoder().encode(JSON.stringify({ n: nonce, exp: expiresAt })),
+  );
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    await hmacKey(secret, "sign"),
+    new TextEncoder().encode(payload),
+  );
   return `${payload}.${toBase64Url(new Uint8Array(signature))}`;
 }
 
 /** The nonce of a validly signed, unexpired token, else null. subtle.verify is constant-time. */
-export async function verifyPairingToken(secret: string, token: string, now: number): Promise<{ nonce: string; expiresAt: number } | null> {
+export async function verifyPairingToken(
+  secret: string,
+  token: string,
+  now: number,
+): Promise<{ nonce: string; expiresAt: number } | null> {
   const [payload, signature, extra] = token.split(".");
   if (payload === undefined || signature === undefined || extra !== undefined) return null;
   const sigBytes = fromBase64Url(signature);
   const payloadBytes = fromBase64Url(payload);
   if (sigBytes === null || payloadBytes === null) return null;
-  const valid = await crypto.subtle.verify("HMAC", await hmacKey(secret, "verify"), sigBytes, new TextEncoder().encode(payload));
+  const valid = await crypto.subtle.verify(
+    "HMAC",
+    await hmacKey(secret, "verify"),
+    sigBytes,
+    new TextEncoder().encode(payload),
+  );
   if (!valid) return null;
   try {
-    const { n, exp } = JSON.parse(new TextDecoder().decode(payloadBytes)) as { n?: unknown; exp?: unknown };
+    const { n, exp } = JSON.parse(new TextDecoder().decode(payloadBytes)) as {
+      n?: unknown;
+      exp?: unknown;
+    };
     if (typeof n !== "string" || typeof exp !== "number" || now > exp) return null;
     return { nonce: n, expiresAt: exp };
   } catch {
@@ -69,7 +108,11 @@ export async function mintDaemonPairing(
   | { ok: false; status: number; message: string }
 > {
   if (env[LOCAL_RUNTIME_FLAG] !== "1" || env.LocalDispatch === undefined) {
-    return { ok: false, status: 404, message: "The local runtime is not enabled on this deployment." };
+    return {
+      ok: false,
+      status: 404,
+      message: "The local runtime is not enabled on this deployment.",
+    };
   }
   const secret = pairingSecret(env);
   if (secret === undefined) {
@@ -122,11 +165,53 @@ export async function handleComputers(request: Request, env: Env): Promise<Respo
     if (typeof body?.machineId !== "string" || body.machineId === "") {
       return Response.json({ error: "machineId is required." }, { status: 400 });
     }
-    return stub.fetch(new Request("https://local-dispatch/revoke-computer", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ machineId: body.machineId }),
-    }));
+    return stub.fetch(
+      new Request("https://local-dispatch/revoke-computer", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ machineId: body.machineId }),
+      }),
+    );
+  }
+
+  if (url.pathname === "/api/computers/harness") {
+    if (request.method !== "GET") return methodNotAllowed();
+    return stub.fetch(new Request("https://local-dispatch/harness"));
+  }
+
+  if (url.pathname === "/api/computers/harness/decide") {
+    if (request.method !== "POST") return methodNotAllowed();
+    const body = (await request.json().catch(() => null)) as {
+      sandboxId?: unknown;
+      requestId?: unknown;
+      decision?: unknown;
+    } | null;
+    return stub.fetch(
+      new Request("https://local-dispatch/harness-decide", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          sandboxId: body?.sandboxId,
+          requestId: body?.requestId,
+          decision: body?.decision,
+        }),
+      }),
+    );
+  }
+
+  if (url.pathname === "/api/computers/harness/control") {
+    if (request.method !== "POST") return methodNotAllowed();
+    const body = (await request.json().catch(() => null)) as {
+      sandboxId?: unknown;
+      interrupt?: unknown;
+    } | null;
+    return stub.fetch(
+      new Request("https://local-dispatch/harness-control", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sandboxId: body?.sandboxId, interrupt: body?.interrupt }),
+      }),
+    );
   }
 
   if (url.pathname === "/api/computers/pairing-token") {

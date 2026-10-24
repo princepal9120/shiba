@@ -63,8 +63,7 @@ Set only what you use. Names must match `apps/backend/src/env.ts` and `apps/back
 | 4 | `AI_GATEWAY_TOKEN` | Only if your gateway requires authenticated requests |
 | 5 | `DASHBOARD_APPROVERS` | Comma-separated emails allowed to resolve shared approvals |
 | 6 | `BETTER_AUTH_SECRET` | Optional dashboard login (≥32 chars); unset keeps Access-only gate |
-| 7 | `DEVIN_API_KEY` | Only for the `devin` harness (not AI Gateway) |
-| 8 | Integration secrets | Slack / Telegram / Discord / `TRIGGER_TOKEN` as needed |
+| 7 | Integration secrets | Slack / Telegram / Discord / `TRIGGER_TOKEN` as needed |
 
 Provider keys for OpenCode / Claude Code / Codex / Grok → **AI Gateway BYOK**, not Worker secrets.
 

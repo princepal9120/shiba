@@ -11,7 +11,9 @@ export type NamedOutboundHandler =
   | "codexSubscription"
   | "codexPlan"
   | "cursorSubscription"
-  | "devinSubscription";
+  | "cursorUser"
+  | "antigravityUser"
+  | "xaiUser";
 
 /** Host → either a built-in forwarder (egress.ts) or a named handler slot. */
 export type OutboundHostRule =
@@ -41,8 +43,6 @@ export const DEFAULT_OUTBOUND_BY_HOST: Record<string, OutboundHostRule> = {
   "api.x.ai": { kind: "builtin", host: "api.x.ai" },
   "opencode.ai": { kind: "builtin", host: "opencode.ai" },
   "api.deepseek.com": { kind: "builtin", host: "api.deepseek.com" },
-  "api.devin.ai": { kind: "builtin", host: "api.devin.ai" },
-  "server.codeium.com": { kind: "builtin", host: "server.codeium.com" },
   "github.com": { kind: "named", handler: "denyUnscopedGitHub" },
 };
 

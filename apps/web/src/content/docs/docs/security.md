@@ -11,7 +11,7 @@ When `REQUIRE_ACCESS` or `ACCESS_AUD` is enabled, the Worker requires an authent
 
 ## The credential boundary
 
-Provider credentials are not supplied to provider-backed harnesses in the container: they receive a dummy key and provider requests are forwarded at Sandbox egress (`apps/backend/src/egress.ts`). The Devin service harness is an exception: it uses a dummy in-container key and a Worker-side forwarder replaces authorization with `DEVIN_API_KEY`. These boundaries have unit coverage; do not treat that as proof of a cloud deployment:
+Provider credentials are not supplied to provider-backed harnesses in the container: they receive a dummy key and provider requests are forwarded at Sandbox egress (`apps/backend/src/egress.ts`). These boundaries have unit coverage; do not treat that as proof of a cloud deployment:
 
 - **Model traffic.** The container is given a dummy key and calls its selected provider host. The Worker forwards supported provider requests through the configured AI Gateway binding; successful inference still depends on account configuration and credentials. There is no provider callback route.
 - **Repository traffic.** `GITHUB_TOKEN` is attached in the Worker, never in the container.

@@ -21,7 +21,6 @@ const SERVICE_DEFAULT_CODING: Record<ConnectionService, { harness: string; model
   },
   google: { harness: "opencode", model: HARNESS_DEFAULT_MODELS.opencode as string },
   grok: { harness: "grok", model: HARNESS_DEFAULT_MODELS.grok as string },
-  devin: { harness: "devin", model: HARNESS_DEFAULT_MODELS.devin as string },
   "opencode-go": { harness: "opencode", model: "opencode-go/deepseek-v3.2" },
   luan: { harness: "opencode", model: "opencode-go/deepseek-v3.2" },
   cursor: { harness: "codex", model: HARNESS_DEFAULT_MODELS.codex as string },

@@ -28,7 +28,6 @@ const CONNECTION_SERVICES = [
   "openai-subscription",
   "google",
   "grok",
-  "devin",
   "opencode-go",
   "luan",
   "acp",

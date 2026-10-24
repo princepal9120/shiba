@@ -17,7 +17,7 @@
     "RUNTIME": "sandbox",
     "INSTANCE_TYPE": "standard-1",
     "WORKER_HOSTNAME": "",
-    "AGENT_HARNESS": "devin",
+    "AGENT_HARNESS": "opencode",
   },
   "ai": { "binding": "AI" },
   "worker_loaders": [{ "binding": "LOADER" }],

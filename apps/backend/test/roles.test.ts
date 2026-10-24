@@ -100,8 +100,8 @@ describe("resolveRoleModel", () => {
       .toEqual({ harness: "codex", model: "openai/custom" });
     expect(resolveRoleModel(env({ ROLE_MODEL__FIXER: "codex" }), "fixer"))
       .toEqual({ harness: "codex", model: "openai/gpt-5.3-codex" });
-    expect(resolveRoleModel(env({ ROLE_MODEL_MAP: JSON.stringify({ designer: { harness: "devin" } }) }), "designer"))
-      .toEqual({ harness: "devin", model: "devin/swe-2-medium" });
+    expect(resolveRoleModel(env({ ROLE_MODEL_MAP: JSON.stringify({ designer: { harness: "grok" } }) }), "designer"))
+      .toEqual({ harness: "grok", model: "xai/grok-4.6" });
   });
 
   it("Pi uses its own default instead of inheriting CODING_MODEL", () => {
@@ -192,13 +192,13 @@ describe("describeRoleModels", () => {
     const rows = describeRoleModels(
       env({
         ROLE_MODEL_MAP: JSON.stringify({ fixer: { harness: "codex", model: "openai/gpt-5.3-codex" } }),
-        ROLE_MODEL__REVIEWER: "devin/devin/swe-2-medium",
+        ROLE_MODEL__REVIEWER: "grok/xai/grok-4.6",
         ROLE_MODEL__DESIGNER: "nosuch-harness",
       }),
     );
     const byRole = Object.fromEntries(rows.map((row) => [row.role, row]));
     expect(byRole.fixer).toMatchObject({ source: "role-map", harness: "codex", model: "openai/gpt-5.3-codex" });
-    expect(byRole.reviewer).toMatchObject({ source: "role-env", harness: "devin", model: "devin/swe-2-medium" });
+    expect(byRole.reviewer).toMatchObject({ source: "role-env", harness: "grok", model: "xai/grok-4.6" });
     expect(byRole.orchestrator?.source).toBe("default");
     expect(byRole.explorer?.source).toBe("default");
     expect(byRole.designer?.error).toBeDefined();
@@ -379,8 +379,8 @@ describe("shipped ROLE_MODEL_MAP (PLAN.md §19)", () => {
       model: "openai/gpt-6-sol",
     });
     expect(resolveRoleModel(shipped, "explorer")).toEqual({
-      harness: "devin",
-      model: "devin/swe-2-medium",
+      harness: "codex",
+      model: "openai/gpt-6-sol",
     });
     expect(resolveRoleModel(shipped, "fixer")).toEqual({
       harness: "claude-code",

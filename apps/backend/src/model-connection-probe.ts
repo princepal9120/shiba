@@ -91,25 +91,6 @@ async function probeWorkerSecret(env: Env, connection: Connection): Promise<Conn
   if (typeof value !== "string" || value.trim() === "") {
     return { ok: false, message: `${secretName} is not configured on this Worker.`, checkedAt };
   }
-  if (connection.service === "devin") {
-    try {
-      const response = await fetch("https://api.devin.ai/v1/health", {
-        method: "GET",
-        headers: { Authorization: `Bearer ${value}` },
-        redirect: "manual",
-      });
-      if (response.status === 200 || response.status === 404) {
-        return { ok: true, message: "Devin API accepted the deployment key.", checkedAt };
-      }
-      if (response.status === 401 || response.status === 403) {
-        return { ok: false, message: "Devin API rejected the deployment key.", checkedAt };
-      }
-      return { ok: false, message: `Devin API returned ${response.status}.`, checkedAt };
-    } catch (error) {
-      const raw = error instanceof Error ? error.message : String(error);
-      return { ok: false, message: redactSecrets(raw) || "Devin probe failed.", checkedAt };
-    }
-  }
   if (connection.service === "cursor") {
     try {
       const response = await fetch("https://api2.cursor.sh/health", {

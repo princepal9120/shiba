@@ -31,7 +31,7 @@ import { PROVIDER_HOSTS } from "../src/harness/types.js";
 import { compatibleHarnesses } from "../src/model-connections.js";
 import type { CodingTaskInput } from "../src/opencode-input.js";
 
-const ACP_NAMES = ["claude-acp", "codex-acp", "gemini-acp", "opencode-acp", "devin-acp"] as const;
+const ACP_NAMES = ["claude-acp", "codex-acp", "gemini-acp", "opencode-acp"] as const;
 
 const task = (codingModel: string): CodingTaskInput => ({
   repoUrl: "https://github.com/owner/repo",
@@ -62,7 +62,6 @@ describe("ACP registry lanes", () => {
   it("ACP lanes ride their provider's deployment model var — no new env vars", () => {
     expect(HARNESS_MODEL_ENV["claude-acp"]).toBe("CLAUDE_CODE_MODEL");
     expect(HARNESS_MODEL_ENV["codex-acp"]).toBe("CODEX_MODEL");
-    expect(HARNESS_MODEL_ENV["devin-acp"]).toBe("DEVIN_MODEL");
     expect(HARNESS_MODEL_ENV["gemini-acp"]).toBe("CODING_MODEL");
     expect(HARNESS_MODEL_ENV["opencode-acp"]).toBe("CODING_MODEL");
   });
@@ -75,7 +74,6 @@ describe("compatibleHarnesses admits ACP lanes by provider", () => {
     expect(compatibleHarnesses("google")).toEqual(
       expect.arrayContaining(["gemini-acp", "opencode-acp"]),
     );
-    expect(compatibleHarnesses("devin")).toContain("devin-acp");
   });
 });
 
@@ -159,25 +157,6 @@ describe("per-lane spec hooks (ce-code-review fixes)", () => {
     expect(hosts).toEqual(expect.arrayContaining(["opencode.ai", "api.deepseek.com"]));
   });
 
-  it("devin-acp egress includes the codeium inference host, not just api.devin.ai", () => {
-    const hosts = resolveHarness("devin-acp").egressHosts("devin/swe-2-medium");
-    expect(hosts).toEqual(expect.arrayContaining(["api.devin.ai", "server.codeium.com"]));
-  });
-
-  it("devin-acp materializes credentials.toml and XDG_DATA_HOME like the devin lane", () => {
-    const devinAcp = resolveHarness("devin-acp");
-    const input = task("devin/swe-2-medium");
-    const config = devinAcp.configFile(input, input.sandboxId);
-    const files = Array.isArray(config) ? config : config === null ? [] : [config];
-    const creds = files.find((f) => f.path.endsWith("/devin/credentials.toml"));
-    expect(creds?.contents).toContain('api_server_url = "https://server.codeium.com"');
-    expect(creds?.contents).toContain('windsurf_api_key = "dummy-egress-swapped"');
-    expect(files.some((f) => f.path === acpDriverPath(input.sandboxId))).toBe(true);
-    expect(devinAcp.env(input, files[0]?.path ?? null)).toMatchObject({
-      XDG_DATA_HOME: "/workspace/.xdg-data",
-      DEVIN_API_KEY: DUMMY_PROVIDER_KEY,
-    });
-  });
 
   it("opencode-acp passes provider/model through — OpenCode's ACP grammar needs the prefix", () => {
     const opencodeAcp = resolveHarness("opencode-acp");
@@ -225,7 +204,6 @@ describe("ACP_LANES single-source (Y2)", () => {
       );
     }
     expect(HARNESS_DEFAULT_MODELS["opencode-acp"]).toBe("google/gemini-3.5-flash-lite");
-    expect(HARNESS_DEFAULT_MODELS["devin-acp"]).toBe("devin/swe-2-medium");
   });
 });
 
@@ -265,7 +243,7 @@ describe("permission auto-allow picks the narrowest grant (C8)", () => {
 
 describe("compatibleHarnesses excludes unrunnable harnesses", () => {
   it("antigravity and cursor declare no sandbox runtime and are not advertised", () => {
-    for (const service of ["google", "anthropic", "openai", "opencode-go", "devin", "cursor"] as const) {
+    for (const service of ["google", "anthropic", "openai", "opencode-go", "cursor"] as const) {
       expect(compatibleHarnesses(service)).not.toContain("antigravity");
       expect(compatibleHarnesses(service)).not.toContain("cursor");
     }

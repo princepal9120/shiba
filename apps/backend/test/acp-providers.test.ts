@@ -74,13 +74,17 @@ describe("provider registry", () => {
       "codex",
       "gemini",
       "grok",
-      "opencode",
+      "cursor",
     ]);
     for (const provider of ACP_PROVIDER_REGISTRY) {
       if (provider.protocol === "acp") {
-        const lane = ACP_LANES[provider.harness as keyof typeof ACP_LANES];
-        expect(lane, provider.id).toBeDefined();
-        expect(provider.spawn).toEqual(lane.spec.spawn);
+        if (provider.harness === "antigravity-subscription" || provider.harness === "cursor-subscription") {
+          expect(provider.spawn.length).toBeGreaterThan(0);
+        } else {
+          const lane = ACP_LANES[provider.harness as keyof typeof ACP_LANES];
+          expect(lane, provider.id).toBeDefined();
+          expect(provider.spawn).toEqual(lane.spec.spawn);
+        }
         expect(acpAdapterPlan(provider.id).harness).toBe(provider.harness);
       }
     }
@@ -371,15 +375,15 @@ describe("API-key fallback", () => {
     );
   });
 
-  it("refuses OAuth for a provider that has no subscription lane", async () => {
+  it("refuses unknown provider ids", async () => {
     const response = await handleAcpProviders(
-      request("/api/providers/grok/connect", {
+      request("/api/providers/opencode/connect", {
         method: "POST",
         body: JSON.stringify({ mode: "oauth" }),
       }),
       env(),
     );
-    expect(response?.status).toBe(400);
+    expect(response?.status).toBe(404);
   });
 });
 
@@ -580,7 +584,7 @@ describe("per-org default", () => {
     const connect = (email: string) =>
       handleAcpProviders(
         request(
-          "/api/providers/opencode/connect",
+          "/api/providers/grok/connect",
           { method: "POST", body: JSON.stringify({ mode: "api-key" }) },
           email,
         ),
@@ -591,7 +595,7 @@ describe("per-org default", () => {
     const ada = await snapshot(
       await handleAcpProviders(
         request(
-          "/api/providers/opencode/default",
+          "/api/providers/grok/default",
           { method: "POST", body: "{}" },
           "ada@example.com",
         ),
@@ -599,7 +603,7 @@ describe("per-org default", () => {
       ),
     );
     expect(ada.org).toBe("ada@example.com");
-    expect(ada.defaultProviderId).toBe("opencode");
+    expect(ada.defaultProviderId).toBe("grok");
 
     const grace = await snapshot(
       await handleAcpProviders(
@@ -608,12 +612,12 @@ describe("per-org default", () => {
       ),
     );
     expect(grace.defaultProviderId).toBeNull();
-    expect(grace.providers.find((provider) => provider.id === "opencode")?.isDefault).toBe(false);
+    expect(grace.providers.find((provider) => provider.id === "grok")?.isDefault).toBe(false);
 
     const cleared = await snapshot(
       await handleAcpProviders(
         request(
-          "/api/providers/opencode/disconnect",
+          "/api/providers/grok/disconnect",
           { method: "POST", body: "{}" },
           "ada@example.com",
         ),
@@ -621,7 +625,7 @@ describe("per-org default", () => {
       ),
     );
     expect(cleared.defaultProviderId).toBeNull();
-    expect(cleared.providers.find((provider) => provider.id === "opencode")?.connection.phase).toBe(
+    expect(cleared.providers.find((provider) => provider.id === "grok")?.connection.phase).toBe(
       "disconnected",
     );
     expect(JSON.stringify(cleared)).not.toContain("gateway-canary");
@@ -745,7 +749,7 @@ describe("Providers page states", () => {
     expect(html).toContain("Org default · Claude Code");
     expect(html).toContain("Ready");
     expect(html).toContain("Open ChatGPT sign-in");
-    expect(html).toContain("Paste callback URL");
+    expect(html).toContain("Callback URL (optional if loopback is running)");
     expect(html).not.toContain("https://chatgpt.com/");
     expect(html).not.toContain("Confirmation code");
     expect(html).toContain("Sign-in pending");
